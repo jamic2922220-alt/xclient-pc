@@ -1,0 +1,10 @@
+{
+  "name": "xclient-ui",
+  "productName": "XClientUI",
+  "version": "1.0.0",
+  "description": "X CLIENT — CS 1.6",
+  "main": "main.js",
+  "author": "boost-top.com",
+  "license": "UNLICENSED",
+  "private": true
+}

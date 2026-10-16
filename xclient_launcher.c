@@ -449,13 +449,26 @@ static BOOL g_fresh = FALSE;
 static void run_game(void)
 {
     wchar_t exe[MAX_PATH], cmd[1024];
+    /* X CLIENT oynasi (x-ui) bo'lsa - o'shani ochamiz, o'yinni u ishga tushiradi */
+    wchar_t ui[MAX_PATH];
+    path_join(ui, g_dir, L"x-ui\\XClientUI.exe");
+    if (GetFileAttributesW(ui) != INVALID_FILE_ATTRIBUTES) {
+        STARTUPINFOW si0 = { sizeof(si0) };
+        PROCESS_INFORMATION pi0;
+        wchar_t uidir[MAX_PATH];
+        path_join(uidir, g_dir, L"x-ui");
+        if (CreateProcessW(ui, NULL, NULL, NULL, FALSE, 0, NULL, uidir, &si0, &pi0)) {
+            CloseHandle(pi0.hThread); CloseHandle(pi0.hProcess);
+            return;
+        }
+    }
     path_join(exe, g_dir, L"xash3d.exe");
     if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) {
         MessageBoxW(NULL, L"O‘yin fayllari topilmadi. Internetni tekshirib, X CLIENT ni qayta oching.", L"X CLIENT", MB_ICONERROR);
         return;
     }
     /* boshlang'ich sozlamalar faqat birinchi marta - keyin o'yinchining o'z sozlamalari saqlanadi */
-    _snwprintf(cmd, 1024, L"\"%s\" -game cstrike +clearmasters +exec xclient_master.cfg%s", exe,
+    _snwprintf(cmd, 1024, L"\"%s\" -game cstrike +scr_drawversion 0 +clearmasters +exec xclient_master.cfg%s", exe,
                g_fresh ? L" +exec boosttop_settings.cfg" : L"");
     STARTUPINFOW si = { sizeof(si) };
     PROCESS_INFORMATION pi;
