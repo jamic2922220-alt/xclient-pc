@@ -18,6 +18,7 @@
 #include <wininet.h>
 #include <wincrypt.h>
 #include <commctrl.h>
+#include <shellapi.h>
 #include <shlobj.h>
 #include <objbase.h>
 #include <shobjidl.h>
@@ -27,6 +28,10 @@
 
 #ifndef XC_API
 #define XC_API "https://mmb.boost-top.com/xclient/api.php"
+#endif
+#ifndef XC_GAME_URL
+/* asl PC CS 1.6 (boost-top PRO) o'rnatuvchisi - o'yin yo'q bo'lsa shundan o'rnatiladi; panel "game=" bilan almashtirishi mumkin */
+#define XC_GAME_URL "https://cssborka.uz/uploads/files/1791198609_6ac38591b615c_CS_1_6_boost-top_PRO_2_5_3.exe"
 #endif
 #define XC_VERSION_FILE L"xclient_version.txt"
 #define WM_XC_STATUS (WM_APP + 1)
@@ -137,6 +142,39 @@ static BOOL http_download(const char *url, const wchar_t *dst)
     }
     CloseHandle(f);
     InternetCloseHandle(h);
+    return ok;
+}
+
+/* katta faylni foiz bilan yuklash (o'yin o'rnatuvchisi) */
+static BOOL http_download_pct(const char *url, const wchar_t *dst, const wchar_t *label)
+{
+    HINTERNET h = open_url(url);
+    if (!h) return FALSE;
+    DWORD total = 0, len = sizeof(total);
+    HttpQueryInfoA(h, HTTP_QUERY_CONTENT_LENGTH | HTTP_QUERY_FLAG_NUMBER, &total, &len, NULL);
+    HANDLE f = CreateFileW(dst, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (f == INVALID_HANDLE_VALUE) { InternetCloseHandle(h); return FALSE; }
+    static char buf[65536];
+    DWORD got, wr;
+    ULONGLONG n = 0;
+    int lastPct = -1;
+    BOOL ok = TRUE;
+    while ((ok = InternetReadFile(h, buf, sizeof(buf), &got)) != FALSE) {
+        if (!got) break;
+        if (!WriteFile(f, buf, got, &wr, NULL) || wr != got) { ok = FALSE; break; }
+        n += got;
+        int pct = total ? (int)(n * 100 / total) : 0;
+        if (pct != lastPct) {
+            wchar_t msg[256];
+            if (total) _snwprintf(msg, 256, L"%s %d%%  (%u / %u MB)", label, pct, (unsigned)(n >> 20), (unsigned)(total >> 20));
+            else _snwprintf(msg, 256, L"%s %u MB", label, (unsigned)(n >> 20));
+            status(msg, pct);
+            lastPct = pct;
+        }
+    }
+    CloseHandle(f);
+    InternetCloseHandle(h);
+    if (ok && total && n != total) ok = FALSE;
     return ok;
 }
 
@@ -258,7 +296,7 @@ static void detect_os(void)
 }
 
 /* ---------------------------------------------------------------- API */
-typedef struct { char status[16], version[32], base[512], manifest[512], master[512], msg[256]; int build, min; } UpdInfo;
+typedef struct { char status[16], version[32], base[512], manifest[512], master[512], msg[256], game[512]; int build, min; } UpdInfo;
 
 static void kv(const char *body, const char *key, char *out, size_t cap)
 {
@@ -300,6 +338,7 @@ static BOOL get_update(UpdInfo *u)
     kv(r, "manifest", u->manifest, sizeof(u->manifest));
     kv(r, "master", u->master, sizeof(u->master));
     kv(r, "msg", u->msg, sizeof(u->msg));
+    kv(r, "game", u->game, sizeof(u->game));
     kv(r, "build", tmp, sizeof(tmp)); u->build = atoi(tmp);
     kv(r, "min", tmp, sizeof(tmp));   u->min = atoi(tmp);
     free(r);
@@ -425,7 +464,21 @@ static BOOL ensure_installed(BOOL *fresh)
 
     wchar_t dst[MAX_PATH];
     path_join(dst, g_dir, L"XClient.exe");
-    if (_wcsicmp(dst, g_self)) CopyFileW(g_self, dst, FALSE);
+    if (_wcsicmp(dst, g_self)) {
+        CopyFileW(g_self, dst, FALSE);
+        /* paket ichida kelgan X CLIENT oynasini ham ko'chiramiz */
+        const wchar_t *items[] = { L"x-ui", L"xclient_version.txt", L"X CLIENT.bat" };
+        for (int i = 0; i < 3; i++) {
+            wchar_t from[MAX_PATH + 2] = {0}, to[MAX_PATH + 2] = {0};
+            path_join(from, selfDir, items[i]);
+            if (GetFileAttributesW(from) == INVALID_FILE_ATTRIBUTES) continue;
+            lstrcpyW(to, g_dir);
+            SHFILEOPSTRUCTW op = {0};
+            op.wFunc = FO_COPY; op.pFrom = from; op.pTo = to;
+            op.fFlags = FOF_NOCONFIRMATION | FOF_NOCONFIRMMKDIR | FOF_NOERRORUI | FOF_SILENT;
+            SHFileOperationW(&op);
+        }
+    }
     make_shortcut(dst);
     *fresh = TRUE;
     lstrcpyW(g_self, dst);
@@ -433,6 +486,56 @@ static BOOL ensure_installed(BOOL *fresh)
 }
 
 /* ---------------------------------------------------------------- o'yin */
+static BOOL has_game(void)
+{
+    wchar_t p[MAX_PATH];
+    path_join(p, g_dir, L"cstrike.exe");
+    if (GetFileAttributesW(p) != INVALID_FILE_ATTRIBUTES) return TRUE;
+    path_join(p, g_dir, L"hl.exe");
+    return GetFileAttributesW(p) != INVALID_FILE_ATTRIBUTES;
+}
+
+static BOOL run_setup(const wchar_t *exe, const wchar_t *params)
+{
+    SHELLEXECUTEINFOW sei = { sizeof(sei) };
+    sei.fMask = SEE_MASK_NOCLOSEPROCESS;
+    sei.lpVerb = L"runas";               /* o'rnatuvchi administrator huquqini so'raydi */
+    sei.lpFile = exe;
+    sei.lpParameters = params;
+    sei.nShow = SW_SHOWNORMAL;
+    if (!ShellExecuteExW(&sei) || !sei.hProcess) return FALSE;
+    WaitForSingleObject(sei.hProcess, INFINITE);
+    CloseHandle(sei.hProcess);
+    return TRUE;
+}
+
+/* O'yin yo'q bo'lsa - asl boost-top PRO o'rnatuvchisini yuklab, shu papkaga o'rnatamiz */
+static BOOL ensure_game(const char *url)
+{
+    if (has_game()) return TRUE;
+    if (!url || !*url) url = XC_GAME_URL;
+    wchar_t tmp[MAX_PATH], params[1024];
+    GetTempPathW(MAX_PATH, tmp);
+    wcscat(tmp, L"xc_cs16_setup.exe");
+    BOOL ok = FALSE;
+    for (int i = 0; i < 3 && !ok; i++) {
+        ok = http_download_pct(url, tmp, L"CS 1.6 yuklanmoqda:");
+        if (!ok) { status(L"Yuklab bo‘lmadi, qayta urinilmoqda...", 0); Sleep(2000); }
+    }
+    if (!ok) { DeleteFileW(tmp); return FALSE; }
+    status(L"CS 1.6 o‘rnatilmoqda... (ruxsat so‘ralsa \"Ha\" ni bosing)", 100);
+    SetWindowPos(g_wnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    _snwprintf(params, 1024, L"/SILENT /SP- /SUPPRESSMSGBOXES /NORESTART /NOICONS /TASKS=\"\" /LANG=uzbek /DIR=\"%s\"", g_dir);
+    run_setup(tmp, params);
+    if (!has_game()) {
+        /* jim rejim ishlamasa - oddiy oynali o'rnatish (papka oldindan tanlangan) */
+        _snwprintf(params, 1024, L"/SP- /NOICONS /LANG=uzbek /DIR=\"%s\"", g_dir);
+        run_setup(tmp, params);
+    }
+    DeleteFileW(tmp);
+    return has_game();
+}
+
 static void write_master_cfg(const char *master)
 {
     wchar_t p[MAX_PATH];
@@ -462,9 +565,10 @@ static void run_game(void)
             return;
         }
     }
-    path_join(exe, g_dir, L"hl.exe");
+    path_join(exe, g_dir, L"cstrike.exe");
+    if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) path_join(exe, g_dir, L"hl.exe");
     if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) {
-        MessageBoxW(NULL, L"O‘yin fayllari (hl.exe) topilmadi. X CLIENT ni to‘liq paketdan qayta o‘rnating.", L"X CLIENT", MB_ICONERROR);
+        MessageBoxW(NULL, L"O‘yin fayllari (cstrike.exe) topilmadi. X CLIENT ni to‘liq paketdan qayta o‘rnating.", L"X CLIENT", MB_ICONERROR);
         return;
     }
     _snwprintf(cmd, 1024, L"\"%s\" -game cstrike -noforcemparms -noforcemaccel +exec xclient_launcher.cfg", exe);
@@ -524,6 +628,10 @@ static DWORD WINAPI worker(LPVOID unused)
             if (selfUp) g_relaunch = TRUE;
         }
         write_master_cfg(u.master);
+    }
+    if (!g_relaunch && !ensure_game(u.game)) {
+        lstrcpyW(g_err, L"CS 1.6 o‘yin fayllarini o‘rnatib bo‘lmadi. Internetni tekshirib, X CLIENT ni qayta oching.");
+        g_play = FALSE;
     }
     status(L"O‘yin ochilmoqda...", 100);
     if (!g_relaunch) api_call("launch", NULL);   /* yangi launcher o'zi yuboradi */
