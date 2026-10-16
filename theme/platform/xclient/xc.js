@@ -1167,21 +1167,23 @@ function detectLang() {
 }
 function renderAll() { renderHome(); renderServers(); }
 
-load();
-if (DB.forget) { DB.token = ''; DB.forget = 0; persist(); }      // "Eslab qolish" o'chirilgan bo'lsa - keyingi safar qayta kirish
-loadSettings();
-loadBinds();
-seedFromGame();
-fit();
-window.onresize = fit;
-fxLoop();
-detectLang();
-loadMaster();
-loadTop();
-loadWeek();
-loadOpts();
-each(PINNED.concat(DB.fav).concat(DB.hist.slice(0, 5).map(function (h) { return h.ip; })), function (ip) { query(ip); });
-renderAll();
+/* har bir qadam alohida: bittasi buzilsa ham qolgani ishlaydi */
+function step(name, fn) { try { fn(); } catch (e) { if (window.onerror) window.onerror(name + ': ' + (e && e.message ? e.message : e), 'xc.js', 0); } }
+step('load();', function () { load(); });
+step("if (DB.forget) { DB.token = ''; DB.forge", function () { if (DB.forget) { DB.token = ''; DB.forget = 0; persist(); } });      // "Eslab qolish" o'chirilgan bo'lsa - keyingi safar qayta kirish
+step('loadSettings();', function () { loadSettings(); });
+step('loadBinds();', function () { loadBinds(); });
+step('seedFromGame();', function () { seedFromGame(); });
+step('fit();', function () { fit(); });
+step('window.onresize = fit;', function () { window.onresize = fit; });
+step('fxLoop();', function () { fxLoop(); });
+step('detectLang();', function () { detectLang(); });
+step('loadMaster();', function () { loadMaster(); });
+step('loadTop();', function () { loadTop(); });
+step('loadWeek();', function () { loadWeek(); });
+step('loadOpts();', function () { loadOpts(); });
+step('each(PINNED.concat(DB.fav).concat(DB.his', function () { each(PINNED.concat(DB.fav).concat(DB.hist.slice(0, 5).map(function (h) { return h.ip; })), function (ip) { query(ip); }); });
+step('renderAll();', function () { renderAll(); });
 
 if (DB.token) api('me', {}, function (r) { if (r.ok) { setMe(r.me); loadFriends(); pingPresence(); } else if (r.err === 'auth' && !DB.guest) openLogin(); });
 else if (!DB.guest) openLogin();

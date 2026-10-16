@@ -26,10 +26,10 @@ input, select { font-family: inherit; }
   -webkit-animation: xcSpinR 24s linear infinite; }
 #stage .r3 { left: 75px; top: 55px; width: 450px; height: 450px; border: 1px solid rgba(255,59,59,0.06); border-left-color: rgba(255,59,59,0.55);
   -webkit-animation: xcSpin 16s linear infinite; }
-#stage .xl2 { position: absolute; left: 175px; top: 152px; width: 250px; height: 255px; overflow: hidden; -webkit-mask-image: url(logo_big.png); -webkit-mask-size: 250px 255px; -webkit-animation: xcFloat 5s ease-in-out infinite; }
+#stage .xl2 { position: absolute; left: 175px; top: 152px; width: 250px; height: 255px; -webkit-animation: xcFloat 5s ease-in-out infinite; }
 #stage .xl2 img { width: 250px; height: 255px; }
 #stage .shine { position: absolute; left: -120px; top: -40px; width: 70px; height: 340px; -webkit-transform: rotate(20deg);
-  background: -webkit-linear-gradient(left, rgba(255,255,255,0) 0%, rgba(255,255,255,0.35) 50%, rgba(255,255,255,0) 100%);
+  background: -webkit-linear-gradient(left, rgba(255,255,255,0) 0%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0) 100%);
   -webkit-animation: xcShine 4.5s ease-in-out infinite; }
 #stage .ttl { position: absolute; left: 0; right: 0; top: 470px; text-align: center; font-family: "Arial Black", Arial, sans-serif; font-weight: 900; font-size: 54px; line-height: 60px; letter-spacing: 6px; color: #f3ece6;
   text-shadow: 0 0 18px rgba(255,59,59,0.55), 0 3px 0 #000; -webkit-animation: xcFlicker 6s linear infinite; }

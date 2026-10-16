@@ -11,6 +11,18 @@
   Akkaunt: xc_api.php (shu papkada).
 -->
 <link rel="stylesheet" href="xc.css">
+<script>
+/* Xato bo'lsa ekranning tepasida ko'rsatamiz (o'yin brauzerida konsol yo'q) */
+window.XC_ERRS = [];
+window.onerror = function (msg, url, line) {
+  var t = String(msg) + ' (' + String(url || '').replace(/^.*\//, '') + ':' + line + ')';
+  window.XC_ERRS.push(t);
+  var d = document.getElementById('xcerr');
+  if (!d && document.body) { d = document.createElement('div'); d.id = 'xcerr'; d.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:999;padding:6px 12px;font:13px Tahoma,Arial;color:#fff;background:#b3161c'; document.body.appendChild(d); }
+  if (d) d.innerHTML = 'X CLIENT xato: ' + window.XC_ERRS.join(' | ').replace(/</g, '&lt;');
+  return false;
+};
+</script>
 <script src="xc_lang.js"></script>
 </head>
 <body>
