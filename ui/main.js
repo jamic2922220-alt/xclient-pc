@@ -141,12 +141,15 @@ function a2s(addr, wantPlayers, timeout = 2000) {
           let o = 5; const str = () => { const e = msg.indexOf(0, o); const s = msg.slice(o, e).toString('utf8'); o = e + 1; return s; };
           if (type === 0x49) { o++; res.name = str(); res.map = str(); str(); str(); o += 2; res.players = msg[o++]; res.max = msg[o++]; res.bots = msg[o++]; }
           else { str(); res.name = str(); res.map = str(); str(); str(); res.players = msg[o++]; res.max = msg[o++]; }
+          // nomdagi ko'rinmas/buzuq belgilarni tozalash
+          const clean = (v) => String(v || '').replace(/[\u0000-\u001f\u007f-\u009f\ufffd\u2580-\u259f]/g, ' ').replace(/\s{2,}/g, ' ').trim();
+          res.name = clean(res.name); res.map = clean(res.map);
           res.ok = true;
           if (wantPlayers) { stage = 'players'; sock.send(plReq(), port, host); } else finish();
         } else if (type === 0x44) {
           let o = 6; const n = msg[5]; res.list = [];
           for (let i = 0; i < n && o < msg.length; i++) {
-            o++; const e = msg.indexOf(0, o); const name = msg.slice(o, e).toString('utf8'); o = e + 1;
+            o++; const e = msg.indexOf(0, o); const name = msg.slice(o, e).toString('utf8').replace(/[\u0000-\u001f\ufffd\u2580-\u259f]/g, '').trim(); o = e + 1;
             const score = msg.readInt32LE(o); o += 4; const time = msg.readFloatLE(o); o += 4;
             if (name) res.list.push({ name, score, time: Math.round(time) });
           }
