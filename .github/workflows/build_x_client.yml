@@ -107,13 +107,14 @@ jobs:
           xhair_color "50 250 50 255"
           xhair_dynamic_scale "0"
           developer "0"
+          scr_drawversion "0"
           CFG
           sed -i 's/^          //' dist/cstrike/boosttop_settings.cfg
           echo "${GITHUB_RUN_NUMBER}" > dist/bt_build.txt
           cat > "dist/X CLIENT.bat" <<'BAT'
           @echo off
           cd /d "%~dp0"
-          start "" xash3d.exe -game cstrike +clearmasters +exec boosttop_ms.cfg +exec boosttop_settings.cfg %*
+          start "" xash3d.exe -game cstrike +scr_drawversion 0 +clearmasters +exec boosttop_ms.cfg +exec boosttop_settings.cfg %*
           BAT
           sed -i 's/^          //' "dist/X CLIENT.bat"
           echo "===== dist ====="; find dist -maxdepth 2 | sort | head -200
