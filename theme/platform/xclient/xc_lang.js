@@ -32,7 +32,11 @@ window.XC_LANG = {
     sy_lang: 'TIL', sy_lang_note: "Bosh menyu tili. O'yin tili o'yin sozlamalaridan o'zgaradi.", sy_up: 'YANGILANISH', sy_ver: 'Versiya', sy_auto: "X CLIENT har ishga tushganda avtomatik yangilanadi",
     sy_srv: 'XIZMAT', sy_con: 'Konsolni ochish', sy_con2: "Dasturchi konsoli (~)", sy_cl: "Sevimlilar va tarixni tozalash", sy_cl2: "Faqat shu kompyuterda saqlangan", sy_clb: 'Tozalash',
     sy_native: "O'yinning asl sozlamalari", sy_native2: 'Barcha qolgan parametrlar', sy_open: 'Ochish', sy_ok: 'Bajarildi',
-    st_menu: 'Bosh menyuda', st_in: "O'ynayapti: ", m_bots: "Botlar bilan o'ynash"
+    st_menu: 'Bosh menyuda', st_in: "O'ynayapti: ", m_bots: "Botlar bilan o'ynash",
+    k_note2: "Vazifani bosing, keyin yangi tugmani bosing (Esc - bekor)", k_press: 'Tugmani bosing...', k_def: 'Standart tugmalar',
+    v_res: "Ekran o'lchami va grafika", v_res2: "Ruxsat (1920×1080 va h.k.) o'yinning video oynasida",
+    sy_chk: "Sozlamalarni tekshirish", sy_chk2: "O'yindagi qiymatlar bilan solishtiradi", sy_chkb: 'Tekshirish',
+    chk_ok: "Saqlandi ✓ {n} ta sozlama o'yinda tekshirildi", chk_bad: "Diqqat: {n} ta sozlama o'yinga qo'llanmadi", chk_na: "Bu klient sozlamalarni o'qishga ruxsat bermaydi"
   },
   ru: {
     m_quick: 'Быстрая игра', m_servers: 'Серверы', m_favs: 'Избранное', m_history: 'История', m_settings: 'Настройки', m_quit: 'Выход',
@@ -62,7 +66,11 @@ window.XC_LANG = {
     h_title: 'ЭКРАН (HUD)', h_net: 'FPS и пинг (net_graph)', h_old: 'Старый киллфид', h_cid: 'Ник в центре', h_draw: 'Скрыть версию',
     sy_lang: 'ЯЗЫК', sy_lang_note: 'Язык меню. Язык игры меняется в настройках игры.', sy_up: 'ОБНОВЛЕНИЕ', sy_ver: 'Версия', sy_auto: 'X CLIENT обновляется при каждом запуске',
     sy_srv: 'СЕРВИС', sy_con: 'Консоль', sy_cl: 'Очистить избранное и историю', sy_clb: 'Очистить', sy_native: 'Стандартные настройки', sy_open: 'Открыть', sy_ok: 'Готово',
-    st_menu: 'В главном меню', st_in: 'Играет: '
+    st_menu: 'В главном меню', st_in: 'Играет: ',
+    k_note2: 'Нажмите действие, затем клавишу (Esc - отмена)', k_press: 'Нажмите клавишу...', k_def: 'По умолчанию',
+    v_res: 'Разрешение и графика', v_res2: 'Разрешение экрана - в окне видео игры',
+    sy_chk: 'Проверка настроек', sy_chk2: 'Сравнивает со значениями в игре', sy_chkb: 'Проверить',
+    chk_ok: 'Сохранено ✓ проверено в игре: {n}', chk_bad: 'Внимание: {n} настроек не применились', chk_na: 'Клиент не даёт читать настройки'
   },
   en: {
     m_quick: 'Quick play', m_servers: 'Servers', m_favs: 'Favorites', m_history: 'History', m_settings: 'Settings', m_quit: 'Quit',

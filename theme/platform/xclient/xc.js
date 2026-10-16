@@ -439,19 +439,49 @@ var CVARS = { sens: 'sensitivity', zoom: 'zoom_sensitivity_ratio', raw: 'm_rawin
   fps: 'fps_max', gamma: 'gamma', fov: 'fov_angle', vmfov: 'viewmodel_fov', hor: 'fov_horplus', xt: 'cl_crosshair_type', xs: 'cl_crosshair_size',
   xc: 'cl_crosshair_color', xtr: 'cl_crosshair_translucent', xdyn: 'cl_dynamiccrosshair', hand: 'cl_righthand', fastsw: 'hud_fastswitch', dl: 'cl_allowdownload' };
 function seedFromGame() {
-  if (DB.set || !window.nextclient || typeof nextclient.getCvarValue !== 'function') return;
+  if (!canRead()) return;
   try {
     for (var k in CVARS) {
       if (!CVARS.hasOwnProperty(k)) continue;
       var v = nextclient.getCvarValue(CVARS[k]);
       if (v == null || v === '') continue;
-      if (typeof DEF[k] === 'number') { var n = parseFloat(v); if (!isNaN(n)) S[k] = Math.round(n * 100) / 100; } else S[k] = String(v);
+      if (typeof DEF[k] === 'number') { var n = parseFloat(v); if (!isNaN(n)) S[k] = Math.round(n * 100) / 100; } else S[k] = String(v).replace(/^\s+|\s+$/g, '');
     }
+    var pitch = parseFloat(nextclient.getCvarValue('m_pitch'));
+    if (!isNaN(pitch)) S.inv = pitch < 0 ? 1 : 0;
+    // eski NextClient "extra_small" ni bilmaydi va uni katta (auto) qilib chizadi - eng kichigi "small"
+    if (S.xs !== 'small' && S.xs !== 'medium' && S.xs !== 'large' && S.xs !== 'auto') S.xs = 'small';
+    S.xc = String(S.xc).replace(/\s+/g, ' ');
     var nm = nextclient.getCvarValue('name');
     if (nm) { S.name = String(nm).replace(/^(X \| |\[UZ\] )/, ''); S.tag = /^X \| /.test(nm) ? 'X | ' : /^\[UZ\] /.test(nm) ? '[UZ] ' : ''; }
   } catch (e) { dbg('getCvarValue xato ' + e); }
   renderBar();
 }
+function canRead() { return !!(window.nextclient && typeof nextclient.getCvarValue === 'function'); }
+function readCvar(n) { try { var v = nextclient.getCvarValue(n); return v == null ? null : String(v); } catch (e) { return null; } }
+
+/* Saqlashdan keyin o'yindan qayta o'qib, har bir sozlama haqiqatan qo'llanganini tekshiramiz */
+function verifySettings(s) {
+  if (!canRead()) { toast(T('saved')); return; }
+  var exp = {}, bad = [], ok = 0;
+  for (var k in CVARS) if (CVARS.hasOwnProperty(k)) exp[CVARS[k]] = s[k];
+  exp.m_pitch = s.inv ? -0.022 : 0.022;
+  if (s.name) exp.name = ((s.tag || '') + s.name).slice(0, 31);
+  for (var c in exp) {
+    if (!exp.hasOwnProperty(c)) continue;
+    var got = readCvar(c);
+    if (got == null) continue;                               // klientda bunday kvar yo'q - o'tkazamiz
+    var want = String(exp[c]), a = parseFloat(got), b = parseFloat(want);
+    var same = (!isNaN(a) && !isNaN(b) && /^[-\d.]+$/.test(want)) ? Math.abs(a - b) < 0.011 : got.replace(/\s+/g, ' ').toLowerCase() === want.toLowerCase();
+    if (same) ok++; else bad.push(c + ': ' + got + ' \u2192 ' + want);
+  }
+  LAST_CHECK = { ok: ok, bad: bad, t: now() };
+  if (bad.length) { toast(T('chk_bad').replace('{n}', bad.length)); dbg(bad.join(' | ')); }
+  else toast(T('chk_ok').replace('{n}', ok));
+  if (curModal === 'mdSettings' && setTab === 'system') showSetTab('system');
+}
+var LAST_CHECK = null;
+
 function loadSettings() {
   S = copy(DEF);
   if (DB.set) for (var k in DB.set) if (DB.set.hasOwnProperty(k) && DEF.hasOwnProperty(k)) S[k] = DB.set[k];
@@ -477,6 +507,7 @@ function applySettings(s) { each(settingsCmds(s), function (c) { cmd(c); }); }
 
 var setTab = 'game';
 function openSettings(tab) {
+  seedFromGame();
   E = copy(S);
   openModal('mdSettings');
   showSetTab(tab || setTab);
@@ -521,33 +552,32 @@ var PANES = {
   },
   keys: function () {
     var rows = '';
-    each([['W / A / S / D', '+forward / +moveleft / +back / +moveright'], ['SPACE', '+jump'], ['CTRL', '+duck'], ['SHIFT', '+speed'], ['R', '+reload'], ['E', '+use'],
-          ['B', 'buy'], ['M', 'chooseteam'], ['TAB', '+showscores'], ['Y / U', 'say / say_team'], ['G', 'drop'], ['K', '+voicerecord']], function (k) {
-      rows += '<div class="kb">' + esc(k[1]) + '<span>' + esc(k[0]) + '</span></div>';
+    each(ACTIONS, function (ac, i) {
+      var k = BINDS[ac[0]] || '';
+      rows += '<div class="kb' + (KEYWAIT === ac[0] ? ' wait' : '') + '" data-bind="' + esc(ac[0]) + '">' + esc(CUR_LANG === 'ru' ? ac[2] : ac[1]) +
+        '<span>' + (KEYWAIT === ac[0] ? esc(T('k_press')) : esc(keyLabel(k) || '\u2014')) + '</span></div>';
     });
-    return '<div class="pane l"><div class="ph2">' + esc(T('k_title')) + '</div>' + rows + '</div>' +
-      '<div class="pane r"><div class="ph2">' + esc(T('s_keys')) + '</div><div class="mut" style="margin-bottom:12px">' + esc(T('k_note')) + '</div>' +
-      '<a class="btn red" style="margin:0 0 20px" data-act="native:keyboard">' + esc(T('k_open')) + '</a>' +
+    return '<div class="pane full"><div class="ph2">' + esc(T('k_title')) + '<span class="mut" style="float:right;letter-spacing:0;font-weight:normal">' + esc(T('k_note2')) + '</span></div>' +
+      '<div class="kcols">' + rows + '</div>' +
       '<div class="ph2 m">' + esc(T('k_buy')) + '</div>' + tg('buykeys', 'k_buy2') +
-      '<div class="mut" style="font-size:12px;line-height:20px">F1: M4A1/AK-47 \u00b7 F2: AWP \u00b7 F3: ' + 'Kevlar+Helmet, Defuse kit \u00b7 F4: HE + 2\u00d7Flash + Smoke</div></div>';
+      '<div class="mut" style="font-size:12px;line-height:20px">F1: M4A1/AK-47 \u00b7 F2: AWP \u00b7 F3: Kevlar+Helmet, Defuse kit \u00b7 F4: HE + 2\u00d7Flash + Smoke</div>' +
+      '<a class="btn" style="margin:14px 0 0" data-act="keysdef">' + esc(T('k_def')) + '</a></div>';
   },
   mouse: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('mo_title')) + '</div>' +
-      sl('sens', 'mo_sens', 0.5, 10, 0.1) + sl('zoom', 'mo_zoom', 0.2, 3, 0.05) +
-      '<a class="btn" style="margin:16px 0 0" data-act="native:mouse">' + esc(T('mo_open')) + '</a></div>' +
+      sl('sens', 'mo_sens', 0.5, 10, 0.1) + sl('zoom', 'mo_zoom', 0.2, 3, 0.05) + '</div>' +
       '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('raw', 'mo_raw', 'mo_raw2') + tg('filter', 'mo_filter') + tg('inv', 'mo_inv') + '</div>';
   },
   sound: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('so_title')) + '</div>' +
-      sl('vol', 'so_vol', 0, 1, 0.05) + sl('mus', 'so_mus', 0, 1, 0.05) + sl('vscale', 'so_vscale', 0, 2, 0.1) +
-      '<a class="btn" style="margin:16px 0 0" data-act="native:audio">' + esc(T('so_open')) + '</a></div>' +
+      sl('vol', 'so_vol', 0, 1, 0.05) + sl('mus', 'so_mus', 0, 1, 0.05) + sl('vscale', 'so_vscale', 0, 2, 0.1) + '</div>' +
       '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('voice', 'so_voice') + tg('mute', 'so_mute') + '</div>';
   },
   video: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('v_title')) + '</div>' +
       seg('fps', 'v_fps', [[60, '60'], [100, '100'], [144, '144'], [200, '200'], [300, '300']]) +
       sl('gamma', 'v_bright', 1.8, 3, 0.1) + sl('fov', 'v_fov', 70, 100, 1, 'v_fov2') + sl('vmfov', 'v_vm', 70, 100, 1) +
-      '<a class="btn" style="margin:16px 0 0" data-act="native:video">' + esc(T('v_open')) + '</a></div>' +
+      '<div class="rowb" style="margin-top:18px"><b>' + esc(T('v_res')) + '</b><small>' + esc(T('v_res2')) + '</small><a class="btn" data-act="native:video">' + esc(T('sy_open')) + '</a></div></div>' +
       '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('hor', 'v_hor') + tg('vsync', 'v_vsync') + '</div>';
   },
   hud: function () {
@@ -556,13 +586,15 @@ var PANES = {
       types += '<a class="' + (Number(E.xt) === o[0] ? 'on' : '') + '" data-seg="xt" data-v="' + o[0] + '">' + esc(T(o[1])) + '</a>';
     });
     var cols = '';
-    each(['255 59 59', '80 250 80', '0 230 255', '255 210 60', '255 80 220', '255 255 255'], function (c) {
+    var pal = ['255 59 59', '50 250 50', '0 230 255', '255 210 60', '255 80 220', '255 255 255'];
+    if (pal.indexOf(E.xc) < 0 && /^\d+ \d+ \d+$/.test(E.xc)) pal.push(E.xc);   // o'yindagi boshqa rang ham ko'rinsin
+    each(pal, function (c) {
       var p = c.split(' ');
       cols += '<a class="' + (E.xc === c ? 'on' : '') + '" data-seg="xc" data-v="' + c + '" style="background:rgb(' + p.join(',') + ')"></a>';
     });
     return '<div class="pane l"><div class="ph2">' + esc(T('x_title')) + '</div>' +
       '<div style="position:relative;height:176px"><div id="xPrev"><canvas id="xCan" width="240" height="160"></canvas></div><div class="xl">' + types + '</div></div>' +
-      seg('xs', 'x_size', [['extra_small', 'sz_xs'], ['small', 'sz_s'], ['medium', 'sz_m'], ['large', 'sz_l'], ['auto', 'sz_auto']]) +
+      seg('xs', 'x_size', [['small', 'sz_s'], ['medium', 'sz_m'], ['large', 'sz_l'], ['auto', 'sz_auto']]) +
       '<div class="fr"><div class="lb">' + esc(T('x_color')) + '</div><div class="ct2 sw">' + cols + '</div></div>' +
       tg('xtr', 'x_trans') + tg('xdyn', 'x_dyn') + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('h_title')) + '</div>' +
@@ -577,9 +609,63 @@ var PANES = {
       '<div class="mut" style="font-size:12px">' + esc(T('sy_lang_note')) + '</div>' +
       '<div class="ph2 m">' + esc(T('sy_up')) + '</div><div class="rowb"><b>' + esc(T('sy_ver')) + ' <span id="verTxt">' + esc(VERSION) + '</span></b><small>' + esc(T('sy_auto')) + '</small></div></div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('sy_srv')) + '</div>' +
-      rowb('sy_con', 'sy_con2', 'console', 'sy_open') + rowb('sy_native', 'sy_native2', 'native:multiplayer', 'sy_open') + rowb('sy_cl', 'sy_cl2', 'clearall', 'sy_clb') + '</div>';
+      rowb('sy_chk', 'sy_chk2', 'check', 'sy_chkb') + checkHtml() +
+      rowb('sy_con', 'sy_con2', 'console', 'sy_open') + rowb('sy_cl', 'sy_cl2', 'clearall', 'sy_clb') + '</div>';
   }
 };
+function checkHtml() {
+  if (!LAST_CHECK) return '';
+  var h = '<div class="chk ' + (LAST_CHECK.bad.length ? 'bad' : 'ok') + '">' + esc((LAST_CHECK.bad.length ? T('chk_bad') : T('chk_ok')).replace('{n}', LAST_CHECK.bad.length || LAST_CHECK.ok));
+  each(LAST_CHECK.bad, function (b) { h += '<div>' + esc(b) + '</div>'; });
+  return h + '</div>';
+}
+
+/* ------------------------------------------------------------ tugmalar (bind) */
+var ACTIONS = [
+  ['+forward', 'Oldinga', '\u0412\u043f\u0435\u0440\u0451\u0434', 'w'], ['+back', 'Orqaga', '\u041d\u0430\u0437\u0430\u0434', 's'],
+  ['+moveleft', 'Chapga', '\u0412\u043b\u0435\u0432\u043e', 'a'], ['+moveright', "O'ngga", '\u0412\u043f\u0440\u0430\u0432\u043e', 'd'],
+  ['+jump', 'Sakrash', '\u041f\u0440\u044b\u0436\u043e\u043a', 'SPACE'], ['+duck', "O'tirish", '\u041f\u0440\u0438\u0441\u0435\u0441\u0442\u044c', 'CTRL'],
+  ['+speed', 'Sekin yurish', '\u0418\u0434\u0442\u0438 \u0442\u0438\u0445\u043e', 'SHIFT'], ['+attack', 'Otish', '\u0410\u0442\u0430\u043a\u0430', 'MOUSE1'],
+  ['+attack2', 'Ikkinchi hujum / pritsel', '\u0414\u043e\u043f. \u0430\u0442\u0430\u043a\u0430', 'MOUSE2'], ['+reload', "Qayta o'qlash", '\u041f\u0435\u0440\u0435\u0437\u0430\u0440\u044f\u0434\u043a\u0430', 'r'],
+  ['+use', 'Ishlatish', '\u0418\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u044c', 'e'], ['drop', 'Qurolni tashlash', '\u0412\u044b\u0431\u0440\u043e\u0441\u0438\u0442\u044c', 'g'],
+  ['lastinv', 'Oxirgi qurol', '\u041f\u0440\u0435\u0434. \u043e\u0440\u0443\u0436\u0438\u0435', 'q'], ['slot1', 'Asosiy qurol', '\u041e\u0441\u043d\u043e\u0432\u043d\u043e\u0435', '1'],
+  ['slot2', 'Pistolet', '\u041f\u0438\u0441\u0442\u043e\u043b\u0435\u0442', '2'], ['slot3', 'Pichoq', '\u041d\u043e\u0436', '3'],
+  ['slot4', 'Granatalar', '\u0413\u0440\u0430\u043d\u0430\u0442\u044b', '4'], ['slot5', 'C4 bomba', 'C4', '5'],
+  ['buy', 'Sotib olish menyusi', '\u041c\u0435\u043d\u044e \u0437\u0430\u043a\u0443\u043f\u043a\u0438', 'b'], ['buyammo1', "Asosiy qurol o'qi", '\u041f\u0430\u0442\u0440\u043e\u043d\u044b (\u043e\u0441\u043d.)', ','],
+  ['buyammo2', "Pistolet o'qi", '\u041f\u0430\u0442\u0440\u043e\u043d\u044b (\u043f\u0438\u0441\u0442.)', '.'], ['chooseteam', 'Jamoa tanlash', '\u0412\u044b\u0431\u043e\u0440 \u043a\u043e\u043c\u0430\u043d\u0434\u044b', 'm'],
+  ['+showscores', 'Hisob jadvali', '\u0422\u0430\u0431\u043b\u0438\u0446\u0430 \u0441\u0447\u0451\u0442\u0430', 'TAB'], ['messagemode', 'Umumiy chat', '\u0427\u0430\u0442', 'y'],
+  ['messagemode2', 'Jamoa chati', '\u0427\u0430\u0442 \u043a\u043e\u043c\u0430\u043d\u0434\u044b', 'u'], ['+voicerecord', 'Ovozli chat', '\u0413\u043e\u043b\u043e\u0441', 'k'],
+  ['impulse 201', 'Spray', '\u0421\u043f\u0440\u0435\u0439', 't'], ['nightvision', "Tungi ko'rish", '\u041d\u043e\u0447\u043d\u043e\u0435 \u0432\u0438\u0434\u0435\u043d\u0438\u0435', 'n'],
+  ['radio1', 'Radio buyruqlar', '\u0420\u0430\u0434\u0438\u043e', 'z'], ['snapshot', 'Skrinshot', '\u0421\u043a\u0440\u0438\u043d\u0448\u043e\u0442', 'F5']
+];
+var BINDS = {}, KEYWAIT = '';
+function loadBinds() {
+  BINDS = {};
+  each(ACTIONS, function (a) { BINDS[a[0]] = a[3]; });
+  if (DB.binds) for (var k in DB.binds) if (DB.binds.hasOwnProperty(k)) BINDS[k] = DB.binds[k];
+}
+var KEYNAMES = { 8: 'BACKSPACE', 9: 'TAB', 13: 'ENTER', 16: 'SHIFT', 17: 'CTRL', 18: 'ALT', 19: 'PAUSE', 20: 'CAPSLOCK', 32: 'SPACE',
+  33: 'PGUP', 34: 'PGDN', 35: 'END', 36: 'HOME', 37: 'LEFTARROW', 38: 'UPARROW', 39: 'RIGHTARROW', 40: 'DOWNARROW', 45: 'INS', 46: 'DEL',
+  96: 'KP_INS', 97: 'KP_END', 98: 'KP_DOWNARROW', 99: 'KP_PGDN', 100: 'KP_LEFTARROW', 101: 'KP_5', 102: 'KP_RIGHTARROW', 103: 'KP_HOME',
+  104: 'KP_UPARROW', 105: 'KP_PGUP', 106: '*', 107: 'KP_PLUS', 109: 'KP_MINUS', 110: 'KP_DEL', 111: 'KP_SLASH',
+  186: 'SEMICOLON', 187: '=', 188: ',', 189: '-', 190: '.', 191: '/', 192: '`', 219: '[', 220: '\\', 221: ']', 222: "'" };
+function keyName(e) {
+  var c = e.keyCode;
+  if (KEYNAMES[c]) return KEYNAMES[c];
+  if (c >= 112 && c <= 123) return 'F' + (c - 111);
+  if ((c >= 48 && c <= 57) || (c >= 65 && c <= 90)) return String.fromCharCode(c).toLowerCase();
+  return '';
+}
+function keyLabel(k) { return /^[a-z]$/.test(k) ? k.toUpperCase() : k; }
+function setBind(action, key) {
+  var old = BINDS[action];
+  for (var a in BINDS) if (BINDS.hasOwnProperty(a) && a !== action && BINDS[a] === key) BINDS[a] = '';   // bitta tugma - bitta vazifa
+  BINDS[action] = key;
+  if (old && old !== key) cmd('unbind ' + q(old));
+  cmd('bind ' + q(key) + ' ' + q(action));
+  DB.binds = BINDS; persist();
+}
+
 /* pritsel ko'rinishi */
 function drawXhair() {
   var c = $('xCan'); if (!c || !c.getContext) return;
@@ -587,7 +673,7 @@ function drawXhair() {
   g.clearRect(0, 0, w, h);
   var p = String(E.xc).split(' ');
   g.fillStyle = 'rgba(' + p[0] + ',' + p[1] + ',' + p[2] + ',' + (E.xtr ? 0.6 : 1) + ')';
-  var len = { extra_small: 4, small: 6, medium: 8, large: 11, auto: 7 }[E.xs] || 6, gap = 3, t = 2;
+  var len = { small: 5, medium: 8, large: 11, auto: 11 }[E.xs] || 5, gap = 3, t = 2;
   var type = Number(E.xt);
   if (type === 3) { g.fillRect(cx - 2, cy - 2, 4, 4); return; }
   if (type === 2) { g.strokeStyle = g.fillStyle; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, len + 2, 0, Math.PI * 2); g.stroke(); g.fillRect(cx - 1, cy - 1, 2, 2); return; }
@@ -640,14 +726,18 @@ function act(a, el) {
     try { nextclient.gameUi.optionsDialog.open(a.slice(7)); } catch (e) { dbg('optionsDialog xato ' + e); }
     return;
   }
+  if (a === 'keysdef') { DB.binds = null; loadBinds(); each(ACTIONS, function (ac) { cmd('bind ' + q(ac[3]) + ' ' + q(ac[0])); }); persist(); toast(T('sy_ok')); return showSetTab('keys'); }
+  if (a === 'check') { if (!canRead()) return toast(T('chk_na')); return verifySettings(S); }
   if (a === 'defaults') { var keep = E.name; E = copy(DEF); E.name = keep; return showSetTab(setTab); }
   if (a === 'save') {
     var nm = $('fName'); if (nm) E.name = nm.value.replace(/["\\;]/g, '').slice(0, 28);
-    S = copy(E); DB.set = S; persist(); applySettings(S); toast(T('saved')); closeModal(); renderBar();
+    S = copy(E); DB.set = S; persist(); applySettings(S); closeModal(); renderBar();
+    setTimeout(function () { verifySettings(S); }, 700);      // o'yin buyruqlarni bajarib bo'lgach tekshiramiz
   }
 }
 document.onclick = function (e) {
   var t = e.target || e.srcElement, el;
+  if ((el = closest(t, 'data-bind'))) { KEYWAIT = KEYWAIT === el.getAttribute('data-bind') ? '' : el.getAttribute('data-bind'); showSetTab('keys'); return; }
   if ((el = closest(t, 'data-fav'))) { toggleFav(el.getAttribute('data-fav')); return; }
   if ((el = closest(t, 'data-tg'))) { var k = el.getAttribute('data-tg'); E[k] = E[k] ? 0 : 1; el.className = 'tg' + (E[k] ? ' on' : ''); if (setTab === 'hud') drawXhair(); return; }
   if ((el = closest(t, 'data-seg'))) {
@@ -684,8 +774,24 @@ function onSlide(e) {
 }
 document.addEventListener('change', onSlide, false);
 document.addEventListener('input', onSlide, false);
+function finishWait(key) {
+  var a = KEYWAIT; KEYWAIT = '';
+  if (key) { setBind(a, key); toast(keyLabel(key) + ' \u2192 ' + a); }
+  showSetTab('keys');
+}
+document.addEventListener('mousedown', function (e) {
+  if (!KEYWAIT || closest(e.target || e.srcElement, 'data-bind')) return;
+  var b = e.button === 0 ? 'MOUSE1' : e.button === 2 ? 'MOUSE2' : e.button === 1 ? 'MOUSE3' : e.button === 3 ? 'MOUSE4' : 'MOUSE5';
+  e.preventDefault(); e.stopPropagation(); finishWait(b);
+}, true);
+document.addEventListener('mousewheel', function (e) {
+  if (!KEYWAIT) return;
+  e.preventDefault(); finishWait(e.wheelDelta > 0 ? 'MWHEELUP' : 'MWHEELDOWN');
+}, false);
+document.oncontextmenu = function () { return !KEYWAIT; };
 document.onkeydown = function (e) {
   var k = e.keyCode;
+  if (KEYWAIT) { if (k !== 27) finishWait(keyName(e)); else finishWait(''); return false; }
   if ($('mdAsk').className === 'modal on') { if (k === 13) askDone(true); if (k === 27) askDone(false); return; }
   if (k === 27 && curModal) { closeModal(); return false; }
 };
@@ -716,6 +822,7 @@ function renderAll() { renderHome(); renderServers(); }
 
 load();
 loadSettings();
+loadBinds();
 fit();
 window.onresize = fit;
 detectLang();
