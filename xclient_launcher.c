@@ -723,9 +723,12 @@ static void setup_main_menu(void)
         /* asl boost-top manzilini bir marta saqlab qo'yamiz */
         path_join(bak, g_dir, L"xclient_backup\\platform\\mmb_home_page.html");
         if (cur && !strstr(cur, "xclient") && GetFileAttributesW(bak) == INVALID_FILE_ATTRIBUTES) { mkdirs_for(bak); CopyFileW(home, bak, TRUE); }
+        SetFileAttributesW(home, FILE_ATTRIBUTE_NORMAL);
         FILE *f = _wfopen(home, L"wb");                 /* oxirida yangi qator bo'lmasin - NextClient trim qilmaydi */
         if (f) { fwrite(url, 1, strlen(url), f); fclose(f); }
     }
+    /* boost-top yangilovchisi manzilni eski saytga qaytarib yozmasligi uchun faylni faqat o'qiladigan qilamiz */
+    SetFileAttributesW(home, FILE_ATTRIBUTE_READONLY);
     free(cur);
 
     path_join(dom, g_dir, L"platform\\accepted_domains.txt");
