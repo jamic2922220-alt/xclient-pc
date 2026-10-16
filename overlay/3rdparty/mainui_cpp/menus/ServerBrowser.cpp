@@ -535,7 +535,7 @@ void server_t::UpdateData( void )
 	if( XC_IsPinned( ipstr, name ))
 	{
 		char tmp[sizeof( name )];
-		snprintf( tmp, sizeof( tmp ), "^1[X]^7 %s", name );
+		snprintf( tmp, sizeof( tmp ), "^1[X]^7%s", name );
 		Q_strncpy( name, tmp, sizeof( name ));
 	}
 }
@@ -1255,8 +1255,8 @@ void CMenuServerBrowser::_Init( void )
 	tabSwitch.eTextAlignment = QM_CENTER;
 	tabSwitch.bMouseToggle = false;
 	tabSwitch.bKeepToggleWidth = true;
-	tabSwitch.iSelectColor = uiInputFgColor;
-	tabSwitch.iFgTextColor = uiInputFgColor - 0x00151515; // bit darker
+	tabSwitch.iSelectColor = uiPromptFocusColor; // X CLIENT: tanlangan yorliq qizil
+	tabSwitch.iFgTextColor = uiColorWhite;       // X CLIENT: oq matn
 	tabSwitch.onChanged = VoidCb( &CMenuServerBrowser::OnTabSwitch );
 
 	// server.dll needs for reading savefiles or startup newgame
