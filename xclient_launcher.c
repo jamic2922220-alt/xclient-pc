@@ -631,12 +631,58 @@ static void ensure_launcher_cfg(void)
     fclose(f);
 }
 
+/* NextClient Serverlar/Sozlamalar oynalari rangini resource/schemes/ dagi tanlangan sxemadan oladi;
+ * tanlov cstrike/MiscellaneousSettings.vdf dagi "Scheme" kalitida. Birinchi marta X CLIENT sxemasini
+ * tanlab qo'yamiz - keyin o'yinchi Sozlamalar > Misc > Color scheme da o'zgartirishi mumkin. */
+#define XC_SCHEME "TrackerScheme_XClient.res"
+static void ensure_scheme(void)
+{
+    wchar_t ini[MAX_PATH], vdf[MAX_PATH];
+    ini_path(ini);
+    if (GetPrivateProfileIntW(L"x", L"scheme", 0, ini)) return;
+    path_join(vdf, g_dir, L"cstrike\\MiscellaneousSettings.vdf");
+    char *buf = NULL, *out = NULL;
+    long n = 0;
+    FILE *f = _wfopen(vdf, L"rb");
+    if (f) {
+        fseek(f, 0, SEEK_END); n = ftell(f); fseek(f, 0, SEEK_SET);
+        if (n > 0 && n < 65536 && (buf = (char *)calloc(1, n + 1)) != NULL) fread(buf, 1, n, f);
+        fclose(f);
+    }
+    out = (char *)malloc(n + 256);
+    if (!out) { free(buf); return; }
+    char *k = buf ? strstr(buf, "\"Scheme\"") : NULL;
+    char *close = buf ? strrchr(buf, '}') : NULL;
+    if (k) {
+        /* "Scheme" "eski" -> "Scheme" "XClient" (qator oxirigacha almashtiramiz) */
+        char *eol = strchr(k, '\n');
+        size_t pre = (size_t)(k - buf);
+        memcpy(out, buf, pre);
+        sprintf(out + pre, "\"Scheme\"\t\t\"%s\"\r\n%s", XC_SCHEME, eol ? eol + 1 : "");
+    } else if (close) {
+        size_t pre = (size_t)(close - buf);
+        memcpy(out, buf, pre);
+        sprintf(out + pre, "\t\"Scheme\"\t\t\"%s\"\r\n%s", XC_SCHEME, close);
+    } else {
+        sprintf(out, "\"MiscellaneousSettings\"\r\n{\r\n\t\"Scheme\"\t\t\"%s\"\r\n}\r\n", XC_SCHEME);
+    }
+    mkdirs_for(vdf);
+    f = _wfopen(vdf, L"wb");
+    if (f) {
+        fwrite(out, 1, strlen(out), f);
+        fclose(f);
+        WritePrivateProfileStringW(L"x", L"scheme", L"1", ini);
+    }
+    free(buf); free(out);
+}
+
 static BOOL g_fresh = FALSE;
 static void run_game(void)
 {
     wchar_t exe[MAX_PATH], cmd[1024];
     remove_old_ui();
     apply_theme_dir(L"");
+    ensure_scheme();
     ensure_launcher_cfg();
     path_join(exe, g_dir, L"cstrike.exe");
     if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) path_join(exe, g_dir, L"hl.exe");
