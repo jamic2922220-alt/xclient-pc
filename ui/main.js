@@ -78,10 +78,45 @@ ipcMain.on('open:folder', (e, sub) => {
   shell.openPath(p);
 });
 
+/* ------------------------------------------------------------ o'yin ichidagi X CLIENT dizayni */
+// x-ui/ingame/** -> o'yin papkasi (fon, menyu, ranglar, logo). Asl fayllar bir marta xclient_backup ga saqlanadi.
+const INGAME = path.join(__dirname, 'ingame');
+function walk(dir, base = '') {
+  let out = [];
+  for (const n of fs.readdirSync(dir)) {
+    const full = path.join(dir, n), rel = base ? base + '/' + n : n;
+    if (fs.statSync(full).isDirectory()) out = out.concat(walk(full, rel)); else out.push(rel);
+  }
+  return out;
+}
+function applyIngame() {
+  if (!gameExe()) return 0;
+  let n = 0;
+  try {
+    for (const rel of walk(INGAME)) {
+      const src = fs.readFileSync(path.join(INGAME, rel));
+      const dst = path.join(GAME_DIR, rel);
+      let cur = null;
+      try { cur = fs.readFileSync(dst); } catch (e) {}
+      if (cur && cur.equals(src)) continue;
+      if (cur) {
+        const bak = path.join(GAME_DIR, 'xclient_backup', rel);
+        if (!fs.existsSync(bak)) { fs.mkdirSync(path.dirname(bak), { recursive: true }); fs.writeFileSync(bak, cur); }
+      }
+      fs.mkdirSync(path.dirname(dst), { recursive: true });
+      fs.writeFileSync(dst, src);
+      n++;
+    }
+  } catch (e) {}
+  return n;
+}
+app.whenReady().then(() => { try { applyIngame(); } catch (e) {} });
+
 /* ------------------------------------------------------------ o'yinni ochish */
 ipcMain.handle('game:launch', (e, opts) => {
   const exe = gameExe();
   if (!exe) return 'cstrike.exe / hl.exe topilmadi: ' + GAME_DIR;
+  applyIngame();
   const args = ['-game', 'cstrike', '-noforcemparms', '-noforcemaccel', '+exec', 'xclient_launcher.cfg'];
   if (opts && opts.width && opts.height) args.unshift('-width', String(opts.width), '-height', String(opts.height));
   if (opts && opts.windowed) args.unshift('-window'); else args.unshift('-full');
