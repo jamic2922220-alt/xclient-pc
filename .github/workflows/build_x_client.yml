@@ -114,7 +114,7 @@ jobs:
           cat > "dist/X CLIENT.bat" <<'BAT'
           @echo off
           cd /d "%~dp0"
-          start "" xash3d.exe -game cstrike +scr_drawversion 0 +clearmasters +exec boosttop_ms.cfg +exec boosttop_settings.cfg %*
+          if exist "x-ui\XClientUI.exe" ( start "" "x-ui\XClientUI.exe" ) else ( start "" xash3d.exe -game cstrike +scr_drawversion 0 +clearmasters +exec boosttop_ms.cfg +exec boosttop_settings.cfg %* )
           BAT
           sed -i 's/^          //' "dist/X CLIENT.bat"
           echo "===== dist ====="; find dist -maxdepth 2 | sort | head -200
@@ -125,6 +125,17 @@ jobs:
           set -e
           cp -rv own/assets/. dist/
           rm -f dist/cstrike/resource/HD_BackgroundLayout.txt
+
+      - name: X CLIENT oynasi (x-ui, Electron 22 — Windows 7..11)
+        shell: bash
+        run: |
+          set -e
+          cd own/ui
+          npx --yes @electron/packager@18.3.6 . XClientUI --platform=win32 --arch=ia32 --electron-version=22.3.27 --icon=app/img/icon.ico --asar --overwrite --out ../../uiout
+          cd ../..
+          mkdir -p dist/x-ui
+          cp -r uiout/XClientUI-win32-ia32/. dist/x-ui/
+          ls -la dist/x-ui | head
 
       - name: X CLIENT launcher (avto-yangilovchi)
         shell: cmd
@@ -141,13 +152,15 @@ jobs:
           cd dist
           echo "$XC_VERSION" > xclient_version.txt
           KEEP='^cstrike/(config|userconfig|video|opengl|boosttop_settings|autoexec)\.cfg$'
-          find . -type f ! -name manifest.txt ! -path './.git/*' | sed 's|^\./||' | LC_ALL=C sort | while IFS= read -r f; do
+          # Electron binarlari juda katta (git 100MB chegarasi) - yangilanishda faqat app.asar
+          printf 'x-ui/*\n!x-ui/resources/\nx-ui/resources/*\n!x-ui/resources/app.asar\n' > .gitignore
+          git init -q
+          git ls-files --others --cached --exclude-standard | grep -v -e '^manifest.txt$' -e '^.gitignore$' | LC_ALL=C sort | while IFS= read -r f; do
             h=$(sha256sum "$f" | cut -d' ' -f1); sz=$(stat -c%s "$f"); p=""
             if echo "$f" | grep -Eq "$KEEP"; then p="?"; fi
             echo "$p$h $sz $f"
           done > manifest.txt
           echo "fayllar: $(wc -l < manifest.txt)"
-          git init -q
           git config user.name "x-client-ci"; git config user.email "ci@users.noreply.github.com"
           git checkout -q -b "dist-$CHANNEL"
           git add -A
