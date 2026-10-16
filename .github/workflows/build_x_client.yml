@@ -27,31 +27,17 @@ jobs:
           path: own
           fetch-depth: 1
 
-      - name: X CLIENT fayllari (o'yinni launcher o'zi o'rnatadi)
+      - name: X CLIENT fayllari (o'yin + dizayn bitta XClient.exe da)
         shell: bash
         run: |
           set -e
           # Asl PC CS 1.6 (boost-top PRO 2.5.3) GitHub'ga joylanmaydi:
           # XClient.exe o'yin yo'q bo'lsa uni cssborka.uz dan yuklab, o'rnatuvchi orqali o'rnatadi.
-          mkdir -p dist
+          # Alohida oyna (Electron) YO'Q: XClient.exe dizaynni qo'yib, cstrike.exe ni o'zi ochadi.
+          mkdir -p dist/xc_theme
           echo "${GITHUB_RUN_NUMBER}" > dist/bt_build.txt
-          cat > "dist/X CLIENT.bat" <<'BAT'
-          @echo off
-          cd /d "%~dp0"
-          if exist "x-ui\XClientUI.exe" ( start "" "x-ui\XClientUI.exe" ) else ( start "" XClient.exe )
-          BAT
-          sed -i 's/^          //' "dist/X CLIENT.bat"
-
-      - name: X CLIENT oynasi (x-ui, Electron 22 — Windows 7..11)
-        shell: bash
-        run: |
-          set -e
-          cd own/ui
-          npx --yes @electron/packager@18.3.6 . XClientUI --platform=win32 --arch=ia32 --electron-version=22.3.27 --icon=app/img/icon.ico --asar --overwrite --out ../../uiout
-          cd ../..
-          mkdir -p dist/x-ui
-          cp -r uiout/XClientUI-win32-ia32/. dist/x-ui/
-          ls -la dist/x-ui | head
+          cp -r own/theme/. dist/xc_theme/
+          find dist -type f | head -50
 
       - name: Setup Visual Studio (x86)
         uses: ilammy/msvc-dev-cmd@v1
@@ -73,8 +59,7 @@ jobs:
           cd dist
           echo "$XC_VERSION" > xclient_version.txt
           KEEP='^cstrike/(config|userconfig|video|opengl|boosttop_settings|autoexec)\.cfg$'
-          # Electron binarlari juda katta (git 100MB chegarasi) - yangilanishda faqat app.asar
-          printf 'x-ui/*\n!x-ui/resources/\nx-ui/resources/*\n!x-ui/resources/app.asar\n' > .gitignore
+          : > .gitignore
           git init -q
           git ls-files --others --cached --exclude-standard | grep -v -e '^manifest.txt$' -e '^.gitignore$' | LC_ALL=C sort | while IFS= read -r f; do
             h=$(sha256sum "$f" | cut -d' ' -f1); sz=$(stat -c%s "$f"); p=""
@@ -90,7 +75,7 @@ jobs:
           SHA=$(git rev-parse HEAD)
           echo "base=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${SHA}" >> "$GITHUB_OUTPUT"
           cd ..
-          # paket: XClient.exe + x-ui (o'yinni birinchi ochilishda o'zi o'rnatadi)
+          # paket: XClient.exe + xc_theme (o'yinni birinchi ochilishda o'zi o'rnatadi)
           mkdir -p full && cp -r dist/. full/ && rm -rf full/.git full/.gitignore full/manifest.txt
           7z a -tzip X-Client-CS16.zip ./full/* > /dev/null
 

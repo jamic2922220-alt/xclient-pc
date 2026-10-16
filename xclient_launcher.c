@@ -6,7 +6,10 @@
  *  2) Har ishga tushganda: serverdan eng yangi versiyani so'raydi (vetka:
  *     stable/beta), o'zgargan fayllarnigina yuklab oladi (SHA-256 bilan
  *     tekshiriladi), "launch" yuboradi va o'yinni ochadi.
- *  3) Internet bo'lmasa — o'yin baribir ochiladi.
+ *  3) X CLIENT dizaynini (xc_theme papkasi) o'yin papkasiga qo'yadi va
+ *     cstrike.exe ni TO'G'RIDAN-TO'G'RI ochadi — alohida oyna yo'q,
+ *     hamma narsa (menyu, serverlar, sozlamalar) o'yinning o'zida.
+ *  4) Internet bo'lmasa — o'yin baribir ochiladi.
  *
  *  Kalit va vetka: .exe oxiriga yozilgan "XCKEY:kalit|vetka" (sayt qo'shadi)
  *  yoki o'rnatilgandan keyin xclient.ini dan olinadi.
@@ -479,9 +482,9 @@ static BOOL ensure_installed(BOOL *fresh)
     path_join(dst, g_dir, L"XClient.exe");
     if (_wcsicmp(dst, g_self)) {
         CopyFileW(g_self, dst, FALSE);
-        /* paket ichida kelgan X CLIENT oynasini ham ko'chiramiz */
-        const wchar_t *items[] = { L"x-ui", L"xclient_version.txt", L"X CLIENT.bat" };
-        for (int i = 0; i < 3; i++) {
+        /* paket ichida kelgan X CLIENT dizaynini ham ko'chiramiz */
+        const wchar_t *items[] = { L"xc_theme", L"xclient_version.txt" };
+        for (int i = 0; i < 2; i++) {
             wchar_t from[MAX_PATH + 2] = {0}, to[MAX_PATH + 2] = {0};
             path_join(from, selfDir, items[i]);
             if (GetFileAttributesW(from) == INVALID_FILE_ATTRIBUTES) continue;
@@ -561,23 +564,80 @@ static void write_master_cfg(const char *master)
     fclose(f);
 }
 
+/* ---------------------------------------------------------------- X CLIENT dizayni */
+/* xc_theme/<yo'l> -> o'yin papkasi/<yo'l>. Asl fayl bir marta xclient_backup ga saqlanadi.
+ * Har ochilishda tekshiriladi: boost-top o'rnatuvchisi yoki o'yinchi fayllarni almashtirsa ham tiklanadi. */
+static BOOL same_file(const wchar_t *a, const wchar_t *b)
+{
+    char ha[65], hb[65];
+    ULONGLONG sa = 0, sb = 0;
+    return sha256_file(a, ha, &sa) && sha256_file(b, hb, &sb) && sa == sb && !strcmp(ha, hb);
+}
+
+static void apply_theme_dir(const wchar_t *rel)
+{
+    wchar_t src[MAX_PATH], mask[MAX_PATH];
+    path_join(src, g_dir, L"xc_theme");
+    if (rel[0]) { wchar_t t[MAX_PATH]; path_join(t, src, rel); lstrcpyW(src, t); }
+    path_join(mask, src, L"*");
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(mask, &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        if (!wcscmp(fd.cFileName, L".") || !wcscmp(fd.cFileName, L"..")) continue;
+        wchar_t r[MAX_PATH], from[MAX_PATH], to[MAX_PATH], bak[MAX_PATH];
+        if (rel[0]) path_join(r, rel, fd.cFileName); else lstrcpynW(r, fd.cFileName, MAX_PATH);
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) { apply_theme_dir(r); continue; }
+        path_join(from, src, fd.cFileName);
+        path_join(to, g_dir, r);
+        if (GetFileAttributesW(to) != INVALID_FILE_ATTRIBUTES) {
+            if (same_file(from, to)) continue;
+            _snwprintf(bak, MAX_PATH, L"%s\\xclient_backup\\%s", g_dir, r);
+            bak[MAX_PATH - 1] = 0;
+            if (GetFileAttributesW(bak) == INVALID_FILE_ATTRIBUTES) { mkdirs_for(bak); CopyFileW(to, bak, TRUE); }
+        }
+        mkdirs_for(to);
+        SetFileAttributesW(to, FILE_ATTRIBUTE_NORMAL);
+        CopyFileW(from, to, FALSE);
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+}
+
+/* eski versiyadagi alohida oyna (x-ui, Electron) va .bat endi kerak emas */
+static void remove_old_ui(void)
+{
+    wchar_t p[MAX_PATH + 2] = {0};
+    path_join(p, g_dir, L"X CLIENT.bat");
+    DeleteFileW(p);
+    memset(p, 0, sizeof(p));
+    path_join(p, g_dir, L"x-ui");
+    if (GetFileAttributesW(p) == INVALID_FILE_ATTRIBUTES) return;
+    SHFILEOPSTRUCTW op = {0};
+    op.wFunc = FO_DELETE; op.pFrom = p;   /* pFrom ikki marta 0 bilan tugashi kerak */
+    op.fFlags = FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
+    SHFileOperationW(&op);
+}
+
+/* xclient_launcher.cfg yo'q bo'lsa - bo'sh qilib yaratamiz (o'yinchi sozlamalari config.cfg da qoladi) */
+static void ensure_launcher_cfg(void)
+{
+    wchar_t p[MAX_PATH];
+    path_join(p, g_dir, L"cstrike\\xclient_launcher.cfg");
+    if (GetFileAttributesW(p) != INVALID_FILE_ATTRIBUTES) return;
+    mkdirs_for(p);
+    FILE *f = _wfopen(p, L"wb");
+    if (!f) return;
+    fprintf(f, "// X CLIENT\nscr_drawversion \"0\"\n");
+    fclose(f);
+}
+
 static BOOL g_fresh = FALSE;
 static void run_game(void)
 {
     wchar_t exe[MAX_PATH], cmd[1024];
-    /* X CLIENT oynasi (x-ui) bo'lsa - o'shani ochamiz, o'yinni u ishga tushiradi */
-    wchar_t ui[MAX_PATH];
-    path_join(ui, g_dir, L"x-ui\\XClientUI.exe");
-    if (GetFileAttributesW(ui) != INVALID_FILE_ATTRIBUTES) {
-        STARTUPINFOW si0 = { sizeof(si0) };
-        PROCESS_INFORMATION pi0;
-        wchar_t uidir[MAX_PATH];
-        path_join(uidir, g_dir, L"x-ui");
-        if (CreateProcessW(ui, NULL, NULL, NULL, FALSE, 0, NULL, uidir, &si0, &pi0)) {
-            CloseHandle(pi0.hThread); CloseHandle(pi0.hProcess);
-            return;
-        }
-    }
+    remove_old_ui();
+    apply_theme_dir(L"");
+    ensure_launcher_cfg();
     path_join(exe, g_dir, L"cstrike.exe");
     if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) path_join(exe, g_dir, L"hl.exe");
     if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) {
