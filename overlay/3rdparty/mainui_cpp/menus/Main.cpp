@@ -297,6 +297,7 @@ void CMenuMain::_Init( void )
 
 	dialog.Link( this );
 
+	banner.SetPicture( "gfx/shell/head_main" ); // X CLIENT logotipi
 	AddItem( banner );
 	AddItem( console );
 	AddItem( disconnect );

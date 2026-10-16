@@ -1,0 +1,2 @@
+resolution 1920 1080
+"resource/background/x_bg.png" scaled 0 0
