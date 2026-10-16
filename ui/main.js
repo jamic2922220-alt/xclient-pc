@@ -53,10 +53,13 @@ ipcMain.handle('cfg:write', (e, text) => {
   } catch (err) { return String(err); }
 });
 
-// Faqat asl PC CS 1.6 (hl.exe)
-function engine() {
-  return fs.existsSync(path.join(GAME_DIR, 'hl.exe')) ? 'gs' : '';
+// Faqat asl PC CS 1.6: hl.exe yoki cstrike.exe (boost-top sborkasi)
+const GAME_EXES = ['cstrike.exe', 'hl.exe'];
+function gameExe() {
+  for (const n of GAME_EXES) { const p = path.join(GAME_DIR, n); if (fs.existsSync(p)) return p; }
+  return '';
 }
+function engine() { return gameExe() ? 'gs' : ''; }
 ipcMain.handle('sys:info', () => ({
   gameDir: GAME_DIR,
   engine: engine(),
@@ -77,8 +80,8 @@ ipcMain.on('open:folder', (e, sub) => {
 
 /* ------------------------------------------------------------ o'yinni ochish */
 ipcMain.handle('game:launch', (e, opts) => {
-  if (!engine()) return 'hl.exe topilmadi: ' + GAME_DIR;
-  const exe = path.join(GAME_DIR, 'hl.exe');
+  const exe = gameExe();
+  if (!exe) return 'cstrike.exe / hl.exe topilmadi: ' + GAME_DIR;
   const args = ['-game', 'cstrike', '-noforcemparms', '-noforcemaccel', '+exec', 'xclient_launcher.cfg'];
   if (opts && opts.width && opts.height) args.unshift('-width', String(opts.width), '-height', String(opts.height));
   if (opts && opts.windowed) args.unshift('-window'); else args.unshift('-full');
