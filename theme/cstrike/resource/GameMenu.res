@@ -22,33 +22,7 @@
 	}
 	"4"
 	{
-		"label" ""
-		"command" ""
-		"OnlyInGame" "1"
-	}
-	"5"
-	{
-		"label" "O'YNASH"
-		"command" "engine connect 157.22.130.26:27015"
-	}
-	"6"
-	{
-		"label" "SERVERLAR"
-		"command" "OpenServerBrowser"
-	}
-	"7"
-	{
 		"label" "BOTLAR BILAN O'YNASH"
 		"command" "OpenCreateMultiplayerGameDialog"
-	}
-	"8"
-	{
-		"label" "SOZLAMALAR"
-		"command" "OpenOptionsDialog"
-	}
-	"9"
-	{
-		"label" "CHIQISH"
-		"command" "Quit"
 	}
 }

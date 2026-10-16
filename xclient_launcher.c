@@ -676,12 +676,105 @@ static void ensure_scheme(void)
     free(buf); free(out);
 }
 
+/* ---------------------------------------------------------------- X CLIENT bosh menyusi (HTML) */
+/* NextClient bosh menyuda platform/mmb_home_page.html dagi manzilni butun ekranga ochadi.
+ * Unga o'yin papkasidagi platform/xclient/index.html ning file:/// manzilini yozamiz.
+ * JS API (nextclient.exec va h.k.) faqat accepted_domains.txt dagi domenlarda ishlaydi -
+ * file:/// sahifalar uchun u yerda "file" qatori bo'lishi kerak. */
+#ifndef XC_MASTER_URL
+#define XC_MASTER_URL "http://mmb.boost-top.com/ms.php?q=/v1/servers/cstrike"
+#endif
+
+static char *read_all(const wchar_t *path, long *len)
+{
+    FILE *f = _wfopen(path, L"rb");
+    if (!f) return NULL;
+    fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
+    char *b = (n >= 0 && n < (1 << 20)) ? (char *)calloc(1, n + 1) : NULL;
+    if (b) fread(b, 1, n, f);
+    fclose(f);
+    if (len) *len = b ? n : 0;
+    return b;
+}
+
+static void setup_main_menu(void)
+{
+    wchar_t page[MAX_PATH], home[MAX_PATH], bak[MAX_PATH], dom[MAX_PATH];
+    path_join(page, g_dir, L"platform\\xclient\\index.html");
+    if (GetFileAttributesW(page) == INVALID_FILE_ATTRIBUTES) return;
+
+    /* file:///C:/games/CS%201.6/platform/xclient/index.html */
+    char u8[MAX_PATH * 3], url[MAX_PATH * 9];
+    WideCharToMultiByte(CP_UTF8, 0, page, -1, u8, sizeof(u8), NULL, NULL);
+    static const char hx[] = "0123456789ABCDEF";
+    size_t o = 0;
+    o += sprintf(url, "file:///");
+    for (const unsigned char *c = (const unsigned char *)u8; *c && o + 4 < sizeof(url); c++) {
+        unsigned char ch = (*c == '\\') ? '/' : *c;
+        if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || strchr("-._~/:", ch)) url[o++] = (char)ch;
+        else { url[o++] = '%'; url[o++] = hx[ch >> 4]; url[o++] = hx[ch & 15]; }
+    }
+    url[o] = 0;
+
+    path_join(home, g_dir, L"platform\\mmb_home_page.html");
+    long n = 0;
+    char *cur = read_all(home, &n);
+    if (!cur || strcmp(cur, url)) {
+        /* asl boost-top manzilini bir marta saqlab qo'yamiz */
+        path_join(bak, g_dir, L"xclient_backup\\platform\\mmb_home_page.html");
+        if (cur && !strstr(cur, "xclient") && GetFileAttributesW(bak) == INVALID_FILE_ATTRIBUTES) { mkdirs_for(bak); CopyFileW(home, bak, TRUE); }
+        FILE *f = _wfopen(home, L"wb");                 /* oxirida yangi qator bo'lmasin - NextClient trim qilmaydi */
+        if (f) { fwrite(url, 1, strlen(url), f); fclose(f); }
+    }
+    free(cur);
+
+    path_join(dom, g_dir, L"platform\\accepted_domains.txt");
+    char *d = read_all(dom, &n);
+    BOOL has = FALSE;
+    if (d) {
+        for (char *t = strtok(d, " \t\r\n"); t; t = strtok(NULL, " \t\r\n")) if (!strcmp(t, "file")) { has = TRUE; break; }
+        free(d);
+    }
+    if (!has) {
+        FILE *f = _wfopen(dom, L"ab");
+        if (f) { fputs("\r\nfile\r\n", f); fclose(f); }
+    }
+}
+
+/* Internet serverlar ro'yxati + versiya -> platform/xclient/master.js (sahifa o'zi tashqi saytga XHR qila olmasligi mumkin) */
+static void write_master_js(void)
+{
+    wchar_t p[MAX_PATH];
+    path_join(p, g_dir, L"platform\\xclient\\master.js");
+    char *body = http_get(XC_MASTER_URL, NULL);
+    if (!body && GetFileAttributesW(p) != INVALID_FILE_ATTRIBUTES) return;   /* eski ro'yxat qolsin */
+    mkdirs_for(p);
+    FILE *f = _wfopen(p, L"wb");
+    if (!f) { free(body); return; }
+    fprintf(f, "// X CLIENT launcher tomonidan yoziladi\nwindow.XC_VERSION = \"%s\";\nwindow.XC_MASTER = [", g_version);
+    int cnt = 0;
+    for (char *line = body; line && *line && cnt < 1000;) {
+        char *next = strchr(line, '\n');
+        if (next) *next++ = 0;
+        char kind[8], addr[64];
+        unsigned a, b, c, d2, port;
+        if (sscanf(line, " %7s %63s", kind, addr) == 2 && (!strcmp(kind, "gs") || !strcmp(kind, "ip"))
+            && sscanf(addr, "%u.%u.%u.%u:%u", &a, &b, &c, &d2, &port) == 5 && a < 256 && b < 256 && c < 256 && d2 < 256 && port < 65536)
+            fprintf(f, "%s\"%u.%u.%u.%u:%u\"", cnt++ ? "," : "", a, b, c, d2, port);
+        line = next;
+    }
+    fprintf(f, "];\n");
+    fclose(f);
+    free(body);
+}
+
 static BOOL g_fresh = FALSE;
 static void run_game(void)
 {
     wchar_t exe[MAX_PATH], cmd[1024];
     remove_old_ui();
     apply_theme_dir(L"");
+    setup_main_menu();
     ensure_scheme();
     ensure_launcher_cfg();
     path_join(exe, g_dir, L"cstrike.exe");
@@ -748,6 +841,7 @@ static DWORD WINAPI worker(LPVOID unused)
         }
         write_master_cfg(u.master);
     }
+    if (!g_relaunch) write_master_js();
     if (!g_relaunch && !ensure_game(u.game)) {
         lstrcpyW(g_err, L"CS 1.6 o‘yin fayllarini o‘rnatib bo‘lmadi. Internetni tekshirib, X CLIENT ni qayta oching.");
         g_play = FALSE;

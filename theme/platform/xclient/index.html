@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<title>X CLIENT</title>
+<!--
+  X CLIENT — o'yin ichidagi bosh menyu (NextClient Main Menu Browser).
+  XClient.exe platform/mmb_home_page.html ga shu faylning file:/// manzilini yozadi.
+  CEF1 (Chrome 17): faqat ES5, flexbox/vh/calc yo'q — hamma narsa absolute + px.
+  O'yin bilan aloqa: nextclient.exec(cmd), nextclient.matchmaking.getServerInfo/getPlayersInfo(ip),
+  nextclient.gameUi.optionsDialog.open(tab). Ro'yxatlar: master.js (launcher yozadi), boost-top top.php.
+-->
+<link rel="stylesheet" href="xc.css">
+<script src="xc_lang.js"></script>
+</head>
+<body>
+<div id="app">
+  <div id="bg"></div>
+  <div id="vig"></div>
+
+  <!-- ===== logo ===== -->
+  <div id="logo">
+    <img src="logo.png" alt="">
+    <div class="lt">
+      <div class="xc"><span>X</span> CLIENT</div>
+      <div class="sub"><span class="bt">COUNTER-STRIKE</span><span class="v">1.6 PRO</span></div>
+    </div>
+  </div>
+
+  <!-- ===== chap menyu ===== -->
+  <div id="menu">
+    <div class="mi" data-act="quick"><i>&#9654;</i><span data-t="m_quick"></span></div>
+    <div class="mi" data-act="servers"><i>&#9673;</i><span data-t="m_servers"></span><em id="mServers"></em></div>
+    <div class="mi" data-act="favs"><i>&#9733;</i><span data-t="m_favs"></span><em id="mFavs"></em></div>
+    <div class="mi" data-act="history"><i>&#8634;</i><span data-t="m_history"></span></div>
+    <div class="sep"></div>
+    <div class="mi" data-act="settings"><i>&#9881;</i><span data-t="m_settings"></span></div>
+    <div class="mi" data-act="quit"><i>&#10005;</i><span data-t="m_quit"></span></div>
+  </div>
+
+  <!-- ===== o'ng ustun ===== -->
+  <div id="col">
+    <div id="play" data-act="play">
+      <div class="tri"></div>
+      <div class="pt"><b data-t="play"></b><small id="playSub">...</small></div>
+      <div class="pp"><span id="playCnt">--</span><small data-t="online"></small></div>
+    </div>
+
+    <div class="card" id="topCard">
+      <div class="ct"><span data-t="top_title"></span><span class="mut" data-t="ad"></span></div>
+      <div id="topList"></div>
+      <div class="cf"><span data-t="top_foot"></span> <b>boost-top.com</b></div>
+    </div>
+
+    <div class="card" id="lastCard">
+      <div class="ct"><span data-t="last_title"></span><span class="mut link" data-act="history" data-t="all"></span></div>
+      <div id="lastList"></div>
+    </div>
+  </div>
+
+  <!-- ===== pastki panel ===== -->
+  <div id="bar">
+    <div class="me"><div class="av" id="meAv">X</div><div><b id="meName">Player</b><small id="meState" class="mut"></small></div></div>
+    <div class="st"><span data-t="b_online"></span> <b id="bOnline">0</b></div>
+    <div class="st"><span data-t="b_servers"></span> <b id="bServers">0</b></div>
+    <div class="st" id="bSaved"></div>
+    <div class="ver" id="bVer">X CLIENT</div>
+  </div>
+
+  <!-- ===== SERVERLAR oynasi ===== -->
+  <div class="modal" id="mdServers">
+    <div class="win">
+      <div class="wh"><img src="logo.png" alt=""><span data-t="m_servers"></span><a class="x" data-act="close">&#10005;</a></div>
+      <div class="tabs" id="srvTabs">
+        <a data-tab="internet" data-t="t_internet"></a>
+        <a data-tab="favs"><span data-t="t_favs"></span> <small id="favCnt"></small></a>
+        <a data-tab="history" data-t="t_history"></a>
+        <a data-tab="top" data-t="t_top"></a>
+      </div>
+      <div class="wb">
+        <div id="srvTools">
+          <input id="srvSearch" type="text">
+          <a class="chip" data-flt="ping" data-t="f_ping"></a>
+          <a class="chip" data-flt="notempty" data-t="f_notempty"></a>
+          <a class="chip" data-flt="notfull" data-t="f_notfull"></a>
+          <a class="chip" data-flt="nopass" data-t="f_nopass"></a>
+          <a class="btn red" id="quickBtn" data-act="quick">&#9889; <span data-t="m_quick"></span></a>
+          <a class="btn" id="addIpBtn" data-act="addip">+ <span data-t="add_ip"></span></a>
+          <a class="btn" id="clearHist" data-act="clearhist">&#128465; <span data-t="clear_hist"></span></a>
+        </div>
+        <div id="srvHead" class="lh">
+          <span class="c0">&#9733;</span><span class="c1 sort" data-sort="name" data-t="h_server"></span><span class="c2 sort" data-sort="pl" data-t="h_players"></span><span class="c3 sort" data-sort="map" data-t="h_map"></span><span class="c4 sort" data-sort="ping" data-t="h_ping"></span><span class="c5" id="h5"></span>
+        </div>
+        <div id="srvList" class="lst"></div>
+        <div id="histStats"></div>
+        <div id="srvInfo"></div>
+      </div>
+      <div class="wf">
+        <span class="mut" id="srvFoot"></span>
+        <a class="btn" data-act="refresh">&#10227; <span data-t="refresh"></span></a>
+        <a class="btn" data-act="togglefav" id="favBtn">&#9733; <span data-t="to_favs"></span></a>
+        <a class="btn red" data-act="join">&#9654; <span data-t="join"></span></a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SOZLAMALAR oynasi ===== -->
+  <div class="modal" id="mdSettings">
+    <div class="win">
+      <div class="wh"><img src="logo.png" alt=""><span data-t="m_settings"></span><a class="x" data-act="close">&#10005;</a></div>
+      <div class="tabs" id="setTabs">
+        <a data-tab="game" data-t="s_game"></a>
+        <a data-tab="keys" data-t="s_keys"></a>
+        <a data-tab="mouse" data-t="s_mouse"></a>
+        <a data-tab="sound" data-t="s_sound"></a>
+        <a data-tab="video" data-t="s_video"></a>
+        <a data-tab="hud" data-t="s_hud"></a>
+        <a data-tab="system" data-t="s_system"></a>
+      </div>
+      <div class="wb" id="setBody"></div>
+      <div class="wf">
+        <span class="mut" data-t="saved_note"></span>
+        <a class="btn" data-act="defaults" data-t="defaults"></a>
+        <a class="btn" data-act="close" data-t="cancel"></a>
+        <a class="btn red" data-act="save" data-t="save"></a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== kichik so'rov oynasi ===== -->
+  <div class="modal" id="mdAsk">
+    <div class="ask">
+      <div class="at" id="askT"></div>
+      <input id="askI" type="text">
+      <div class="ab"><a class="btn" id="askNo" data-t="cancel"></a><a class="btn red" id="askYes">OK</a></div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+  <div id="dbg"></div>
+</div>
+<script src="master.js"></script>
+<script src="xc.js"></script>
+</body>
+</html>
