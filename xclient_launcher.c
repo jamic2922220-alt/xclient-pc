@@ -677,10 +677,8 @@ static void ensure_scheme(void)
 }
 
 /* ---------------------------------------------------------------- X CLIENT bosh menyusi (HTML) */
-/* NextClient bosh menyuda platform/mmb_home_page.html dagi manzilni butun ekranga ochadi.
- * Unga o'yin papkasidagi platform/xclient/index.html ning file:/// manzilini yozamiz.
- * JS API (nextclient.exec va h.k.) faqat accepted_domains.txt dagi domenlarda ishlaydi -
- * file:/// sahifalar uchun u yerda "file" qatori bo'lishi kerak. */
+/* NextClient bosh menyuda platform/mmb_home_page.html dagi manzilni (mmb.boost-top.com) butun ekranga ochadi.
+ * X CLIENT menyusi (theme/platform/xclient) o'sha saytga yuklanadi; launcher faqat serverlar ro'yxatini beradi. */
 #ifndef XC_MASTER_URL
 #define XC_MASTER_URL "http://mmb.boost-top.com/ms.php?q=/v1/servers/cstrike"
 #endif
@@ -697,51 +695,22 @@ static char *read_all(const wchar_t *path, long *len)
     return b;
 }
 
+/* Sinovda o'yin brauzeri (CEF1) file:/// sahifani ochmadi - xato sahifasi chiqdi. Shuning uchun X CLIENT menyusi
+ * saytda (mmb.boost-top.com) turadi va bosh menyu manzili asl holida qoladi. Oldingi versiya yozgan
+ * file:/// manzilni shu yerda qaytaramiz. */
+#define XC_HOME_URL "http://mmb.boost-top.com/index.html"
 static void setup_main_menu(void)
 {
-    wchar_t page[MAX_PATH], home[MAX_PATH], bak[MAX_PATH], dom[MAX_PATH];
-    path_join(page, g_dir, L"platform\\xclient\\index.html");
-    if (GetFileAttributesW(page) == INVALID_FILE_ATTRIBUTES) return;
-
-    /* file:///C:/games/CS%201.6/platform/xclient/index.html */
-    char u8[MAX_PATH * 3], url[MAX_PATH * 9];
-    WideCharToMultiByte(CP_UTF8, 0, page, -1, u8, sizeof(u8), NULL, NULL);
-    static const char hx[] = "0123456789ABCDEF";
-    size_t o = 0;
-    o += sprintf(url, "file:///");
-    for (const unsigned char *c = (const unsigned char *)u8; *c && o + 4 < sizeof(url); c++) {
-        unsigned char ch = (*c == '\\') ? '/' : *c;
-        if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || strchr("-._~/:", ch)) url[o++] = (char)ch;
-        else { url[o++] = '%'; url[o++] = hx[ch >> 4]; url[o++] = hx[ch & 15]; }
-    }
-    url[o] = 0;
-
+    wchar_t home[MAX_PATH];
     path_join(home, g_dir, L"platform\\mmb_home_page.html");
     long n = 0;
     char *cur = read_all(home, &n);
-    if (!cur || strcmp(cur, url)) {
-        /* asl boost-top manzilini bir marta saqlab qo'yamiz */
-        path_join(bak, g_dir, L"xclient_backup\\platform\\mmb_home_page.html");
-        if (cur && !strstr(cur, "xclient") && GetFileAttributesW(bak) == INVALID_FILE_ATTRIBUTES) { mkdirs_for(bak); CopyFileW(home, bak, TRUE); }
+    if (cur && strstr(cur, "file:///") && strstr(cur, "xclient")) {
         SetFileAttributesW(home, FILE_ATTRIBUTE_NORMAL);
-        FILE *f = _wfopen(home, L"wb");                 /* oxirida yangi qator bo'lmasin - NextClient trim qilmaydi */
-        if (f) { fwrite(url, 1, strlen(url), f); fclose(f); }
+        FILE *f = _wfopen(home, L"wb");
+        if (f) { fputs(XC_HOME_URL, f); fclose(f); }
     }
-    /* boost-top yangilovchisi manzilni eski saytga qaytarib yozmasligi uchun faylni faqat o'qiladigan qilamiz */
-    SetFileAttributesW(home, FILE_ATTRIBUTE_READONLY);
     free(cur);
-
-    path_join(dom, g_dir, L"platform\\accepted_domains.txt");
-    char *d = read_all(dom, &n);
-    BOOL has = FALSE;
-    if (d) {
-        for (char *t = strtok(d, " \t\r\n"); t; t = strtok(NULL, " \t\r\n")) if (!strcmp(t, "file")) { has = TRUE; break; }
-        free(d);
-    }
-    if (!has) {
-        FILE *f = _wfopen(dom, L"ab");
-        if (f) { fputs("\r\nfile\r\n", f); fclose(f); }
-    }
 }
 
 /* Internet serverlar ro'yxati + versiya -> platform/xclient/master.js (sahifa o'zi tashqi saytga XHR qila olmasligi mumkin) */
