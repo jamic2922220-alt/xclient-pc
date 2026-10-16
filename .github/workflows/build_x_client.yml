@@ -118,15 +118,12 @@ jobs:
           sed -i 's/^          //' "dist/X CLIENT.bat"
           echo "===== dist ====="; find dist -maxdepth 2 | sort | head -200
 
-      - name: X CLIENT dizayni (fon, ranglar)
+      - name: X CLIENT dizayni (fon, sarlavhalar, ranglar, o'zbekcha matnlar)
         shell: bash
         run: |
           set -e
-          mkdir -p dist/cstrike/resource/background dist/cstrike/gfx/shell
-          cp own/x_bg.png dist/cstrike/resource/background/x_bg.png
-          printf 'resolution 1920 1080\n"resource/background/x_bg.png" scaled 0 0\n' > dist/cstrike/resource/BackgroundLayout.txt
+          cp -rv own/assets/. dist/
           rm -f dist/cstrike/resource/HD_BackgroundLayout.txt
-          printf 'HELP_COLOR 175 165 172\nPROMPT_BG_COLOR 20 17 24\nPROMPT_TEXT_COLOR 236 230 234\nPROMPT_FOCUS_COLOR 255 59 59\nINPUT_TEXT_COLOR 255 255 255\nINPUT_BG_COLOR 18 15 21\nINPUT_FG_COLOR 90 46 52\nCON_TEXT_COLOR 255 106 90\n' > dist/cstrike/gfx/shell/colors.lst
 
       - name: X CLIENT launcher (avto-yangilovchi)
         shell: cmd
