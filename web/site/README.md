@@ -4,7 +4,7 @@ Shu papkadagi hamma fayl `boost-top.com/mmb` papkasiga (o'yin ochadigan `http://
 
 | Fayl | Vazifasi |
 |---|---|
-| `index.html`, `xc.css`, `xc.js`, `xc_lang.js`, `logo.png`, `bg.jpg` | o'yin ichidagi X CLIENT menyusi |
+| `index.html`, `xc.css`, `xc.js`, `xc_lang.js`, `logo.png`, `logo_big.png` | o'yin ichidagi X CLIENT menyusi |
 | `xc_api.php` | akkaunt: ro'yxatdan o'tish, kirish, bulutga saqlash, do'stlar, TOP hafta, XP |
 
 `xc_api.php` birinchi so'rovda `xc_data/` papkasini o'zi yaratadi (MySQL kerak emas). Papkaga ruxsat 755 bo'lishi kerak.
