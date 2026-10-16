@@ -716,10 +716,13 @@ static int jint(const char *b, const char *k, int def)
     if (*p == '"') p++;
     return atoi(p);
 }
+static unsigned cache_mb(void);
 static void fetch_opts(void)
 {
     char url[256];
-    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=opts&d=%s", g_id); url[sizeof(url) - 1] = 0;
+    char v[48];
+    url_escape(v, sizeof(v), g_version[0] ? g_version : "1.0");
+    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=hello&d=%s&v=%s&cache=%u", g_id, v, cache_mb()); url[sizeof(url) - 1] = 0;
     char *r = http_get(url, NULL);
     if (!r || !strstr(r, "\"ok\":true")) { free(r); return; }
     o_beta = jint(r, "beta", -1); o_auto = jint(r, "auto", 1); o_start = jint(r, "start", -1);
@@ -782,22 +785,19 @@ static void clean_cache(void)
     SHFileOperationW(&op);
 }
 
-/* Bosh menyu manzili: http://mmb.boost-top.com/index.html?xc=<id>&v=<versiya>&c=<kesh MB>
- * (sahifa shu id bilan Tizim sozlamalarini saqlaydi, versiya va kesh hajmini ko'rsatadi).
- * Oxirida yangi qator bo'lmasin - NextClient manzilni trim qilmaydi. */
+/* Bosh menyu manzili oddiy http://mmb.boost-top.com/index.html bo'lib qoladi - o'yin brauzeri
+ * "?..." qo'shimchali manzilni ocholmadi (xato sahifasi chiqdi). Oldingi versiyalar yozgan
+ * file:/// yoki ?xc= manzilini shu yerda qaytaramiz. Kompyuter id'si menyuga sayt orqali (IP bo'yicha) yetadi. */
 static void setup_main_menu(void)
 {
     wchar_t home[MAX_PATH];
     path_join(home, g_dir, L"platform\\mmb_home_page.html");
     long n = 0;
-    char *cur = read_all(home, &n), url[300], v[48];
-    if (cur && *cur && !strstr(cur, "mmb.boost-top.com") && !strstr(cur, "xclient")) { free(cur); return; }   /* boshqa sahifa - tegmaymiz */
-    url_escape(v, sizeof(v), g_version[0] ? g_version : "1.0");
-    _snprintf(url, sizeof(url), XC_SITE "index.html?xc=%s&v=%s&c=%u", g_id, v, cache_mb()); url[sizeof(url) - 1] = 0;
-    if (!cur || strcmp(cur, url)) {
+    char *cur = read_all(home, &n);
+    if (cur && (strstr(cur, "?xc=") || (strstr(cur, "file:///") && strstr(cur, "xclient")))) {
         SetFileAttributesW(home, FILE_ATTRIBUTE_NORMAL);
         FILE *f = _wfopen(home, L"wb");
-        if (f) { fputs(url, f); fclose(f); }
+        if (f) { fputs(XC_SITE "index.html", f); fclose(f); }
     }
     free(cur);
 }

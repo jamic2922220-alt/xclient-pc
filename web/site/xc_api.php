@@ -258,30 +258,47 @@ case 'report':                                           // "Xatolik haqida xaba
     wr('reports/' . date('Ymd-His') . '-' . $who . '-' . mt_rand(100, 999), array('t' => time(), 'who' => $who, 'ver' => p('ver'), 'log' => $log, 'ua' => isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : ''));
     out(array('ok' => true));
 
-case 'opts':                                             // XClient.exe so'raydi: shu kompyuter uchun Tizim sozlamalari
-case 'opts_set':                                         // menyu yozadi
-case 'opts_done':                                        // XClient.exe bir martalik buyruqlarni bajardi
-    $d = strtolower(p('d'));
-    if (!preg_match('/^[a-z0-9]{8,40}$/', $d)) fail('dev', 'device');
+/* ---- XClient.exe <-> menyu: bir kompyuter (bir IP) bo'yicha bog'lanadi ----
+ * XClient.exe ishga tushganda 'hello' yuboradi (kompyuter id, versiya, kesh hajmi).
+ * Menyu 'opts' / 'opts_set' ni id'siz chaqiradi - server shu IP dan oxirgi kelgan XClient.exe id'sini oladi. */
+case 'hello':
+case 'opts':
+case 'opts_set':
+case 'opts_done':
     @mkdir(XC_DIR . '/dev', 0755, true);
-    $o = rd('dev/' . $d, array());
-    if ($a === 'opts_set') {
+    @mkdir(XC_DIR . '/ip', 0755, true);
+    $ipk = 'ip/' . substr(sha1((isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '') . 'xc'), 0, 24);
+    $d = strtolower(p('d'));
+    if ($a === 'hello') {
+        if (!preg_match('/^[a-z0-9]{8,40}$/', $d)) fail('dev', 'device');
         lock();
         $o = rd('dev/' . $d, array());
+        $o['ver'] = substr(preg_replace('/[^\w.\-]/', '', p('v')), 0, 20);
+        $o['cachemb'] = (int)p('cache');
+        $o['seen'] = time();
+        wr('dev/' . $d, $o);
+        wr($ipk, array('d' => $d, 't' => time()));
+        out(array('ok' => true, 'o' => $o));
+    }
+    if (!preg_match('/^[a-z0-9]{8,40}$/', $d)) {
+        $m = rd($ipk, null);
+        if (!$m || time() - $m['t'] > 30 * 86400) out(array('ok' => true, 'o' => null));   // XClient.exe hali ulanmagan
+        $d = $m['d'];
+    }
+    lock();
+    $o = rd('dev/' . $d, array());
+    if ($a === 'opts_set') {
         $in = json_decode(p('o'), true);
         if (!is_array($in)) fail('bad', 'bad');
         foreach (array('beta', 'auto', 'start', 'win', 'clean', 'verify') as $k) if (isset($in[$k])) $o[$k] = $in[$k] ? 1 : 0;
         if (isset($in['res'])) $o['res'] = preg_match('/^\d{3,4}x\d{3,4}$/', $in['res']) ? $in['res'] : '';
         wr('dev/' . $d, $o);
     } elseif ($a === 'opts_done') {
-        lock();
-        $o = rd('dev/' . $d, array());
         $o['clean'] = 0; $o['verify'] = 0;
         if (p('cache') !== '') $o['cachemb'] = (int)p('cache');
-        if (p('v') !== '') $o['ver'] = substr(preg_replace('/[^\w.\-]/', '', p('v')), 0, 20);
         wr('dev/' . $d, $o);
     }
-    out(array('ok' => true, 'o' => $o));
+    out(array('ok' => true, 'o' => $o, 'd' => $d));
 
 default:
     fail('action', 'Noma\'lum amal');

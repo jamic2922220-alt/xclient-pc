@@ -173,8 +173,15 @@ function qparam(k) { var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.s
 var PCID = /^[a-z0-9]{8,40}$/.test(qparam('xc')) ? qparam('xc') : '';
 var OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, clean: 0, verify: 0 }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
 function loadOpts() {
-  if (!PCID) return;
-  api('opts', { d: PCID }, function (r) { if (r.ok && r.o) { for (var k in r.o) if (r.o.hasOwnProperty(k) && OPTS.hasOwnProperty(k)) OPTS[k] = r.o[k]; if (curModal === 'mdSettings' && setTab === 'system') showSetTab('system'); } });
+  // id berilmasa server shu IP dan oxirgi ulangan XClient.exe ni topadi
+  api('opts', PCID ? { d: PCID } : {}, function (r) {
+    if (!r.ok || !r.o) return;
+    if (r.d) PCID = r.d;
+    for (var k in r.o) if (r.o.hasOwnProperty(k) && OPTS.hasOwnProperty(k)) OPTS[k] = r.o[k];
+    if (r.o.ver && !qparam('v')) { VERSION = r.o.ver; renderBar(); }
+    if (r.o.cachemb != null && !qparam('c')) CACHE_MB = r.o.cachemb;
+    if (curModal === 'mdSettings' && setTab === 'system') showSetTab('system');
+  });
 }
 function saveOpts(msg) {
   if (!PCID) { toast(T('sy_nolaunch'), 4000); return; }
