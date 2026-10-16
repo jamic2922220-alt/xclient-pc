@@ -1,4 +1,4 @@
-name: X CLIENT CS 1.6 (Windows)
+name: X CLIENT CS 1.6 PC (Windows)
 on:
   push:
     branches: [ master, main ]
@@ -27,104 +27,20 @@ jobs:
           path: own
           fetch-depth: 1
 
-      - name: Checkout cs16-client manbasi
-        uses: actions/checkout@v5
-        with:
-          repository: Velaron/cs16-client
-          ref: 9778fec4c6f956d2b483949feb704fb479c92f7f
-          path: src
-          fetch-depth: 1
-          submodules: recursive
-
-      - name: Manbani ish papkasiga ko'chirish
+      - name: X CLIENT fayllari (o'yinni launcher o'zi o'rnatadi)
         shell: bash
-        run: |
-          shopt -s dotglob
-          mv src/* .
-          rmdir src
-
-      - name: X CLIENT menyu fayllari (overlay)
-        shell: bash
-        run: |
-          cp -rv own/overlay/. .
-
-      - name: Setup Visual Studio (x86)
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x86
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.11
-      - name: Setup YY-Thunks (Windows 7 uchun)
-        shell: bash
-        run: bash scripts/setup_yy_thunks.sh
-      - name: Configure
-        run: cmake -DCMAKE_POLICY_DEFAULT_CMP0141=NEW --preset "win32-ci-x86"
-      - name: Build and Package
-        working-directory: build
-        run: |
-          cmake --build .
-          cpack --config CPackConfig.cmake
-
-      - name: Dvijok + klient + boost-top sozlamalari
-        shell: bash
-        env:
-          GAMEFILES_URL: ${{ secrets.GAMEFILES_URL }}
         run: |
           set -e
-          mkdir -p tmp dist
-          if [ -n "$GAMEFILES_URL" ]; then
-            curl -fL -o gamefiles.zip "$GAMEFILES_URL"
-            7z x -y -otmp/game gamefiles.zip > /dev/null
-            n=$(ls -1 tmp/game | wc -l)
-            if [ "$n" = "1" ] && [ -d "tmp/game/$(ls tmp/game)" ]; then cp -r "tmp/game/$(ls tmp/game)"/. dist/; else cp -r tmp/game/. dist/; fi
-          else
-            echo "::warning::GAMEFILES_URL berilmagan - o'yin fayllarisiz build"
-          fi
-          for z in build/*.zip; do 7z x -y -otmp/client "$z"; done
-          cp -r tmp/client/. dist/
-          curl -fL -o engine.7z https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xash3d-fwgs-win32-i386.7z
-          7z x -y -odist engine.7z
-          find dist -name "*.pdb" -delete; find dist -name "*.lib" -delete
-          mkdir -p dist/cstrike
-          printf 'addmasterstatic "http://mmb.boost-top.com/ms.php?q="\n' > dist/cstrike/boosttop_ms.cfg
-          printf 'connect 157.22.130.26:27015\n' > dist/cstrike/boosttop_random.cfg
-          cat > dist/cstrike/boosttop_settings.cfg <<'CFG'
-          // boost-top PC: o'qlar aniq tegishi va silliq o'yin uchun
-          rate "100000"
-          cl_updaterate "101"
-          cl_cmdrate "105"
-          ex_interp "0.01"
-          cl_lw "1"
-          cl_lc "1"
-          fps_max "250"
-          gl_vsync "0"
-          hud_fastswitch "1"
-          xhair_enable "1"
-          xhair_thick "2"
-          xhair_size "5"
-          xhair_gap "2"
-          xhair_pad "1"
-          xhair_color "50 250 50 255"
-          xhair_dynamic_scale "0"
-          developer "0"
-          scr_drawversion "0"
-          CFG
-          sed -i 's/^          //' dist/cstrike/boosttop_settings.cfg
+          # Asl PC CS 1.6 (boost-top PRO 2.5.3) GitHub'ga joylanmaydi:
+          # XClient.exe o'yin yo'q bo'lsa uni cssborka.uz dan yuklab, o'rnatuvchi orqali o'rnatadi.
+          mkdir -p dist
           echo "${GITHUB_RUN_NUMBER}" > dist/bt_build.txt
           cat > "dist/X CLIENT.bat" <<'BAT'
           @echo off
           cd /d "%~dp0"
-          if exist "x-ui\XClientUI.exe" ( start "" "x-ui\XClientUI.exe" ) else ( start "" xash3d.exe -game cstrike +scr_drawversion 0 +clearmasters +exec boosttop_ms.cfg +exec boosttop_settings.cfg %* )
+          if exist "x-ui\XClientUI.exe" ( start "" "x-ui\XClientUI.exe" ) else ( start "" XClient.exe )
           BAT
           sed -i 's/^          //' "dist/X CLIENT.bat"
-          echo "===== dist ====="; find dist -maxdepth 2 | sort | head -200
-
-      - name: X CLIENT dizayni (fon, sarlavhalar, ranglar, o'zbekcha matnlar)
-        shell: bash
-        run: |
-          set -e
-          cp -rv own/assets/. dist/
-          rm -f dist/cstrike/resource/HD_BackgroundLayout.txt
 
       - name: X CLIENT oynasi (x-ui, Electron 22 — Windows 7..11)
         shell: bash
@@ -136,6 +52,11 @@ jobs:
           mkdir -p dist/x-ui
           cp -r uiout/XClientUI-win32-ia32/. dist/x-ui/
           ls -la dist/x-ui | head
+
+      - name: Setup Visual Studio (x86)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x86
 
       - name: X CLIENT launcher (avto-yangilovchi)
         shell: cmd
@@ -168,7 +89,10 @@ jobs:
           git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "dist-$CHANNEL"
           SHA=$(git rev-parse HEAD)
           echo "base=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${SHA}" >> "$GITHUB_OUTPUT"
-          cd .. && 7z a -tzip X-Client-CS16.zip ./dist/* -xr!.git > /dev/null
+          cd ..
+          # paket: XClient.exe + x-ui (o'yinni birinchi ochilishda o'zi o'rnatadi)
+          mkdir -p full && cp -r dist/. full/ && rm -rf full/.git full/.gitignore full/manifest.txt
+          7z a -tzip X-Client-CS16.zip ./full/* > /dev/null
 
       - name: Panelga xabar (hamma klientlar yangilanadi)
         shell: bash
