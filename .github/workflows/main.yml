@@ -1,0 +1,219 @@
+name: X CLIENT CS 1.6 (Windows)
+on:
+  push:
+    branches: [ master, main ]
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Vetka: stable (hamma) yoki beta (sinov)'
+        default: stable
+        type: choice
+        options: [ stable, beta ]
+
+env:
+  CHANNEL: ${{ github.event.inputs.channel || 'beta' }}
+  XC_VERSION: 1.0.${{ github.run_number }}
+
+jobs:
+  windows:
+    name: Windows klient
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout X CLIENT fayllari
+        uses: actions/checkout@v5
+        with:
+          path: own
+          fetch-depth: 1
+
+      - name: Checkout cs16-client manbasi
+        uses: actions/checkout@v5
+        with:
+          repository: Velaron/cs16-client
+          path: src
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Manbani ish papkasiga ko'chirish
+        shell: bash
+        run: |
+          shopt -s dotglob
+          mv src/* .
+          rmdir src
+
+      - name: boost-top menyu (kompyuterdagi CS 1.6 kabi)
+        shell: bash
+        run: |
+          python - <<'PY'
+          import re
+          p = '3rdparty/mainui_cpp/BaseMenu.cpp'
+          s = open(p, encoding='utf-8').read()
+          a = 'uiStatic.renderPicbuttonText = gMenu.m_gameinfo.flags & GFL_RENDER_PICBUTTON_TEXT;'
+          assert a in s, a
+          s = s.replace(a, 'uiStatic.renderPicbuttonText = true;')
+          open(p, 'w', encoding='utf-8').write(s)
+          print('BaseMenu.cpp: text buttons')
+          p = '3rdparty/mainui_cpp/menus/Main.cpp'
+          s = open(p, encoding='utf-8').read()
+          def must(a, b, cnt=None):
+              global s
+              assert a in s, a
+              s = s.replace(a, b) if cnt is None else s.replace(a, b, cnt)
+          for item in ['previews', 'saveRestore', 'hazardCourse', 'customGame']:
+              must('AddItem( %s );' % item, ';')
+          s = re.sub(r'readme\.SetNameAndStatus\([^;]*\);',
+              lambda m: '''{ const char *bt_l = EngFuncs::GetCvarString( "ui_language" ); const char *bt_rs = "Random server";
+          		if( bt_l && !strcmp( bt_l, "russian" )) bt_rs = "Случайный сервер";
+          		else if( bt_l && !strcmp( bt_l, "uzbek" )) bt_rs = "Tasodifiy server";
+          		readme.SetNameAndStatus( bt_rs, NULL ); }
+          	readme.onReleased.SetCommand( 0, "exec boosttop_random.cfg\\n" );''', s, count=1)
+          must('readme.SetPicture( PC_VIEW_README );', '')
+          must('newGame.onReleased = UI_NewGame_Menu;', 'newGame.onReleased = UI_CreateGame_Menu;')
+          must('newGame.SetGrayed( true );', ';')
+          must('newGame.SetVisibility( false );', 'newGame.SetVisibility( true );')
+          s2 = re.sub(r'multiPlayer\.SetNameAndStatus\(\s*L\(\s*"GameUI_Multiplayer"\s*\)',
+                      'multiPlayer.SetNameAndStatus( L( "GameUI_GameMenu_FindServers" )', s)
+          print('multiplayer label ->', 'find servers' if s2 != s else 'NOT FOUND'); s = s2
+          must('multiPlayer.onReleased = UI_MultiPlayer_Menu;', 'multiPlayer.onReleased = UI_InternetGames_Menu;')
+          i = s.index('\tpreviews.SetCoord( hoffset, previews_voffset );')
+          j = s.index("\t// now figure out what's visible")
+          s = s[:i] + '''	bool single = gpGlobals->maxClients < 2;
+          	int yoffset = previews_voffset + ygap;
+          	quit.SetCoord( hoffset, yoffset ); yoffset -= ygap;
+          	configuration.SetCoord( hoffset, yoffset ); yoffset -= ygap;
+          	multiPlayer.SetCoord( hoffset, yoffset ); yoffset -= ygap;
+          	newGame.SetCoord( hoffset, yoffset ); yoffset -= ygap * 2;
+          	readme.SetCoord( hoffset, yoffset ); yoffset -= ygap * 2;
+          	if( connected )
+          	{
+          		if( !single ) { disconnect.SetCoord( hoffset, yoffset ); yoffset -= ygap; }
+          		resumeGame.SetCoord( hoffset, yoffset ); yoffset -= ygap;
+          	}
+          	console.SetCoord( hoffset, yoffset );
+
+          ''' + s[j:]
+          open(p, 'w', encoding='utf-8').write(s)
+          print('Main.cpp patched')
+          PY
+
+      - name: Setup Visual Studio (x86)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x86
+      - name: Setup YY-Thunks (Windows 7 uchun)
+        shell: bash
+        run: bash scripts/setup_yy_thunks.sh
+      - name: Configure
+        run: cmake -DCMAKE_POLICY_DEFAULT_CMP0141=NEW --preset "win32-ci-x86"
+      - name: Build and Package
+        working-directory: build
+        run: |
+          cmake --build .
+          cpack --config CPackConfig.cmake
+
+      - name: Dvijok + klient + boost-top sozlamalari
+        shell: bash
+        env:
+          GAMEFILES_URL: ${{ secrets.GAMEFILES_URL }}
+        run: |
+          set -e
+          mkdir -p tmp dist
+          if [ -n "$GAMEFILES_URL" ]; then
+            curl -fL -o gamefiles.zip "$GAMEFILES_URL"
+            7z x -y -otmp/game gamefiles.zip > /dev/null
+            n=$(ls -1 tmp/game | wc -l)
+            if [ "$n" = "1" ] && [ -d "tmp/game/$(ls tmp/game)" ]; then cp -r "tmp/game/$(ls tmp/game)"/. dist/; else cp -r tmp/game/. dist/; fi
+          else
+            echo "::warning::GAMEFILES_URL berilmagan - o'yin fayllarisiz build"
+          fi
+          for z in build/*.zip; do 7z x -y -otmp/client "$z"; done
+          n=$(ls -1 tmp/client | wc -l)
+          if [ "$n" = "1" ] && [ -d "tmp/client/$(ls tmp/client)" ]; then cp -r "tmp/client/$(ls tmp/client)"/. dist/; else cp -r tmp/client/. dist/; fi
+          curl -fL -o engine.7z https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xash3d-fwgs-win32-i386.7z
+          7z x -y -odist engine.7z
+          mkdir -p dist/cstrike
+          printf 'addmasterstatic "http://mmb.boost-top.com/ms.php?q="\n' > dist/cstrike/boosttop_ms.cfg
+          printf 'connect 157.22.130.26:27015\n' > dist/cstrike/boosttop_random.cfg
+          cat > dist/cstrike/boosttop_settings.cfg <<'CFG'
+          // boost-top PC: o'qlar aniq tegishi va silliq o'yin uchun
+          rate "100000"
+          cl_updaterate "101"
+          cl_cmdrate "105"
+          ex_interp "0.01"
+          cl_lw "1"
+          cl_lc "1"
+          fps_max "250"
+          gl_vsync "0"
+          hud_fastswitch "1"
+          xhair_enable "1"
+          xhair_thick "2"
+          xhair_size "5"
+          xhair_gap "2"
+          xhair_pad "1"
+          xhair_color "50 250 50 255"
+          xhair_dynamic_scale "0"
+          developer "0"
+          CFG
+          sed -i 's/^          //' dist/cstrike/boosttop_settings.cfg
+          echo "${GITHUB_RUN_NUMBER}" > dist/bt_build.txt
+          cat > "dist/X CLIENT.bat" <<'BAT'
+          @echo off
+          cd /d "%~dp0"
+          start "" xash3d.exe -game cstrike +clearmasters +exec boosttop_ms.cfg +exec boosttop_settings.cfg %*
+          BAT
+          sed -i 's/^          //' "dist/X CLIENT.bat"
+          echo "===== dist ====="; find dist -maxdepth 2 | sort | head -200
+
+      - name: X CLIENT launcher (avto-yangilovchi)
+        shell: cmd
+        run: |
+          cl /nologo /O2 /MT /utf-8 /DUNICODE /D_UNICODE own\xclient_launcher.c /Fe:dist\XClient.exe /link /SUBSYSTEM:WINDOWS wininet.lib comctl32.lib ole32.lib uuid.lib shell32.lib advapi32.lib user32.lib gdi32.lib
+
+      - name: Manifest + dist vetkasiga joylash
+        id: dist
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          cd dist
+          echo "$XC_VERSION" > xclient_version.txt
+          KEEP='^cstrike/(config|userconfig|video|opengl|boosttop_settings|autoexec)\.cfg$'
+          find . -type f ! -name manifest.txt ! -path './.git/*' | sed 's|^\./||' | LC_ALL=C sort | while IFS= read -r f; do
+            h=$(sha256sum "$f" | cut -d' ' -f1); sz=$(stat -c%s "$f"); p=""
+            if echo "$f" | grep -Eq "$KEEP"; then p="?"; fi
+            echo "$p$h $sz $f"
+          done > manifest.txt
+          echo "fayllar: $(wc -l < manifest.txt)"
+          git init -q
+          git config user.name "x-client-ci"; git config user.email "ci@users.noreply.github.com"
+          git checkout -q -b "dist-$CHANNEL"
+          git add -A
+          git commit -q -m "X CLIENT $XC_VERSION ($CHANNEL)"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "dist-$CHANNEL"
+          SHA=$(git rev-parse HEAD)
+          echo "base=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${SHA}" >> "$GITHUB_OUTPUT"
+          cd .. && 7z a -tzip X-Client-CS16.zip ./dist/* -xr!.git > /dev/null
+
+      - name: Panelga xabar (hamma klientlar yangilanadi)
+        shell: bash
+        env:
+          XC_API: ${{ secrets.XCLIENT_API }}
+          XC_SECRET: ${{ secrets.XCLIENT_CI_SECRET }}
+          BASE: ${{ steps.dist.outputs.base }}
+        run: |
+          if [ -z "$XC_API" ] || [ -z "$XC_SECRET" ]; then echo "::warning::XCLIENT_API / XCLIENT_CI_SECRET yo'q - panelga yozilmadi"; exit 0; fi
+          sleep 20
+          curl -fsS -X POST -H "X-XClient-Secret: $XC_SECRET" \
+            --data-urlencode "channel=$CHANNEL" --data-urlencode "build=$GITHUB_RUN_NUMBER" \
+            --data-urlencode "version=$XC_VERSION" --data-urlencode "base=$BASE" \
+            --data-urlencode "manifest=$BASE/manifest.txt" \
+            --data-urlencode "notes=$(git -C own log -1 --pretty=%s)" \
+            "$XC_API?a=release"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: X-Client-build${{ github.run_number }}
+          path: X-Client-CS16.zip
