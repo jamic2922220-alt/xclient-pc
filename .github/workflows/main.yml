@@ -101,6 +101,8 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x86
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
       - name: Setup YY-Thunks (Windows 7 uchun)
         shell: bash
         run: bash scripts/setup_yy_thunks.sh
