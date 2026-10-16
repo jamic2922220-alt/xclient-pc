@@ -53,9 +53,14 @@ ipcMain.handle('cfg:write', (e, text) => {
   } catch (err) { return String(err); }
 });
 
+// Faqat asl PC CS 1.6 (hl.exe)
+function engine() {
+  return fs.existsSync(path.join(GAME_DIR, 'hl.exe')) ? 'gs' : '';
+}
 ipcMain.handle('sys:info', () => ({
   gameDir: GAME_DIR,
-  hasGame: fs.existsSync(path.join(GAME_DIR, 'xash3d.exe')),
+  engine: engine(),
+  hasGame: !!engine(),
   version: (() => { try { return fs.readFileSync(path.join(GAME_DIR, 'xclient_version.txt'), 'utf8').trim(); } catch (e) { return 'dev'; } })(),
   platform: process.platform,
 }));
@@ -72,11 +77,11 @@ ipcMain.on('open:folder', (e, sub) => {
 
 /* ------------------------------------------------------------ o'yinni ochish */
 ipcMain.handle('game:launch', (e, opts) => {
-  const exe = path.join(GAME_DIR, 'xash3d.exe');
-  if (!fs.existsSync(exe)) return 'xash3d.exe topilmadi: ' + exe;
-  const args = ['-game', 'cstrike', '+scr_drawversion', '0', '+clearmasters', '+exec', 'boosttop_ms.cfg', '+exec', 'xclient_master.cfg', '+exec', 'xclient_pc.cfg', '+exec', 'xclient_launcher.cfg'];
+  if (!engine()) return 'hl.exe topilmadi: ' + GAME_DIR;
+  const exe = path.join(GAME_DIR, 'hl.exe');
+  const args = ['-game', 'cstrike', '-noforcemparms', '-noforcemaccel', '+exec', 'xclient_launcher.cfg'];
   if (opts && opts.width && opts.height) args.unshift('-width', String(opts.width), '-height', String(opts.height));
-  if (opts && opts.windowed) args.unshift('-window'); else args.unshift('-fullscreen');
+  if (opts && opts.windowed) args.unshift('-window'); else args.unshift('-full');
   if (opts && opts.connect && /^[\w.\-]+:\d+$/.test(opts.connect)) args.push('+connect', opts.connect);
   if (opts && opts.map && /^\w+$/.test(opts.map)) args.push('+maxplayers', String(opts.maxplayers || 12), '+map', opts.map);
   try {

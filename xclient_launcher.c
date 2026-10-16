@@ -462,14 +462,12 @@ static void run_game(void)
             return;
         }
     }
-    path_join(exe, g_dir, L"xash3d.exe");
+    path_join(exe, g_dir, L"hl.exe");
     if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) {
-        MessageBoxW(NULL, L"O‘yin fayllari topilmadi. Internetni tekshirib, X CLIENT ni qayta oching.", L"X CLIENT", MB_ICONERROR);
+        MessageBoxW(NULL, L"O‘yin fayllari (hl.exe) topilmadi. X CLIENT ni to‘liq paketdan qayta o‘rnating.", L"X CLIENT", MB_ICONERROR);
         return;
     }
-    /* boshlang'ich sozlamalar faqat birinchi marta - keyin o'yinchining o'z sozlamalari saqlanadi */
-    _snwprintf(cmd, 1024, L"\"%s\" -game cstrike +scr_drawversion 0 +clearmasters +exec xclient_master.cfg +exec xclient_pc.cfg%s", exe,
-               g_fresh ? L" +exec boosttop_settings.cfg" : L"");
+    _snwprintf(cmd, 1024, L"\"%s\" -game cstrike -noforcemparms -noforcemaccel +exec xclient_launcher.cfg", exe);
     STARTUPINFOW si = { sizeof(si) };
     PROCESS_INFORMATION pi;
     if (CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, g_dir, &si, &pi)) {

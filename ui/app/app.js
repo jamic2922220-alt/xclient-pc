@@ -65,9 +65,18 @@ function show(id) { $$('.screen').forEach((s) => s.classList.toggle('on', s.id =
 async function persist() { await window.xc.store.set(S); await window.xc.writeCfg(buildCfg()); }
 
 /* ------------------------------------------------------------ o'yin config */
+let ENGINE = 'gs';
+// GoldSrc uchun FPS rejimlari (Xash'da alohida xc_fps_*.cfg fayllari bor)
+const GS_FPS = {
+  low: ['r_dynamic "0"', 'r_decals "128"', 'mp_decals "50"', 'cl_himodels "0"', 'gl_max_size "256"', 'cl_weather "0"'],
+  max: ['r_dynamic "0"', 'r_decals "256"', 'mp_decals "100"', 'cl_himodels "0"', 'gl_max_size "512"', 'cl_weather "0"'],
+  balanced: ['r_dynamic "1"', 'r_decals "1024"', 'mp_decals "300"', 'cl_himodels "0"', 'gl_max_size "512"'],
+  pretty: ['r_dynamic "1"', 'r_decals "4096"', 'mp_decals "300"', 'cl_himodels "1"', 'gl_max_size "1024"'],
+};
 function buildCfg() {
   const net = { slow: [25000, 60, 60], mid: [50000, 101, 101], fast: [100000, 101, 105] }[S.net] || [100000, 101, 105];
   const x = S.x;
+  if (ENGINE === 'gs') return buildCfgGS(net, x);
   const L = [
     '// X CLIENT tomonidan yoziladi — qo‘lda o‘zgartirmang',
     `exec xc_fps_${S.fps}.cfg`,
@@ -83,6 +92,25 @@ function buildCfg() {
     // PC CS 1.6 ko'rinishi: klassik matnli menyular (B, M, radio), eski config xatosini tuzatish
     'cl_crosshair_size "auto"', `_vgui_menus "${S.pcmenu ? 0 : 1}"`, `_extended_menus "${S.pcmenu ? 0 : 1}"`, 'cl_oldtouchmenus "0"',
     'cl_shadows "0"', 'cl_radartype "0"', 'hud_centerid "0"', 'cl_righthand "1"', 'touch_enable "0"', 'hud_textmode "0"',
+  ];
+  Object.entries(S.binds).forEach(([cmd, key]) => { if (key) L.push(`bind "${key === '"' ? "'" : key}" "${cmd}"`); });
+  if (S.buyKeys) BUY.forEach(([k, , cmd]) => L.push(`bind "${k}" "${cmd}"`));
+  return L.join('\n') + '\n';
+}
+// Asl PC CS 1.6 (GoldSrc) uchun — faqat shu dvijokda bor buyruqlar
+function buildCfgGS(net, x) {
+  const xs = x.size <= 4 ? 'small' : x.size <= 8 ? 'medium' : 'large';
+  const L = [
+    '// X CLIENT (PC CS 1.6) tomonidan yoziladi — qo‘lda o‘zgartirmang',
+    ...(GS_FPS[S.fps] || GS_FPS.max),
+    `name "${(S.tag + S.name).replace(/"/g, '').slice(0, 31)}"`,
+    `rate "${net[0]}"`, `cl_updaterate "${net[1]}"`, `cl_cmdrate "${net[2]}"`, 'ex_interp "0.01"', 'cl_lw "1"', 'cl_lc "1"',
+    `cl_allowdownload "${S.dl}"`, `cl_allowupload "${S.spray}"`,
+    `sensitivity "${S.sens}"`, `zoom_sensitivity_ratio "${S.zoom}"`, `m_rawinput "${S.raw}"`, `m_filter "${S.filter}"`, `m_pitch "${S.inv ? -0.022 : 0.022}"`,
+    `volume "${S.vol}"`, `MP3Volume "${S.mus}"`, `voice_enable "${S.voiceOn}"`, `voice_scale "${S.voice}"`,
+    'fps_override "1"', `fps_max "${S.fpsMax}"`, `gl_vsync "${S.vsync}"`, `gamma "${S.gamma}"`, `brightness "${Math.min(3, Math.max(0, (S.gamma - 1.8) * 2)).toFixed(1)}"`,
+    `cl_crosshair_size "${xs}"`, `cl_crosshair_color "${x.color}"`, `cl_crosshair_translucent "${x.alpha < 200 ? 1 : 0}"`, `cl_dynamiccrosshair "${x.dyn}"`,
+    `net_graph "${S.netgraph ? 1 : 0}"`, `hud_fastswitch "${S.fastswitch}"`,
   ];
   Object.entries(S.binds).forEach(([cmd, key]) => { if (key) L.push(`bind "${key === '"' ? "'" : key}" "${cmd}"`); });
   if (S.buyKeys) BUY.forEach(([k, , cmd]) => L.push(`bind "${k}" "${cmd}"`));
@@ -247,7 +275,7 @@ function renderSettings() {
       ${row(t('x_color'), COLORS.map((c) => `<span class="sw ${S.x.color === c ? 'on' : ''}" data-col="${c}" style="background:rgb(${c.split(' ').join(',')})"></span>`).join(''))}
       ${tg('x.dot', t('x_dot'))}${tg('x.t', t('x_t'))}${tg('x.dyn', t('x_dyn'))}
       ${row(t('x_code'), `<span class="val" style="width:auto;flex:1;justify-content:flex-start;padding:0 10px;font-family:Consolas,monospace;color:#ff5a5a" id="xcode">${xCode()}</span><span class="btn" id="xcopy">${t('x_copy')}</span><span class="btn" id="xpaste">${t('x_paste')}</span>`)}</div>
-      <div class="card p"><div class="h">${t('hud_t')}</div>${sl('hudScale', 0, 3, 0.25, t('hud_scale'), '', FMT.hudScale)}${tg('netgraph', t('netgraph'))}${tg('fastswitch', t('fastswitch'))}${tg('pcmenu', t('pcmenu'))}</div>`,
+      <div class="card p"><div class="h">${t('hud_t')}</div>${tg('netgraph', t('netgraph'))}${tg('fastswitch', t('fastswitch'))}</div>`,
     acc: () => `<div class="card p" style="text-align:center"><div class="h" style="text-align:left">${t('acc_t')}</div>
       <div style="width:110px;height:110px;margin:6px auto 12px;border-radius:50%;background:#ff3b3b;box-shadow:0 0 0 3px #ff9a8a,0 0 24px rgba(255,59,59,.5);display:flex;align-items:center;justify-content:center;font-size:48px;font-weight:bold">${esc((S.name[0] || 'X').toUpperCase())}</div>
       <div style="font-size:24px">${esc(S.tag + S.name)}</div><p class="mut" style="max-width:420px;margin:18px auto;line-height:1.6">${t('acc_soon')}</p>
