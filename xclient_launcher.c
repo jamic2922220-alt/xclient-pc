@@ -448,6 +448,19 @@ static BOOL ensure_installed(BOOL *fresh)
     if (bs) *bs = 0;
     path_join(ini, selfDir, L"xclient.ini");
     if (GetFileAttributesW(ini) != INVALID_FILE_ATTRIBUTES) { lstrcpyW(g_dir, selfDir); return TRUE; }
+    /* exe o'yin papkasining o'zida turgan bo'lsa (cstrike.exe / hl.exe yonida) - shu papkani ishlatamiz */
+    {
+        wchar_t g1[MAX_PATH], g2[MAX_PATH];
+        path_join(g1, selfDir, L"cstrike.exe");
+        path_join(g2, selfDir, L"hl.exe");
+        if (GetFileAttributesW(g1) != INVALID_FILE_ATTRIBUTES || GetFileAttributesW(g2) != INVALID_FILE_ATTRIBUTES) {
+            lstrcpyW(g_dir, selfDir);
+            WritePrivateProfileStringW(L"x", L"installed", L"1", ini);
+            make_shortcut(g_self);
+            *fresh = TRUE;
+            return TRUE;
+        }
+    }
 
     /* o'rnatish papkasi */
     const wchar_t *cands[2] = { L"C:\\Games\\XClient", NULL };
