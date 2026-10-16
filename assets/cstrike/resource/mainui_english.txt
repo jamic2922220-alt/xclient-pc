@@ -309,5 +309,10 @@
 "Customize" "O'yinchi"
 "Audio" "Ovoz"
 "Video" "Video"
+"FPS rejimi" "FPS rejimi"
+"Kuchsiz PC" "Kuchsiz PC"
+"Maksimal FPS" "Maksimal FPS"
+"Muvozanat" "Muvozanat"
+"Chiroyli" "Chiroyli"
 }
 }
