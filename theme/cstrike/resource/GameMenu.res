@@ -20,9 +20,4 @@
 		"OnlyInGame" "1"
 		"notsingle" "1"
 	}
-	"4"
-	{
-		"label" "BOTLAR BILAN O'YNASH"
-		"command" "OpenCreateMultiplayerGameDialog"
-	}
 }

@@ -70,11 +70,17 @@ function clean(v) { return String(v || '').replace(/[\u0000-\u001f\u007f-\u009f\
 /* ============================================================ til */
 var LANG = window.XC_LANG || { uz: {} };
 var L = LANG.uz, CUR_LANG = 'uz';
-function T(k) { return (L && L[k] != null) ? L[k] : (LANG.uz[k] != null ? LANG.uz[k] : k); }
+var LFALL = { ua: 'ru', kz: 'ru', kg: 'ru', tj: 'ru', tr: 'en', az: 'en', tm: 'en' };
+function T(k) {
+  if (L && L[k] != null) return L[k];
+  var f = LANG[LFALL[CUR_LANG]];
+  if (f && f[k] != null) return f[k];
+  return LANG.uz[k] != null ? LANG.uz[k] : k;
+}
 function fmtDur(sec) {
   sec = Math.max(0, Math.round(sec || 0));
   var h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60);
-  if (CUR_LANG === 'ru') return h ? h + ' \u0447 ' + m + ' \u043c\u0438\u043d' : m + ' \u043c\u0438\u043d';
+  if (CUR_LANG === 'ru' || LFALL[CUR_LANG] === 'ru') return h ? h + ' \u0447 ' + m + ' \u043c\u0438\u043d' : m + ' \u043c\u0438\u043d';
   if (CUR_LANG === 'en') return h ? h + ' h ' + m + ' min' : m + ' min';
   return h ? h + ' soat ' + m + ' daq' : m + ' daq';
 }
@@ -92,9 +98,13 @@ function applyLang() {
   renderLoginForm();
   renderAll();
 }
+var LANGS = [['uz', 'UZ', "O'zbekcha", '#1eb53a'], ['ru', 'RU', '\u0420\u0443\u0441\u0441\u043a\u0438\u0439', '#0039a6'], ['en', 'EN', 'English', '#012169'],
+  ['ua', 'UA', '\u0423\u043a\u0440\u0430\u0457\u043d\u0441\u044c\u043a\u0430', '#0057b7'], ['tr', 'TR', 'T\u00fcrk\u00e7e', '#e30a17'], ['kz', 'KZ', '\u049a\u0430\u0437\u0430\u049b\u0448\u0430', '#00afca'],
+  ['kg', 'KG', '\u041a\u044b\u0440\u0433\u044b\u0437\u0447\u0430', '#e8112d'], ['tj', 'TJ', '\u0422\u043e\u04b7\u0438\u043a\u04e3', '#006600'], ['az', 'AZ', 'Az\u0259rbaycanca', '#0092bc'], ['tm', 'TM', 'T\u00fcrkmen\u00e7e', '#28ae66']];
 function setLang(code) {
-  var map = { uzbek: 'uz', uz: 'uz', russian: 'ru', ukrainian: 'ru', ru: 'ru', english: 'en', en: 'en' };
-  CUR_LANG = map[String(code || '').toLowerCase()] || 'uz';
+  var map = { uzbek: 'uz', russian: 'ru', ukrainian: 'ua', english: 'en', turkish: 'tr', kazakh: 'kz', kyrgyz: 'kg', tajik: 'tj', azerbaijani: 'az', turkmen: 'tm' };
+  code = String(code || '').toLowerCase();
+  CUR_LANG = LANG[code] ? code : (map[code] || 'uz');
   L = LANG[CUR_LANG] || LANG.uz;
   applyLang();
 }
@@ -128,8 +138,24 @@ function fit() {
   $('loginBox').style.left = Math.max(620, W - 740) + 'px';
 }
 
+/* ============================================================ XClient.exe bilan aloqa
+ * XClient.exe bosh menyu manziliga ?xc=<kompyuter id>&v=<versiya>&c=<kesh MB> qo'shadi.
+ * Tizim sozlamalari (beta, Windows bilan ishga tushish, ekran, kesh, fayllarni tekshirish)
+ * xc_api.php ga yoziladi va XClient.exe ularni keyingi ishga tushishda bajaradi. */
+function qparam(k) { var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search || ''); return m ? decodeURIComponent(m[1]) : ''; }
+var PCID = /^[a-z0-9]{8,40}$/.test(qparam('xc')) ? qparam('xc') : '';
+var OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, clean: 0, verify: 0 }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
+function loadOpts() {
+  if (!PCID) return;
+  api('opts', { d: PCID }, function (r) { if (r.ok && r.o) { for (var k in r.o) if (r.o.hasOwnProperty(k) && OPTS.hasOwnProperty(k)) OPTS[k] = r.o[k]; if (curModal === 'mdSettings' && setTab === 'system') showSetTab('system'); } });
+}
+function saveOpts(msg) {
+  if (!PCID) { toast(T('sy_nolaunch'), 4000); return; }
+  api('opts_set', { d: PCID, o: JSON.stringify(OPTS) }, function (r) { toast(r.ok ? (msg || T('sy_next')) : (r.msg || 'Xato'), 3500); });
+}
+
 /* ============================================================ akkaunt API (xc_api.php) */
-var ME = null, FRIENDS = [], WEEK = [], NEWS = [];
+var ME = null, FRIENDS = [], WEEK = [];
 function api(a, params, cb) {
   var body = 'a=' + encodeURIComponent(a) + '&device=' + DB.device + (DB.token ? '&token=' + DB.token : '');
   for (var k in params) if (params.hasOwnProperty(k)) body += '&' + k + '=' + encodeURIComponent(params[k]);
@@ -200,7 +226,6 @@ function loadFriends() {
   });
 }
 function loadWeek() { api('top', {}, function (r) { if (r.ok) { WEEK = r.top || []; renderHome(); } }); }
-function loadNews() { api('news', {}, function (r) { if (r.ok) { NEWS = r.news || []; renderHome(); } }); }
 function pingPresence() {
   if (!ME) return;
   var s = CONNECTED ? srv(CONNECTED) : null;
@@ -396,10 +421,6 @@ function renderHome() {
   $('playPing').innerHTML = b && b.ok ? b.ping : '--';
   $('play').style.display = CONNECTED ? 'none' : '';      // o'yin ichida pastda "O'yinga qaytish" turadi
   // turnir kartasi
-  var n0 = NEWS[0];
-  $('hero').style.display = n0 ? '' : 'none';
-  if (n0) { $('heroTag').innerHTML = esc(n0.tag || 'LIVE'); $('heroTitle').innerHTML = esc(n0.title || ''); $('heroSub').innerHTML = esc(n0.sub || ''); }
-  $('mTourn').innerHTML = NEWS.length ? 'NEW' : '';
   // X TOP serverlar
   var html = '', list = TOP.length ? TOP : PINNED;
   each(list.slice(0, 3), function (ip, i) {
@@ -627,14 +648,6 @@ function openSide(mode, title, body) {
   if (curModal !== 'mdSide') openModal('mdSide');
   $('sideTitle').innerHTML = esc(title); $('sideBody').innerHTML = body;
 }
-function openTourn() {
-  var h = '';
-  each(NEWS, function (n) {
-    h += '<div class="nw"><span class="tag">' + esc(n.tag || 'LIVE') + '</span><b>' + esc(n.title) + '</b><span>' + esc(n.sub || '') + '</span>' +
-      (n.text ? '<p>' + esc(n.text) + '</p>' : '') + (n.server ? '<a class="btn red" data-ip="' + esc(n.server) + '">' + esc(T('tn_go')) + '</a>' : '') + '</div>';
-  });
-  openSide('tourn', T('m_tourn'), h || '<div class="empty">' + esc(T('tn_none')) + '</div>');
-}
 function openFriends() {
   if (!ME) { openLogin(); return; }
   var keep = $('frIn') ? $('frIn').value : '';
@@ -656,13 +669,15 @@ var DEF = {
   sens: 2.5, zoom: 1.2, raw: 1, filter: 0, inv: 0,
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1,
   fps: 100, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 300,
-  xp: 'pro', xt: 0, xs: 'small', xc: '255 59 59', xtr: 0, xdyn: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5
+  xp: 'pro', xt: 0, xs: 'small', xc: '255 59 59', xtr: 0, xdyn: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
+  rscale: 115, ropac: 100, rnames: 0, rhp: 0
 };
 var S = null, E = null;
 var CVARS = { sens: 'sensitivity', zoom: 'zoom_sensitivity_ratio', raw: 'm_rawinput', filter: 'm_filter', vol: 'volume', vscale: 'voice_scale', voice: 'voice_enable',
   fps: 'fps_max', gamma: 'gamma', fov: 'fov_angle', vmfov: 'viewmodel_fov', hor: 'fov_horplus', xt: 'cl_crosshair_type', xs: 'cl_crosshair_size',
   xc: 'cl_crosshair_color', xtr: 'cl_crosshair_translucent', xdyn: 'cl_dynamiccrosshair', hand: 'cl_righthand', fastsw: 'hud_fastswitch', dl: 'cl_allowdownload',
-  spray: 'cl_allowupload', mute: 'snd_mute_losefocus', vsync: 'gl_vsync', dyn: 'r_dynamic', cid: 'hud_centerid', radar: 'cl_radartype', dmax: 'hud_deathnotice_max', decals: 'mp_decals' };
+  spray: 'cl_allowupload', mute: 'snd_mute_losefocus', vsync: 'gl_vsync', dyn: 'r_dynamic', cid: 'hud_centerid', radar: 'cl_radartype', dmax: 'hud_deathnotice_max', decals: 'mp_decals',
+  ropac: 'hud_radar_opacity', rnames: 'hud_radar_names', rhp: 'hud_radar_health' };
 function loadSettings() {
   S = copy(DEF);
   if (DB.set) for (var k in DB.set) if (DB.set.hasOwnProperty(k) && DEF.hasOwnProperty(k)) S[k] = DB.set[k];
@@ -679,6 +694,7 @@ function seedFromGame() {
   var ng = parseFloat(readCvar('net_graph')); if (!isNaN(ng)) S.netg = ng > 0 ? 1 : 0;
   var old = parseFloat(readCvar('hud_deathnotice_old')); if (!isNaN(old)) S.hs = old > 0 ? 0 : 1;
   var dv = parseFloat(readCvar('scr_drawversion')); if (!isNaN(dv)) S.nover = dv > 0 ? 0 : 1;
+  var rs = parseFloat(readCvar('hud_radar_scale')); if (!isNaN(rs)) S.rscale = Math.round(rs * 100);
   // eski NextClient "extra_small" ni katta (auto) qilib chizadi - eng kichigi "small"
   if (S.xs !== 'small' && S.xs !== 'medium' && S.xs !== 'large' && S.xs !== 'auto') S.xs = 'small';
   S.xc = String(S.xc).replace(/\s+/g, ' ');
@@ -700,6 +716,7 @@ function settingsCmds(s) {
   c.push('fps_max ' + s.fps, 'gamma ' + s.gamma, 'fov_angle ' + s.fov, 'viewmodel_fov ' + s.vmfov, 'fov_horplus ' + s.hor, 'gl_vsync ' + s.vsync, 'r_dynamic ' + s.dyn, 'mp_decals ' + s.decals);
   c.push('cl_crosshair_type ' + s.xt, 'cl_crosshair_size ' + s.xs, 'cl_crosshair_color ' + q(s.xc), 'cl_crosshair_translucent ' + s.xtr, 'cl_dynamiccrosshair ' + s.xdyn);
   c.push('net_graph ' + (s.netg ? 3 : 0), 'hud_deathnotice_old ' + (s.hs ? 0 : 1), 'hud_deathnotice_max ' + s.dmax, 'cl_radartype ' + s.radar, 'hud_centerid ' + s.cid, 'scr_drawversion ' + (s.nover ? 0 : 1));
+  c.push('hud_radar_scale ' + (s.rscale / 100), 'hud_radar_opacity ' + s.ropac, 'hud_radar_names ' + s.rnames, 'hud_radar_health ' + s.rhp);
   if (s.buykeys) each(BUY, function (b) { c.push('bind ' + b[0] + ' ' + q(b[1])); });
   return c;
 }
@@ -711,7 +728,7 @@ function verifySettings(s) {
   if (!canRead()) { toast(T('saved')); return; }
   var exp = {}, bad = [], ok = 0;
   for (var k in CVARS) if (CVARS.hasOwnProperty(k)) exp[CVARS[k]] = s[k];
-  exp.m_pitch = s.inv ? -0.022 : 0.022; exp.net_graph = s.netg ? 3 : 0; exp.hud_deathnotice_old = s.hs ? 0 : 1;
+  exp.m_pitch = s.inv ? -0.022 : 0.022; exp.net_graph = s.netg ? 3 : 0; exp.hud_deathnotice_old = s.hs ? 0 : 1; exp.hud_radar_scale = s.rscale / 100;
   if (s.name) exp.name = fullName(s);
   for (var c in exp) {
     if (!exp.hasOwnProperty(c)) continue;
@@ -769,9 +786,9 @@ function tg(key, label, sub) {
   return '<div class="fr w"><div class="lb">' + esc(T(label)) + (sub ? '<small>' + esc(T(sub)) + '</small>' : '') + '</div>' +
     '<div class="tg' + (E[key] ? ' on' : '') + '" data-tg="' + key + '"><i></i></div></div>';
 }
-function sl(key, label, min, max, step, sub) {
+function sl(key, label, min, max, step, sub, unit) {
   return '<div class="fr"><div class="lb">' + esc(T(label)) + (sub ? '<small>' + esc(T(sub)) + '</small>' : '') + '</div><div class="ct2"><div class="sl">' +
-    '<input type="range" min="' + min + '" max="' + max + '" step="' + step + '" value="' + E[key] + '" data-sl="' + key + '"><div class="vv" id="vv_' + key + '">' + E[key] + '</div></div></div></div>';
+    '<input type="range" min="' + min + '" max="' + max + '" step="' + step + '" value="' + E[key] + '" data-sl="' + key + '"' + (unit ? ' data-u="' + unit + '"' : '') + '><div class="vv" id="vv_' + key + '">' + E[key] + (unit || '') + '</div></div></div></div>';
 }
 function seg(key, label, opts) {
   var h = '';
@@ -801,7 +818,7 @@ var PANES = {
     var rows = '';
     each(ACTIONS, function (ac) {
       var k = BINDS[ac[0]] || '';
-      rows += '<div class="kb' + (KEYWAIT === ac[0] ? ' wait' : '') + '" data-bind="' + esc(ac[0]) + '">' + esc(CUR_LANG === 'ru' ? ac[2] : ac[1]) +
+      rows += '<div class="kb' + (KEYWAIT === ac[0] ? ' wait' : '') + '" data-bind="' + esc(ac[0]) + '">' + esc(CUR_LANG === 'ru' || LFALL[CUR_LANG] === 'ru' ? ac[2] : ac[1]) +
         '<span>' + (KEYWAIT === ac[0] ? esc(T('k_press')) : esc(keyLabel(k) || '\u2014')) + '</span></div>';
     });
     return '<div class="pane full"><div class="ph2">' + esc(T('k_title')) + '<span class="mut" style="float:right;letter-spacing:0;font-weight:normal">' + esc(T('k_note2')) + '</span></div>' +
@@ -831,14 +848,16 @@ var PANES = {
     if (pal.indexOf(E.xc) < 0 && /^\d+ \d+ \d+$/.test(E.xc)) pal.push(E.xc);
     var cols = '';
     each(pal, function (c) { cols += '<a class="' + (E.xc === c ? 'on' : '') + '" data-seg="xc" data-v="' + c + '" style="background:rgb(' + c.split(' ').join(',') + ')"></a>'; });
+    var si = Math.max(0, SZ.indexOf(E.xs)), szl = [T('sz_s'), T('sz_m'), T('sz_l'), T('sz_auto')][si];
     return '<div class="pane l"><div class="ph2">' + esc(T('x_title')) + '</div>' +
       '<div style="position:relative;height:172px"><div id="xPrev"><canvas id="xCan" width="240" height="160"></canvas></div><div class="xl">' + types + '</div></div>' +
-      seg('xs', 'x_size', [['small', 'sz_s'], ['medium', 'sz_m'], ['large', 'sz_l'], ['auto', 'sz_auto']]) +
+      '<div class="fr"><div class="lb">' + esc(T('x_size')) + '</div><div class="ct2"><div class="sl"><input type="range" min="0" max="3" step="1" value="' + si + '" data-xsz="1"><div class="vv" id="vv_xsz">' + esc(szl) + '</div></div></div></div>' +
       '<div class="fr"><div class="lb">' + esc(T('x_color')) + '</div><div class="ct2 sw">' + cols + '</div></div>' +
-      tg('xtr', 'x_trans') + tg('xdyn', 'x_dyn') +
-      '<div class="fr"><div class="lb">' + esc(T('x_code')) + '</div><div class="ct2 code"><input id="xCode" value="' + esc(xcode(E)) + '"><a class="btn" data-act="xcode">' + esc(T('x_apply')) + '</a></div></div></div>' +
+      tg('xtr', 'x_trans') +
+      '<div class="fr cw"><div class="lb">' + esc(T('x_code')) + '</div><div class="ct2 code"><input id="xCode" value="' + esc(xcode(E)) + '"><a class="btn" data-act="xcopy">' + esc(T('x_copy')) + '</a><a class="btn b2" data-act="xcode">' + esc(T('x_apply')) + '</a></div></div></div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('h_title')) + '</div>' +
-      sl('dmax', 'h_kills', 3, 10, 1) + tg('hs', 'h_hs') + tg('radar', 'h_radar') + tg('netg', 'h_net') + tg('cid', 'h_cid') + tg('nover', 'h_draw') + '</div>';
+      sl('rscale', 'h_rscale', 50, 300, 5, null, '%') + sl('ropac', 'h_ropac', 0, 100, 5, null, '%') + sl('dmax', 'h_kills', 3, 10, 1) +
+      tg('hs', 'h_hs') + tg('xdyn', 'x_dyn') + tg('netg', 'h_net') + tg('rnames', 'h_rnames') + tg('cid', 'h_cid') + tg('nover', 'h_draw') + '</div>';
   },
   account: function () {
     if (!ME) {
@@ -862,8 +881,8 @@ var PANES = {
   },
   system: function () {
     var langs = '';
-    each([['uz', 'UZ', "O'zbekcha", '#1eb53a'], ['ru', 'RU', '\u0420\u0443\u0441\u0441\u043a\u0438\u0439', '#0039a6'], ['en', 'EN', 'English', '#012169']], function (o) {
-      langs += '<a class="' + (CUR_LANG === o[0] ? 'on' : '') + '" data-lang="' + o[0] + '"><b style="background:' + o[3] + '">' + o[1] + '</b>' + esc(o[2]) + '</a>';
+    each(LANGS, function (o) {
+      langs += '<a class="' + (CUR_LANG === o[0] ? 'on' : '') + '" data-lang="' + o[0] + '"><b style="background:' + o[3] + '">' + o[1] + '</b>' + esc(o[2]) + (CUR_LANG === o[0] ? '<i>\u2713</i>' : '') + '</a>';
     });
     var chk = '';
     if (LAST_CHECK) {
@@ -871,16 +890,26 @@ var PANES = {
       each(LAST_CHECK.bad, function (b) { chk += '<div>' + esc(b) + '</div>'; });
       chk += '</div>';
     }
+    var sw = screen.width || 1920, sh = screen.height || 1080, res = '<option value="">' + esc(T('sy_res_auto')) + '</option>';
+    each(['1920x1080', '1680x1050', '1600x900', '1440x900', '1366x768', '1280x1024', '1280x960', '1280x720', '1024x768', '800x600'].concat((sw + 'x' + sh)), function (r, i, all) {
+      if (res.indexOf('"' + r + '"') >= 0) return;
+      res += '<option value="' + r + '"' + (OPTS.res === r ? ' selected' : '') + '>' + r.replace('x', '\u00d7') + '</option>';
+    });
+    var otg = function (k, label, sub) {
+      return '<div class="fr w"><div class="lb">' + esc(T(label)) + (sub ? '<small>' + esc(T(sub)) + '</small>' : '') + '</div><div class="tg' + (OPTS[k] ? ' on' : '') + '" data-otg="' + k + '"><i></i></div></div>';
+    };
     return '<div class="pane l"><div class="ph2">' + esc(T('sy_lang')) + '</div><div class="lng">' + langs + '</div>' +
-      '<div class="mut" style="font-size:12px">' + esc(T('sy_lang_note')) + '</div>' +
       '<div class="ph2 m">' + esc(T('sy_up')) + '</div>' +
-      '<div class="rowb"><b>' + esc(T('sy_ver')) + ' ' + esc(VERSION || '1.0') + '</b><small>' + esc(T('sy_new')) + '</small><span class="ok2">\u2713</span></div>' +
-      '<div class="rowb"><b>' + esc(T('sy_auto')) + '</b><small>' + esc(T('sy_auto2')) + '</small><span class="ok2">\u2713</span></div></div>' +
-      '<div class="pane r"><div class="ph2">' + esc(T('sy_srv')) + '</div>' +
+      '<div class="rowb"><b>' + esc(T('sy_ver')) + ' <span class="vbold">v' + esc(VERSION || '1.0') + '</span></b><small>' + esc(T('sy_new')) + '</small><span class="ok2">\u2713 ' + esc(T('sy_newb')) + '</span></div>' +
+      otg('auto', 'sy_auto', 'sy_auto2') + otg('beta', 'sy_beta') + '</div>' +
+      '<div class="pane r"><div class="ph2">' + esc(T('sy_start')) + '</div>' +
+      otg('start', 'sy_win') + otg('win', 'sy_windowed') +
+      '<div class="fr"><div class="lb">' + esc(T('sy_screen')) + '</div><div class="ct2"><select id="resSel" class="sel" style="width:100%;height:36px">' + res + '</select></div></div>' +
+      '<div class="ph2 m">' + esc(T('sy_srv')) + '</div>' +
+      '<div class="rowb"><b>' + esc(T('sy_cache')) + '</b><small>' + esc(T('sy_cache2').replace('{n}', CACHE_MB)) + (OPTS.clean ? ' \u00b7 ' + esc(T('sy_pending')) : '') + '</small><a class="btn" data-act="cache">' + esc(T('sy_cacheb')) + '</a></div>' +
+      '<div class="rowb"><b>' + esc(T('sy_files')) + '</b><small>' + esc(T('sy_files2')) + (OPTS.verify ? ' \u00b7 ' + esc(T('sy_pending')) : '') + '</small><a class="btn" data-act="verify">' + esc(T('sy_filesb')) + '</a></div>' +
       rowb('sy_chk', 'sy_chk2', 'check', 'sy_chkb') + chk +
-      rowb('sy_rep', 'sy_rep2', 'report', 'sy_repb') +
-      rowb('sy_con', 'sy_con2', 'console', 'sy_open') +
-      rowb('sy_cl', 'sy_cl2', 'clearall', 'sy_clb') + '</div>';
+      rowb('sy_rep', 'sy_rep2', 'report', 'sy_repb') + '</div>';
   }
 };
 function drawXhair() {
@@ -977,7 +1006,6 @@ function askDone(ok) {
 function act(a) {
   if (a === 'quick' || a === 'play') { closeModal(); return quick(); }
   if (a === 'servers') return openServers('internet');
-  if (a === 'tourn') return openTourn();
   if (a === 'friends') return openFriends();
   if (a === 'weekall') return openServers('history');
   if (a === 'profile') return ME ? openSettings('account') : openLogin();
@@ -1002,8 +1030,15 @@ function act(a) {
     return api('friend_add', { login: v }, function (r) { if (!r.ok) return toast(r.msg); $('frIn').value = ''; loadFriends(); });
   }
   if (a === 'keysdef') { DB.binds = null; loadBinds(); applyBinds(); persist(); cloudSave(); toast(T('sy_ok')); return showSetTab('keys'); }
+  if (a === 'cache') { OPTS.clean = 1; saveOpts(); return showSetTab('system'); }
+  if (a === 'verify') { OPTS.verify = 1; saveOpts(); return showSetTab('system'); }
   if (a === 'check') { if (!canRead()) return toast(T('chk_na')); return verifySettings(S); }
   if (a === 'report') return api('report', { log: CONLOG.join('\n'), who: ME ? ME.login : 'guest', ver: VERSION }, function (r) { toast(r.ok ? T('sy_repok') : (r.msg || 'Xato')); });
+  if (a === 'xcopy') {
+    var inp = $('xCode'); inp.value = xcode(E); inp.focus(); inp.select();
+    var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+    return toast(ok ? T('x_copied') : T('x_copy2'));
+  }
   if (a === 'xcode') { if (applyCode($('xCode').value)) showSetTab('hud'); return; }
   if (a === 'rename') return ask(T('a_newname'), function (v) { api('profile', { name: v }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); }); });
   if (a === 'email') return ask(T('a_newmail'), function (v) { api('profile', { email: v }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); }); });
@@ -1027,6 +1062,7 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-fav'))) { toggleFav(el.getAttribute('data-fav')); return; }
   if ((el = closest(t, 'data-frdel'))) { api('friend_del', { login: el.getAttribute('data-frdel') }, function () { loadFriends(); }); return; }
   if ((el = closest(t, 'data-dbtg'))) { var dk = el.getAttribute('data-dbtg'); var cur = dk === 'autosave' ? !!DB[dk] : DB[dk] !== 0; DB[dk] = cur ? 0 : 1; persist(); if (dk === 'autosave') $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local')); el.className = 'tg' + (DB[dk] ? ' on' : ''); return; }
+  if ((el = closest(t, 'data-otg'))) { var ok2 = el.getAttribute('data-otg'); OPTS[ok2] = OPTS[ok2] ? 0 : 1; el.className = 'tg' + (OPTS[ok2] ? ' on' : ''); saveOpts(); return; }
   if ((el = closest(t, 'data-tg'))) { var k = el.getAttribute('data-tg'); E[k] = E[k] ? 0 : 1; el.className = 'tg' + (E[k] ? ' on' : ''); if (setTab === 'hud') { drawXhair(); var cd = $('xCode'); if (cd) cd.value = xcode(E); } return; }
   if ((el = closest(t, 'data-xpre'))) {
     var id = el.getAttribute('data-xpre');
@@ -1058,11 +1094,16 @@ document.ondblclick = function (e) {
 };
 function onSlide(e) {
   var t = e.target || e.srcElement;
+  if (t && t.getAttribute && t.getAttribute('data-xsz')) {
+    var i = Number(t.value); E.xs = SZ[i]; E.xp = presetOf(E);
+    $('vv_xsz').innerHTML = esc([T('sz_s'), T('sz_m'), T('sz_l'), T('sz_auto')][i]); drawXhair(); var cd = $('xCode'); if (cd) cd.value = xcode(E);
+    return;
+  }
   if (!t || !t.getAttribute || !t.getAttribute('data-sl')) return;
   var k = t.getAttribute('data-sl');
-  E[k] = Math.round(Number(t.value) * 100) / 100; $('vv_' + k).innerHTML = E[k];
+  E[k] = Math.round(Number(t.value) * 100) / 100; $('vv_' + k).innerHTML = E[k] + (t.getAttribute('data-u') || '');
 }
-document.addEventListener('change', function (e) { onSlide(e); var t = e.target || e.srcElement; if (t && (t.id === 'fMap' || t.id === 'fMode')) renderServers(); }, false);
+document.addEventListener('change', function (e) { onSlide(e); var t = e.target || e.srcElement; if (t && (t.id === 'fMap' || t.id === 'fMode')) renderServers(); if (t && t.id === 'resSel') { OPTS.res = t.value; saveOpts(); } }, false);
 document.addEventListener('input', onSlide, false);
 document.addEventListener('mousedown', function (e) {
   if (!KEYWAIT || closest(e.target || e.srcElement, 'data-bind')) return;
@@ -1084,7 +1125,7 @@ $('askNo').onclick = function () { askDone(false); };
 $('srvSearch').onkeyup = function () { renderServers(); };
 
 /* ============================================================ boshlash */
-var VERSION = window.XC_VERSION || '';
+var VERSION = qparam('v') || window.XC_VERSION || '';
 function detectLang() {
   if (DB.lang) { setLang(DB.lang); return; }
   var m = /[?&]lang=([a-z]+)/i.exec(location.search || '');
@@ -1102,8 +1143,8 @@ window.onresize = fit;
 detectLang();
 loadMaster();
 loadTop();
-loadNews();
 loadWeek();
+loadOpts();
 each(PINNED.concat(DB.fav).concat(DB.hist.slice(0, 5).map(function (h) { return h.ip; })), function (ip) { query(ip); });
 renderAll();
 
@@ -1134,5 +1175,5 @@ setInterval(function () {
 }, 30000);
 setInterval(pingPresence, 60000);
 setInterval(function () { loadFriends(); loadWeek(); }, 60000);
-setInterval(function () { loadTop(); loadNews(); }, 10 * 60 * 1000);
+setInterval(loadTop, 10 * 60 * 1000);
 })();

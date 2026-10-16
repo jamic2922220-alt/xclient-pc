@@ -204,9 +204,14 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 .xl a.on { border-color: #e5484d; background: #2a1216; color: #fff; }
 .xl a.on:after { content: "\2713"; float: right; color: #ff6a6a; }
 .code { position: relative; height: 34px; }
-.code input { position: absolute; left: 0; top: 0; width: 176px; height: 32px; padding: 0 10px; font-family: Consolas, monospace; font-size: 14px; color: #ff6a6a; background: #0f0d12; border: 1px solid #3a2e34; outline: none; }
-.code .btn { position: absolute; left: 184px; top: 0; height: 32px; line-height: 30px; margin: 0; }
-.lng a { display: inline-block; width: 160px; height: 38px; line-height: 36px; padding-left: 12px; margin: 0 8px 8px 0; background: #0f0d12; border: 1px solid #3a2e34; font-size: 14px; }
+.fr.cw .ct2 { margin-left: 140px; }
+.code input { position: absolute; left: 0; top: 0; width: 172px; height: 32px; padding: 0 10px; font-family: Consolas, monospace; font-size: 14px; color: #ff6a6a; background: #0f0d12; border: 1px solid #3a2e34; outline: none; }
+.code .btn.b2 { left: 268px; }
+.code .btn { position: absolute; left: 178px; top: 0; height: 32px; line-height: 30px; margin: 0; }
+.lng { overflow: hidden; }
+.lng a i { float: right; margin-right: 10px; font-style: normal; color: #ff6a6a; }
+.vbold { font-weight: bold; }
+.lng a { display: block; float: left; width: 48%; margin-right: 2% !important; height: 38px; line-height: 36px; padding-left: 12px; margin: 0 8px 8px 0; background: #0f0d12; border: 1px solid #3a2e34; font-size: 14px; }
 .lng a b { display: inline-block; width: 30px; height: 20px; line-height: 20px; text-align: center; font-size: 11px; margin-right: 10px; color: #fff; }
 .lng a.on { border-color: #e5484d; background: #2a1216; }
 .rowb { position: relative; min-height: 54px; margin-bottom: 8px; padding: 9px 12px; background: #0f0d12; border: 1px solid #2a2026; }

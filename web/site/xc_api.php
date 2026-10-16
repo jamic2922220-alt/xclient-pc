@@ -258,6 +258,31 @@ case 'report':                                           // "Xatolik haqida xaba
     wr('reports/' . date('Ymd-His') . '-' . $who . '-' . mt_rand(100, 999), array('t' => time(), 'who' => $who, 'ver' => p('ver'), 'log' => $log, 'ua' => isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : ''));
     out(array('ok' => true));
 
+case 'opts':                                             // XClient.exe so'raydi: shu kompyuter uchun Tizim sozlamalari
+case 'opts_set':                                         // menyu yozadi
+case 'opts_done':                                        // XClient.exe bir martalik buyruqlarni bajardi
+    $d = strtolower(p('d'));
+    if (!preg_match('/^[a-z0-9]{8,40}$/', $d)) fail('dev', 'device');
+    @mkdir(XC_DIR . '/dev', 0755, true);
+    $o = rd('dev/' . $d, array());
+    if ($a === 'opts_set') {
+        lock();
+        $o = rd('dev/' . $d, array());
+        $in = json_decode(p('o'), true);
+        if (!is_array($in)) fail('bad', 'bad');
+        foreach (array('beta', 'auto', 'start', 'win', 'clean', 'verify') as $k) if (isset($in[$k])) $o[$k] = $in[$k] ? 1 : 0;
+        if (isset($in['res'])) $o['res'] = preg_match('/^\d{3,4}x\d{3,4}$/', $in['res']) ? $in['res'] : '';
+        wr('dev/' . $d, $o);
+    } elseif ($a === 'opts_done') {
+        lock();
+        $o = rd('dev/' . $d, array());
+        $o['clean'] = 0; $o['verify'] = 0;
+        if (p('cache') !== '') $o['cachemb'] = (int)p('cache');
+        if (p('v') !== '') $o['ver'] = substr(preg_replace('/[^\w.\-]/', '', p('v')), 0, 20);
+        wr('dev/' . $d, $o);
+    }
+    out(array('ok' => true, 'o' => $o));
+
 default:
     fail('action', 'Noma\'lum amal');
 }

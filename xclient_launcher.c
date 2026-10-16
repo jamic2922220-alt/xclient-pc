@@ -698,17 +698,106 @@ static char *read_all(const wchar_t *path, long *len)
 /* Sinovda o'yin brauzeri (CEF1) file:/// sahifani ochmadi - xato sahifasi chiqdi. Shuning uchun X CLIENT menyusi
  * saytda (mmb.boost-top.com) turadi va bosh menyu manzili asl holida qoladi. Oldingi versiya yozgan
  * file:/// manzilni shu yerda qaytaramiz. */
-#define XC_HOME_URL "http://mmb.boost-top.com/index.html"
+#define XC_SITE "http://mmb.boost-top.com/"
+
+/* ---------------------------------------------------------------- Tizim sozlamalari (menyudan) */
+/* O'yin ichidagi X CLIENT menyusi (Sozlamalar > Tizim) ularni xc_api.php ga shu kompyuter id'si (g_id)
+ * bilan yozadi; XClient.exe har ishga tushganda o'qiydi va bajaradi. */
+static int  o_beta = -1, o_auto = 1, o_start = -1, o_win = 0, o_clean = 0, o_verify = 0;
+static char o_res[16] = "";
+
+static int jint(const char *b, const char *k, int def)
+{
+    char key[32];
+    _snprintf(key, sizeof(key), "\"%s\":", k); key[sizeof(key) - 1] = 0;
+    const char *p = b ? strstr(b, key) : NULL;
+    if (!p) return def;
+    p += strlen(key);
+    if (*p == '"') p++;
+    return atoi(p);
+}
+static void fetch_opts(void)
+{
+    char url[256];
+    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=opts&d=%s", g_id); url[sizeof(url) - 1] = 0;
+    char *r = http_get(url, NULL);
+    if (!r || !strstr(r, "\"ok\":true")) { free(r); return; }
+    o_beta = jint(r, "beta", -1); o_auto = jint(r, "auto", 1); o_start = jint(r, "start", -1);
+    o_win = jint(r, "win", 0); o_clean = jint(r, "clean", 0); o_verify = jint(r, "verify", 0);
+    const char *p = strstr(r, "\"res\":\"");
+    unsigned w = 0, h = 0;
+    if (p && sscanf(p + 7, "%ux%u", &w, &h) == 2 && w >= 640 && w <= 7680 && h >= 480 && h <= 4320) _snprintf(o_res, sizeof(o_res), "%ux%u", w, h);
+    free(r);
+}
+static void opts_done(unsigned cacheMb)
+{
+    char url[320], v[48];
+    url_escape(v, sizeof(v), g_version[0] ? g_version : "1.0");
+    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=opts_done&d=%s&cache=%u&v=%s", g_id, cacheMb, v); url[sizeof(url) - 1] = 0;
+    free(http_get(url, NULL));
+}
+/* Windows bilan birga ishga tushirish (HKCU\...\Run) */
+static void set_autostart(int on)
+{
+    HKEY k;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_SET_VALUE, &k) != ERROR_SUCCESS) return;
+    if (on) {
+        wchar_t v[MAX_PATH + 4];
+        _snwprintf(v, MAX_PATH + 4, L"\"%s\"", g_self); v[MAX_PATH + 3] = 0;
+        RegSetValueExW(k, L"X CLIENT", 0, REG_SZ, (const BYTE *)v, (DWORD)((wcslen(v) + 1) * sizeof(wchar_t)));
+    } else RegDeleteValueW(k, L"X CLIENT");
+    RegCloseKey(k);
+}
+static ULONGLONG dir_size(const wchar_t *dir)
+{
+    wchar_t mask[MAX_PATH], sub[MAX_PATH];
+    ULONGLONG n = 0;
+    path_join(mask, dir, L"*");
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(mask, &fd);
+    if (h == INVALID_HANDLE_VALUE) return 0;
+    do {
+        if (!wcscmp(fd.cFileName, L".") || !wcscmp(fd.cFileName, L"..")) continue;
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) { path_join(sub, dir, fd.cFileName); n += dir_size(sub); }
+        else n += ((ULONGLONG)fd.nFileSizeHigh << 32) | fd.nFileSizeLow;
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+    return n;
+}
+static unsigned cache_mb(void)
+{
+    wchar_t d[MAX_PATH];
+    path_join(d, g_dir, L"cstrike_downloads");
+    return (unsigned)(dir_size(d) >> 20);
+}
+/* Keshni tozalash: serverlardan yuklangan xarita va fayllar (cstrike_downloads) */
+static void clean_cache(void)
+{
+    wchar_t p[MAX_PATH + 2] = {0};
+    path_join(p, g_dir, L"cstrike_downloads");
+    if (GetFileAttributesW(p) == INVALID_FILE_ATTRIBUTES) return;
+    SHFILEOPSTRUCTW op = {0};
+    op.wFunc = FO_DELETE; op.pFrom = p;
+    op.fFlags = FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
+    SHFileOperationW(&op);
+}
+
+/* Bosh menyu manzili: http://mmb.boost-top.com/index.html?xc=<id>&v=<versiya>&c=<kesh MB>
+ * (sahifa shu id bilan Tizim sozlamalarini saqlaydi, versiya va kesh hajmini ko'rsatadi).
+ * Oxirida yangi qator bo'lmasin - NextClient manzilni trim qilmaydi. */
 static void setup_main_menu(void)
 {
     wchar_t home[MAX_PATH];
     path_join(home, g_dir, L"platform\\mmb_home_page.html");
     long n = 0;
-    char *cur = read_all(home, &n);
-    if (cur && strstr(cur, "file:///") && strstr(cur, "xclient")) {
+    char *cur = read_all(home, &n), url[300], v[48];
+    if (cur && *cur && !strstr(cur, "mmb.boost-top.com") && !strstr(cur, "xclient")) { free(cur); return; }   /* boshqa sahifa - tegmaymiz */
+    url_escape(v, sizeof(v), g_version[0] ? g_version : "1.0");
+    _snprintf(url, sizeof(url), XC_SITE "index.html?xc=%s&v=%s&c=%u", g_id, v, cache_mb()); url[sizeof(url) - 1] = 0;
+    if (!cur || strcmp(cur, url)) {
         SetFileAttributesW(home, FILE_ATTRIBUTE_NORMAL);
         FILE *f = _wfopen(home, L"wb");
-        if (f) { fputs(XC_HOME_URL, f); fclose(f); }
+        if (f) { fputs(url, f); fclose(f); }
     }
     free(cur);
 }
@@ -755,7 +844,11 @@ static void run_game(void)
         MessageBoxW(NULL, L"O‘yin fayllari (cstrike.exe) topilmadi. X CLIENT ni to‘liq paketdan qayta o‘rnating.", L"X CLIENT", MB_ICONERROR);
         return;
     }
-    _snwprintf(cmd, 1024, L"\"%s\" -game cstrike -noforcemparms -noforcemaccel +exec xclient_launcher.cfg", exe);
+    wchar_t vid[64] = L"";
+    unsigned w = 0, h = 0;
+    if (o_res[0] && sscanf(o_res, "%ux%u", &w, &h) == 2) _snwprintf(vid, 64, L" -width %u -height %u%s", w, h, o_win ? L" -window" : L" -full");
+    else if (o_win) lstrcpyW(vid, L" -window");
+    _snwprintf(cmd, 1024, L"\"%s\" -game cstrike%s -noforcemparms -noforcemaccel +exec xclient_launcher.cfg", exe, vid);
     STARTUPINFOW si = { sizeof(si) };
     PROCESS_INFORMATION pi;
     if (CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, g_dir, &si, &pi)) {
@@ -790,6 +883,11 @@ static DWORD WINAPI worker(LPVOID unused)
 
     if (fresh) { g_fresh = TRUE; status(L"O‘rnatilmoqda...", 1); api_call("install", NULL); }
 
+    fetch_opts();
+    if (o_beta >= 0) { lstrcpynA(g_chan, o_beta ? "beta" : "stable", sizeof(g_chan)); ini_save(); }
+    if (o_start >= 0) set_autostart(o_start);
+    if (o_clean) { status(L"Kesh tozalanmoqda...", 1); clean_cache(); }
+
     status(L"Yangilanish tekshirilmoqda...", 1);
     UpdInfo u;
     if (get_update(&u)) {
@@ -798,7 +896,8 @@ static DWORD WINAPI worker(LPVOID unused)
             MultiByteToWideChar(CP_UTF8, 0, u.msg, -1, w, 256);
             MessageBoxW(g_wnd, w, L"X CLIENT", MB_ICONWARNING);
         }
-        if (u.build && u.base[0] && u.manifest[0] && (u.build != g_build || fresh)) {
+        BOOL must = fresh || o_verify || (u.min && g_build < u.min);
+        if (u.build && u.base[0] && u.manifest[0] && (u.build != g_build || must) && (o_auto || must)) {
             BOOL selfUp = FALSE;
             int fails = sync_files(&u, &selfUp);
             if (fails == 0) {
@@ -814,6 +913,7 @@ static DWORD WINAPI worker(LPVOID unused)
         write_master_cfg(u.master);
     }
     if (!g_relaunch) write_master_js();
+    if (!g_relaunch && (o_clean || o_verify || o_beta >= 0)) opts_done(cache_mb());
     if (!g_relaunch && !ensure_game(u.game)) {
         lstrcpyW(g_err, L"CS 1.6 o‘yin fayllarini o‘rnatib bo‘lmadi. Internetni tekshirib, X CLIENT ni qayta oching.");
         g_play = FALSE;
