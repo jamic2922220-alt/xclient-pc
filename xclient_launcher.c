@@ -468,7 +468,7 @@ static void run_game(void)
         return;
     }
     /* boshlang'ich sozlamalar faqat birinchi marta - keyin o'yinchining o'z sozlamalari saqlanadi */
-    _snwprintf(cmd, 1024, L"\"%s\" -game cstrike +scr_drawversion 0 +clearmasters +exec xclient_master.cfg%s", exe,
+    _snwprintf(cmd, 1024, L"\"%s\" -game cstrike +scr_drawversion 0 +clearmasters +exec xclient_master.cfg +exec xclient_pc.cfg%s", exe,
                g_fresh ? L" +exec boosttop_settings.cfg" : L"");
     STARTUPINFOW si = { sizeof(si) };
     PROCESS_INFORMATION pi;

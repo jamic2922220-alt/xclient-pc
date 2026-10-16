@@ -74,7 +74,7 @@ ipcMain.on('open:folder', (e, sub) => {
 ipcMain.handle('game:launch', (e, opts) => {
   const exe = path.join(GAME_DIR, 'xash3d.exe');
   if (!fs.existsSync(exe)) return 'xash3d.exe topilmadi: ' + exe;
-  const args = ['-game', 'cstrike', '+scr_drawversion', '0', '+clearmasters', '+exec', 'boosttop_ms.cfg', '+exec', 'xclient_master.cfg', '+exec', 'xclient_launcher.cfg'];
+  const args = ['-game', 'cstrike', '+scr_drawversion', '0', '+clearmasters', '+exec', 'boosttop_ms.cfg', '+exec', 'xclient_master.cfg', '+exec', 'xclient_pc.cfg', '+exec', 'xclient_launcher.cfg'];
   if (opts && opts.width && opts.height) args.unshift('-width', String(opts.width), '-height', String(opts.height));
   if (opts && opts.windowed) args.unshift('-window'); else args.unshift('-fullscreen');
   if (opts && opts.connect && /^[\w.\-]+:\d+$/.test(opts.connect)) args.push('+connect', opts.connect);

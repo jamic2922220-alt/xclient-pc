@@ -35,7 +35,7 @@ function defaults() {
     vol: 0.8, mus: 0, voiceOn: 1, voice: 0.8, mute: 1,
     fps: 'max', res: '0x0', windowed: 0, fpsMax: 300, vsync: 0, gamma: 2.5,
     x: { size: 6, thick: 2, gap: 3, pad: 1, alpha: 255, color: '255 59 59', dot: 0, t: 0, dyn: 0 },
-    hudScale: 0, netgraph: 0, fastswitch: 1,
+    hudScale: 0, netgraph: 0, fastswitch: 1, pcmenu: 1,
     favs: [], hist: [],
   };
 }
@@ -80,6 +80,9 @@ function buildCfg() {
     'xhair_enable "1"', `xhair_size "${x.size}"`, `xhair_thick "${x.thick}"`, `xhair_gap "${x.gap}"`, `xhair_pad "${x.pad}"`, `xhair_dot "${x.dot}"`, `xhair_t "${x.t}"`,
     `xhair_color "${x.color} ${x.alpha}"`, `xhair_dynamic_move "${x.dyn}"`, `cl_dynamiccrosshair "${x.dyn}"`,
     `hud_scale "${S.hudScale}"`, `net_graph "${S.netgraph ? 1 : 0}"`, `hud_fastswitch "${S.fastswitch}"`, 'scr_drawversion "0"',
+    // PC CS 1.6 ko'rinishi: klassik matnli menyular (B, M, radio), eski config xatosini tuzatish
+    'cl_crosshair_size "auto"', `_vgui_menus "${S.pcmenu ? 0 : 1}"`, `_extended_menus "${S.pcmenu ? 0 : 1}"`, 'cl_oldtouchmenus "0"',
+    'cl_shadows "0"', 'cl_radartype "0"', 'hud_centerid "0"', 'cl_righthand "1"', 'touch_enable "0"', 'hud_textmode "0"',
   ];
   Object.entries(S.binds).forEach(([cmd, key]) => { if (key) L.push(`bind "${key === '"' ? "'" : key}" "${cmd}"`); });
   if (S.buyKeys) BUY.forEach(([k, , cmd]) => L.push(`bind "${k}" "${cmd}"`));
@@ -244,7 +247,7 @@ function renderSettings() {
       ${row(t('x_color'), COLORS.map((c) => `<span class="sw ${S.x.color === c ? 'on' : ''}" data-col="${c}" style="background:rgb(${c.split(' ').join(',')})"></span>`).join(''))}
       ${tg('x.dot', t('x_dot'))}${tg('x.t', t('x_t'))}${tg('x.dyn', t('x_dyn'))}
       ${row(t('x_code'), `<span class="val" style="width:auto;flex:1;justify-content:flex-start;padding:0 10px;font-family:Consolas,monospace;color:#ff5a5a" id="xcode">${xCode()}</span><span class="btn" id="xcopy">${t('x_copy')}</span><span class="btn" id="xpaste">${t('x_paste')}</span>`)}</div>
-      <div class="card p"><div class="h">${t('hud_t')}</div>${sl('hudScale', 0, 3, 0.25, t('hud_scale'), '', FMT.hudScale)}${tg('netgraph', t('netgraph'))}${tg('fastswitch', t('fastswitch'))}</div>`,
+      <div class="card p"><div class="h">${t('hud_t')}</div>${sl('hudScale', 0, 3, 0.25, t('hud_scale'), '', FMT.hudScale)}${tg('netgraph', t('netgraph'))}${tg('fastswitch', t('fastswitch'))}${tg('pcmenu', t('pcmenu'))}</div>`,
     acc: () => `<div class="card p" style="text-align:center"><div class="h" style="text-align:left">${t('acc_t')}</div>
       <div style="width:110px;height:110px;margin:6px auto 12px;border-radius:50%;background:#ff3b3b;box-shadow:0 0 0 3px #ff9a8a,0 0 24px rgba(255,59,59,.5);display:flex;align-items:center;justify-content:center;font-size:48px;font-weight:bold">${esc((S.name[0] || 'X').toUpperCase())}</div>
       <div style="font-size:24px">${esc(S.tag + S.name)}</div><p class="mut" style="max-width:420px;margin:18px auto;line-height:1.6">${t('acc_soon')}</p>
