@@ -58,13 +58,6 @@ window.onerror = function (msg, url, line) {
     <div class="mi" data-act="quit"><i>&#10005;</i><span data-t="m_quit"></span></div>
   </div>
 
-  <!-- ===== katta O'YNASH tugmasi ===== -->
-  <div id="play" data-act="play">
-    <div class="tri"></div>
-    <div class="pt"><b data-t="play"></b><small id="playSub">...</small></div>
-    <div class="pp"><span id="playPing">--</span><small>ms</small></div>
-  </div>
-
   <!-- ===== o'ng ustun ===== -->
   <div id="col">
      <div class="card">
@@ -134,12 +127,12 @@ window.onerror = function (msg, url, line) {
       <div class="wb">
         <div id="srvTools">
           <input id="srvSearch" type="text">
-          <select id="fMap" class="sel"></select>
-          <select id="fMode" class="sel"></select>
+          <a class="dd" id="fMap" data-dd="map"><span></span><i>&#9662;</i></a>
+          <a class="dd" id="fMode" data-dd="mode"><span></span><i>&#9662;</i></a>
           <a class="chip" data-flt="ping" data-t="f_ping"></a>
           <a class="chip" data-flt="notempty" data-t="f_notempty"></a>
           <a class="chip" data-flt="notfull" data-t="f_notfull"></a>
-          <a class="btn red" id="quickBtn" data-act="quick">&#9889; <span data-t="m_quick"></span></a>
+          <a class="btn red" id="quickBtn" data-act="quick"><span data-t="m_quick"></span></a>
           <a class="btn" id="addIpBtn" data-act="addip">+ <span data-t="add_ip"></span></a>
           <a class="btn" id="clearHist" data-act="clearhist">&#10005; <span data-t="clear_hist"></span></a>
           <span class="mut" id="favNote" data-t="fav_note"></span>
@@ -153,7 +146,7 @@ window.onerror = function (msg, url, line) {
       </div>
       <div class="wf">
         <span class="mut" id="srvFoot"></span>
-        <a class="btn" data-act="refresh">&#10227; <span data-t="refresh"></span></a>
+        <a class="btn" data-act="refresh"><span data-t="refresh"></span></a>
         <a class="btn" data-act="togglefav" id="favBtn">&#9733; <span data-t="to_favs"></span></a>
         <a class="btn red" data-act="join">&#9654; <span data-t="join"></span></a>
       </div>
@@ -202,6 +195,7 @@ window.onerror = function (msg, url, line) {
     </div>
   </div>
 
+  <div id="ddList"></div>
   <div id="toast"></div>
   <div id="dbg"></div>
 </div>

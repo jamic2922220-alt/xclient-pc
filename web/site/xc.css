@@ -302,3 +302,14 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 
 #toast { position: absolute; left: 600px; width: 440px; bottom: 80px; min-height: 40px; line-height: 20px; padding: 10px 14px; text-align: center; background: rgba(20,17,24,0.97); border: 1px solid #e5484d; color: #fff; display: none; z-index: 50; }
 #dbg { position: absolute; left: 0; right: 0; top: 0; padding: 4px 10px; font-size: 11px; color: #ff9b9b; background: rgba(0,0,0,0.6); display: none; z-index: 60; word-wrap: break-word; }
+
+/* o'z dropdown'imiz (CEF1 dagi <select> o'rniga) */
+.dd { position: relative; display: inline-block; vertical-align: top; width: 170px; height: 34px; line-height: 32px; margin-right: 6px; padding: 0 28px 0 12px; font-size: 13px; color: #eee; background: #1d181f; border: 1px solid #3a2e34; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dd:hover { border-color: #5a3a40; }
+.dd i { position: absolute; right: 10px; top: 0; font-style: normal; color: #a99ea6; font-size: 11px; }
+.dd.wide { display: block; width: 100%; height: 36px; line-height: 34px; margin: 0; }
+#ddList { display: none; position: absolute; z-index: 45; max-height: 320px; overflow-y: auto; background: #1d181f; border: 1px solid #5a3a40; -webkit-box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
+#ddList a { display: block; height: 30px; line-height: 30px; padding: 0 12px; font-size: 13px; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#ddList a:hover { background: #2a1216; color: #fff; }
+#ddList a.on { color: #ff6a6a; }
+#ddList::-webkit-scrollbar { width: 8px; } #ddList::-webkit-scrollbar-thumb { background: #3a2a30; }
