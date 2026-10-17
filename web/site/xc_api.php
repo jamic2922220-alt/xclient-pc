@@ -147,6 +147,52 @@ case 'login':
     save_user($u);
     out(array('ok' => true, 'token' => new_token($u['login']), 'me' => pub($u, true)));
 
+case 'reset_req':                                        // parolni tiklash: 1) emailga 6 xonali kod
+    $who = p('login');
+    $login = $who;
+    if (strpos($who, '@') !== false) {
+        foreach (glob(XC_DIR . '/users/*.php') as $f) {
+            $x = rd('users/' . basename($f, '.php'), null);
+            if ($x && !empty($x['email']) && strcasecmp($x['email'], $who) === 0) { $login = $x['login']; break; }
+        }
+    }
+    if (!preg_match('/^[A-Za-z0-9_]{3,20}$/', $login)) fail('bad', 'Bunday akkaunt topilmadi');
+    lock();
+    $u = user($login);
+    if (!$u) { usleep(400000); fail('bad', 'Bunday akkaunt topilmadi'); }
+    if (empty($u['email'])) fail('noemail', 'Bu akkauntga email ulanmagan. Parolni tiklash uchun boost-top.com admini bilan bog\'laning');
+    if (!empty($u['rst']['sent']) && time() - $u['rst']['sent'] < 120) fail('wait', 'Kod yaqinda yuborildi. 2 daqiqadan keyin qayta urinib ko\'ring');
+    $code = (string)(function_exists('random_int') ? random_int(100000, 999999) : mt_rand(100000, 999999));
+    $host = preg_replace('/^www\./', '', isset($_SERVER['HTTP_HOST']) ? preg_replace('/^mmb\./', '', $_SERVER['HTTP_HOST']) : 'boost-top.com');
+    $subj = '=?UTF-8?B?' . base64_encode('X CLIENT: parolni tiklash kodi / код восстановления') . '?=';
+    $body = "X CLIENT (boost-top.com)\r\n\r\nLogin: " . $u['login'] . "\r\nKod / Код: " . $code . "\r\n\r\n"
+        . "Kodni o'yindagi X CLIENT oynasiga kiriting. Kod 15 daqiqa amal qiladi.\r\n"
+        . "Введите код в окне X CLIENT в игре. Код действует 15 минут.\r\n\r\n"
+        . "Agar siz so'ramagan bo'lsangiz - bu xatga e'tibor bermang.\r\n";
+    $hdr = "From: X CLIENT <noreply@" . $host . ">\r\nContent-Type: text/plain; charset=UTF-8\r\nMIME-Version: 1.0\r\n";
+    if (!function_exists('mail') || !@mail($u['email'], $subj, $body, $hdr)) fail('mail', 'Serverdan email yuborib bo\'lmadi. boost-top.com admini bilan bog\'laning');
+    $u['rst'] = array('h' => password_hash($code, PASSWORD_DEFAULT), 'exp' => time() + 900, 'n' => 0, 'sent' => time());
+    save_user($u);
+    out(array('ok' => true, 'login' => $u['login'], 'email' => preg_replace('/^(.).*(@.*)$/', '$1*****$2', $u['email'])));
+
+case 'reset_do':                                         // 2) kod + yangi parol
+    $login = p('login'); $code = preg_replace('/\D/', '', p('code')); $np = p('newpass');
+    if (!preg_match('/^[A-Za-z0-9_]{3,20}$/', $login)) fail('bad', 'Bunday akkaunt topilmadi');
+    if (strlen($np) < 6) fail('pass', 'Yangi parol kamida 6 belgi');
+    lock();
+    $u = user($login);
+    if (!$u || empty($u['rst'])) fail('code', 'Avval kod so\'rang');
+    if (time() > $u['rst']['exp'] || $u['rst']['n'] >= 5) { unset($u['rst']); save_user($u); fail('code', 'Kod eskirdi. Yangi kod so\'rang'); }
+    if (!password_verify($code, $u['rst']['h'])) { $u['rst']['n']++; save_user($u); usleep(400000); fail('code', 'Kod noto\'g\'ri'); }
+    unset($u['rst']);
+    $u['pass'] = password_hash($np, PASSWORD_DEFAULT); $u['pwchanged'] = time();
+    $tokens = rd('tokens', array());                     // eski sessiyalar bekor qilinadi
+    foreach ($tokens as $t => $l) if ($l === strtolower($u['login'])) unset($tokens[$t]);
+    wr('tokens', $tokens);
+    touch_device($u);
+    save_user($u);
+    out(array('ok' => true, 'token' => new_token($u['login']), 'me' => pub($u, true)));
+
 case 'me':
     $u = auth();
     out(array('ok' => true, 'me' => pub($u, true)));

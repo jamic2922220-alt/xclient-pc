@@ -77,6 +77,11 @@ function T(k) {
   if (f && f[k] != null) return f[k];
   return LANG.uz[k] != null ? LANG.uz[k] : k;
 }
+function fmtShort(sec) {                       // o'yinchilar ro'yxati uchun qisqa: 1:04 yoki 26'
+  sec = Math.max(0, Math.round(sec || 0));
+  var h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60);
+  return h ? h + ':' + (m < 10 ? '0' : '') + m : m + "'";
+}
 function fmtDur(sec) {
   sec = Math.max(0, Math.round(sec || 0));
   var h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60);
@@ -602,6 +607,27 @@ function doLogin() {
   });
 }
 
+/* parolni tiklash: login/email -> emailga kod -> kod + yangi parol */
+function forgot() {
+  ask(T('rs_ask'), function (who) {
+    who = String(who || '').replace(/^\s+|\s+$/g, '');
+    if (!who) return;
+    toast(T('lg_wait'));
+    api('reset_req', { login: who }, function (r) {
+      if (!r.ok) return toast(r.msg || 'Xato', 7000);
+      toast(T('rs_sent').replace('{e}', r.email), 7000);
+      ask(T('rs_code').replace('{e}', r.email), function (code, np) {
+        api('reset_do', { login: r.login, code: code, newpass: np }, function (r2) {
+          if (!r2.ok) return toast(r2.msg || 'Xato', 6000);
+          DB.forget = 0;
+          afterLogin(r2);
+          toast(T('rs_ok'), 5000);
+        });
+      }, true, false);
+    });
+  });
+}
+
 /* ============================================================ SERVERLAR oynasi */
 var srvTab = 'internet', srvSel = '', srvSort = 'pl', srvDesc = true;
 var FLT = { ping: false, notempty: false, notfull: false };
@@ -798,10 +824,13 @@ function renderInfo() {
   var box = $('srvInfo');
   if (!srvSel) { box.innerHTML = '<div class="empty">' + esc(T('empty_list')) + '</div>'; return; }
   var s = srv(srvSel), pl = PLAYERS[srvSel], ph = '', h = histOf(srvSel);
-  if (pl && pl.length) each(pl.slice(0, 40), function (p) { ph += '<div class="pl">' + esc(clean(p.name) || '...') + '<span>' + (p.score || 0) + ' \u00b7 ' + fmtDur(p.timePlayedSeconds) + '</span></div>'; });
+  if (pl && pl.length) each(pl.slice(0, 40), function (p) { ph += '<div class="pl">' + esc(clean(p.name) || '...') + '<span>' + (p.score || 0) + ' \u00b7 ' + fmtShort(p.timePlayedSeconds) + '</span></div>'; });
   else ph = '<div class="empty" style="padding:8px 0">' + esc(pl ? T('no_players') : T('loading')) + '</div>';
   var pc = s.ping < 50 ? 'gr' : s.ping < 100 ? 'ye' : 'rd', mode = modeOf(s), fr = friendsAt(srvSel);
-  box.innerHTML = '<div class="mp' + (mode === 'zm' ? ' zm' : mode === 'awp' ? ' aw' : '') + '"><span>' + esc(s.map || (h && h.map) || '?') + '</span></div>' +
+  var mapn = s.map || (h && h.map) || '';
+  box.innerHTML = '<div class="mp' + (mode === 'zm' ? ' zm' : mode === 'awp' ? ' aw' : '') + '">' +
+    (/^[\w\-.]{2,40}$/.test(mapn) ? '<img src="map.php?m=' + encodeURIComponent(mapn.toLowerCase()) + '" alt="" onerror="this.style.display=\'none\'">' : '') +
+    '<span>' + esc(mapn || '?') + '</span></div>' +
     '<h3>' + esc(s.name || (h && h.name) || srvSel) + '</h3><div class="ip">' + esc(srvSel) + '</div>' +
     '<div class="ln">' + esc(T('ph_players')) + ' <b>' + (s.ok ? s.pl + '/' + s.max : '-') + '</b><span class="r ' + pc + '">' + (s.ok ? '\u25cf ' + s.ping + ' ms' : esc(T('offline'))) + '</span></div>' +
     '<div class="ph">' + esc(T('ph_players')) + '</div><div class="pls">' + ph + '</div>' +
@@ -1252,7 +1281,7 @@ function act(a) {
   if (a === 'guest') { DB.guest = 1; persist(); return closeModal(); }
   if (a === 'dologin') return doLogin();
   if (a === 'lgswitch') { lgReg = !lgReg; return renderLoginForm(); }
-  if (a === 'forgot') return toast(T('lg_forgot2'), 5000);
+  if (a === 'forgot') return forgot();
   if (a === 'refresh') { each(tabIps(), function (ip) { query(ip, true); }); if (srvSel) loadPlayers(srvSel); if (srvTab === 'friends') loadFriends(); return; }
   if (a === 'join') { if (srvSel) { closeModal(); connect(srvSel); } return; }
   if (a === 'togglefav') return toggleFav(srvSel);

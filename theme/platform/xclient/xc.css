@@ -174,6 +174,7 @@ input, select { font-family: inherit; }
 #srvInfo .mp { position: relative; height: 120px; margin-bottom: 12px; background: -webkit-linear-gradient(top, #8fb3d9 0%, #c8b48a 48%, #9b8360 52%, #7a6448 100%); }
 #srvInfo .mp.zm { background: -webkit-linear-gradient(top, #2a3a2a 0%, #4a5a3a 50%, #2a2a1a 100%); }
 #srvInfo .mp.aw { background: -webkit-linear-gradient(top, #a8c8e8 0%, #d8c8a0 50%, #a08060 100%); }
+#srvInfo .mp img { position: absolute; left: 0; top: 0; width: 100%; height: 120px; }
 #srvInfo .mp span { position: absolute; left: 10px; bottom: 8px; padding: 2px 8px; font-size: 12px; background: rgba(0,0,0,0.65); }
 #srvInfo h3 { margin: 0; font-size: 17px; font-weight: normal; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #srvInfo .ip { font-size: 12px; color: #8f8590; margin: 3px 0 12px; }
@@ -181,8 +182,8 @@ input, select { font-family: inherit; }
 #srvInfo .ln .r { position: absolute; right: 0; top: 0; }
 #srvInfo .ph { margin: 10px 0 4px; font-size: 12px; letter-spacing: 2px; color: #e5484d; font-weight: bold; }
 #srvInfo .pl { position: relative; height: 24px; line-height: 24px; font-size: 13px; border-bottom: 1px solid #2a2026; white-space: nowrap; overflow: hidden; }
-#srvInfo .pl span { position: absolute; right: 0; top: 0; color: #8f8590; background: #1b161d; padding-left: 6px; }
-#srvInfo .pls { height: 260px; overflow-y: auto; }
+#srvInfo .pl span { position: absolute; right: 4px; top: 0; color: #8f8590; background: #1b161d; padding-left: 6px; }
+#srvInfo .pls { height: 260px; overflow-y: auto; padding-right: 10px; }
 #srvInfo .fr3 { margin-top: 8px; font-size: 12px; }
 #srvInfo .note { margin-top: 8px; font-size: 12px; color: #ff6a6a; }
 
