@@ -13,7 +13,9 @@ header('Cache-Control: no-store');
 
 // xizmatlar (TOP / BOOST / VIP / Sevimlilar) jadvallari turgan sahifa(lar) - birinchi ishlagani olinadi
 $PAGES  = array('https://boost-top.com/', 'http://boost-top.com/', 'https://www.boost-top.com/');
-$MARKER = '/sevimli|избранн|favorit/iu';      // jadval sarlavhasi
+// tekshirish uchun boshqa sahifa: fav.php?debug=1&url=https://boost-top.com/...
+if (isset($_GET['debug'], $_GET['url']) && preg_match('#^https?://(www\.)?boost-top\.com/#i', $_GET['url'])) $PAGES = array($_GET['url']);
+$MARKER = '/sevimli|избранн|favorit|game ?menu/iu';      // jadval sarlavhasi
 $CACHE  = __DIR__ . '/xc_data/fav_cache.php';
 $IPRE   = '/(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3}:\d{2,5})(?!\d)/';
 
@@ -39,18 +41,28 @@ function fetch_page($url, $host = '', &$info = null) {
 function parse_fav($html, $MARKER, $IPRE, &$dbg) {
     $list = array();
     // 0) saytdagi "boost-privileges-table": har bir xizmat qatori <tr data-service="favorites"> ...
-    if (preg_match_all('#<tr\b[^>]*data-service\s*=\s*["\']?(?:favorites|favourites|fav)\b[^>]*>(.*?)</tr>#is', $html, $rows)) {
+    if (preg_match_all('#<tr\b[^>]*data-service\s*=\s*["\']?(?:gamemenu|favorites|favourites|fav)\b[^>]*>(.*?)</tr>#is', $html, $rows)) {
         foreach ($rows[1] as $r) {
             if (preg_match_all('/(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3})(?::(\d{2,5}))?(?![\d.])/', $r, $m, PREG_SET_ORDER))
                 foreach ($m as $x) { $ip = $x[1] . ':' . (isset($x[2]) && $x[2] !== '' ? $x[2] : '27015'); if (!in_array($ip, $list)) $list[] = $ip; }
         }
-        $dbg .= 'data-service=favorites qatorlari: ' . count($rows[1]) . "\n";
+        $dbg .= 'data-service=gamemenu qatorlari: ' . count($rows[1]) . "\n";
         if ($rows[1]) $dbg .= 'Birinchi qator: ' . trim(preg_replace('/\s+/u', ' ', strip_tags(str_replace('<', ' <', $rows[1][0])))) . "\n";
         if ($list) return $list;
-    } else $dbg .= "data-service=favorites qatorlari topilmadi\n";
+    } else $dbg .= "data-service=gamemenu qatorlari topilmadi\n";
+    if (isset($_GET['debug'])) {
+        if (preg_match_all('#data-service\s*=\s*["\']?([\w-]+)#i', $html, $sv)) {
+            $c = array(); foreach (array_count_values($sv[1]) as $k => $n) $c[] = $k . ' x' . $n;
+            $dbg .= 'data-service qiymatlari: ' . implode(', ', $c) . "\n";
+        }
+        if (preg_match_all('/(?<![\d.])\d{1,3}(?:\.\d{1,3}){3}:\d{2,5}/', $html, $ips, PREG_OFFSET_CAPTURE)) {
+            $dbg .= "\n--- IP ATROFIDAGI KOD (birinchi 3 ta) ---\n";
+            foreach (array_slice($ips[0], 0, 3) as $h) $dbg .= '@' . $h[1] . ': ' . preg_replace('/\s+/u', ' ', substr($html, max(0, $h[1] - 600), 750)) . "\n\n";
+        }
+    }
     // 0b) jadval JS orqali chizilsa: skriptdagi {"service":"favorites", ... "ip":"..."} obyektlari
     $raw = preg_replace('#<style\b.*?</style>#is', ' ', $html);
-    if (preg_match_all('#\{[^{}]*?["\']?(?:service|type|tariff|slug|key)["\']?\s*:\s*["\'](?:favorites|favourites|fav|gm)["\'][^{}]*\}#is', $raw, $objs)) {
+    if (preg_match_all('#\{[^{}]*?["\']?(?:service|type|tariff|slug|key)["\']?\s*:\s*["\'](?:gamemenu|favorites|favourites|fav|gm)["\'][^{}]*\}#is', $raw, $objs)) {
         foreach ($objs[0] as $o)
             if (preg_match_all('/(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3})(?::(\d{2,5}))?(?![\d.])/', $o, $m, PREG_SET_ORDER))
                 foreach ($m as $x) { $ip = $x[1] . ':' . (isset($x[2]) && $x[2] !== '' ? $x[2] : '27015'); if (!in_array($ip, $list)) $list[] = $ip; }
