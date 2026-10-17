@@ -48,6 +48,27 @@ function parse_fav($html, $MARKER, $IPRE, &$dbg) {
         if ($rows[1]) $dbg .= 'Birinchi qator: ' . trim(preg_replace('/\s+/u', ' ', strip_tags(str_replace('<', ' <', $rows[1][0])))) . "\n";
         if ($list) return $list;
     } else $dbg .= "data-service=favorites qatorlari topilmadi\n";
+    // 0b) jadval JS orqali chizilsa: skriptdagi {"service":"favorites", ... "ip":"..."} obyektlari
+    $raw = preg_replace('#<style\b.*?</style>#is', ' ', $html);
+    if (preg_match_all('#\{[^{}]*?["\']?(?:service|type|tariff|slug|key)["\']?\s*:\s*["\'](?:favorites|favourites|fav|gm)["\'][^{}]*\}#is', $raw, $objs)) {
+        foreach ($objs[0] as $o)
+            if (preg_match_all('/(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3})(?::(\d{2,5}))?(?![\d.])/', $o, $m, PREG_SET_ORDER))
+                foreach ($m as $x) { $ip = $x[1] . ':' . (isset($x[2]) && $x[2] !== '' ? $x[2] : '27015'); if (!in_array($ip, $list)) $list[] = $ip; }
+        $dbg .= 'JS obyektlar (favorites): ' . count($objs[0]) . "\n";
+        if ($list) return $list;
+    }
+    if (isset($_GET['debug'])) {                                          // sahifa kodidan parchalar - qayerda turganini ko'rish uchun
+        if (preg_match_all('/favorit|sevimli|gamemenu|privileges|befirst/iu', $raw, $hits, PREG_OFFSET_CAPTURE)) {
+            $dbg .= "\n--- KODDAN PARCHALAR (" . count($hits[0]) . " ta) ---\n";
+            $last = -1000;
+            foreach (array_slice($hits[0], 0, 40) as $h) {
+                if ($h[1] - $last < 500) continue;
+                $last = $h[1];
+                $dbg .= '@' . $h[1] . ': ' . preg_replace('/\s+/u', ' ', substr($raw, max(0, $h[1] - 250), 700)) . "\n\n";
+            }
+        }
+        if (preg_match_all('#(?:fetch|ajax|getJSON|axios\.get|\.load)\s*\(\s*["\']([^"\']+)#i', $raw, $u)) $dbg .= 'AJAX manzillar: ' . implode(' , ', array_unique($u[1])) . "\n";
+    }
     $html = preg_replace('#<(style|script)\b.*?</\1>#is', ' ', $html);      // CSS/JS dagi so'zlar adashtirmasin
     $text = preg_replace('/\s+/u', ' ', strip_tags(str_replace('<', ' <', $html)));
     $text = html_entity_decode($text, ENT_QUOTES, 'UTF-8');
