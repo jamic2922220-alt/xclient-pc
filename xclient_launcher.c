@@ -713,7 +713,8 @@ static char *read_all(const wchar_t *path, long *len)
 /* O'yin ichidagi X CLIENT menyusi (Sozlamalar > Tizim) ularni xc_api.php ga shu kompyuter id'si (g_id)
  * bilan yozadi; XClient.exe har ishga tushganda o'qiydi va bajaradi. */
 static int  o_beta = -1, o_auto = 1, o_start = -1, o_win = 0, o_clean = 0, o_verify = 0;
-static char o_res[16] = "";
+static int  o_prio = 0, o_shots = 0, o_spray = 0, o_ok = 0;   /* o_ok: sozlamalar saytdan olindi */
+static char o_res[16] = "", o_packs[256] = "";
 
 static int jint(const char *b, const char *k, int def)
 {
@@ -725,17 +726,51 @@ static int jint(const char *b, const char *k, int def)
     if (*p == '"') p++;
     return atoi(p);
 }
+/* JSON dagi "k":"qiymat" satrini olish (faqat oddiy belgilar) */
+static void jstr(const char *b, const char *k, char *out, size_t cap)
+{
+    char key[40];
+    _snprintf(key, sizeof(key), "\"%s\":\"", k); key[sizeof(key) - 1] = 0;
+    const char *p = b ? strstr(b, key) : NULL;
+    size_t n = 0;
+    out[0] = 0;
+    if (!p) return;
+    for (p += strlen(key); *p && *p != '"' && n + 1 < cap; p++) out[n++] = *p;
+    out[n] = 0;
+}
+/* kompyuter quvvati: menyu shunga qarab grafika sozlamalarini tavsiya qiladi */
+static void hw_query(char *out, size_t cap)
+{
+    MEMORYSTATUSEX ms; ms.dwLength = sizeof(ms);
+    SYSTEM_INFO si;
+    DISPLAY_DEVICEA dd;
+    char gpu[128] = "", eg[256];
+    unsigned ram = GlobalMemoryStatusEx(&ms) ? (unsigned)(ms.ullTotalPhys >> 20) : 0;
+    GetSystemInfo(&si);
+    for (DWORD i = 0; ; i++) {
+        ZeroMemory(&dd, sizeof(dd)); dd.cb = sizeof(dd);
+        if (!EnumDisplayDevicesA(NULL, i, &dd, 0)) break;
+        if (!gpu[0] || (dd.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE)) lstrcpynA(gpu, dd.DeviceString, sizeof(gpu));
+        if (dd.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE) break;
+    }
+    url_escape(eg, sizeof(eg), gpu);
+    _snprintf(out, cap, "&ram=%u&cpu=%u&gpu=%s", ram, (unsigned)si.dwNumberOfProcessors, eg); out[cap - 1] = 0;
+}
 static unsigned cache_mb(void);
 static void fetch_opts(void)
 {
-    char url[256];
+    char url[640], hw[320];
     char v[48];
     url_escape(v, sizeof(v), g_version[0] ? g_version : "1.0");
-    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=hello&d=%s&v=%s&cache=%u", g_id, v, cache_mb()); url[sizeof(url) - 1] = 0;
+    hw_query(hw, sizeof(hw));
+    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=hello&d=%s&v=%s&cache=%u%s", g_id, v, cache_mb(), hw); url[sizeof(url) - 1] = 0;
     char *r = http_get(url, NULL);
     if (!r || !strstr(r, "\"ok\":true")) { free(r); return; }
     o_beta = jint(r, "beta", -1); o_auto = jint(r, "auto", 1); o_start = jint(r, "start", -1);
     o_win = jint(r, "win", 0); o_clean = jint(r, "clean", 0); o_verify = jint(r, "verify", 0);
+    o_prio = jint(r, "prio", 0); o_shots = jint(r, "shots", 0); o_spray = jint(r, "spray", 0);
+    jstr(r, "packs", o_packs, sizeof(o_packs));
+    o_ok = 1;
     const char *p = strstr(r, "\"res\":\"");
     unsigned w = 0, h = 0;
     if (p && sscanf(p + 7, "%ux%u", &w, &h) == 2 && w >= 640 && w <= 7680 && h >= 480 && h <= 4320) _snprintf(o_res, sizeof(o_res), "%ux%u", w, h);
@@ -792,6 +827,235 @@ static void clean_cache(void)
     op.wFunc = FO_DELETE; op.pFrom = p;
     op.fFlags = FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
     SHFileOperationW(&op);
+}
+
+/* ---------------------------------------------------------------- Kontent (menyudan tanlanadi) */
+static BOOL file_exists(const wchar_t *p) { return GetFileAttributesW(p) != INVALID_FILE_ATTRIBUTES; }
+static int ini_int(const wchar_t *k) { wchar_t ini[MAX_PATH]; ini_path(ini); return GetPrivateProfileIntW(L"x", k, 0, ini); }
+static void ini_set_int(const wchar_t *k, int v) { wchar_t ini[MAX_PATH], w[24]; ini_path(ini); _snwprintf(w, 24, L"%d", v); WritePrivateProfileStringW(L"x", k, w, ini); }
+
+/* Spray: menyu tayyorlagan tempdecal.wad ni o'rnatish */
+static void install_spray(void)
+{
+    if (o_spray <= 0 || o_spray == ini_int(L"sprayt")) return;
+    wchar_t dst[MAX_PATH], tmp[MAX_PATH];
+    char url[256];
+    path_join(dst, g_dir, L"cstrike\\tempdecal.wad");
+    path_join(tmp, g_dir, L"cstrike\\tempdecal.xcdl");
+    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=spray_get&d=%s", g_id); url[sizeof(url) - 1] = 0;
+    status(L"Spray o‘rnatilmoqda...", 1);
+    if (!http_download(url, tmp)) { DeleteFileW(tmp); return; }
+    SetFileAttributesW(dst, FILE_ATTRIBUTE_NORMAL);
+    if (MoveFileExW(tmp, dst, MOVEFILE_REPLACE_EXISTING)) {
+        SetFileAttributesW(dst, FILE_ATTRIBUTE_READONLY);   /* o'yin ustidan yozib yubormasin */
+        ini_set_int(L"sprayt", o_spray);
+    } else DeleteFileW(tmp);
+}
+
+/* Paketlar: saytdagi mmb/packs/<id>/files/ o'yin papkasiga ko'chiriladi, asl fayllar xc_backup/<id>/ ga saqlanadi */
+static BOOL safe_rel(const char *rel)
+{
+    if (!rel[0] || rel[0] == '/' || rel[0] == '\\' || strstr(rel, "..") || strchr(rel, ':')) return FALSE;
+    return TRUE;
+}
+static void rel_to_w(const char *rel, wchar_t *out)
+{
+    MultiByteToWideChar(CP_UTF8, 0, rel, -1, out, MAX_PATH);
+    for (wchar_t *c = out; *c; c++) if (*c == L'/') *c = L'\\';
+}
+static BOOL pack_install(const char *id)
+{
+    char url[256];
+    _snprintf(url, sizeof(url), XC_SITE "packs.php?files=%s", id); url[sizeof(url) - 1] = 0;
+    char *list = http_get(url, NULL);
+    if (!list) return FALSE;
+    wchar_t wid[64], bdir[MAX_PATH], sub[MAX_PATH], lst[MAX_PATH];
+    MultiByteToWideChar(CP_UTF8, 0, id, -1, wid, 64);
+    _snwprintf(sub, MAX_PATH, L"xc_backup\\%s", wid); sub[MAX_PATH - 1] = 0;
+    path_join(bdir, g_dir, sub);
+    path_join(lst, bdir, L"_files.txt");
+    mkdirs_for(lst);
+    FILE *lf = _wfopen(lst, L"ab");
+    int n = 0, fails = 0;
+    status(L"Paket o‘rnatilmoqda...", 1);
+    for (char *line = strtok(list, "\n"); line; line = strtok(NULL, "\n")) {
+        char *t1 = strchr(line, '\t'); if (!t1) continue;
+        *t1 = 0;
+        char *t2 = strchr(t1 + 1, '\t'); if (!t2) continue;
+        char *u = t2 + 1, *cr = strchr(u, '\r'); if (cr) *cr = 0;
+        if (!safe_rel(line) || _strnicmp(u, "http", 4)) continue;
+        wchar_t wrel[MAX_PATH], dst[MAX_PATH], bak[MAX_PATH], tmp[MAX_PATH + 8];
+        rel_to_w(line, wrel);
+        path_join(dst, g_dir, wrel);
+        path_join(bak, bdir, wrel);
+        if (file_exists(dst) && !file_exists(bak)) { mkdirs_for(bak); CopyFileW(dst, bak, TRUE); }
+        mkdirs_for(dst);
+        _snwprintf(tmp, MAX_PATH + 8, L"%s.xcdl", dst); tmp[MAX_PATH + 7] = 0;
+        if (http_download(u, tmp) && MoveFileExW(tmp, dst, MOVEFILE_REPLACE_EXISTING)) {
+            if (lf) fprintf(lf, "%s\n", line);
+            n++;
+        } else { DeleteFileW(tmp); fails++; }
+    }
+    if (lf) fclose(lf);
+    free(list);
+    return n > 0;
+}
+static void pack_remove(const char *id)
+{
+    wchar_t wid[64], bdir[MAX_PATH + 2] = {0}, sub[MAX_PATH], lst[MAX_PATH];
+    MultiByteToWideChar(CP_UTF8, 0, id, -1, wid, 64);
+    _snwprintf(sub, MAX_PATH, L"xc_backup\\%s", wid); sub[MAX_PATH - 1] = 0;
+    path_join(bdir, g_dir, sub);
+    path_join(lst, bdir, L"_files.txt");
+    long len = 0;
+    char *b = read_all(lst, &len);
+    if (b) {
+        for (char *line = strtok(b, "\n"); line; line = strtok(NULL, "\n")) {
+            char *cr = strchr(line, '\r'); if (cr) *cr = 0;
+            if (!safe_rel(line)) continue;
+            wchar_t wrel[MAX_PATH], dst[MAX_PATH], bak[MAX_PATH];
+            rel_to_w(line, wrel);
+            path_join(dst, g_dir, wrel);
+            path_join(bak, bdir, wrel);
+            if (file_exists(bak)) CopyFileW(bak, dst, FALSE); else DeleteFileW(dst);
+        }
+        free(b);
+    }
+    SHFILEOPSTRUCTW op = {0};
+    op.wFunc = FO_DELETE; op.pFrom = bdir;
+    op.fFlags = FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
+    SHFileOperationW(&op);
+}
+static BOOL in_list(const char *list, const char *id)
+{
+    size_t n = strlen(id);
+    for (const char *p = list; (p = strstr(p, id)) != NULL; p += n)
+        if ((p == list || p[-1] == ',') && (p[n] == 0 || p[n] == ',')) return TRUE;
+    return FALSE;
+}
+static void apply_packs(void)
+{
+    wchar_t ini[MAX_PATH], w[256];
+    char have[256], now[256] = "", id[48];
+    ini_path(ini);
+    GetPrivateProfileStringW(L"x", L"packs", L"", w, 256, ini);
+    WideCharToMultiByte(CP_UTF8, 0, w, -1, have, sizeof(have), NULL, NULL);
+    /* menyuda o'chirilganlarini qaytarib olamiz */
+    for (const char *p = have; *p; ) {
+        size_t n = strcspn(p, ",");
+        if (n && n < sizeof(id)) {
+            memcpy(id, p, n); id[n] = 0;
+            if (!in_list(o_packs, id)) pack_remove(id);
+            else { if (now[0]) strcat(now, ","); strcat(now, id); }
+        }
+        p += n; if (*p == ',') p++;
+    }
+    /* yangi tanlanganlarini o'rnatamiz */
+    for (const char *p = o_packs; *p; ) {
+        size_t n = strcspn(p, ",");
+        if (n && n < sizeof(id)) {
+            memcpy(id, p, n); id[n] = 0;
+            if (!in_list(now, id) && strlen(now) + n + 2 < sizeof(now) && pack_install(id)) { if (now[0]) strcat(now, ","); strcat(now, id); }
+        }
+        p += n; if (*p == ',') p++;
+    }
+    MultiByteToWideChar(CP_UTF8, 0, now, -1, w, 256);
+    WritePrivateProfileStringW(L"x", L"packs", w, ini);
+}
+
+/* O'yinni tezlashtirish: Windows to'liq ekran "optimizatsiya"sini o'chirish (eski o'yinlarda FPS va kirish kechikishi) */
+static void compat_flags(const wchar_t *exe, int on)
+{
+    HKEY k;
+    const wchar_t *val = L"~ DISABLEDXMAXIMIZEDWINDOWEDMODE";
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers", 0, NULL, 0, KEY_QUERY_VALUE | KEY_SET_VALUE, NULL, &k, NULL) != ERROR_SUCCESS) return;
+    if (on) RegSetValueExW(k, exe, 0, REG_SZ, (const BYTE *)val, (DWORD)((wcslen(val) + 1) * sizeof(wchar_t)));
+    else {
+        wchar_t cur[128]; DWORD sz = sizeof(cur), type = 0;
+        if (RegQueryValueExW(k, exe, NULL, &type, (BYTE *)cur, &sz) == ERROR_SUCCESS && type == REG_SZ && !wcscmp(cur, val)) RegDeleteValueW(k, exe);
+    }
+    RegCloseKey(k);
+}
+
+/* Skrinshotlar: yangi BMP larni JPEG qilib saytga yuklash (menyudagi galereya uchun). GDI+ (Windows bilan keladi) */
+typedef struct { UINT32 GdiplusVersion; void *DebugEventCallback; BOOL SuppressBackgroundThread; BOOL SuppressExternalCodecs; } XGdipStartupInput;
+int WINAPI GdiplusStartup(ULONG_PTR *token, const XGdipStartupInput *input, void *output);
+void WINAPI GdiplusShutdown(ULONG_PTR token);
+int WINAPI GdipLoadImageFromFile(const WCHAR *file, void **image);
+int WINAPI GdipGetImageWidth(void *image, UINT *w);
+int WINAPI GdipGetImageHeight(void *image, UINT *h);
+int WINAPI GdipGetImageThumbnail(void *image, UINT w, UINT h, void **thumb, void *cb, void *data);
+int WINAPI GdipSaveImageToFile(void *image, const WCHAR *file, const CLSID *encoder, const void *params);
+int WINAPI GdipDisposeImage(void *image);
+static const CLSID XC_JPEG = { 0x557cf401, 0x1a04, 0x11d3, { 0x9a, 0x73, 0x00, 0x00, 0xf8, 0x1e, 0xf3, 0x2e } };
+
+static char *http_post(const char *path, const void *data, DWORD len)
+{
+    HINTERNET c = InternetConnectA(g_net, "mmb.boost-top.com", INTERNET_DEFAULT_HTTP_PORT, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
+    if (!c) return NULL;
+    HINTERNET r = HttpOpenRequestA(c, "POST", path, NULL, NULL, NULL, INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_NO_UI, 0);
+    char *out = NULL;
+    if (r && HttpSendRequestA(r, "Content-Type: application/octet-stream\r\n", (DWORD)-1L, (LPVOID)data, len)) {
+        out = (char *)calloc(1, 4097);
+        DWORD got, n = 0;
+        while (out && n < 4096 && InternetReadFile(r, out + n, 4096 - n, &got) && got) n += got;
+    }
+    if (r) InternetCloseHandle(r);
+    InternetCloseHandle(c);
+    return out;
+}
+static ULONGLONG ft64(FILETIME t) { return ((ULONGLONG)t.dwHighDateTime << 32) | t.dwLowDateTime; }
+static void upload_shots(void)
+{
+    wchar_t ini[MAX_PATH], w[32], mask[MAX_PATH];
+    ini_path(ini);
+    GetPrivateProfileStringW(L"x", L"shott", L"0", w, 32, ini);
+    ULONGLONG last = _wcstoui64(w, NULL, 10), best[8] = {0}, newest = last;
+    wchar_t names[8][MAX_PATH];
+    int cnt = 0;
+    /* faqat oxirgi 8 ta yangi skrinshot */
+    path_join(mask, g_dir, L"cstrike\\*.bmp");
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(mask, &fd);
+    if (h != INVALID_HANDLE_VALUE) {
+        do {
+            ULONGLONG t = ft64(fd.ftLastWriteTime);
+            if (t <= last || fd.nFileSizeLow < 100000 || (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
+            int slot = cnt < 8 ? cnt++ : -1;
+            if (slot < 0) { slot = 0; for (int i = 1; i < 8; i++) if (best[i] < best[slot]) slot = i; if (best[slot] >= t) continue; }
+            best[slot] = t; path_join(names[slot], g_dir, L"cstrike"); path_join(names[slot], names[slot], fd.cFileName);
+        } while (FindNextFileW(h, &fd));
+        FindClose(h);
+    }
+    if (!cnt) return;
+    ULONG_PTR tok = 0;
+    XGdipStartupInput in = { 1, NULL, FALSE, FALSE };
+    if (GdiplusStartup(&tok, &in, NULL) != 0) return;
+    status(L"Skrinshotlar yuklanmoqda...", 1);
+    wchar_t tmp[MAX_PATH];
+    path_join(tmp, g_dir, L"xc_shot.tmp.jpg");
+    for (int i = 0; i < cnt; i++) {
+        void *img = NULL, *th = NULL;
+        UINT iw = 0, ih = 0;
+        if (GdipLoadImageFromFile(names[i], &img) != 0 || !img) continue;
+        GdipGetImageWidth(img, &iw); GdipGetImageHeight(img, &ih);
+        if (iw > 1280 && ih) { UINT tw = 1280, thh = (UINT)((ULONGLONG)ih * 1280 / iw); if (GdipGetImageThumbnail(img, tw, thh, &th, NULL, NULL) != 0) th = NULL; }
+        int ok = GdipSaveImageToFile(th ? th : img, tmp, &XC_JPEG, NULL) == 0;
+        if (th) GdipDisposeImage(th);
+        GdipDisposeImage(img);
+        long len = 0;
+        char *jpg = ok ? read_all(tmp, &len) : NULL;
+        DeleteFileW(tmp);
+        if (!jpg) continue;
+        char path[160];
+        _snprintf(path, sizeof(path), "/xc_api.php?a=shot_up&d=%s", g_id); path[sizeof(path) - 1] = 0;
+        free(http_post(path, jpg, (DWORD)len));
+        free(jpg);
+        if (best[i] > newest) newest = best[i];
+    }
+    GdiplusShutdown(tok);
+    _snwprintf(w, 32, L"%I64u", newest);
+    WritePrivateProfileStringW(L"x", L"shott", w, ini);
 }
 
 /* Bosh menyu manzili oddiy http://mmb.boost-top.com/index.html bo'lib qoladi - o'yin brauzeri
@@ -860,7 +1124,9 @@ static void run_game(void)
     _snwprintf(cmd, 1024, L"\"%s\" -game cstrike%s -noforcemparms -noforcemaccel +exec xclient_launcher.cfg", exe, vid);
     STARTUPINFOW si = { sizeof(si) };
     PROCESS_INFORMATION pi;
+    if (o_ok) compat_flags(exe, o_prio);
     if (CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, g_dir, &si, &pi)) {
+        if (o_prio) SetPriorityClass(pi.hProcess, HIGH_PRIORITY_CLASS);   /* "O'yinni tezlashtirish" */
         CloseHandle(pi.hThread);
         CloseHandle(pi.hProcess);
     }
@@ -896,6 +1162,11 @@ static DWORD WINAPI worker(LPVOID unused)
     if (o_beta >= 0) { lstrcpynA(g_chan, o_beta ? "beta" : "stable", sizeof(g_chan)); ini_save(); }
     if (o_start >= 0) set_autostart(o_start);
     if (o_clean) { status(L"Kesh tozalanmoqda...", 1); clean_cache(); }
+    if (o_ok) {                                   /* internet bo'lmasa paketlarga tegmaymiz */
+        install_spray();
+        apply_packs();
+        if (o_shots) upload_shots();
+    }
 
     status(L"Yangilanish tekshirilmoqda...", 1);
     UpdInfo u;

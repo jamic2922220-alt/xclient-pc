@@ -218,7 +218,7 @@ function fxLoop() {
  * xc_api.php ga yoziladi va XClient.exe ularni keyingi ishga tushishda bajaradi. */
 function qparam(k) { var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search || ''); return m ? decodeURIComponent(m[1]) : ''; }
 var PCID = /^[a-z0-9]{8,40}$/.test(qparam('xc')) ? qparam('xc') : '';
-var OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, clean: 0, verify: 0 }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
+var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '' }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
 function loadOpts() {
   // id berilmasa server shu IP dan oxirgi ulangan XClient.exe ni topadi
   api('opts', PCID ? { d: PCID } : {}, function (r) {
@@ -227,6 +227,8 @@ function loadOpts() {
     for (var k in r.o) if (r.o.hasOwnProperty(k) && OPTS.hasOwnProperty(k)) OPTS[k] = r.o[k];
     if (r.o.ver && !qparam('v')) { VERSION = r.o.ver; renderBar(); }
     if (r.o.cachemb != null && !qparam('c')) CACHE_MB = r.o.cachemb;
+    if (r.o.hw) HW = r.o.hw;
+    if (curModal === 'mdSettings' && (setTab === 'pro' || setTab === 'cont')) showSetTab(setTab);
     if (curModal === 'mdSettings' && setTab === 'system') showSetTab('system');
   });
 }
@@ -868,6 +870,32 @@ function loadPlayers(ip) {
     }, function () { PLAYERS[ip] = []; if (ip === srvSel) renderInfo(); });
   } catch (e) {}
 }
+/* ---- serverning soatlar bo'yicha gavjumligi ---- */
+var SHIST = {};
+function histBars(ip) {
+  var h = SHIST[ip];
+  if (!h || now() - h.at > 600000) {
+    if (!h || !h.busy) { SHIST[ip] = { at: now(), busy: 1, h: h && h.h }; api('srvhist', { ip: ip }, function (r) { SHIST[ip] = { at: now(), h: r.ok ? r.h : null, max: r.max || 32, now: r.now }; if (srvSel === ip) renderInfo(); }); }
+  }
+  if (!h || !h.h) return '';
+  var any = false, mx = 1, bars = '';
+  each(h.h, function (v) { if (v >= 0) { any = true; if (v > mx) mx = v; } });
+  if (!any) return '';
+  each(h.h, function (v, i) {
+    var ht = v < 0 ? 2 : Math.max(2, Math.round(v / mx * 34));
+    bars += '<i class="' + (i === h.now ? 'on' : '') + '" style="height:' + ht + 'px" title="' + i + ':00 — ' + (v < 0 ? '?' : v) + '"></i>';
+  });
+  return '<div class="ph">' + esc(T('hs_busy')) + '</div><div class="hbars">' + bars + '</div><div class="hbl"><span>0</span><span>6</span><span>12</span><span>18</span><span>23</span></div>';
+}
+function sendStats() {
+  var list = [], seen = {};
+  each(svcIps().concat(TOP, PROMO_FAV, DB.fav, CONNECTED ? [CONNECTED] : []), function (ip) {
+    var s = SRV[ip];
+    if (seen[ip] || !s || !s.ok || list.length >= 40) return;
+    seen[ip] = 1; list.push([ip, s.pl || 0, s.max || 32]);
+  });
+  if (list.length) api('srvstat', { s: JSON.stringify(list) });
+}
 function renderInfo() {
   var box = $('srvInfo');
   if (!srvSel) { box.innerHTML = '<div class="empty">' + esc(T('empty_list')) + '</div>'; return; }
@@ -881,6 +909,7 @@ function renderInfo() {
     '<span>' + esc(mapn || '?') + '</span></div>' +
     '<h3>' + flagOf(srvSel) + esc(s.name || (h && h.name) || srvSel) + '</h3><div class="ip">' + esc(srvSel) + '</div>' +
     '<div class="ln">' + esc(T('ph_players')) + ' <b>' + (s.ok ? s.pl + '/' + s.max : '-') + '</b><span class="r ' + pc + '">' + (s.ok ? '\u25cf ' + s.ping + ' ms' : esc(T('offline'))) + '</span></div>' +
+    histBars(srvSel) +
     '<div class="ph">' + esc(T('ph_players')) + '</div><div class="pls">' + ph + '</div>' +
     (fr.length ? '<div class="fr3">' + esc(T('fr_here')) + '<span class="gr">' + esc(fr.join(', ')) + '</span></div>' : '') +
     (isX(s) ? '<div class="note">' + esc(T('vip_note')) + '</div>' : '');
@@ -1088,6 +1117,143 @@ function applyStyle(id) {
   each(STYLES, function (x) { if (x[0] === id) for (var k in x[3]) if (x[3].hasOwnProperty(k)) E[k] = x[3][k]; });
   E.xp = presetOf(E); showSetTab('tools'); toast(T('st_ok'), 4000);
 }
+/* ---- kompyuter quvvati (XClient.exe aniqlaydi) ---- */
+function hwClass() {
+  if (!HW) return 'mid';
+  var weakGpu = /intel.*(hd|gma|uhd)|sis |via |radeon.*(hd [2-5]|x[0-9])|geforce (6|7|8|9|2[0-9]{2}) /i.test(HW.gpu || '');
+  if (HW.ram < 3500 || HW.cpu <= 2 || (weakGpu && HW.ram < 6000)) return 'weak';
+  if (HW.ram >= 8000 && HW.cpu >= 4 && !weakGpu) return 'strong';
+  return 'mid';
+}
+function hwText() {
+  if (!HW) return T('hw_none');
+  return Math.round(HW.ram / 1024) + ' GB RAM · ' + HW.cpu + ' ' + T('hw_cores') + (HW.gpu ? ' · ' + HW.gpu : '');
+}
+function hwAuto() {
+  var c = hwClass(), v = c === 'weak' ? { picmip: 1, detail: 0, shadows: 0, minm: 1, dyn: 0, decals: 50, vsync: 0 }
+    : c === 'mid' ? { picmip: 0, detail: 0, shadows: 1, minm: 0, dyn: 0, decals: 150, vsync: 0 }
+    : { picmip: 0, detail: 1, shadows: 1, minm: 0, dyn: 1, decals: 300, vsync: 0 };
+  for (var k in v) if (v.hasOwnProperty(k)) E[k] = v[k];
+  showSetTab('pro'); toast(T('hw_done').replace('{c}', T('hw_' + c)), 5000);
+}
+/* ---- kontent paketlari (saytdagi mmb/packs) ---- */
+var PACKS = null;
+function loadPacks() {
+  var x; try { x = new XMLHttpRequest(); x.open('GET', 'packs.php?t=' + now(), true); } catch (e) { return; }
+  x.onreadystatechange = function () {
+    if (x.readyState !== 4) return;
+    var r = null; try { r = JSON.parse(x.responseText); } catch (e) {}
+    PACKS = r && r.length != null ? r : [];
+    if (curModal === 'mdSettings' && setTab === 'cont') showSetTab('cont');
+  };
+  x.send(null);
+  PACKS = undefined;
+}
+/* ---- spray: rasm -> 96x96 -> 256 rangli tempdecal.wad (WAD3, "{LOGO") ---- */
+function sprayQ(r, g, b) { return Math.round(r / 51) * 42 + Math.round(g * 6 / 255) * 6 + Math.round(b / 51); }
+function sprayPal() {
+  var p = [];
+  for (var i = 0; i < 256; i++) {
+    if (i < 252) p.push([Math.floor(i / 42) * 51, Math.round(Math.floor(i % 42 / 6) * 255 / 6), (i % 6) * 51]);
+    else p.push(i === 255 ? [0, 0, 255] : [0, 0, 0]);
+  }
+  return p;
+}
+function sprayLevel(px, w, h, f) {           // f marta kichraytirish (o'rtacha rang), indekslar
+  var ow = w / f, oh = h / f, out = new Array(ow * oh);
+  for (var y = 0; y < oh; y++) for (var x = 0; x < ow; x++) {
+    var r = 0, g = 0, b = 0, a = 0, n = 0;
+    for (var yy = 0; yy < f; yy++) for (var xx = 0; xx < f; xx++) {
+      var o = ((y * f + yy) * w + (x * f + xx)) * 4;
+      if (px[o + 3] >= 128) { r += px[o]; g += px[o + 1]; b += px[o + 2]; n++; }
+      a++;
+    }
+    out[y * ow + x] = n * 2 < a ? 255 : sprayQ(r / n, g / n, b / n);
+  }
+  return out;
+}
+function makeWad(px, w, h) {
+  var mips = [sprayLevel(px, w, h, 1), sprayLevel(px, w, h, 2), sprayLevel(px, w, h, 4), sprayLevel(px, w, h, 8)];
+  var sum = 0; each(mips, function (m) { sum += m.length; });
+  var lump = 40 + sum + 2 + 768 + 2, total = 12 + lump + 32, b = new Array(total), i;
+  for (i = 0; i < total; i++) b[i] = 0;
+  function u32(o, v) { b[o] = v & 255; b[o + 1] = (v >> 8) & 255; b[o + 2] = (v >> 16) & 255; b[o + 3] = (v >> 24) & 255; }
+  function str(o, t) { for (var k = 0; k < t.length; k++) b[o + k] = t.charCodeAt(k); }
+  str(0, 'WAD3'); u32(4, 1); u32(8, 12 + lump);
+  var m = 12; str(m, '{LOGO'); u32(m + 16, w); u32(m + 20, h);
+  var off = 40; for (i = 0; i < 4; i++) { u32(m + 24 + i * 4, off); off += mips[i].length; }
+  var o = m + 40;
+  each(mips, function (mm) { for (var k = 0; k < mm.length; k++) b[o++] = mm[k]; });
+  b[o] = 0; b[o + 1] = 1; o += 2;                   // 256 rang
+  each(sprayPal(), function (c) { b[o++] = c[0]; b[o++] = c[1]; b[o++] = c[2]; });
+  var d = 12 + lump; u32(d, 12); u32(d + 4, lump); u32(d + 8, lump); b[d + 12] = 0x43; str(d + 16, '{LOGO');
+  var bin = ''; for (i = 0; i < total; i++) bin += String.fromCharCode(b[i]);
+  return btoa(bin);
+}
+function sprayFrom(src) {
+  if (!PCID) return toast(T('sy_nolaunch'), 5000);
+  var im = new Image();
+  im.onload = function () {
+    var c = document.createElement('canvas'); c.width = 96; c.height = 96;
+    var g = c.getContext('2d'), sz = Math.min(im.width, im.height);
+    g.clearRect(0, 0, 96, 96);
+    g.drawImage(im, Math.round((im.width - sz) / 2), Math.round((im.height - sz) / 2), sz, sz, 0, 0, 96, 96);
+    var px; try { px = g.getImageData(0, 0, 96, 96).data; } catch (e) { return toast(T('a_photo_bad')); }
+    var wad = makeWad(px, 96, 96);
+    toast(T('lg_wait'));
+    api('spray', { d: PCID, wad: wad }, function (r) {
+      if (!r.ok) return toast(r.msg || 'Xato', 5000);
+      try { DB.sprayPrev = c.toDataURL('image/png'); } catch (e) {}
+      DB.sprayT = now(); persist();
+      toast(T('sp_ok'), 6000);
+      if (curModal === 'mdSettings' && setTab === 'cont') showSetTab('cont');
+    });
+  };
+  im.onerror = function () { toast(T('a_photo_bad')); };
+  im.src = src;
+}
+/* ---- mavzular: xc.css dagi qizil ranglarni boshqa rangga almashtiramiz ---- */
+var THEMES = [['red', 0], ['blue', 212], ['cyan', 188], ['green', 135], ['purple', 272], ['orange', 30]];
+function hsl2rgb(h, s, l) {
+  function f(n) { var k = (n + h / 30) % 12, a = s * Math.min(l, 1 - l); return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); }
+  return [f(0), f(8), f(4)];
+}
+function rgb2hsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  var mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn, h = 0, s = 0;
+  if (d) {
+    s = d / (1 - Math.abs(2 * l - 1));
+    h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h = (h * 60 + 360) % 360;
+  }
+  return [h, s, l];
+}
+function themeColor(r, g, b, hue) {
+  var c = rgb2hsl(r, g, b);
+  if (c[1] < 0.3 || c[2] < 0.08 || c[2] > 0.94 || (c[0] > 22 && c[0] < 338)) return null;   // faqat qizil tuslar
+  return hsl2rgb(hue, c[1], c[2]);
+}
+function hex2(n) { var h = n.toString(16); return h.length < 2 ? '0' + h : h; }
+function applyTheme(id) {
+  var old = $('thcss'); if (old) old.parentNode.removeChild(old);
+  var hue = -1; each(THEMES, function (x) { if (x[0] === id) hue = x[1]; });
+  if (hue <= 0) return;
+  var x; try { x = new XMLHttpRequest(); x.open('GET', 'xc.css?th=' + now(), true); } catch (e) { return; }
+  x.onreadystatechange = function () {
+    if (x.readyState !== 4 || !x.responseText) return;
+    var css = x.responseText.replace(/#([0-9a-f]{6}|[0-9a-f]{3})\b/gi, function (m, h) {
+      if (h.length === 3) h = h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2);
+      var c = themeColor(parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16), hue);
+      return c ? '#' + hex2(c[0]) + hex2(c[1]) + hex2(c[2]) : m;
+    }).replace(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(,[^)]*)?\)/gi, function (m, r, g, b, a) {
+      var c = themeColor(+r, +g, +b, hue);
+      return c ? (a ? 'rgba(' : 'rgb(') + c.join(',') + (a || '') + ')' : m;
+    });
+    var st = document.createElement('style'); st.id = 'thcss'; st.innerHTML = css;
+    document.getElementsByTagName('head')[0].appendChild(st);
+  };
+  x.send(null);
+}
 function openSettings(tab) {
   detectXext();
   seedFromGame();
@@ -1187,13 +1353,38 @@ var PANES = {
       (S && S.demo ? '' : '<div class="mut" style="font-size:12px;margin-bottom:6px">' + esc(T('dm_off')) + '</div>') +
       '<div class="dml">' + (dm || '<div class="empty">' + esc(T('dm_none')) + '</div>') + '</div></div>';
   },
+  cont: function () {                             // Kontent: spray, skrinshotlar, mavzu, paketlar
+    if (PACKS === null) loadPacks();
+    var th = '';
+    each(THEMES, function (x) { th += '<a class="' + ((DB.theme || 'red') === x[0] ? 'on' : '') + '" data-theme="' + x[0] + '" style="background:hsl(' + x[1] + ',85%,58%)" title="' + esc(T('th_' + x[0])) + '"></a>'; });
+    var pk = '';
+    each(PACKS || [], function (x) {
+      var on = (',' + (OPTS.packs || '') + ',').indexOf(',' + x.id + ',') >= 0;
+      pk += '<div class="fr w"><div class="lb">' + esc(x.name) + '<small>' + esc((x.desc ? x.desc + ' · ' : '') + (Math.round(x.size / 104857.6) / 10) + ' MB') + '</small></div><div class="tg' + (on ? ' on' : '') + '" data-pack="' + esc(x.id) + '"><i></i></div></div>';
+    });
+    var nol = PCID ? '' : '<div class="chk bad">' + esc(T('sy_nolaunch')) + '</div>';
+    return '<div class="pane l"><div class="ph2">' + esc(T('sp_title')) + '</div>' + nol +
+      '<div class="spr"><div class="sprv">' + (DB.sprayPrev ? '<img src="' + DB.sprayPrev + '" alt="">' : '') + '</div>' +
+      '<a class="btn red" data-act="spfile">' + esc(T('sp_file')) + '</a>' + (ME && ME.av ? '<a class="btn" data-act="spav">' + esc(T('sp_av')) + '</a>' : '') +
+      '<a class="btn" data-act="splogo">X CLIENT</a><div class="mut">' + esc(DB.sprayT ? T('sp_sent').replace('{t}', fmtTime(DB.sprayT)) : T('sp_note')) + '</div></div>' +
+      '<div class="ph2 m">' + esc(T('sh_title')) + '</div>' +
+      '<div class="fr w"><div class="lb">' + esc(T('sh_up')) + '<small>' + esc(T('sh_up2')) + '</small></div><div class="tg' + (OPTS.shots ? ' on' : '') + '" data-otg="shots"><i></i></div></div>' +
+      '<a class="btn" style="margin:0" data-act="gallery">' + esc(T('sh_open')) + '</a>' +
+      '<div class="ph2 m">' + esc(T('th_title')) + '</div><div class="ths">' + th + '</div></div>' +
+      '<div class="pane r"><div class="ph2">' + esc(T('pk_title')) + '</div>' +
+      (PACKS && !PACKS.length ? '<div class="empty">' + esc(T('pk_none')) + '</div>' : (PACKS ? pk : '<div class="empty">' + esc(T('loading')) + '</div>')) +
+      '<div class="mut" style="font-size:12px;margin-top:10px">' + esc(T('pk_note')) + '</div></div>';
+  },
   pro: function () {                              // Kengaytirilgan: grafika, internet, qurol, ekran
     return '<div class="pane l"><div class="ph2">' + esc(T('pr_gfx')) + '</div>' +
       seg('picmip', 'pr_tex', [[0, 'pr_tex0'], [1, 'pr_tex1'], [2, 'pr_tex2']]) +
       '<div class="mut" style="margin:-6px 0 8px;font-size:12px">' + esc(T('pr_tex3')) + '</div>' +
       tg('detail', 'pr_detail') + tg('shadows', 'pr_shadows') + tg('minm', 'pr_minm', 'pr_minm2') +
       '<div class="ph2 m">' + esc(T('pr_fps')) + '</div>' +
-      '<div class="rowb"><b>' + esc(T('pr_fps')) + '</b><small>' + esc(T('pr_fps2')) + '</small><a class="btn red" data-act="fpsmode">' + esc(T('pr_fpsb')) + '</a></div></div>' +
+      '<div class="rowb"><b>' + esc(T('pr_fps')) + '</b><small>' + esc(T('pr_fps2')) + '</small><a class="btn red" data-act="fpsmode">' + esc(T('pr_fpsb')) + '</a></div>' +
+      '<div class="rowb"><b>' + esc(T('hw_title')) + ' <span class="gr">' + esc(HW ? T('hw_' + hwClass()) : '') + '</span></b><small>' + esc(hwText()) + '</small>' +
+      (HW ? '<a class="btn" data-act="hwauto">' + esc(T('hw_auto')) + '</a>' : '') + '</div>' +
+      '<div class="fr w"><div class="lb">' + esc(T('pr_prio')) + '<small>' + esc(T('pr_prio2')) + '</small></div><div class="tg' + (OPTS.prio ? ' on' : '') + '" data-otg="prio"><i></i></div></div></div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('pr_net')) + '</div>' +
       seg('interp', 'pr_interp', [[0.01, '0.01'], [0.05, '0.05'], [0.1, '0.1']]) +
       '<div class="mut" style="margin:-6px 0 8px;font-size:12px">' + esc(T('pr_interp2')) + '</div>' +
@@ -1498,6 +1689,20 @@ function act(a) {
     return toast(T('hx_test1'), 3000);
   }
   if (a === 'calcapply') { var cv = calcVal(); if (!cv) return toast(T('cc_bad')); E.sens = Math.max(0.1, Math.min(20, cv)); return toast(T('cc_ok').replace('{v}', E.sens), 4000); }
+  if (a === 'hwauto') return hwAuto();
+  if (a === 'spfile') { var sf = $('sprayFile'); if (!sf) return; sf.value = ''; try { sf.click(); } catch (e) { toast(T('a_photo_na')); } return; }
+  if (a === 'spav') return ME && ME.av ? sprayFrom(ME.av) : null;
+  if (a === 'splogo') return sprayFrom('logo_big.png');
+  if (a === 'gallery') return api('shots', { d: PCID }, function (r) {
+    var h = '';
+    if (!r.ok) h = '<div class="empty">' + esc(r.msg || T('sy_nolaunch')) + '</div>';
+    else if (!r.list.length) h = '<div class="empty">' + esc(T('sh_none')) + '</div>';
+    else each(r.list, function (x) {
+      var u = 'xc_api.php?a=shot&d=' + encodeURIComponent(r.d) + '&f=' + encodeURIComponent(x.f);
+      h += '<div class="shot"><img src="' + u + '" alt=""><small>' + esc(fmtTime(x.t * 1000)) + '</small><a class="x2" data-shdel="' + esc(x.f) + '">✕</a></div>';
+    });
+    openSide('shots', T('sh_title2'), '<div class="shots">' + h + '</div>');
+  });
   if (a === 'fpsmode') {                       // kuchsiz kompyuter: grafikani pasaytiramiz
     E.picmip = 1; E.detail = 0; E.shadows = 0; E.minm = 1; E.dyn = 0; E.decals = 50; E.vsync = 0;
     showSetTab('pro'); return toast(T('pr_fpsok'), 5000);
@@ -1543,6 +1748,13 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-otg'))) { var ok2 = el.getAttribute('data-otg'); OPTS[ok2] = OPTS[ok2] ? 0 : 1; el.className = 'tg' + (OPTS[ok2] ? ' on' : ''); saveOpts(); return; }
   if ((el = closest(t, 'data-tg'))) { var k = el.getAttribute('data-tg'); E[k] = E[k] ? 0 : 1; el.className = 'tg' + (E[k] ? ' on' : ''); if (setTab === 'hud') { drawXhair(); var cd = $('xCode'); if (cd) cd.value = xcode(E); } return; }
   if ((el = closest(t, 'data-avc'))) { api('avatar', { color: el.getAttribute('data-avc') }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); }); return; }
+  if ((el = closest(t, 'data-theme'))) { DB.theme = el.getAttribute('data-theme'); persist(); cloudSave(); applyTheme(DB.theme); showSetTab('cont'); return; }
+  if ((el = closest(t, 'data-pack'))) {
+    var pid = el.getAttribute('data-pack'), pl = (OPTS.packs ? OPTS.packs.split(',') : []), pix = pl.indexOf(pid);
+    if (pix >= 0) pl.splice(pix, 1); else pl.push(pid);
+    OPTS.packs = pl.join(','); el.className = 'tg' + (pix >= 0 ? '' : ' on'); saveOpts(); return;
+  }
+  if ((el = closest(t, 'data-shdel'))) { api('shot_del', { d: PCID, f: el.getAttribute('data-shdel') }, function () { act('gallery'); }); return; }
   if ((el = closest(t, 'data-prsave'))) { profSave(Number(el.getAttribute('data-prsave'))); showSetTab('tools'); return; }
   if ((el = closest(t, 'data-prload'))) { profLoad(Number(el.getAttribute('data-prload'))); showSetTab('tools'); return; }
   if ((el = closest(t, 'data-pren'))) {
@@ -1631,6 +1843,11 @@ $('askYes').onclick = function () { askDone(true); };
 $('askNo').onclick = function () { askDone(false); };
 $('srvSearch').onkeyup = function () { renderServers(); };
 $('avFile').onchange = function () { avUpload(this.files && this.files[0]); };
+$('sprayFile').onchange = function () {
+  var f = this.files && this.files[0]; if (!f) return;
+  if (!/^image\//.test(f.type || '') || !window.FileReader) return toast(T('a_photo_bad'));
+  var rd = new FileReader(); rd.onload = function () { sprayFrom(rd.result); }; rd.readAsDataURL(f);
+};
 
 /* ============================================================ boshlash */
 var VERSION = qparam('v') || window.XC_VERSION || '';
@@ -1651,6 +1868,7 @@ step('seedFromGame();', function () { seedFromGame(); });
 step('fit();', function () { fit(); });
 step('window.onresize = fit;', function () { window.onresize = fit; });
 step('fxLoop();', function () { fxLoop(); });
+step('applyTheme', function () { if (DB.theme && DB.theme !== 'red') applyTheme(DB.theme); });
 step('detectLang();', function () { detectLang(); });
 step('loadMaster();', function () { loadMaster(); });
 step('loadTop();', function () { loadTop(); });
@@ -1687,4 +1905,5 @@ setInterval(function () {
 setInterval(pingPresence, 60000);
 setInterval(function () { loadFriends(); loadWeek(); }, 60000);
 setInterval(loadTop, 10 * 60 * 1000);
+setTimeout(sendStats, 90000); setInterval(sendStats, 10 * 60 * 1000);
 })();

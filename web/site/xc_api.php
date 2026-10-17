@@ -371,6 +371,7 @@ case 'opts_done':
         $o['ver'] = substr(preg_replace('/[^\w.\-]/', '', p('v')), 0, 20);
         $o['cachemb'] = (int)p('cache');
         $o['seen'] = time();
+        if (p('ram') !== '') $o['hw'] = array('ram' => (int)p('ram'), 'cpu' => (int)p('cpu'), 'gpu' => substr(preg_replace('/[^\w .()\-\/]/', '', p('gpu')), 0, 80));
         wr('dev/' . $d, $o);
         wr($ipk, array('d' => $d, 't' => time()));
         out(array('ok' => true, 'o' => $o));
@@ -385,7 +386,8 @@ case 'opts_done':
     if ($a === 'opts_set') {
         $in = json_decode(p('o'), true);
         if (!is_array($in)) fail('bad', 'bad');
-        foreach (array('beta', 'auto', 'start', 'win', 'clean', 'verify') as $k) if (isset($in[$k])) $o[$k] = $in[$k] ? 1 : 0;
+        foreach (array('beta', 'auto', 'start', 'win', 'clean', 'verify', 'prio', 'shots') as $k) if (isset($in[$k])) $o[$k] = $in[$k] ? 1 : 0;
+        if (isset($in['packs'])) $o['packs'] = preg_match('/^[a-z0-9_,\-]{0,200}$/', $in['packs']) ? $in['packs'] : '';
         if (isset($in['res'])) $o['res'] = preg_match('/^\d{3,4}x\d{3,4}$/', $in['res']) ? $in['res'] : '';
         wr('dev/' . $d, $o);
     } elseif ($a === 'opts_done') {
@@ -394,6 +396,90 @@ case 'opts_done':
         wr('dev/' . $d, $o);
     }
     out(array('ok' => true, 'o' => $o, 'd' => $d));
+
+/* ---------- spray, skrinshotlar: XClient.exe (kompyuter id) bilan bog'liq ---------- */
+case 'spray':                                            // menyu: tayyor tempdecal.wad (base64) -> keyingi ishga tushishda o'rnatiladi
+case 'spray_get':                                        // XClient.exe: wad faylni olish
+case 'shot_up':                                          // XClient.exe: skrinshot (JPEG) yuklash
+case 'shots':                                            // menyu: skrinshotlar ro'yxati
+case 'shot':                                             // menyu: bitta skrinshot
+case 'shot_del':
+    $d = strtolower(p('d'));
+    if (!preg_match('/^[a-z0-9]{8,40}$/', $d)) {
+        $m = rd('ip/' . substr(sha1((isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '') . 'xc'), 0, 24), null);
+        if (!$m || time() - $m['t'] > 30 * 86400) fail('nolaunch', 'XClient.exe topilmadi');
+        $d = $m['d'];
+    }
+    if (!is_file(XC_DIR . '/dev/' . $d . '.php')) fail('nolaunch', 'XClient.exe topilmadi');
+    if ($a === 'spray') {
+        $w = base64_decode(p('wad'), true);
+        if (!$w || substr($w, 0, 4) !== 'WAD3' || strlen($w) > 20000) fail('bad', 'Spray noto\'g\'ri');
+        lock();
+        @mkdir(XC_DIR . '/spray', 0755, true);
+        file_put_contents(XC_DIR . '/spray/' . $d . '.php', XC_GUARD . $w, LOCK_EX);
+        $o = rd('dev/' . $d, array()); $o['spray'] = time(); wr('dev/' . $d, $o);
+        out(array('ok' => true));
+    }
+    if ($a === 'spray_get') {
+        $f = XC_DIR . '/spray/' . $d . '.php';
+        if (!is_file($f)) { header('HTTP/1.1 404 Not Found'); exit; }
+        header('Content-Type: application/octet-stream');
+        echo substr(file_get_contents($f), strlen(XC_GUARD));
+        exit;
+    }
+    $sd = XC_DIR . '/shots/' . $d;
+    if ($a === 'shot_up') {
+        $img = file_get_contents('php://input');
+        if (!$img || strlen($img) > 2500000 || substr($img, 0, 2) !== "\xFF\xD8") fail('bad', 'JPEG kerak');
+        @mkdir($sd, 0755, true);
+        $name = time() . '_' . mt_rand(100, 999);
+        file_put_contents("$sd/$name.php", XC_GUARD . $img, LOCK_EX);
+        $all = glob("$sd/*.php"); sort($all);
+        while (count($all) > 40) @unlink(array_shift($all));   // oxirgi 40 tasi saqlanadi
+        out(array('ok' => true));
+    }
+    if ($a === 'shots') {
+        $list = array();
+        foreach (array_reverse((array)glob("$sd/*.php")) as $f) { $n = basename($f, '.php'); $list[] = array('f' => $n, 't' => (int)$n); }
+        out(array('ok' => true, 'd' => $d, 'list' => $list));
+    }
+    $f = preg_replace('/[^0-9_]/', '', p('f'));
+    if ($f === '' || !is_file("$sd/$f.php")) { header('HTTP/1.1 404 Not Found'); exit; }
+    if ($a === 'shot_del') { @unlink("$sd/$f.php"); out(array('ok' => true)); }
+    header('Content-Type: image/jpeg');
+    header('Cache-Control: public, max-age=604800');
+    echo substr(file_get_contents("$sd/$f.php"), strlen(XC_GUARD));
+    exit;
+
+/* ---------- serverning soatlar bo'yicha gavjumligi (o'yinchilar menyusi yuborgan ma'lumotdan) ---------- */
+case 'srvstat':
+    $in = json_decode(p('s'), true);
+    if (!is_array($in)) fail('bad', 'bad');
+    @date_default_timezone_set('Asia/Tashkent');
+    $h = (int)date('G');
+    lock();
+    @mkdir(XC_DIR . '/stat', 0755, true);
+    foreach (array_slice($in, 0, 40) as $x) {
+        if (!is_array($x) || count($x) < 3 || !preg_match('/^[\w.\-]+:\d+$/', $x[0])) continue;
+        $pl = max(0, min(64, (int)$x[1])); $mx = max(1, min(64, (int)$x[2]));
+        $k = 'stat/' . substr(sha1($x[0]), 0, 20);
+        $st = rd($k, array('h' => array_fill(0, 24, array(0, 0)), 'lt' => array_fill(0, 24, 0), 'max' => $mx));
+        if (time() - $st['lt'][$h] < 300) continue;      // har soatga 5 daqiqada bir marta
+        $st['h'][$h][0] += $pl; $st['h'][$h][1]++;
+        if ($st['h'][$h][1] > 200) { $st['h'][$h][0] /= 2; $st['h'][$h][1] /= 2; }
+        $st['lt'][$h] = time(); $st['max'] = $mx;
+        wr($k, $st);
+    }
+    out(array('ok' => true));
+
+case 'srvhist':
+    $ip = p('ip');
+    if (!preg_match('/^[\w.\-]+:\d+$/', $ip)) fail('bad', 'bad');
+    $st = rd('stat/' . substr(sha1($ip), 0, 20), null);
+    $out = array();
+    for ($i = 0; $i < 24; $i++) $out[] = ($st && $st['h'][$i][1] > 0) ? round($st['h'][$i][0] / $st['h'][$i][1], 1) : -1;
+    @date_default_timezone_set('Asia/Tashkent');
+    out(array('ok' => true, 'h' => $out, 'max' => $st ? $st['max'] : 32, 'now' => (int)date('G')));
 
 default:
     fail('action', 'Noma\'lum amal');
