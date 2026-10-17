@@ -961,14 +961,14 @@ var DEF = {
   name: '', tag: 'X | ', net: 'fast', dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, buykeys: 0, queue: 1, reconn: 1, demo: 0,
   sens: 2.5, zoom: 1.2, raw: 1, filter: 0, inv: 0,
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1,
-  fps: 100, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 300,
+  fps: 200, showfps: 0, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 300,
   xp: 'pro', xt: 0, xs: 'small', xc: '255 59 59', xtr: 0, xdyn: 0, xthick: 1, xgap: 3, xout: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
   rscale: 115, ropac: 100, rnames: 0, rhp: 0,
   bob: 0.01, picmip: 0, detail: 1, shadows: 1, minm: 0, interp: 0.01, lw: 1, lc: 1, hisnd: 1, mixa: 0.1, loop: 0, saytm: 5, ngpos: 1
 };
 var S = null, E = null;
 var CVARS = { sens: 'sensitivity', zoom: 'zoom_sensitivity_ratio', raw: 'm_rawinput', filter: 'm_filter', vol: 'volume', vscale: 'voice_scale', voice: 'voice_enable',
-  fps: 'fps_max', gamma: 'gamma', fov: 'fov_angle', vmfov: 'viewmodel_fov', hor: 'fov_horplus', xt: 'cl_crosshair_type', xs: 'cl_crosshair_size',
+  fps: 'fps_max', showfps: 'cl_showfps', gamma: 'gamma', fov: 'fov_angle', vmfov: 'viewmodel_fov', hor: 'fov_horplus', xt: 'cl_crosshair_type', xs: 'cl_crosshair_size',
   xc: 'cl_crosshair_color', xtr: 'cl_crosshair_translucent', xdyn: 'cl_dynamiccrosshair', hand: 'cl_righthand', fastsw: 'hud_fastswitch', dl: 'cl_allowdownload',
   spray: 'cl_allowupload', mute: 'snd_mute_losefocus', vsync: 'gl_vsync', dyn: 'r_dynamic', cid: 'hud_centerid', radar: 'cl_radartype', dmax: 'hud_deathnotice_max', decals: 'mp_decals',
   ropac: 'hud_radar_opacity', rnames: 'hud_radar_names', rhp: 'hud_radar_health',
@@ -1010,6 +1010,8 @@ function settingsCmds(s) {
   c.push('mp3volume ' + (s.mp3off ? 0 : s.mus));
   c.push('sensitivity ' + s.sens, 'zoom_sensitivity_ratio ' + s.zoom, 'm_rawinput ' + s.raw, 'm_filter ' + s.filter, 'm_pitch ' + (s.inv ? -0.022 : 0.022));
   c.push('volume ' + s.vol, 'voice_enable ' + s.voice, 'voice_scale ' + s.vscale, 'snd_mute_losefocus ' + s.mute);
+  // fps_override 1 bo'lmasa NextClient FPS ni 100 da ushlab qoladi
+  c.push('fps_override ' + (s.fps > 100 ? 1 : 0), 'cl_showfps ' + s.showfps, 'cl_cmdbackup 2', 'cl_dlmax 1024', 'm_customaccel 0');
   c.push('fps_max ' + s.fps, 'gamma ' + s.gamma, 'fov_angle ' + s.fov, 'viewmodel_fov ' + s.vmfov, 'fov_horplus ' + s.hor, 'gl_vsync ' + s.vsync, 'r_dynamic ' + s.dyn, 'mp_decals ' + s.decals);
   each(xhairCmds(s), function (x) { c.push(x); });
   c.push('cl_bob ' + s.bob, 'gl_picmip ' + s.picmip, 'r_detailtextures ' + s.detail, 'cl_shadows ' + s.shadows, 'cl_minmodels ' + s.minm,
@@ -1337,9 +1339,9 @@ var PANES = {
   },
   video: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('v_title')) + '</div>' +
-      seg('fps', 'v_fps', [[60, '60'], [100, '100'], [144, '144'], [200, '200'], [300, '300']]) +
+      seg('fps', 'v_fps', [[100, '100'], [144, '144'], [200, '200'], [300, '300'], [500, '500']]) +
       sl('gamma', 'v_bright', 1.8, 3, 0.1) + sl('fov', 'v_fov', 70, 100, 1, 'v_fov2') + sl('vmfov', 'v_vm', 70, 100, 1) + sl('decals', 'v_dec', 50, 1000, 50) + '</div>' +
-      '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('hor', 'v_hor') + tg('vsync', 'v_vsync') + tg('dyn', 'v_dyn') + '</div>';
+      '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('hor', 'v_hor') + tg('vsync', 'v_vsync') + tg('showfps', 'v_showfps') + tg('dyn', 'v_dyn') + '</div>';
   },
   tools: function () {                            // Qo'shimcha: profillar, kalkulyator, tayyor uslublar, demolar
     var pr = '';
@@ -1393,6 +1395,7 @@ var PANES = {
       '<div class="mut" style="margin:-6px 0 8px;font-size:12px">' + esc(T('pr_tex3')) + '</div>' +
       tg('detail', 'pr_detail') + tg('shadows', 'pr_shadows') + tg('minm', 'pr_minm', 'pr_minm2') +
       '<div class="ph2 m">' + esc(T('pr_fps')) + '</div>' +
+      '<div class="rowb"><b>' + esc(T('pr_cfg')) + '</b><small>' + esc(T('pr_cfg2')) + '</small><a class="btn red" data-act="procfg">' + esc(T('pr_cfgb')) + '</a></div>' +
       '<div class="rowb"><b>' + esc(T('pr_fps')) + '</b><small>' + esc(T('pr_fps2')) + '</small><a class="btn red" data-act="fpsmode">' + esc(T('pr_fpsb')) + '</a></div>' +
       '<div class="rowb"><b>' + esc(T('hw_title')) + ' <span class="gr">' + esc(HW ? T('hw_' + hwClass()) : '') + '</span></b><small>' + esc(hwText()) + '</small>' +
       (HW ? '<a class="btn" data-act="hwauto">' + esc(T('hw_auto')) + '</a>' : '') + '</div>' +
@@ -1715,8 +1718,13 @@ function act(a) {
     });
     openSide('shots', T('sh_title2'), '<div class="shots">' + h + '</div>');
   });
+  if (a === 'procfg') {                        // Pro CFG: lag'siz internet, yuqori FPS, aniq sichqoncha
+    E.net = 'fast'; E.fps = 300; E.vsync = 0; E.raw = 1; E.filter = 0; E.fastsw = 1; E.bob = 0; E.interp = 0.01; E.lw = 1; E.lc = 1;
+    E.dyn = 0; E.decals = 100; E.detail = 0; E.hisnd = 1; E.mixa = 0.05; E.dl = 1; E.xdyn = 0;
+    showSetTab('pro'); return toast(T('pr_cfgok'), 5000);
+  }
   if (a === 'fpsmode') {                       // kuchsiz kompyuter: grafikani pasaytiramiz
-    E.picmip = 1; E.detail = 0; E.shadows = 0; E.minm = 1; E.dyn = 0; E.decals = 50; E.vsync = 0;
+    E.picmip = 1; E.detail = 0; E.shadows = 0; E.minm = 1; E.dyn = 0; E.decals = 50; E.vsync = 0; if (E.fps < 200) E.fps = 200;
     showSetTab('pro'); return toast(T('pr_fpsok'), 5000);
   }
   if (a === 'xdef') { each(['xp', 'xt', 'xs', 'xc', 'xtr', 'xdyn', 'xthick', 'xgap', 'xout'], function (k) { E[k] = DEF[k]; }); return showSetTab('hud'); }
