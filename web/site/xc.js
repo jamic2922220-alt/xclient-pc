@@ -139,32 +139,24 @@ function fit() {
   // markazdagi X CLIENT: chap menyu bilan o'ng ustun o'rtasida
   var st = $('stage'), mid = Math.round((480 + (W - 450)) / 2);
   st.style.left = (mid - 300) + 'px'; st.style.top = Math.max(40, Math.round((H - 52 - 600) / 2)) + 'px';
-  var fx = $('fx'); fx.width = W; fx.height = H; FXW = W; FXH = H;
 }
 
-/* ============================================================ fon: ko'tarilayotgan uchqunlar (canvas) */
-var FXW = 1600, FXH = 900, SPARKS = [];
-function spark(init) {
-  return { x: Math.random() * FXW, y: init ? Math.random() * FXH : FXH + 10, r: 0.6 + Math.random() * 1.8, vy: 0.25 + Math.random() * 0.9,
-    vx: (Math.random() - 0.5) * 0.3, a: 0.25 + Math.random() * 0.6, ph: Math.random() * 6.28 };
-}
+/* ============================================================ yengil animatsiya
+ * O'yin brauzeri (CEF1) har kadrni protsessorda chizadi - shuning uchun faqat kichik maydon,
+ * sekundiga ~12 marta: halqa sekin aylanadi, nur "nafas oladi", logo ozgina suzadi. */
+var ANIM_T = 0;
 function fxLoop() {
-  var c = $('fx'); if (!c || !c.getContext) return;
-  var g = c.getContext('2d');
-  if (!SPARKS.length) for (var i = 0; i < 70; i++) SPARKS.push(spark(true));
-  g.clearRect(0, 0, FXW, FXH);
-  for (var j = 0; j < SPARKS.length; j++) {
-    var p = SPARKS[j];
-    p.y -= p.vy; p.ph += 0.03; p.x += p.vx + Math.sin(p.ph) * 0.25;
-    if (p.y < -10) SPARKS[j] = p = spark(false);
-    var fade = Math.min(1, p.y / (FXH * 0.6));
-    g.fillStyle = 'rgba(255,' + (70 + Math.round(p.r * 40)) + ',60,' + (p.a * fade).toFixed(3) + ')';
-    g.beginPath(); g.arc(p.x, p.y, p.r, 0, 6.283); g.fill();
-  }
-  var raf = window.requestAnimationFrame || window.webkitRequestAnimationFrame;
-  if (raf) raf(fxLoop); else setTimeout(fxLoop, 33);
+  var r = document.querySelector('#stage .r1'), g = document.querySelector('#stage .glow'), x = document.querySelector('#stage .xl2');
+  if (!r || !g || !x) return;
+  setInterval(function () {
+    if (curModal) return;                                  // oyna ochiq bo'lsa animatsiya to'xtaydi
+    ANIM_T += 1;
+    r.style.webkitTransform = 'rotate(' + ((ANIM_T * 3) % 360) + 'deg)';
+    var k = (Math.sin(ANIM_T / 10) + 1) / 2;
+    g.style.opacity = (0.6 + k * 0.4).toFixed(2);
+    x.style.webkitTransform = 'translateY(' + (-Math.round(k * 8)) + 'px)';
+  }, 85);
 }
-
 /* ============================================================ XClient.exe bilan aloqa
  * XClient.exe bosh menyu manziliga ?xc=<kompyuter id>&v=<versiya>&c=<kesh MB> qo'shadi.
  * Tizim sozlamalari (beta, Windows bilan ishga tushish, ekran, kesh, fayllarni tekshirish)
