@@ -12,7 +12,7 @@ header(($DEBUG ? 'Content-Type: text/plain' : 'Content-Type: application/javascr
 header('Cache-Control: no-store');
 
 // xizmatlar (TOP / BOOST / VIP / Sevimlilar) jadvallari turgan sahifa(lar) - birinchi ishlagani olinadi
-$PAGES  = array('https://boost-top.com/', 'http://boost-top.com/', 'https://www.boost-top.com/');
+$PAGES  = array('https://boost-top.com/listing/', 'https://boost-top.com/', 'http://boost-top.com/', 'https://www.boost-top.com/');
 // tekshirish uchun boshqa sahifa: fav.php?debug=1&url=https://boost-top.com/...
 if (isset($_GET['debug'], $_GET['url']) && preg_match('#^https?://(www\.)?boost-top\.com/#i', $_GET['url'])) $PAGES = array($_GET['url']);
 $MARKER = '/sevimli|избранн|favorit|game ?menu/iu';      // jadval sarlavhasi
@@ -40,6 +40,14 @@ function fetch_page($url, $host = '', &$info = null) {
 
 function parse_fav($html, $MARKER, $IPRE, &$dbg) {
     $list = array();
+    // A) /listing/ sahifasi: <section class="boost-listing-section" data-service="gamemenu"> ... <tr data-address="IP:port">
+    if (preg_match_all('#<section\b[^>]*data-service\s*=\s*["\']?(?:gamemenu|favorites)\b[^>]*>(.*?)</section>#is', $html, $secs)) {
+        foreach ($secs[1] as $sec)
+            if (preg_match_all('#data-address\s*=\s*["\']([\d.]+(?::\d{2,5})?)["\']#i', $sec, $m))
+                foreach ($m[1] as $ip) { if (strpos($ip, ':') === false) $ip .= ':27015'; if (!in_array($ip, $list)) $list[] = $ip; }
+        $dbg .= 'Sevimlilar bo\'limi (section gamemenu): ' . count($secs[1]) . ' ta, serverlar: ' . count($list) . "\n";
+        return $list;                                                   // bo'lim bor - bo'sh bo'lsa ham shu to'g'ri javob
+    }
     // 0) saytdagi "boost-privileges-table": har bir xizmat qatori <tr data-service="favorites"> ...
     if (preg_match_all('#<tr\b[^>]*data-service\s*=\s*["\']?(?:gamemenu|favorites|favourites|fav)\b[^>]*>(.*?)</tr>#is', $html, $rows)) {
         foreach ($rows[1] as $r) {
@@ -108,6 +116,7 @@ function parse_fav($html, $MARKER, $IPRE, &$dbg) {
 // sahifada haqiqiy (skript/CSS dan tashqari) <tr data-service="gamemenu"> jadvali bormi
 function has_gm_table($html) {
     $h = preg_replace('#<(style|script)\b.*?</\1>#is', ' ', $html);
+    if (preg_match('#<section\b[^>]*data-service\s*=\s*["\']?gamemenu\b#i', $h)) return true;
     return (bool)preg_match('#<tr\b[^>]*data-service\s*=\s*["\']?(?:gamemenu|favorites)\b#i', $h);
 }
 // bosh sahifadagi ichki havolalar (jadval qaysi sahifada ekanini o'zimiz topamiz)
