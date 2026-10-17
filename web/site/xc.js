@@ -150,6 +150,7 @@ function fxLoop() {
   if (!r || !g || !x) return;
   setInterval(function () {
     if (curModal) return;                                  // oyna ochiq bo'lsa animatsiya to'xtaydi
+    try { if (NC && NC.gameUi && NC.gameUi.shown === false) return; } catch (e) {}   // o'yin paytida (menyu yopiq) - to'xtaydi
     ANIM_T += 1;
     r.style.webkitTransform = 'rotate(' + ((ANIM_T * 3) % 360) + 'deg)';
     var k = (Math.sin(ANIM_T / 10) + 1) / 2;
