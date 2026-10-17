@@ -650,6 +650,73 @@ static void fix_override_bg(void)
     FindClose(h);
 }
 
+/* nDirect (NextClient yangilovchisi) o'yin ochilganda sborka fonini (bt_*.tga, platform/mmb...) qaytarib qo'yadi.
+ * 1) O'yin tilining papkasi (cstrike_russian ...) cstrike dan oldin o'qiladi va nDirect uni kuzatmaydi:
+ *    fonni shu yerga o'z nomlari (xcl_*.tga) bilan yozamiz.
+ * 2) O'yin ochilgandan keyin bir necha daqiqa kuzatamiz: fayl qaytarilsa - X CLIENT nikini qayta qo'yamiz. */
+static void lang_bg_dir(const wchar_t *lang)
+{
+    wchar_t dir[MAX_PATH], src[MAX_PATH], from[MAX_PATH], to[MAX_PATH], sub[MAX_PATH];
+    _snwprintf(sub, MAX_PATH, L"cstrike_%s\\resource", lang); sub[MAX_PATH - 1] = 0;
+    path_join(dir, g_dir, sub);
+    path_join(src, g_dir, L"xc_theme\\cstrike\\resource\\background");
+    int n = 0;
+    for (int r = 1; r <= 5; r++) for (int c = 1; c <= 8; c++) {
+        wchar_t f[32], t[48];
+        _snwprintf(f, 32, L"xc_%d_%d.tga", r, c);
+        _snwprintf(t, 48, L"background\\xcl_%d_%d.tga", r, c);
+        path_join(from, src, f); path_join(to, dir, t);
+        if (!file_exists(from)) continue;
+        if (!file_exists(to) || !same_file(from, to)) { mkdirs_for(to); SetFileAttributesW(to, FILE_ATTRIBUTE_NORMAL); CopyFileW(from, to, FALSE); }
+        n++;
+    }
+    if (n < 40) return;                              /* fon to'liq bo'lmasa layout yozmaymiz */
+    char lay[4096]; size_t len = 0;
+    len += _snprintf(lay + len, sizeof(lay) - len, "resolution\t1920\t1080\r\n\r\n");
+    for (int r = 1; r <= 5; r++) {
+        for (int c = 1; c <= 8; c++)
+            len += _snprintf(lay + len, sizeof(lay) - len, "resource/background/xcl_%d_%d.tga\t\tscaled\t\t%d\t%d\r\n", r, c, (c - 1) * 256, (r - 1) * 256);
+        len += _snprintf(lay + len, sizeof(lay) - len, "\r\n");
+    }
+    const wchar_t *names[2] = { L"BackgroundLayout.txt", L"BackgroundLoadingLayout.txt" };
+    for (int i = 0; i < 2; i++) {
+        path_join(to, dir, names[i]);
+        mkdirs_for(to); SetFileAttributesW(to, FILE_ATTRIBUTE_NORMAL);
+        FILE *f = _wfopen(to, L"wb");
+        if (f) { fwrite(lay, 1, len, f); fclose(f); }
+    }
+}
+static void lang_bg(void)
+{
+    wchar_t lang[32] = L"russian", w[64];
+    HKEY k; DWORD sz = sizeof(w), type = 0;
+    lang_bg_dir(L"russian");
+    /* boshqa til tanlangan bo'lsa (Steam/NextClient sozlamasi) - o'sha papkaga ham */
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Valve\\Steam", 0, KEY_QUERY_VALUE, &k) == ERROR_SUCCESS) {
+        if (RegQueryValueExW(k, L"Language", NULL, &type, (BYTE *)w, &sz) == ERROR_SUCCESS && type == REG_SZ) lstrcpynW(lang, w, 32);
+        RegCloseKey(k);
+    }
+    for (wchar_t *c = lang; *c; c++) if (!((*c >= L'a' && *c <= L'z') || (*c >= L'A' && *c <= L'Z'))) { lang[0] = 0; break; }
+    if (lang[0] && _wcsicmp(lang, L"russian") && _wcsicmp(lang, L"english")) lang_bg_dir(lang);
+}
+static BOOL theme_changed(const wchar_t *rel)
+{
+    wchar_t a[MAX_PATH], b[MAX_PATH], t[MAX_PATH];
+    path_join(t, L"xc_theme", rel);
+    path_join(a, g_dir, t); path_join(b, g_dir, rel);
+    return file_exists(a) && !same_file(a, b);
+}
+static void guard_theme(HANDLE game)
+{
+    const wchar_t *watch[] = { L"platform\\mmb_error_page.html", L"cstrike\\resource\\background\\bt_1_1.tga",
+        L"cstrike\\resource\\BackgroundLoadingLayout.txt", L"platform\\mmb\\bg_1920.jpg" };
+    DWORD start = GetTickCount();
+    while (GetTickCount() - start < 240000) {              /* 4 daqiqa */
+        if (WaitForSingleObject(game, 1500) == WAIT_OBJECT_0) break;   /* o'yin yopildi */
+        for (int i = 0; i < 4; i++) if (theme_changed(watch[i])) { apply_theme_dir(L""); break; }
+    }
+}
+
 /* eski versiyadagi alohida oyna (x-ui, Electron) va .bat endi kerak emas */
 static void remove_old_ui(void)
 {
@@ -1156,6 +1223,7 @@ static void run_game(void)
     remove_old_ui();
     apply_theme_dir(L"");
     fix_override_bg();
+    lang_bg();
     setup_main_menu();
     ensure_scheme();
     ensure_launcher_cfg();
@@ -1176,6 +1244,7 @@ static void run_game(void)
     if (CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, g_dir, &si, &pi)) {
         if (o_prio) SetPriorityClass(pi.hProcess, HIGH_PRIORITY_CLASS);   /* "O'yinni tezlashtirish" */
         CloseHandle(pi.hThread);
+        guard_theme(pi.hProcess);
         CloseHandle(pi.hProcess);
     }
 }

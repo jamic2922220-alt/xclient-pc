@@ -100,6 +100,16 @@ function pub($u, $full) {
     }
     return $r;
 }
+/* kunlik statistika (admin.php): xc_data/daily/YYYY-MM-DD.php  {d:{qurilma:1}, n:{yangi:1}, m:{menyu:1}} */
+function day_mark($kind, $id, $isNew) {
+    @mkdir(XC_DIR . '/daily', 0755, true);
+    @date_default_timezone_set('Asia/Tashkent');
+    $k = 'daily/' . date('Y-m-d');
+    $x = rd($k, array('d' => array(), 'n' => array(), 'm' => array()));
+    $x[$kind][$id] = 1;
+    if ($isNew) $x['n'][$id] = 1;
+    wr($k, $x);
+}
 function touch_device(&$u) {
     $d = p('device');
     if (!preg_match('/^[a-z0-9]{8,40}$/', $d)) return;
@@ -146,6 +156,13 @@ case 'login':
     touch_device($u);
     save_user($u);
     out(array('ok' => true, 'token' => new_token($u['login']), 'me' => pub($u, true)));
+
+case 'beat':                                             // menyu ochildi (kuniga bir marta hisoblanadi)
+    $dev = p('device');
+    if (!preg_match('/^[a-z0-9]{8,40}$/', $dev)) fail('bad', 'bad');
+    lock();
+    day_mark('m', $dev, false);
+    out(array('ok' => true));
 
 case 'reset_req':                                        // parolni tiklash: 1) emailga 6 xonali kod
     $who = p('login');
@@ -368,6 +385,9 @@ case 'opts_done':
         if (!preg_match('/^[a-z0-9]{8,40}$/', $d)) fail('dev', 'device');
         lock();
         $o = rd('dev/' . $d, array());
+        $isNew = empty($o['first']) && empty($o['seen']);  // birinchi marta ko'rinayotgan kompyuter = yangi o'rnatish
+        if (empty($o['first'])) $o['first'] = time();
+        day_mark('d', $d, $isNew);                         // kunlik statistika: XClient.exe ishga tushirganlar
         $o['ver'] = substr(preg_replace('/[^\w.\-]/', '', p('v')), 0, 20);
         $o['cachemb'] = (int)p('cache');
         $o['seen'] = time();

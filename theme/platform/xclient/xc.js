@@ -1868,6 +1868,7 @@ step('seedFromGame();', function () { seedFromGame(); });
 step('fit();', function () { fit(); });
 step('window.onresize = fit;', function () { window.onresize = fit; });
 step('fxLoop();', function () { fxLoop(); });
+step('beat', function () { if (DB.beat !== new Date().toDateString()) api('beat', {}, function (r) { if (r.ok) { DB.beat = new Date().toDateString(); persist(); } }); });   // statistika: menyu ochildi
 step('applyTheme', function () { if (DB.theme && DB.theme !== 'red') applyTheme(DB.theme); });
 step('detectLang();', function () { detectLang(); });
 step('loadMaster();', function () { loadMaster(); });
