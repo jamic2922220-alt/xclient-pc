@@ -307,11 +307,18 @@ function loadFriends() {
   });
 }
 function loadWeek() { api('top', {}, function (r) { if (r.ok) { WEEK = r.top || []; renderHome(); } }); }
+/* do'stdan taklif: "X sizni serverga chaqiryapti" -> Kirish */
+function showInvite(iv) {
+  var ip = normIp(iv.ip); if (!ip || ip === CONNECTED) return;
+  var s = srv(ip); query(ip);
+  ask(T('iv_title').replace('{n}', iv.from || iv.login).replace('{s}', s.name || ip), function () { closeModal(); connect(ip); }, false, false, true);
+}
 function pingPresence() {
   if (!ME) return;
   var s = CONNECTED ? srv(CONNECTED) : null;
   api('ping', { server: CONNECTED || '', map: (s && s.map) || '' }, function (r) {
     if (r.ok && ME) { ME.xp = r.xp; ME.level = r.level; ME.lvlxp = r.lvlxp; renderBar(); }
+    if (r.ok && r.inv && r.inv.length) showInvite(r.inv[r.inv.length - 1]);
   });
 }
 
@@ -525,7 +532,12 @@ function onConnectEvt(addr) {
   addr = normIp(addr);
   if (!addr || addr === CONNECTED) return;
   CONNECTED = addr; startGame(addr);
-  if (S.demo) setTimeout(function () { var d = new Date(); cmd('record xc_' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '_' + pad(d.getHours()) + pad(d.getMinutes())); }, 4000);
+  if (S.demo) setTimeout(function () {
+    var d = new Date(), nm = 'xc_' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '_' + pad(d.getHours()) + pad(d.getMinutes());
+    cmd('record ' + nm);
+    var sv = srv(addr);
+    DB.demos = [{ n: nm, s: sv.name || addr, m: sv.map || '', t: now() }].concat(DB.demos || []).slice(0, 30); persist();
+  }, 4000);
   pingPresence(); renderAll();
 }
 function onDisconnectEvt() {
@@ -551,7 +563,8 @@ function onConsole(txt) {
 }
 function bestServer() {
   var best = null;
-  function score(s) { return (isX(s) ? 1000 : 0) + (s.pl || 0) * 10 - (s.ping || 300) / 10; }
+  // do'stlar o'ynayotgan server, past ping va o'yinchi ko'pligi ustun
+  function score(s) { return (isX(s) ? 1000 : 0) + friendsAt(s.ip).length * 300 + Math.min(s.pl || 0, 28) * 10 - (s.ping || 300) / 4; }
   for (var ip in SRV) {
     var s = SRV[ip];
     if (!s.ok || s.pass || isFull(s)) continue;
@@ -895,6 +908,7 @@ function openFriends() {
     h += '<div class="tr" style="cursor:default"><div class="rk c av2" style="' + (f.online ? avStyle(f) : 'background:#4a4048') + '">' + avInner(f, f.name) + '</div>' +
       '<div class="nm">' + esc(f.name) + ' <span class="mut" style="font-weight:normal;font-size:12px">' + esc(T('lvl').replace('{n}', f.level)) + '</span></div>' +
       '<div class="mt">' + (f.online ? '<span class="gm">\u25cf</span> ' + esc(f.server ? T('fr_in') + ((s && s.name) || f.server) : T('fr_menu')) : esc(T('fr_off'))) + '</div>' +
+      (CONNECTED && f.online && f.server !== CONNECTED ? '<a class="go inv" data-inv="' + esc(f.login) + '">' + esc(T('iv_btn')) + '</a>' : '') +
       (f.server ? '<a class="go" data-ip="' + esc(f.server) + '">' + esc(T('join')) + '</a>' : '<a class="go" data-frdel="' + esc(f.login) + '">' + esc(T('fr_del')) + '</a>') + '</div>';
   });
   if (!FRIENDS.length) h += '<div class="empty">' + esc(T('fr_none')) + '</div>';
@@ -1036,6 +1050,44 @@ function xhairCmds(s) {
   return c;
 }
 function xLive() { if (!E) return; XLIVE = true; each(xhairCmds(E), function (x) { cmd(x); }); }
+/* ---- profillar: 4 ta joy, har birida sozlamalar + tugmalar ---- */
+function profSlots() {
+  var p = DB.profiles || [], n = ['pf_n1', 'pf_n2', 'pf_n3', 'pf_n4'], out = [];
+  for (var i = 0; i < 4; i++) out.push(p[i] || { n: T(n[i]), t: 0 });
+  return out;
+}
+function profSave(i) {
+  var p = DB.profiles || [], sl = profSlots()[i], set = copy(E);
+  delete set.name; delete set.tag;
+  p[i] = { n: sl.n, t: now(), s: set, b: copy(BINDS) };
+  DB.profiles = p; persist(); cloudSave(); toast(T('pf_saved').replace('{n}', sl.n));
+}
+function profLoad(i) {
+  var sl = (DB.profiles || [])[i]; if (!sl || !sl.s) return;
+  for (var k in sl.s) if (sl.s.hasOwnProperty(k) && DEF.hasOwnProperty(k)) E[k] = sl.s[k];
+  if (sl.b) { DB.binds = copy(sl.b); loadBinds(); applyBinds(); persist(); }
+  toast(T('pf_loaded').replace('{n}', sl.n), 4000);
+}
+/* ---- sezgirlik kalkulyatori (CS 1.6 m_yaw 0.022) ---- */
+var CALC_G = [['cs2', 'CS2 / CS:GO', 1], ['val', 'Valorant', 3.181818], ['ow', 'Overwatch 2', 0.3], ['apex', 'Apex', 1]];
+var CALC = 'cs2', CALC_V = '1';
+function calcVal() {
+  var v = parseFloat(String(CALC_V).replace(',', '.')), f = 1;
+  each(CALC_G, function (g) { if (g[0] === CALC) f = g[2]; });
+  return isNaN(v) ? 0 : Math.round(v * f * 100) / 100;
+}
+function calcOut() { var v = calcVal(); return v ? '= <b>' + v + '</b> CS 1.6' : ''; }
+/* ---- tayyor uslublar (o'yin uslubi bo'yicha, haqiqiy o'yinchilar emas) ---- */
+var STYLES = [
+  ['rifle', 'st_rifle', 'st_rifle2', { sens: 2.2, zoom: 1, raw: 1, xt: 0, xs: 'small', xc: '50 250 50', xdyn: 0, interp: 0.01, lw: 1, lc: 1, bob: 0 }],
+  ['awp', 'st_awp', 'st_awp2', { sens: 1.8, zoom: 0.85, raw: 1, xt: 3, xs: 'small', xc: '0 230 255', xdyn: 0, interp: 0.01, lw: 1, lc: 1, bob: 0 }],
+  ['classic', 'st_classic', 'st_classic2', { sens: 2.5, zoom: 1.2, raw: 1, xt: 0, xs: 'medium', xc: '50 250 50', xdyn: 1, bob: 0.01 }],
+  ['new', 'st_new', 'st_new2', { sens: 3, zoom: 1.2, raw: 1, xt: 0, xs: 'medium', xc: '255 210 60', xdyn: 1, bob: 0.01 }]
+];
+function applyStyle(id) {
+  each(STYLES, function (x) { if (x[0] === id) for (var k in x[3]) if (x[3].hasOwnProperty(k)) E[k] = x[3][k]; });
+  E.xp = presetOf(E); showSetTab('tools'); toast(T('st_ok'), 4000);
+}
 function openSettings(tab) {
   detectXext();
   seedFromGame();
@@ -1110,6 +1162,30 @@ var PANES = {
       seg('fps', 'v_fps', [[60, '60'], [100, '100'], [144, '144'], [200, '200'], [300, '300']]) +
       sl('gamma', 'v_bright', 1.8, 3, 0.1) + sl('fov', 'v_fov', 70, 100, 1, 'v_fov2') + sl('vmfov', 'v_vm', 70, 100, 1) + sl('decals', 'v_dec', 50, 1000, 50) + '</div>' +
       '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('hor', 'v_hor') + tg('vsync', 'v_vsync') + tg('dyn', 'v_dyn') + '</div>';
+  },
+  tools: function () {                            // Qo'shimcha: profillar, kalkulyator, tayyor uslublar, demolar
+    var pr = '';
+    each(profSlots(), function (sl, i) {
+      pr += '<div class="rowb"><b class="pn" data-pren="' + i + '">' + esc(sl.n) + ' <span class="mut">✎</span></b><small>' + esc(sl.t ? fmtTime(sl.t) : T('pf_empty')) + '</small>' +
+        (sl.t ? '<a class="btn" style="right:116px" data-prload="' + i + '">' + esc(T('pf_load')) + '</a>' : '') + '<a class="btn" data-prsave="' + i + '">' + esc(T('pf_save')) + '</a></div>';
+    });
+    var games = '';
+    each(CALC_G, function (g) { games += '<a class="' + (CALC === g[0] ? 'on' : '') + '" data-calc="' + g[0] + '">' + g[1] + '</a>'; });
+    var st = '';
+    each(STYLES, function (x) { st += '<div class="rowb"><b>' + esc(T(x[1])) + '</b><small>' + esc(T(x[2])) + '</small><a class="btn" data-style="' + x[0] + '">' + esc(T('st_apply')) + '</a></div>'; });
+    var dm = '';
+    each(DB.demos || [], function (d) {
+      dm += '<div class="dmr"><b>' + esc(d.s) + '</b><small>' + esc(fmtTime(d.t) + (d.m ? ' · ' + d.m : '') + ' · ' + d.n) + '</small><a class="btn" data-demo="' + esc(d.n) + '">▶ ' + esc(T('dm_play')) + '</a></div>';
+    });
+    return '<div class="pane l"><div class="ph2">' + esc(T('pf_title')) + '</div>' + pr +
+      '<div class="ph2 m">' + esc(T('cc_title')) + '</div>' +
+      '<div class="fr"><div class="lb">' + esc(T('cc_game')) + '</div><div class="ct2 seg">' + games + '</div></div>' +
+      '<div class="fr"><div class="lb">' + esc(T('cc_in')) + '</div><div class="ct2 code"><input id="calcIn" value="' + esc(CALC_V) + '"><span class="ccres" id="calcOut">' + calcOut() + '</span>' +
+      '<a class="btn b2" data-act="calcapply">' + esc(T('x_apply')) + '</a></div></div></div>' +
+      '<div class="pane r"><div class="ph2">' + esc(T('st_title')) + '</div>' + st +
+      '<div class="ph2 m">' + esc(T('dm_title')) + '</div>' +
+      (S && S.demo ? '' : '<div class="mut" style="font-size:12px;margin-bottom:6px">' + esc(T('dm_off')) + '</div>') +
+      '<div class="dml">' + (dm || '<div class="empty">' + esc(T('dm_none')) + '</div>') + '</div></div>';
   },
   pro: function () {                              // Kengaytirilgan: grafika, internet, qurol, ekran
     return '<div class="pane l"><div class="ph2">' + esc(T('pr_gfx')) + '</div>' +
@@ -1266,7 +1342,14 @@ var ACTIONS = [
   ['+showscores', 'Hisob jadvali', '\u0422\u0430\u0431\u043b\u0438\u0446\u0430 \u0441\u0447\u0451\u0442\u0430', 'TAB'], ['messagemode', 'Umumiy chat', '\u0427\u0430\u0442', 'y'],
   ['messagemode2', 'Jamoa chati', '\u0427\u0430\u0442 \u043a\u043e\u043c\u0430\u043d\u0434\u044b', 'u'], ['+voicerecord', 'Ovozli chat', '\u0413\u043e\u043b\u043e\u0441', 'k'],
   ['impulse 201', 'Spray', '\u0421\u043f\u0440\u0435\u0439', 't'], ['nightvision', "Tungi ko'rish", '\u041d\u043e\u0447\u043d\u043e\u0435 \u0432\u0438\u0434\u0435\u043d\u0438\u0435', 'n'],
-  ['radio1', 'Radio buyruqlar', '\u0420\u0430\u0434\u0438\u043e', 'z'], ['snapshot', 'Skrinshot', '\u0421\u043a\u0440\u0438\u043d\u0448\u043e\u0442', 'F5']
+  ['radio1', 'Radio buyruqlar', '\u0420\u0430\u0434\u0438\u043e', 'z'], ['snapshot', 'Skrinshot', '\u0421\u043a\u0440\u0438\u043d\u0448\u043e\u0442', 'F5'],
+  // tayyor bindlar (tugmasi bo'sh - o'yinchi o'zi tanlaydi)
+  ['+jumpthrow', 'Granatani sakrab otish (jumpthrow)', '\u041f\u0440\u044b\u0436\u043e\u043a + \u0431\u0440\u043e\u0441\u043e\u043a', ''],
+  ['xc_qs', 'Tez almashtirish (AWP uchun)', '\u0411\u044b\u0441\u0442\u0440\u0430\u044f \u0441\u043c\u0435\u043d\u0430 (AWP)', ''],
+  ['radio2', 'Radio 2', '\u0420\u0430\u0434\u0438\u043e 2', ''], ['radio3', 'Radio 3', '\u0420\u0430\u0434\u0438\u043e 3', ''],
+  ['say gl hf', 'Chat: gl hf', '\u0427\u0430\u0442: gl hf', ''], ['say gg wp', 'Chat: gg wp', '\u0427\u0430\u0442: gg wp', ''],
+  ['say_team Need backup!', 'Jamoaga: yordam kerak', '\u041a\u043e\u043c\u0430\u043d\u0434\u0435: \u043d\u0443\u0436\u043d\u0430 \u043f\u043e\u043c\u043e\u0449\u044c', ''],
+  ['say_team Bomb planted!', 'Jamoaga: bomba qo\'yildi', '\u041a\u043e\u043c\u0430\u043d\u0434\u0435: \u0431\u043e\u043c\u0431\u0430 \u0437\u0430\u043b\u043e\u0436\u0435\u043d\u0430', '']
 ];
 var BINDS = {}, KEYWAIT = '';
 function loadBinds() {
@@ -1274,7 +1357,11 @@ function loadBinds() {
   each(ACTIONS, function (a) { BINDS[a[0]] = a[3]; });
   if (DB.binds) for (var k in DB.binds) if (DB.binds.hasOwnProperty(k)) BINDS[k] = DB.binds[k];
 }
-function applyBinds() { for (var a in BINDS) if (BINDS.hasOwnProperty(a) && BINDS[a]) cmd('bind ' + q(BINDS[a]) + ' ' + q(a)); }
+function binAliases() {                        // tayyor bindlar uchun aliaslar
+  cmd('alias +jumpthrow "+jump; -attack"'); cmd('alias -jumpthrow "-jump"');
+  cmd('alias xc_qs "slot3; wait; lastinv"');
+}
+function applyBinds() { binAliases(); for (var a in BINDS) if (BINDS.hasOwnProperty(a) && BINDS[a]) cmd('bind ' + q(BINDS[a]) + ' ' + q(a)); }
 var KEYNAMES = { 8: 'BACKSPACE', 9: 'TAB', 13: 'ENTER', 16: 'SHIFT', 17: 'CTRL', 18: 'ALT', 19: 'PAUSE', 20: 'CAPSLOCK', 32: 'SPACE',
   33: 'PGUP', 34: 'PGDN', 35: 'END', 36: 'HOME', 37: 'LEFTARROW', 38: 'UPARROW', 39: 'RIGHTARROW', 40: 'DOWNARROW', 45: 'INS', 46: 'DEL',
   96: 'KP_INS', 97: 'KP_END', 98: 'KP_DOWNARROW', 99: 'KP_PGDN', 100: 'KP_LEFTARROW', 101: 'KP_5', 102: 'KP_RIGHTARROW', 103: 'KP_HOME',
@@ -1292,6 +1379,7 @@ function setBind(action, key) {
   var old = BINDS[action];
   for (var a in BINDS) if (BINDS.hasOwnProperty(a) && a !== action && BINDS[a] === key) BINDS[a] = '';
   BINDS[action] = key;
+  binAliases();
   if (old && old !== key) cmd('unbind ' + q(old));
   cmd('bind ' + q(key) + ' ' + q(action));
   DB.binds = BINDS; persist(); cloudSave();
@@ -1316,8 +1404,9 @@ function closeModal() {
   $(curModal).className = 'modal'; curModal = '';
 }
 var askCb = null;
-function ask(title, cb, two, pw) {
+function ask(title, cb, two, pw, noin) {
   askCb = cb; $('askT').innerHTML = esc(title); $('askI').value = ''; $('askI2').value = '';
+  $('askI').style.display = noin ? 'none' : '';
   $('askI').type = pw ? 'password' : 'text';
   $('askI2').style.display = two ? '' : 'none';
   $('mdAsk').className = 'modal on';
@@ -1408,6 +1497,7 @@ function act(a) {
     }, 3000);
     return toast(T('hx_test1'), 3000);
   }
+  if (a === 'calcapply') { var cv = calcVal(); if (!cv) return toast(T('cc_bad')); E.sens = Math.max(0.1, Math.min(20, cv)); return toast(T('cc_ok').replace('{v}', E.sens), 4000); }
   if (a === 'fpsmode') {                       // kuchsiz kompyuter: grafikani pasaytiramiz
     E.picmip = 1; E.detail = 0; E.shadows = 0; E.minm = 1; E.dyn = 0; E.decals = 50; E.vsync = 0;
     showSetTab('pro'); return toast(T('pr_fpsok'), 5000);
@@ -1447,11 +1537,26 @@ document.onclick = function (e) {
   if (DD) ddClose();
   if ((el = closest(t, 'data-bind'))) { KEYWAIT = KEYWAIT === el.getAttribute('data-bind') ? '' : el.getAttribute('data-bind'); showSetTab('keys'); return; }
   if ((el = closest(t, 'data-fav'))) { toggleFav(el.getAttribute('data-fav')); return; }
+  if ((el = closest(t, 'data-inv'))) { api('invite', { to: el.getAttribute('data-inv'), ip: CONNECTED }, function (r) { toast(r.ok ? T('iv_sent') : (r.msg || 'Xato')); }); return; }
   if ((el = closest(t, 'data-frdel'))) { api('friend_del', { login: el.getAttribute('data-frdel') }, function () { loadFriends(); }); return; }
   if ((el = closest(t, 'data-dbtg'))) { var dk = el.getAttribute('data-dbtg'); var cur = dk === 'autosave' ? !!DB[dk] : DB[dk] !== 0; DB[dk] = cur ? 0 : 1; persist(); if (dk === 'fx') { FX.off = 0; FX.slow = 0; sparks(); } if (dk === 'autosave') $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local')); el.className = 'tg' + (DB[dk] ? ' on' : ''); return; }
   if ((el = closest(t, 'data-otg'))) { var ok2 = el.getAttribute('data-otg'); OPTS[ok2] = OPTS[ok2] ? 0 : 1; el.className = 'tg' + (OPTS[ok2] ? ' on' : ''); saveOpts(); return; }
   if ((el = closest(t, 'data-tg'))) { var k = el.getAttribute('data-tg'); E[k] = E[k] ? 0 : 1; el.className = 'tg' + (E[k] ? ' on' : ''); if (setTab === 'hud') { drawXhair(); var cd = $('xCode'); if (cd) cd.value = xcode(E); } return; }
   if ((el = closest(t, 'data-avc'))) { api('avatar', { color: el.getAttribute('data-avc') }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); }); return; }
+  if ((el = closest(t, 'data-prsave'))) { profSave(Number(el.getAttribute('data-prsave'))); showSetTab('tools'); return; }
+  if ((el = closest(t, 'data-prload'))) { profLoad(Number(el.getAttribute('data-prload'))); showSetTab('tools'); return; }
+  if ((el = closest(t, 'data-pren'))) {
+    var pi = Number(el.getAttribute('data-pren'));
+    ask(T('pf_rename'), function (v) {
+      v = String(v || '').replace(/[<>"]/g, '').slice(0, 20); if (!v) return;
+      var pp = DB.profiles || []; if (!pp[pi]) pp[pi] = { n: v, t: 0 }; else pp[pi].n = v;
+      DB.profiles = pp; persist(); showSetTab('tools');
+    });
+    return;
+  }
+  if ((el = closest(t, 'data-calc'))) { var ci = $('calcIn'); if (ci) CALC_V = ci.value; CALC = el.getAttribute('data-calc'); showSetTab('tools'); return; }
+  if ((el = closest(t, 'data-style'))) { applyStyle(el.getAttribute('data-style')); return; }
+  if ((el = closest(t, 'data-demo'))) { closeModal(); cmd('playdemo ' + el.getAttribute('data-demo').replace(/[^\w\-]/g, '')); return; }
   if ((el = closest(t, 'data-hsub'))) { HSUB = el.getAttribute('data-hsub'); showSetTab('hud'); return; }
   if ((el = closest(t, 'data-xchk'))) {
     var xk = el.getAttribute('data-xchk'), XT = { dot: 3, t: 1, circle: 2 };
@@ -1506,6 +1611,7 @@ function onSlide(e) {
 }
 document.addEventListener('change', function (e) { onSlide(e); var t = e.target || e.srcElement; if (t && (t.id === 'fMap' || t.id === 'fMode')) renderServers();  }, false);
 document.addEventListener('input', onSlide, false);
+document.addEventListener('keyup', function (e) { var t = e.target || e.srcElement; if (t && t.id === 'calcIn') { CALC_V = t.value; var o = $('calcOut'); if (o) o.innerHTML = calcOut(); } }, false);
 document.addEventListener('mousedown', function (e) {
   if (!KEYWAIT || closest(e.target || e.srcElement, 'data-bind')) return;
   var b = e.button === 0 ? 'MOUSE1' : e.button === 2 ? 'MOUSE2' : e.button === 1 ? 'MOUSE3' : e.button === 3 ? 'MOUSE4' : 'MOUSE5';
@@ -1540,7 +1646,7 @@ function step(name, fn) { try { fn(); } catch (e) { if (window.onerror) window.o
 step('load();', function () { load(); });
 step("if (DB.forget) { DB.token = ''; DB.forge", function () { if (DB.forget) { DB.token = ''; DB.forget = 0; persist(); } });      // "Eslab qolish" o'chirilgan bo'lsa - keyingi safar qayta kirish
 step('loadSettings();', function () { loadSettings(); });
-step('loadBinds();', function () { loadBinds(); });
+step('loadBinds();', function () { loadBinds(); binAliases(); });
 step('seedFromGame();', function () { seedFromGame(); });
 step('fit();', function () { fit(); });
 step('window.onresize = fit;', function () { window.onresize = fit; });

@@ -278,8 +278,24 @@ case 'ping':                                             // har daqiqada: onlayn
         $u['server'] = $srv; $u['map'] = substr(preg_replace('/[^\w\-]/', '', $map), 0, 40);
     } else { $u['server'] = ''; $u['map'] = ''; }
     $u['seen'] = $now;
+    $inv = array();                                      // do'stlardan kelgan takliflar (bir marta beriladi)
+    if (!empty($u['inv'])) { foreach ($u['inv'] as $i) if ($now - $i['t'] < 600) $inv[] = $i; $u['inv'] = array(); }
     save_user($u);
-    out(array('ok' => true, 'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL));
+    out(array('ok' => true, 'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL, 'inv' => $inv));
+
+case 'invite':                                           // do'stni o'zim o'ynayotgan serverga taklif qilish
+    lock();
+    $u = auth();
+    $to = strtolower(p('to')); $ip = p('ip');
+    if (!preg_match('/^[\w.\-]+:\d+$/', $ip)) fail('bad', 'Server manzili noto\'g\'ri');
+    if (empty($u['friends']) || !in_array($to, array_map('strtolower', $u['friends']))) fail('bad', 'Faqat do\'stlarni taklif qilish mumkin');
+    $t = user($to);
+    if (!$t) fail('bad', 'Do\'st topilmadi');
+    if (!isset($t['inv'])) $t['inv'] = array();
+    $t['inv'][] = array('from' => $u['name'], 'login' => $u['login'], 'ip' => $ip, 't' => time());
+    $t['inv'] = array_slice($t['inv'], -5);
+    save_user($t);
+    out(array('ok' => true));
 
 case 'friends':
     $u = auth();
