@@ -394,7 +394,22 @@ function loadScript(src, ok, fail) {
  * top.php -> window.BOOST_TOP = [{ip, title, type?}, ...]  (TOP tarif; type 'fav'/'gm' bo'lsa - Sevimlilar tarifi)
  * fav.php -> window.BOOST_FAV = [...]  (ixtiyoriy: Sevimlilar tarifini olganlar)
  * Avval nisbiy yo'l (sahifa mmb.boost-top.com dan ochiladi) - o'yin brauzeri zamonaviy https ni ocholmasligi mumkin. */
-var PROMO_FAV = [];
+var PROMO_FAV = [], SVC = {}, SORT_USER = false;
+var SVC_ORDER = [['top', 'TOP'], ['boost', 'BOOST'], ['vip', 'VIP']];
+function svcAny() { for (var i = 0; i < SVC_ORDER.length; i++) if ((SVC[SVC_ORDER[i][0]] || []).length) return true; return false; }
+function svcIps() { var o = []; each(SVC_ORDER, function (g) { each(SVC[g[0]] || [], function (ip) { if (o.indexOf(ip) < 0) o.push(ip); }); }); return o; }
+function svcBadges(ip) {
+  var h = '';
+  each(SVC_ORDER, function (g) { if ((SVC[g[0]] || []).indexOf(ip) >= 0) h += '<span class="svb ' + g[0] + '">' + g[1] + '</span>'; });
+  if (srvTab !== 'favs' && PROMO_FAV.indexOf(ip) >= 0) h += '<span class="svb gm">\u2605</span>';
+  return h;
+}
+function setSvc(o) {
+  SVC = {};
+  for (var k in o) if (o.hasOwnProperty(k) && o[k] && o[k].length != null) { SVC[k] = []; each(o[k], function (ip) { ip = normIp(ip); if (ip && SVC[k].indexOf(ip) < 0) SVC[k].push(ip); }); }
+  each(svcIps(), function (ip) { query(ip); });
+  renderSoon();
+}
 function loadList(urls, varName, cb) {
   var n = 0;
   function next() {
@@ -408,7 +423,7 @@ function loadList(urls, varName, cb) {
 }
 function loadTop() {
   loadList(['top.php', 'http://boost-top.com/mmb/top.php', 'https://boost-top.com/mmb/top.php'], 'BOOST_TOP', function (l) { setTop(l || []); });
-  loadList(['fav.php'], 'BOOST_FAV', function (l) { if (l) setPromoFav(l); });
+  loadList(['fav.php'], 'BOOST_FAV', function (l) { if (window.BOOST_SVC) setSvc(window.BOOST_SVC); if (l) setPromoFav(l); });
 }
 function itemIp(it) { if (typeof it === 'string') it = { ip: it }; var ip = normIp(it && (it.ip || it.addr || it.address)); if (ip && it.title && !srv(ip).name) srv(ip).name = it.title; return ip; }
 function setTop(list) {
@@ -592,6 +607,7 @@ var srvTab = 'internet', srvSel = '', srvSort = 'pl', srvDesc = true;
 var FLT = { ping: false, notempty: false, notfull: false };
 function openServers(tab) { openModal('mdServers'); setSrvTab(tab || 'internet'); }
 function setSrvTab(tab) {
+  if (tab !== srvTab) SORT_USER = false;
   srvTab = tab;
   each(document.querySelectorAll('#srvTabs a'), function (a) { a.className = a.getAttribute('data-tab') === tab ? 'on' : ''; });
   if (tab === 'friends') loadFriends();
@@ -606,7 +622,7 @@ function tabIps() {
   if (srvTab === 'top') return TOP.slice();
   if (srvTab === 'friends') { var o = []; each(FRIENDS, function (f) { if (f.server && o.indexOf(f.server) < 0) o.push(f.server); }); return o; }
   if (srvTab === 'history') { var seen = {}, out = []; each(DB.hist, function (h) { if (!seen[h.ip]) { seen[h.ip] = 1; out.push(h.ip); } }); return out; }
-  return MASTER.slice();
+  var net = svcIps(); each(MASTER, function (ip) { if (net.indexOf(ip) < 0) net.push(ip); }); return net;
 }
 function histOf(ip) { for (var i = 0; i < DB.hist.length; i++) if (DB.hist[i].ip === ip) return DB.hist[i]; return null; }
 function friendsAt(ip) { var n = []; each(FRIENDS, function (f) { if (f.server === ip) n.push(f.name); }); return n; }
@@ -711,19 +727,33 @@ function renderServers() {
     });
   }
   var html = '';
-  each(rows, function (s) {
+  function rowHtml(s) {
+    var html = '';
     var pc = s.ping < 50 ? 'g' : s.ping < 100 ? 'y' : 'r', h = (isHist || isFav) ? histOf(s.ip) : null, c5 = '', c6 = '';
     if (h) c5 = isHist ? fmtTime(h.t) + (h.d ? ' \u00b7 ' + fmtDur(h.d) : '') : fmtTime(h.t);
     if (isFr) c5 = esc(friendsAt(s.ip).join(', '));
     if (isHist && h) c6 = (h.k || h.x) ? (h.k || 0) + ' / ' + (h.x || 0) : '\u2014';
     html += '<div class="sr' + (s.ip === srvSel ? ' on' : '') + '" data-ip="' + esc(s.ip) + '">' +
       '<span class="c0' + (isFavIp(s.ip) ? ' f' : '') + '" data-fav="' + esc(s.ip) + '">\u2605</span>' +
-      '<span class="c1">' + esc(s.name || (h && h.name) || s.ip) + (isX(s) ? '<span class="xb">X</span><span class="vb">VIP</span>' : '') + (s.pass ? '<span class="vb">PW</span>' : '') + (isFav && PROMO_FAV.indexOf(s.ip) >= 0 ? '<span class="vb">' + esc(T('ad')) + '</span>' : '') + '</span>' +
+      '<span class="c1">' + esc(s.name || (h && h.name) || s.ip) + (isX(s) ? '<span class="xb">X</span><span class="vb">VIP</span>' : '') + svcBadges(s.ip) + (s.pass ? '<span class="vb">PW</span>' : '') + (isFav && PROMO_FAV.indexOf(s.ip) >= 0 ? '<span class="vb">' + esc(T('ad')) + '</span>' : '') + '</span>' +
       '<span class="c2">' + (s.ok ? pbar(s) + s.pl + '/' + s.max : (s.fail ? '<span class="rd">' + T('offline') + '</span>' : '...')) + '</span>' +
       '<span class="c3">' + esc(s.map || (h && h.map) || '') + '</span>' +
       '<span class="c4">' + (s.ok ? '<i class="dot ' + pc + '"></i>' + s.ping : '') + '</span>' +
       '<span class="c5">' + c5 + '</span><span class="c6">' + c6 + '</span></div>';
-  });
+    return html;
+  }
+  if (isNet && !SORT_USER && svcAny()) {
+    // saytdagi kabi: avval TOP, keyin BOOST, keyin VIP xizmatini olganlar (sayt tartibida), so'ng qolganlari
+    var used = {};
+    each(SVC_ORDER, function (g) {
+      var part = '';
+      each(SVC[g[0]] || [], function (ip) { for (var i = 0; i < rows.length; i++) if (rows[i].ip === ip) { part += rowHtml(rows[i]); used[ip] = 1; break; } });
+      if (part) html += '<div class="sgh"><b class="svb ' + g[0] + '">' + g[1] + '</b>' + esc(T('sv_' + g[0])) + '</div>' + part;
+    });
+    var rest = '';
+    each(rows, function (s) { if (!used[s.ip]) rest += rowHtml(s); });
+    if (rest) html += (html ? '<div class="sgh">' + esc(T('sv_other')) + '</div>' : '') + rest;
+  } else each(rows, function (s) { html += rowHtml(s); });
   var emptyMsg = isFav ? T('empty_favs') : isHist ? T('empty_hist') : isFr ? (ME ? T('empty_frsrv') : T('no_fr_login')) : (isNet && running ? T('loading') : T('empty_list'));
   var lst = $('srvList'), st = lst.scrollTop;
   lst.innerHTML = html || '<div class="empty">' + esc(emptyMsg) + '</div>';
@@ -1306,7 +1336,7 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-lang'))) { DB.lang = el.getAttribute('data-lang'); persist(); cloudSave(); setLang(DB.lang); showSetTab('system'); return; }
   if ((el = closest(t, 'data-tab'))) { if (curModal === 'mdServers') setSrvTab(el.getAttribute('data-tab')); else showSetTab(el.getAttribute('data-tab')); return; }
   if ((el = closest(t, 'data-flt'))) { var f = el.getAttribute('data-flt'); FLT[f] = !FLT[f]; renderServers(); return; }
-  if ((el = closest(t, 'data-sort'))) { var so = el.getAttribute('data-sort'); if (srvSort === so) srvDesc = !srvDesc; else { srvSort = so; srvDesc = so === 'pl'; } renderServers(); return; }
+  if ((el = closest(t, 'data-sort'))) { var so = el.getAttribute('data-sort'); if (SORT_USER && srvSort === so) srvDesc = !srvDesc; else { srvSort = so; srvDesc = so === 'pl'; } SORT_USER = true; renderServers(); return; }
   if ((el = closest(t, 'data-act'))) { act(el.getAttribute('data-act')); return; }
   if ((el = closest(t, 'data-ip'))) {
     var ip = el.getAttribute('data-ip');

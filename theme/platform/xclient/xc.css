@@ -367,3 +367,12 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 .hfoot { position: absolute; left: 18px; right: 18px; bottom: 14px; height: 34px; }
 .hfoot span { position: absolute; left: 0; right: 130px; top: 0; font-size: 12px; line-height: 16px; }
 .hfoot .btn { position: absolute; right: 0; top: 0; margin: 0; height: 32px; line-height: 30px; }
+
+/* ===== Internet: saytdagi xizmatlar guruhlari (TOP / BOOST / VIP) ===== */
+.sgh { height: 30px; line-height: 30px; padding-left: 14px; font-size: 12px; letter-spacing: 1px; color: #a99ea6; background: #1a1418; border-bottom: 1px solid #2a2026; }
+.sgh .svb { margin: 0 10px 0 0; }
+.svb { display: inline-block; vertical-align: middle; position: relative; top: -1px; margin-left: 5px; height: 16px; line-height: 16px; padding: 0 5px; font-size: 10px; font-weight: bold; letter-spacing: 1px; color: #fff; }
+.svb.top { background: #e5484d; }
+.svb.boost { background: #ff8a2a; }
+.svb.vip { background: #d6a520; color: #1a1418; }
+.svb.gm { background: transparent; color: #ffd24a; font-size: 12px; padding: 0 2px; }

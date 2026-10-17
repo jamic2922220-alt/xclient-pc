@@ -16,7 +16,7 @@ $PAGES  = array('https://boost-top.com/listing/', 'https://boost-top.com/', 'htt
 // tekshirish uchun boshqa sahifa: fav.php?debug=1&url=https://boost-top.com/...
 if (isset($_GET['debug'], $_GET['url']) && preg_match('#^https?://(www\.)?boost-top\.com/#i', $_GET['url'])) $PAGES = array($_GET['url']);
 $MARKER = '/sevimli|избранн|favorit|game ?menu/iu';      // jadval sarlavhasi
-$CACHE  = __DIR__ . '/xc_data/fav_cache.php';
+$CACHE  = __DIR__ . '/xc_data/fav_cache2.php';
 $IPRE   = '/(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3}:\d{2,5})(?!\d)/';
 
 function fetch_page($url, $host = '', &$info = null) {
@@ -38,8 +38,19 @@ function fetch_page($url, $host = '', &$info = null) {
     return $s === false ? '' : $s;
 }
 
+$SVC = array();                                                        // /listing/ dagi barcha xizmatlar: top, boost, vip, gamemenu, ...
 function parse_fav($html, $MARKER, $IPRE, &$dbg) {
+    global $SVC;
     $list = array();
+    if (preg_match_all('#<section\b[^>]*data-service\s*=\s*["\']?([\w-]+)[^>]*>(.*?)</section>#is', $html, $all, PREG_SET_ORDER)) {
+        foreach ($all as $sec) {
+            $k = strtolower($sec[1]);
+            if (!isset($SVC[$k])) $SVC[$k] = array();
+            if (preg_match_all('#data-address\s*=\s*["\']([\d.]+(?::\d{2,5})?)["\']#i', $sec[2], $m))
+                foreach ($m[1] as $ip) { if (strpos($ip, ':') === false) $ip .= ':27015'; if (!in_array($ip, $SVC[$k])) $SVC[$k][] = $ip; }
+        }
+        foreach ($SVC as $k => $v) $dbg .= 'Xizmat ' . $k . ': ' . implode(', ', $v) . "\n";
+    }
     // A) /listing/ sahifasi: <section class="boost-listing-section" data-service="gamemenu"> ... <tr data-address="IP:port">
     if (preg_match_all('#<section\b[^>]*data-service\s*=\s*["\']?(?:gamemenu|favorites)\b[^>]*>(.*?)</section>#is', $html, $secs)) {
         foreach ($secs[1] as $sec)
@@ -138,7 +149,8 @@ function site_links($html, $base) {
 $list = null; $dbg = '';
 $PAGEF = __DIR__ . '/xc_data/fav_page.php';                            // jadval topilgan sahifa (eslab qolinadi)
 if (!$DEBUG && is_file($CACHE) && time() - filemtime($CACHE) < 300) {
-    $list = json_decode(substr(file_get_contents($CACHE), 15), true);
+    $c = json_decode(substr(file_get_contents($CACHE), 15), true);
+    if (is_array($c) && isset($c['fav'])) { $list = $c['fav']; $SVC = (array)$c['svc']; }
 }
 if (!is_array($list)) {
     $list = array(); $got = false; $t0 = time();
@@ -175,11 +187,12 @@ if (!is_array($list)) {
     }
     if ($got && !$DEBUG) {
         @mkdir(dirname($CACHE), 0755, true);
-        @file_put_contents($CACHE, "<?php exit; ?>\n" . json_encode($list), LOCK_EX);
+        @file_put_contents($CACHE, "<?php exit; ?>\n" . json_encode(array('fav' => $list, 'svc' => $SVC)), LOCK_EX);
         if (!$list) @touch($CACHE, time() - 240);                       // bo'sh bo'lsa 1 daqiqadan keyin qayta urinadi
     }
 }
 if ($DEBUG) { echo $dbg . "\nNATIJA: " . json_encode($list) . "\n"; exit; }
 $out = array();
 foreach ($list as $ip) $out[] = array('ip' => $ip);
+echo 'window.BOOST_SVC = ' . json_encode((object)$SVC) . ";\n";
 echo 'window.BOOST_FAV = ' . json_encode($out) . ";\n";
