@@ -1024,7 +1024,8 @@ function detectXext() {
 }
 function xextVal(k, s) { return k === 'xout' && /draw/.test(XSUP[k] || '') ? (s.xout > 0 ? 1 : 0) : s[k]; }
 function xhairCmds(s) {
-  var c = ['cl_crosshair_type ' + s.xt, 'cl_crosshair_size ' + s.xs, 'cl_crosshair_color ' + q(s.xc), 'cl_crosshair_translucent ' + s.xtr, 'cl_dynamiccrosshair ' + s.xdyn];
+  // rang qo'shtirnoqsiz: o'yin "255 0 0" ni baribir to'liq oladi, NextClient menyu kanali esa qo'shtirnoqni o'tkazmasligi mumkin
+  var c = ['cl_crosshair_type ' + s.xt, 'cl_crosshair_size ' + s.xs, 'cl_crosshair_color ' + String(s.xc).replace(/[^\d ]/g, ''), 'cl_crosshair_translucent ' + s.xtr, 'cl_dynamiccrosshair ' + s.xdyn];
   for (var k in XSUP) if (XSUP.hasOwnProperty(k) && XSUP[k]) c.push(XSUP[k] + ' ' + xextVal(k, s));
   return c;
 }
@@ -1144,7 +1145,7 @@ var PANES = {
       '<div class="fr"><div class="lb">' + esc(T('hx_opaq')) + '</div><div class="ct2"><div class="sl"><input type="range" min="0" max="1" step="1" value="' + (E.xtr ? 0 : 1) + '" data-xop="1"><div class="vv" id="vv_xop">' + (E.xtr ? '60%' : '100%') + '</div></div></div></div>' +
       off('xout', 'hx_outl', 0, 3) +
       '<div class="cks">' + ck('dot', 'hx_dot', xt === 3) + ck('t', 'hx_t', xt === 1) + ck('circle', 'hx_circ', xt === 2) + ck('dyn', 'hx_wdep', !!E.xdyn) + '</div>' +
-      '<div class="hfoot"><span class="mut">' + (XSUP.xthick && XSUP.xgap && XSUP.xout ? '' : esc(T('hx_na'))) + '</span><a class="btn" data-act="xdef">' + esc(T('hx_std')) + '</a></div></div>';
+      '<div class="hfoot"><span class="mut">' + (XSUP.xthick && XSUP.xgap && XSUP.xout ? '' : esc(T('hx_na'))) + '</span><a class="btn" data-act="xdef">' + esc(T('hx_std')) + '</a><a class="btn xt" data-act="xtest">' + esc(T('hx_test')) + '</a></div></div>';
   },
   account: function () {
     if (!ME) {
@@ -1375,6 +1376,15 @@ function act(a) {
     var inp = $('xCode'); inp.value = xcode(E); inp.focus(); inp.select();
     var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
     return toast(ok ? T('x_copied') : T('x_copy2'));
+  }
+  if (a === 'xtest') {                         // 3 soniya qizil katta pritsel: menyu buyrug'i o'yinga yetib boradimi
+    cmd('cl_crosshair_color 255 0 0'); cmd('cl_crosshair_size large');
+    setTimeout(function () {
+      var v = readCvar('cl_crosshair_color');
+      toast(T('hx_test2').replace('{v}', v == null ? '?' : v), 5000);
+      each(xhairCmds(E || S), function (x) { cmd(x); });
+    }, 3000);
+    return toast(T('hx_test1'), 3000);
   }
   if (a === 'xdef') { each(['xp', 'xt', 'xs', 'xc', 'xtr', 'xdyn', 'xthick', 'xgap', 'xout'], function (k) { E[k] = DEF[k]; }); return showSetTab('hud'); }
   if (a === 'xpick') return ask(T('hx_colask'), function (v) {
