@@ -377,3 +377,8 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 .svb.boost { background: #ff8a2a; }
 .svb.vip { background: #d6a520; color: #1a1418; }
 .svb.gm { background: transparent; color: #ffd24a; font-size: 12px; padding: 0 2px; }
+
+/* ===== davlat bayroqlari ===== */
+.flg { display: inline-block; width: 16px; height: 11px; margin: 0 7px 0 0; vertical-align: middle; position: relative; top: -1px; border: 0; }
+.sr .c1 .snm { display: inline-block; vertical-align: top; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#srvInfo h3 .flg { top: -2px; }

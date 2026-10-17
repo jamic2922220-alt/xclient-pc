@@ -431,10 +431,45 @@ function loadTop() {
   loadList(['fav.php'], 'BOOST_FAV', function (l) { if (window.BOOST_SVC) setSvc(window.BOOST_SVC); if (l) setPromoFav(l); });
 }
 function itemIp(it) { if (typeof it === 'string') it = { ip: it }; var ip = normIp(it && (it.ip || it.addr || it.address)); if (ip && it.title && !srv(ip).name) srv(ip).name = it.title; return ip; }
+/* ---- serverlar davlati (geo.php -> ip-api.com) va bayroq (saytdagi media/flags) ---- */
+var GEO = {}, GEO_PEND = [], GEO_ASKED = {}, GEO_TM = 0;
+try { GEO = JSON.parse(localStorage.getItem('xc_geo') || '{}') || {}; } catch (e) { GEO = {}; }
+function hostOf(ip) { return String(ip || '').replace(/:\d+$/, ''); }
+function flagOf(ip) {
+  var cc = GEO[hostOf(ip)];
+  if (!cc || !/^[a-z]{2}$/.test(cc)) { needGeo([ip]); return ''; }
+  return '<img class="flg" src="geo.php?flag=' + cc + '" alt="" title="' + cc.toUpperCase() + '">';
+}
+function needGeo(ips) {
+  each(ips, function (ip) { var h = hostOf(ip); if (h && !GEO[h] && !GEO_ASKED[h]) { GEO_ASKED[h] = 1; GEO_PEND.push(h); } });
+  if (!GEO_PEND.length || GEO_TM) return;
+  GEO_TM = setTimeout(function () {
+    GEO_TM = 0;
+    var list = GEO_PEND.splice(0, 300), x;
+    try { x = new XMLHttpRequest(); x.open('POST', 'geo.php', true); x.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded'); } catch (e) { return; }
+    x.onreadystatechange = function () {
+      if (x.readyState !== 4) return;
+      var r = null; try { r = JSON.parse(x.responseText); } catch (e) {}
+      if (!r) return;
+      var n = 0;
+      for (var h in r) if (r.hasOwnProperty(h) && /^[a-z]{2}$/.test(r[h])) { GEO[h] = r[h]; n++; }
+      if (n) { try { localStorage.setItem('xc_geo', JSON.stringify(GEO)); } catch (e) {} renderSoon(); }
+      if (GEO_PEND.length) needGeo([]);
+    };
+    x.send('ips=' + encodeURIComponent(list.join(',')));
+  }, 400);
+}
+/* server qatori: bayroq + nom (kerak bo'lsa "...") + belgilar */
+function c1row(s, name, badges) {
+  var w = 300, re = /<span class="(?:svb|vb|xb)[^"]*">([^<]*)<\/span>/g, m;   // har belgi: ~9px harf + chekka
+  while ((m = re.exec(badges))) w -= m[1].length * 9 + 16;
+  return '<span class="c1">' + flagOf(s.ip) + '<span class="snm" style="max-width:' + Math.max(110, w) + 'px">' + esc(name) + '</span>' + badges + '</span>';
+}
 function setTop(list) {
   TOP = []; var fav = [];
   each(list || [], function (it) {
     var ip = itemIp(it); if (!ip) return;
+    if (it && /^[a-z]{2}$/i.test(it.cc || '')) GEO[hostOf(ip)] = String(it.cc).toLowerCase();
     var tp = String((it && (it.type || it.tariff || it.t)) || '').toLowerCase();
     if (/fav|sevim|gm|izbr/.test(tp)) fav.push(ip); else TOP.push(ip);
   });
@@ -537,7 +572,7 @@ function renderHome() {
     var s = srv(ip);
     var meta = s.ok ? pbar(s) + s.pl + '/' + s.max + ' \u00b7 ' + esc(s.map) : (s.fail ? T('offline') : esc(ip));
     html += '<div class="tr' + (i === 0 ? ' r1' : '') + '" data-ip="' + esc(ip) + '"><div class="rk">' + (i + 1) + '</div>' +
-      '<div class="nm">' + esc(s.name || ip) + (isX(s) ? '<span class="xb">X</span>' : '') + '</div><div class="mt">' + meta + '</div>' +
+      '<div class="nm">' + flagOf(ip) + esc(s.name || ip) + (isX(s) ? '<span class="xb">X</span>' : '') + '</div><div class="mt">' + meta + '</div>' +
       '<div class="go">' + esc(T('join')) + '</div></div>';
   });
   $('topList').innerHTML = html || '<div class="empty">' + esc(T('no_top')) + '</div>';
@@ -761,7 +796,7 @@ function renderServers() {
     if (isHist && h) c6 = (h.k || h.x) ? (h.k || 0) + ' / ' + (h.x || 0) : '\u2014';
     html += '<div class="sr' + (s.ip === srvSel ? ' on' : '') + '" data-ip="' + esc(s.ip) + '">' +
       '<span class="c0' + (isFavIp(s.ip) ? ' f' : '') + '" data-fav="' + esc(s.ip) + '">\u2605</span>' +
-      '<span class="c1">' + esc(s.name || (h && h.name) || s.ip) + (isX(s) ? '<span class="xb">X</span><span class="vb">VIP</span>' : '') + svcBadges(s.ip) + (s.pass ? '<span class="vb">PW</span>' : '') + (isFav && PROMO_FAV.indexOf(s.ip) >= 0 ? '<span class="vb">' + esc(T('ad')) + '</span>' : '') + '</span>' +
+      c1row(s, (s.name || (h && h.name) || s.ip), (isX(s) ? '<span class="xb">X</span><span class="vb">VIP</span>' : '') + svcBadges(s.ip) + (s.pass ? '<span class="vb">PW</span>' : '') + (isFav && PROMO_FAV.indexOf(s.ip) >= 0 ? '<span class="vb">' + esc(T('ad')) + '</span>' : '')) +
       '<span class="c2">' + (s.ok ? pbar(s) + s.pl + '/' + s.max : (s.fail ? '<span class="rd">' + T('offline') + '</span>' : '...')) + '</span>' +
       '<span class="c3">' + esc(s.map || (h && h.map) || '') + '</span>' +
       '<span class="c4">' + (s.ok ? '<i class="dot ' + pc + '"></i>' + s.ping : '') + '</span>' +
@@ -831,7 +866,7 @@ function renderInfo() {
   box.innerHTML = '<div class="mp' + (mode === 'zm' ? ' zm' : mode === 'awp' ? ' aw' : '') + '">' +
     (/^[\w\-.]{2,40}$/.test(mapn) ? '<img src="map.php?m=' + encodeURIComponent(mapn.toLowerCase()) + '" alt="" onerror="this.style.display=\'none\'">' : '') +
     '<span>' + esc(mapn || '?') + '</span></div>' +
-    '<h3>' + esc(s.name || (h && h.name) || srvSel) + '</h3><div class="ip">' + esc(srvSel) + '</div>' +
+    '<h3>' + flagOf(srvSel) + esc(s.name || (h && h.name) || srvSel) + '</h3><div class="ip">' + esc(srvSel) + '</div>' +
     '<div class="ln">' + esc(T('ph_players')) + ' <b>' + (s.ok ? s.pl + '/' + s.max : '-') + '</b><span class="r ' + pc + '">' + (s.ok ? '\u25cf ' + s.ping + ' ms' : esc(T('offline'))) + '</span></div>' +
     '<div class="ph">' + esc(T('ph_players')) + '</div><div class="pls">' + ph + '</div>' +
     (fr.length ? '<div class="fr3">' + esc(T('fr_here')) + '<span class="gr">' + esc(fr.join(', ')) + '</span></div>' : '') +
