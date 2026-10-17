@@ -1085,8 +1085,8 @@ function detectXext() {
 }
 function xextVal(k, s) { return k === 'xout' && /draw/.test(XSUP[k] || '') ? (s.xout > 0 ? 1 : 0) : s[k]; }
 function xhairCmds(s) {
-  // rang qo'shtirnoqsiz: o'yin "255 0 0" ni baribir to'liq oladi, NextClient menyu kanali esa qo'shtirnoqni o'tkazmasligi mumkin
-  var c = ['cl_crosshair_type ' + s.xt, 'cl_crosshair_size ' + s.xs, 'cl_crosshair_color ' + String(s.xc).replace(/[^\d ]/g, ''), 'cl_crosshair_translucent ' + s.xtr, 'cl_dynamiccrosshair ' + s.xdyn];
+  // rang qo'shtirnoq bilan: GoldSrc kvarga faqat 1-so'zni yozadi (cl_crosshair_color 255 0 0 -> "255")
+  var c = ['cl_crosshair_type ' + s.xt, 'cl_crosshair_size ' + s.xs, 'cl_crosshair_color ' + q(String(s.xc).replace(/[^\d ]/g, '')), 'cl_crosshair_translucent ' + s.xtr, 'cl_dynamiccrosshair ' + s.xdyn];
   for (var k in XSUP) if (XSUP.hasOwnProperty(k) && XSUP[k]) c.push(XSUP[k] + ' ' + xextVal(k, s));
   return c;
 }
@@ -1692,7 +1692,7 @@ function act(a) {
     return toast(ok ? T('x_copied') : T('x_copy2'));
   }
   if (a === 'xtest') {                         // 3 soniya qizil katta pritsel: menyu buyrug'i o'yinga yetib boradimi
-    cmd('cl_crosshair_color 255 0 0'); cmd('cl_crosshair_size large');
+    cmd('cl_crosshair_color "255 0 0"'); cmd('cl_crosshair_size large');
     setTimeout(function () {
       var v = readCvar('cl_crosshair_color');
       toast(T('hx_test2').replace('{v}', v == null ? '?' : v), 5000);
