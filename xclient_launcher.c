@@ -30,7 +30,7 @@
 #include <string.h>
 
 #ifndef XC_API
-#define XC_API "https://mmb.boost-top.com/xclient/api.php"
+#define XC_API "http://mmb.boost-top.com/xclient/api.php"   /* admin.php > Yangilanishlar */
 #endif
 #ifndef XC_GAME_URL
 /* asl PC CS 1.6 (boost-top PRO) o'rnatuvchisi - o'yin yo'q bo'lsa shundan o'rnatiladi; panel "game=" bilan almashtirishi mumkin */

@@ -9,6 +9,7 @@
  *
  *  packs.php            -> menyu uchun ro'yxat (JSON)
  *  packs.php?files=<id> -> XClient.exe uchun fayllar: "yo'l<TAB>hajm<TAB>manzil" qatorlari
+ *  pack.json da "all":true bo'lsa - paket HAMMA o'yinchilarga o'rnatiladi ("ver" oshirilsa qayta o'rnatiladi).
  * ===================================================================== */
 $ROOT = __DIR__ . '/packs';
 $BASE = 'http://mmb.boost-top.com/packs/';
@@ -27,7 +28,7 @@ function pack_files($dir, $rel = '') {
 if (isset($_GET['files'])) {
     header('Content-Type: text/plain; charset=utf-8');
     header('Cache-Control: no-store');
-    $id = $_GET['files'];
+    $id = preg_replace('/~\d+$/', '', $_GET['files']);       // "id~versiya" - majburiy paket
     if (!preg_match('/^[a-z0-9_\-]{1,40}$/', $id) || !is_dir("$ROOT/$id/files")) { header('HTTP/1.1 404 Not Found'); exit; }
     foreach (pack_files("$ROOT/$id/files") as $f) {
         if (strpos($f[0], '..') !== false || $f[0][0] === '/') continue;
@@ -42,6 +43,7 @@ $list = array();
 foreach ((array)@scandir($ROOT) as $id) {
     if (!preg_match('/^[a-z0-9_\-]{1,40}$/', $id) || !is_dir("$ROOT/$id/files")) continue;
     $meta = is_file("$ROOT/$id/pack.json") ? json_decode(file_get_contents("$ROOT/$id/pack.json"), true) : null;
+    if (!empty($meta['all'])) continue;                     // hamma uchun majburiy - menyuda tanlanmaydi
     $files = pack_files("$ROOT/$id/files");
     $size = 0; foreach ($files as $f) $size += $f[1];
     $list[] = array('id' => $id, 'name' => isset($meta['name']) ? $meta['name'] : $id, 'desc' => isset($meta['desc']) ? $meta['desc'] : '',

@@ -17,6 +17,21 @@ define('XC_GUARD', "<?php exit; ?>\n");
 define('XP_PER_MIN', 1);          // har bir o'ynalgan daqiqa uchun XP
 define('XP_PER_LEVEL', 1000);
 
+/* Admin "hamma uchun" deb belgilagan paketlar har bir XClient.exe ga "id~versiya" ko'rinishida qo'shiladi:
+ * versiya oshirilsa, eski nusxa olib tashlanib yangisi o'rnatiladi (sborka yangilanishi). */
+function with_forced_packs($o) {
+    $mine = array_filter(explode(',', isset($o['packs']) ? $o['packs'] : ''));
+    $all = array();
+    foreach ((array)@scandir(__DIR__ . '/packs') as $id) {
+        if (!preg_match('/^[a-z0-9_\-]{1,40}$/', $id) || !is_dir(__DIR__ . "/packs/$id/files")) continue;
+        $m = json_decode((string)@file_get_contents(__DIR__ . "/packs/$id/pack.json"), true);
+        if (empty($m['all'])) continue;
+        $all[] = $id . '~' . max(1, isset($m['ver']) ? (int)$m['ver'] : 1);
+        $mine = array_diff($mine, array($id));
+    }
+    $o['packs'] = implode(',', array_merge($all, $mine));
+    return $o;
+}
 function out($a) { echo json_encode($a); exit; }
 function fail($code, $msg) { out(array('ok' => false, 'err' => $code, 'msg' => $msg)); }
 function p($k, $def = '') { return isset($_POST[$k]) ? trim((string)$_POST[$k]) : (isset($_GET[$k]) ? trim((string)$_GET[$k]) : $def); }
@@ -446,7 +461,7 @@ case 'opts_done':
         wr('dev/' . $d, $o);
         if ($isNew) tg_notify('install', "Yangi X CLIENT o'rnatish\n" . strtoupper(isset($o['cc']) ? $o['cc'] : '') . ' ' . $ip . "\n" . (isset($o['os']) ? $o['os'] : '') . (isset($o['res']) ? ' · ' . $o['res'] : ''));
         wr($ipk, array('d' => $d, 't' => time()));
-        out(array('ok' => true, 'o' => $o));
+        out(array('ok' => true, 'o' => with_forced_packs($o)));
     }
     if (!preg_match('/^[a-z0-9]{8,40}$/', $d)) {
         $m = rd($ipk, null);

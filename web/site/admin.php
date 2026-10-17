@@ -2,7 +2,7 @@
 /* =====================================================================
  *  X CLIENT — admin panel (mmb.boost-top.com/admin.php)
  *  NextClient (o'yin menyusini ochganlar) va X CLIENT (XClient.exe orqali kirganlar) alohida hisoblanadi.
- *  Bo'limlar: Infopanel, O'yinchilar, O'rnatishlar, Akkauntlar, E'lonlar, Xatolar, Paketlar, Telegram, API, Sozlamalar.
+ *  Bo'limlar: Infopanel, O'yinchilar, O'rnatishlar, Akkauntlar, E'lonlar, Xatolar, Yangilanishlar, Paketlar, Telegram, API, Sozlamalar.
  *  Birinchi kirishda parol o'rnatiladi: kod xc_data/ADMIN_KOD.php faylida (FastPanel'da oching).
  *  PHP 5.6+ / 7 / 8. Ma'lumotlar: xc_data/*.php (brauzerdan o'qib bo'lmaydi).
  * ===================================================================== */
@@ -12,6 +12,7 @@ define('XC_GUARD', "<?php exit; ?>\n");
 define('PACKS_DIR', __DIR__ . '/packs');
 define('NDIRECT', 'http://nextcs.boost-top.com/admin');
 define('PER_PAGE', 25);
+require_once __DIR__ . '/xclient/release_lib.php';
 
 function rd($name, $def) {
     $f = XC_DIR . '/' . $name . '.php';
@@ -166,6 +167,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($id !== '') { $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(PACKS_DIR . '/' . $id, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST); foreach ($it as $f) { $f->isDir() ? @rmdir($f->getPathname()) : @unlink($f->getPathname()); } @rmdir(PACKS_DIR . '/' . $id); }
         flash("Paket o'chirildi"); go('?p=packs');
     }
+    if ($act === 'rel_save') {
+        $ch = pp('ch') === 'beta' ? 'beta' : 'stable'; $cfg = rel_rd('release', array()); $r = isset($cfg[$ch]) ? $cfg[$ch] : array();
+        $r['mode'] = in_array(pp('mode'), array('auto', 'manual', 'pause')) ? pp('mode') : 'auto';
+        $r['min'] = max(0, (int)pp('min')); $r['msg'] = mb_substr(str_replace(array("\r", "\n"), ' ', pp('msg')), 0, 200, 'UTF-8');
+        if ($r['mode'] === 'manual' && empty($r['base'])) { $l = rel_latest($ch); if ($l) { $r['build'] = $l['build']; $r['version'] = $l['version']; $r['base'] = $l['base']; } }
+        $cfg[$ch] = $r; rel_wr('release', $cfg); flash($ch . ': saqlandi ✓'); go('?p=upd');
+    }
+    if ($act === 'rel_pin') {
+        $ch = pp('ch') === 'beta' ? 'beta' : 'stable'; $h = rel_rd('rel_hist', array()); $b = (int)pp('build');
+        if (isset($h[$b])) { $cfg = rel_rd('release', array()); $r = isset($cfg[$ch]) ? $cfg[$ch] : array();
+            $r['mode'] = 'manual'; $r['build'] = $b; $r['version'] = $h[$b]['version']; $r['base'] = $h[$b]['base']; $cfg[$ch] = $r; rel_wr('release', $cfg);
+            flash($ch . ': hamma o\'yinchilarga build ' . $b . ' beriladi ✓'); }
+        go('?p=upd');
+    }
+    if ($act === 'rel_check') { rel_latest('stable', true); rel_latest('beta', true); flash('GitHub tekshirildi'); go('?p=upd'); }
+    if ($act === 'pack_all') {
+        $id = strtolower(preg_replace('/[^a-z0-9_\-]/i', '', pp('id'))); $f = PACKS_DIR . '/' . $id . '/pack.json';
+        if ($id !== '' && is_dir(PACKS_DIR . '/' . $id)) {
+            $m = json_decode((string)@file_get_contents($f), true); if (!is_array($m)) $m = array('name' => $id);
+            if (pp('do') === 'on') { $m['all'] = true; if (empty($m['ver'])) $m['ver'] = 1; flash('Paket endi HAMMA o\'yinchilarga o\'rnatiladi (XClient.exe ochilganda)'); }
+            if (pp('do') === 'off') { $m['all'] = false; flash('Paket majburiy emas - o\'yinchilarda olib tashlanadi'); }
+            if (pp('do') === 'bump') { $m['ver'] = (isset($m['ver']) ? (int)$m['ver'] : 1) + 1; flash('Versiya ' . $m['ver'] . ' - hammada qayta o\'rnatiladi'); }
+            @file_put_contents($f, json_encode($m));
+        }
+        go('?p=packs&id=' . $id);
+    }
     if ($act === 'tg_save') {
         $CFG['tg_token'] = preg_replace('/[^A-Za-z0-9:_\-]/', '', pp('token')); $CFG['tg_chat'] = preg_replace('/[^0-9\-@A-Za-z_]/', '', pp('chat'));
         $CFG['tg_ev'] = array(); foreach (array('install', 'account', 'report') as $e) $CFG['tg_ev'][$e] = pp('ev_' . $e) ? 1 : 0;
@@ -204,7 +231,7 @@ if ($P === 'installs' && g('csv')) {
 
 /* ---------- sahifa ---------- */
 $NAV = array('dash' => array('Infopanel', '⌂'), 'players' => array("O'yinchilar", '☺'), 'installs' => array("O'rnatishlar", '↓'), 'accounts' => array('Akkauntlar', '✉'),
-    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'packs' => array('Paketlar', '▤'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
+    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
 $devCount = count((array)glob(XC_DIR . '/dev/*.php')); $ncCount = count((array)glob(XC_DIR . '/nc/*.php')); $accCount = count((array)glob(XC_DIR . '/users/*.php')); $repCount = count((array)glob(XC_DIR . '/reports/*.php'));
 $badge = array('players' => $devCount + $ncCount, 'installs' => $devCount, 'accounts' => $accCount, 'reports' => $repCount);
 head(isset($NAV[$P]) ? $NAV[$P][0] : 'Admin');
@@ -385,9 +412,44 @@ if ($P === 'packs') {
             . '<div class="mut small">Bitta fayl hajmi chegarasi: ' . h(ini_get('upload_max_filesize')) . '. Katta fayllarni FastPanel orqali mmb/packs/' . h($id) . '/files/ ga yuklang.</div></form><table class="list">';
         foreach ($fl as $x) echo '<tr><td class="mono">' . h($x[0]) . '</td><td>' . size_h($x[1]) . '</td><td class="r"><form method="post" class="inl">' . csrf_in() . '<input type="hidden" name="act" value="pack_rm"><input type="hidden" name="id" value="' . h($id) . '"><input type="hidden" name="path" value="' . h($x[0]) . '"><button class="lnk red">O\'chirish</button></form></td></tr>';
         if (!$fl) echo '<tr><td class="mut">Hali fayl yo\'q</td></tr>';
-        echo '</table><form method="post" onsubmit="return confirm(\'Paket butunlay o\\\'chirilsinmi?\')" style="margin-top:12px">' . csrf_in() . '<input type="hidden" name="act" value="pack_del"><input type="hidden" name="id" value="' . h($id) . '"><button class="btn out">Paketni o\'chirish</button></form></div>';
+        $pm = json_decode((string)@file_get_contents(PACKS_DIR . "/$id/pack.json"), true); $pall = !empty($pm['all']); $pv = isset($pm['ver']) ? (int)$pm['ver'] : 1;
+        $pb = function ($do, $t, $cls) use ($id) { return '<form method="post" class="inl">' . csrf_in() . '<input type="hidden" name="act" value="pack_all"><input type="hidden" name="id" value="' . h($id) . '"><input type="hidden" name="do" value="' . $do . '"><button class="btn ' . $cls . '">' . $t . '</button></form> '; };
+        echo '</table><div class="ph" style="margin-top:16px">Kimga o\'rnatiladi</div>'
+            . ($pall ? '<p><b style="color:#3fb950">HAMMA o\'yinchilarga</b> · versiya ' . $pv . '</p>' . $pb('bump', 'Fayllarni yangiladim - hammaga qayta tarqatish', 'red') . $pb('off', 'Majburiy emas qilish', 'out')
+                     : '<p class="mut">Faqat menyuda (Sozlamalar > Kontent) o\'zi yoqqanlarga.</p>' . $pb('on', 'Hamma o\'yinchilarga o\'rnatish', 'red'))
+            . '<div class="mut small" style="margin-top:6px">Sborka yangilanishi: fayllarni shu paketga yuklang → "Hamma o\'yinchilarga" → keyin har o\'zgartirganda "qayta tarqatish". O\'yinchi XClient.exe ni ochganda yuklab oladi; paket o\'chirilsa asl fayllar qaytariladi.</div>'
+            . '<form method="post" onsubmit="return confirm(\'Paket butunlay o\\\'chirilsinmi?\')" style="margin-top:12px">' . csrf_in() . '<input type="hidden" name="act" value="pack_del"><input type="hidden" name="id" value="' . h($id) . '"><button class="btn out">Paketni o\'chirish</button></form></div>';
     } else echo '<div class="panel mut">Chapdan paketni tanlang yoki yangisini yarating.</div>';
     echo '</div>';
+}
+
+/* ===== YANGILANISHLAR ===== */
+if ($P === 'upd') {
+    $cfg = rel_rd('release', array()); $hist = rel_rd('rel_hist', array());
+    $vers = array(); foreach (all_of('dev') as $o) { $k = isset($o['ver']) && $o['ver'] !== '' ? $o['ver'] : "noma'lum"; $vers[$k] = (isset($vers[$k]) ? $vers[$k] : 0) + 1; } arsort($vers);
+    echo '<h1>Yangilanishlar</h1><div class="mut" style="margin:-8px 0 16px">XClient.exe har ochilganda shu yerdan so\'raydi va yangi build bo\'lsa o\'zgargan fayllarni (XClient.exe, dizayn xc_theme) o\'zi yuklab oladi.'
+        . ' Yangi build: GitHub Actions → "X CLIENT CS 1.6 PC" → Run workflow (stable). O\'yin fayllari (sborka) uchun - <a href="?p=packs">Paketlar</a> → "Hamma o\'yinchilarga".</div>'
+        . '<form method="post" style="margin-bottom:12px">' . csrf_in() . '<input type="hidden" name="act" value="rel_check"><button class="btn">GitHub\'ni hozir tekshirish</button></form><div class="grid2">';
+    foreach (array('stable' => 'Stable (hamma)', 'beta' => 'Beta (sinov)') as $ch => $title) {
+        $l = rel_latest($ch); $cur = rel_current($ch); $r = isset($cfg[$ch]) ? $cfg[$ch] : array(); $mode = isset($r['mode']) ? $r['mode'] : 'auto';
+        $opt = function ($v, $t) use ($mode) { return '<option value="' . $v . '"' . ($mode === $v ? ' selected' : '') . '>' . $t . '</option>'; };
+        echo '<div class="panel"><div class="ph">' . $title . '</div>'
+            . '<div class="kv"><span>GitHub\'dagi oxirgi build</span><b>' . ($l ? $l['build'] . ' · v' . h($l['version']) . ' · ' . dt($l['date']) : '— (GitHub javob bermadi)') . '</b></div>'
+            . '<div class="kv"><span>O\'yinchilarga berilmoqda</span><b>' . ($cur['build'] ? 'build ' . $cur['build'] . ' · v' . h($cur['version']) : ($mode === 'pause' ? 'to\'xtatilgan' : '—')) . '</b></div>'
+            . '<form method="post" class="frm" style="margin-top:10px">' . csrf_in() . '<input type="hidden" name="act" value="rel_save"><input type="hidden" name="ch" value="' . $ch . '">'
+            . '<label>Rejim</label><select name="mode">' . $opt('auto', 'Avto - GitHub\'dagi oxirgisi darhol hammaga') . $opt('manual', 'Qo\'lda - tanlangan build (pastdan)') . $opt('pause', 'To\'xtatish - hech kim yangilanmaydi') . '</select>'
+            . '<label>Majburiy minimal build (bundan eski bo\'lsa, "Avto yangilash" o\'chiq bo\'lsa ham yangilanadi; 0 = yo\'q)</label><input name="min" type="number" min="0" value="' . (isset($r['min']) ? (int)$r['min'] : 0) . '">'
+            . '<label>Ochilishda xabar oynasi (bo\'sh = yo\'q; har ochilganda chiqadi)</label><input name="msg" value="' . h(isset($r['msg']) ? $r['msg'] : '') . '" maxlength="200">'
+            . '<button class="btn red">Saqlash</button></form></div>';
+    }
+    echo '</div><div class="grid2"><div class="panel"><div class="ph">Buildlar tarixi (orqaga qaytarish)</div><table class="list"><tr><th>Build</th><th>Versiya</th><th>Vetka</th><th>Sana</th><th></th></tr>';
+    foreach ($hist as $b => $x) {
+        echo '<tr><td><b>' . (int)$b . '</b></td><td>v' . h($x['version']) . '</td><td>' . h($x['ch']) . '</td><td>' . dt($x['date']) . '</td><td class="r">';
+        foreach (array('stable', 'beta') as $ch) echo '<form method="post" class="inl" onsubmit="return confirm(\'' . $ch . ' o\\\'yinchilariga build ' . (int)$b . ' berilsinmi?\')">' . csrf_in() . '<input type="hidden" name="act" value="rel_pin"><input type="hidden" name="ch" value="' . $ch . '"><input type="hidden" name="build" value="' . (int)$b . '"><button class="lnk">→ ' . $ch . '</button></form> ';
+        echo '</td></tr>';
+    }
+    if (!$hist) echo '<tr><td colspan="5" class="mut">Hali yo\'q - GitHub\'da build bo\'lganda shu yerda paydo bo\'ladi</td></tr>';
+    echo '</table></div><div class="panel"><div class="ph">O\'yinchilardagi versiyalar</div>' . pie($vers) . '</div></div>';
 }
 
 /* ===== TELEGRAM ===== */
