@@ -868,12 +868,29 @@ static void hw_query(char *out, size_t cap)
         if (dd.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE) break;
     }
     url_escape(eg, sizeof(eg), gpu);
-    _snprintf(out, cap, "&ram=%u&cpu=%u&gpu=%s", ram, (unsigned)si.dwNumberOfProcessors, eg); out[cap - 1] = 0;
+    /* Windows nomi va ekran o'lchami (admin paneldagi o'yinchi sahifasi uchun) */
+    char win[160] = "Windows", ew[256], ek[96];
+    HKEY k;
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &k) == ERROR_SUCCESS) {
+        char pn[96] = "", dv[32] = "", cb[16] = ""; DWORD sz;
+        sz = sizeof(pn); RegQueryValueExA(k, "ProductName", NULL, NULL, (BYTE *)pn, &sz);
+        sz = sizeof(dv); RegQueryValueExA(k, "DisplayVersion", NULL, NULL, (BYTE *)dv, &sz);
+        sz = sizeof(cb); RegQueryValueExA(k, "CurrentBuildNumber", NULL, NULL, (BYTE *)cb, &sz);
+        RegCloseKey(k);
+        /* Windows 11 ham "Windows 10" deb yoziladi - build 22000+ bo'lsa tuzatamiz */
+        if (atoi(cb) >= 22000 && !strncmp(pn, "Windows 10", 10)) pn[9] = '1';
+        if (pn[0]) _snprintf(win, sizeof(win), "%s%s%s", pn, dv[0] ? " " : "", dv);
+        win[sizeof(win) - 1] = 0;
+    }
+    url_escape(ew, sizeof(ew), win);
+    url_escape(ek, sizeof(ek), g_key[0] ? g_key : "boost-top.com");
+    _snprintf(out, cap, "&ram=%u&cpu=%u&gpu=%s&res=%dx%d&os=%s&ch=%s&pt=%s", ram, (unsigned)si.dwNumberOfProcessors, eg,
+        GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), ew, g_chan, ek); out[cap - 1] = 0;
 }
 static unsigned cache_mb(void);
 static void fetch_opts(void)
 {
-    char url[640], hw[320];
+    char url[1200], hw[800];
     char v[48];
     url_escape(v, sizeof(v), g_version[0] ? g_version : "1.0");
     hw_query(hw, sizeof(hw));

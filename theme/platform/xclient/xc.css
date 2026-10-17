@@ -419,3 +419,11 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 .shot img { width: 340px; height: 191px; background: #0f0d12; }
 .shot small { display: block; font-size: 11px; color: #8f8590; }
 .shot .x2 { position: absolute; right: 6px; top: 6px; width: 24px; height: 24px; line-height: 24px; text-align: center; background: rgba(0,0,0,0.7); color: #fff; cursor: pointer; }
+
+/* ===== admin e'lonlari ===== */
+.ann { padding: 12px 16px 14px; border-left: 4px solid #3d86df; }
+.ann.warn { border-left-color: #f5a623; } .ann.promo { border-left-color: #ff3b3b; }
+.ann .anh { position: relative; font-size: 12px; font-weight: bold; letter-spacing: 2px; color: #8ab4ff; margin-bottom: 6px; }
+.ann.warn .anh { color: #ffc46a; } .ann.promo .anh { color: #ff6a6a; }
+.ann .anx { position: absolute; right: -4px; top: -4px; width: 22px; height: 22px; line-height: 22px; text-align: center; color: #8f8590; cursor: pointer; letter-spacing: 0; }
+.ann .ant { font-size: 14px; line-height: 19px; color: #eadfd9; }

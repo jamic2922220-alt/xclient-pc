@@ -100,12 +100,40 @@ function pub($u, $full) {
     }
     return $r;
 }
+/* ---- admin sozlamalari (admin.php yozadi): telegram, e'lonlar, api kalitlar ---- */
+function xc_cfg() { static $c = null; if ($c === null) $c = rd('config', array()); return $c; }
+function client_ip() { return isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : ''; }
+/* IP -> davlat kodi (geo.php bilan bir xil kesh: xc_data/geo.php) */
+function geo_cc($ip) {
+    if (!preg_match('/^\d{1,3}(\.\d{1,3}){3}$/', $ip) || preg_match('/^(10|127|192\.168|172\.(1[6-9]|2\d|3[01]))\./', $ip)) return '';
+    $c = rd('geo', array());
+    if (isset($c[$ip]) && time() - $c[$ip][1] < 30 * 86400) return $c[$ip][0];
+    $ctx = stream_context_create(array('http' => array('timeout' => 2)));
+    $r = json_decode((string)@file_get_contents('http://ip-api.com/json/' . $ip . '?fields=countryCode', false, $ctx), true);
+    $cc = isset($r['countryCode']) ? strtolower($r['countryCode']) : '';
+    $c[$ip] = array($cc, time());
+    if (count($c) > 5000) $c = array_slice($c, -4000, null, true);
+    wr('geo', $c);
+    return $cc;
+}
+/* Telegram xabarnoma (admin.php > Telegram bo'limida yoqiladi) */
+function tg_notify($event, $text) {
+    $c = xc_cfg();
+    if (empty($c['tg_token']) || empty($c['tg_chat']) || empty($c['tg_ev'][$event])) return;
+    $ctx = stream_context_create(array('http' => array('method' => 'POST', 'timeout' => 3,
+        'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
+        'content' => http_build_query(array('chat_id' => $c['tg_chat'], 'text' => $text, 'disable_web_page_preview' => 1)))));
+    @file_get_contents('https://api.telegram.org/bot' . $c['tg_token'] . '/sendMessage', false, $ctx);
+}
+function clean_str($s, $n) { return substr(preg_replace('/[\x00-\x1f<>"\\\\]/u', '', (string)$s), 0, $n); }
+
 /* kunlik statistika (admin.php): xc_data/daily/YYYY-MM-DD.php  {d:{qurilma:1}, n:{yangi:1}, m:{menyu:1}} */
 function day_mark($kind, $id, $isNew) {
     @mkdir(XC_DIR . '/daily', 0755, true);
     @date_default_timezone_set('Asia/Tashkent');
     $k = 'daily/' . date('Y-m-d');
-    $x = rd($k, array('d' => array(), 'n' => array(), 'm' => array()));
+    $x = rd($k, array('d' => array(), 'n' => array(), 'm' => array(), 'mn' => array()));
+    if (!isset($x[$kind])) $x[$kind] = array();
     $x[$kind][$id] = 1;
     if ($isNew) $x['n'][$id] = 1;
     wr($k, $x);
@@ -139,6 +167,7 @@ case 'register':
     wr('meta', $meta);
     touch_device($u);
     save_user($u);
+    tg_notify('account', "Yangi X CLIENT akkaunt: " . $login . ($email !== '' ? ' (' . $email . ')' : ''));
     out(array('ok' => true, 'token' => new_token($login), 'me' => pub($u, true)));
 
 case 'login':
@@ -161,7 +190,19 @@ case 'beat':                                             // menyu ochildi (kunig
     $dev = p('device');
     if (!preg_match('/^[a-z0-9]{8,40}$/', $dev)) fail('bad', 'bad');
     lock();
+    @mkdir(XC_DIR . '/nc', 0755, true);
+    $r = rd('nc/' . $dev, array());
+    $new = empty($r['first']);
+    if ($new) $r['first'] = time();
+    $r['seen'] = time(); $r['days'] = (isset($r['days']) ? $r['days'] : 0) + 1;
+    if (p('nick') !== '') $r['nick'] = clean_str(p('nick'), 40);
+    if (preg_match('/^\d{3,5}x\d{3,5}$/', p('res'))) $r['res'] = p('res');
+    if (p('mv') !== '') $r['ver'] = clean_str(p('mv'), 20);
+    $ip = client_ip();
+    if (empty($r['ip']) || $r['ip'] !== $ip || !isset($r['cc'])) { $r['ip'] = $ip; $r['cc'] = geo_cc($ip); }
+    wr('nc/' . $dev, $r);
     day_mark('m', $dev, false);
+    if ($new) day_mark('mn', $dev, false);
     out(array('ok' => true));
 
 case 'reset_req':                                        // parolni tiklash: 1) emailga 6 xonali kod
@@ -360,7 +401,9 @@ case 'top':                                              // haftaning eng faol o
 case 'news':                                             // turnirlar / e'lonlar: xc_news.json (qo'lda tahrirlanadi)
     $f = __DIR__ . '/xc_news.json';
     $j = is_file($f) ? json_decode(file_get_contents($f), true) : null;
-    out(array('ok' => true, 'news' => is_array($j) ? $j : array()));
+    $ann = array();                                      // admin paneldagi e'lonlar
+    foreach ((array)rd('announce', array()) as $x) if (empty($x['until']) || $x['until'] > time()) $ann[] = array('id' => $x['id'], 'text' => $x['text'], 'type' => $x['type'], 'link' => isset($x['link']) ? $x['link'] : '');
+    out(array('ok' => true, 'news' => is_array($j) ? $j : array(), 'ann' => $ann));
 
 case 'report':                                           // "Xatolik haqida xabar": konsol loglari
     $log = p('log');
@@ -368,6 +411,7 @@ case 'report':                                           // "Xatolik haqida xaba
     @mkdir(XC_DIR . '/reports', 0755, true);
     $who = preg_replace('/[^\w\-]/', '', p('who', 'anon'));
     wr('reports/' . date('Ymd-His') . '-' . $who . '-' . mt_rand(100, 999), array('t' => time(), 'who' => $who, 'ver' => p('ver'), 'log' => $log, 'ua' => isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : ''));
+    tg_notify('report', "X CLIENT: xatolik haqida xabar keldi (" . $who . ", v" . clean_str(p('ver'), 20) . ")");
     out(array('ok' => true));
 
 /* ---- XClient.exe <-> menyu: bir kompyuter (bir IP) bo'yicha bog'lanadi ----
@@ -392,7 +436,15 @@ case 'opts_done':
         $o['cachemb'] = (int)p('cache');
         $o['seen'] = time();
         if (p('ram') !== '') $o['hw'] = array('ram' => (int)p('ram'), 'cpu' => (int)p('cpu'), 'gpu' => substr(preg_replace('/[^\w .()\-\/]/', '', p('gpu')), 0, 80));
+        if (p('res') !== '') $o['res'] = preg_match('/^\d{3,5}x\d{3,5}$/', p('res')) ? p('res') : '';
+        if (p('os') !== '') $o['os'] = clean_str(p('os'), 80);
+        if (p('ch') !== '') $o['ch'] = preg_replace('/[^a-z]/', '', p('ch'));
+        if (p('pt') !== '') $o['pt'] = clean_str(p('pt'), 60);
+        $ip = client_ip();
+        if (empty($o['ip']) || $o['ip'] !== $ip || !isset($o['cc'])) { $o['ip'] = $ip; $o['cc'] = geo_cc($ip); }
+        $o['runs'] = (isset($o['runs']) ? $o['runs'] : 0) + 1;
         wr('dev/' . $d, $o);
+        if ($isNew) tg_notify('install', "Yangi X CLIENT o'rnatish\n" . strtoupper(isset($o['cc']) ? $o['cc'] : '') . ' ' . $ip . "\n" . (isset($o['os']) ? $o['os'] : '') . (isset($o['res']) ? ' · ' . $o['res'] : ''));
         wr($ipk, array('d' => $d, 't' => time()));
         out(array('ok' => true, 'o' => $o));
     }

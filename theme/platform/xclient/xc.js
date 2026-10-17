@@ -622,6 +622,18 @@ function avInner(u, name) {
   if (u && u.av) return '<img src="' + esc(u.av) + '" alt="">';
   return esc(String(name || (u && u.name) || 'X').charAt(0).toUpperCase() || 'X');
 }
+/* ---- admin paneldagi e'lonlar: bosh menyuning o'ng ustuni tepasida ---- */
+var ANN = [];
+function loadAnn() { api('news', {}, function (r) { ANN = r.ok && r.ann ? r.ann : []; renderAnn(); }); }
+function renderAnn() {
+  var el = $('ann'); if (!el) return;
+  var hid = DB.annHide || [], a = null;
+  each(ANN, function (x) { if (!a && hid.indexOf(x.id) < 0) a = x; });
+  if (!a) { el.style.display = 'none'; return; }
+  el.className = 'card ann ' + (/^(info|warn|promo)$/.test(a.type) ? a.type : 'info');
+  el.innerHTML = '<div class="anh">' + esc(T('an_title')) + '<a class="anx" data-annx="' + esc(a.id) + '">✕</a></div><div class="ant">' + esc(a.text) + '</div>';
+  el.style.display = '';
+}
 function renderBar() {
   var on = 0, cnt = 0;
   for (var ip in SRV) if (SRV[ip].ok) { cnt++; on += SRV[ip].pl || 0; }
@@ -1748,6 +1760,7 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-otg'))) { var ok2 = el.getAttribute('data-otg'); OPTS[ok2] = OPTS[ok2] ? 0 : 1; el.className = 'tg' + (OPTS[ok2] ? ' on' : ''); saveOpts(); return; }
   if ((el = closest(t, 'data-tg'))) { var k = el.getAttribute('data-tg'); E[k] = E[k] ? 0 : 1; el.className = 'tg' + (E[k] ? ' on' : ''); if (setTab === 'hud') { drawXhair(); var cd = $('xCode'); if (cd) cd.value = xcode(E); } return; }
   if ((el = closest(t, 'data-avc'))) { api('avatar', { color: el.getAttribute('data-avc') }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); }); return; }
+  if ((el = closest(t, 'data-annx'))) { DB.annHide = (DB.annHide || []).concat([el.getAttribute('data-annx')]).slice(-50); persist(); renderAnn(); return; }
   if ((el = closest(t, 'data-theme'))) { DB.theme = el.getAttribute('data-theme'); persist(); cloudSave(); applyTheme(DB.theme); showSetTab('cont'); return; }
   if ((el = closest(t, 'data-pack'))) {
     var pid = el.getAttribute('data-pack'), pl = (OPTS.packs ? OPTS.packs.split(',') : []), pix = pl.indexOf(pid);
@@ -1868,7 +1881,8 @@ step('seedFromGame();', function () { seedFromGame(); });
 step('fit();', function () { fit(); });
 step('window.onresize = fit;', function () { window.onresize = fit; });
 step('fxLoop();', function () { fxLoop(); });
-step('beat', function () { if (DB.beat !== new Date().toDateString()) api('beat', {}, function (r) { if (r.ok) { DB.beat = new Date().toDateString(); persist(); } }); });   // statistika: menyu ochildi
+step('beat', function () { if (DB.beat !== new Date().toDateString()) api('beat', { nick: MYNAME || (S && S.name) || '', res: (screen.width || 0) + 'x' + (screen.height || 0), mv: VERSION }, function (r) { if (r.ok) { DB.beat = new Date().toDateString(); persist(); } }); });   // statistika: menyu ochildi
+step('loadAnn', function () { loadAnn(); });
 step('applyTheme', function () { if (DB.theme && DB.theme !== 'red') applyTheme(DB.theme); });
 step('detectLang();', function () { detectLang(); });
 step('loadMaster();', function () { loadMaster(); });
@@ -1906,5 +1920,6 @@ setInterval(function () {
 setInterval(pingPresence, 60000);
 setInterval(function () { loadFriends(); loadWeek(); }, 60000);
 setInterval(loadTop, 10 * 60 * 1000);
+setInterval(loadAnn, 5 * 60 * 1000);
 setTimeout(sendStats, 90000); setInterval(sendStats, 10 * 60 * 1000);
 })();
