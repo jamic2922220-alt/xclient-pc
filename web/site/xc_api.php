@@ -83,6 +83,8 @@ function pub($u, $full) {
         'id' => $u['id'], 'login' => $u['login'], 'name' => $u['name'],
         'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL, 'lvlmax' => XP_PER_LEVEL,
         'vip' => !empty($u['vip']), 'online' => is_online($u),
+        'avc' => isset($u['avc']) ? $u['avc'] : '',
+        'av' => !empty($u['avt']) ? 'xc_api.php?a=av&l=' . strtolower($u['login']) . '&t=' . $u['avt'] : '',
         'server' => is_online($u) && !empty($u['server']) ? $u['server'] : '', 'map' => is_online($u) && !empty($u['map']) ? $u['map'] : '',
     );
     if ($full) {
@@ -185,6 +187,36 @@ case 'profile':                                          // nom / email / parol
     save_user($u);
     out(array('ok' => true, 'me' => pub($u, true)));
 
+case 'avatar':                                           // profil rasmi (JPEG/PNG data URL, 128x128) yoki rang
+    lock();
+    $u = auth();
+    $c = p('color');
+    if ($c !== '') {
+        if (!preg_match('/^#[0-9a-fA-F]{6}$/', $c)) fail('bad', 'Rang noto\'g\'ri');
+        $u['avc'] = $c;
+    }
+    $img = p('img');
+    if ($img === 'none') { $u['avt'] = 0; @unlink(XC_DIR . '/av/' . strtolower($u['login']) . '.php'); }
+    elseif ($img !== '') {
+        if (!preg_match('#^data:image/(jpeg|png);base64,([A-Za-z0-9+/=]+)$#', $img, $m)) fail('bad', 'Rasm noto\'g\'ri');
+        $bin = base64_decode($m[2]);
+        if (!$bin || strlen($bin) > 80000) fail('big', 'Rasm juda katta');
+        @mkdir(XC_DIR . '/av', 0755, true);
+        wr('av/' . strtolower($u['login']), array('type' => $m[1], 'data' => $m[2]));
+        $u['avt'] = time();
+    }
+    save_user($u);
+    out(array('ok' => true, 'me' => pub($u, true)));
+
+case 'av':                                               // rasmni berish
+    $l = strtolower(p('l'));
+    $a2 = preg_match('/^[a-z0-9_]{3,20}$/', $l) ? rd('av/' . $l, null) : null;
+    if (!$a2) { header('HTTP/1.1 404 Not Found'); exit; }
+    header('Content-Type: image/' . $a2['type']);
+    header('Cache-Control: public, max-age=86400');
+    echo base64_decode($a2['data']);
+    exit;
+
 case 'ping':                                             // har daqiqada: onlayn holat + o'yin vaqti (XP)
     lock();
     $u = auth();
@@ -238,7 +270,8 @@ case 'top':                                              // haftaning eng faol o
         $users++;
         if (is_online($x)) $online++;
         $w = (isset($x['wk']) && $x['wk'] === $wk) ? (int)$x['wkxp'] : 0;
-        if ($w > 0) $top[] = array('name' => $x['name'], 'login' => $x['login'], 'week' => $w, 'level' => level($x['xp']), 'vip' => !empty($x['vip']));
+        if ($w > 0) $top[] = array('name' => $x['name'], 'login' => $x['login'], 'week' => $w, 'level' => level($x['xp']), 'vip' => !empty($x['vip']),
+            'avc' => isset($x['avc']) ? $x['avc'] : '', 'av' => !empty($x['avt']) ? 'xc_api.php?a=av&l=' . strtolower($x['login']) . '&t=' . $x['avt'] : '');
     }
     usort($top, function ($a, $b) { return $b['week'] - $a['week']; });
     $top = array_slice($top, 0, 10);

@@ -161,8 +161,50 @@ function intro() {
     if (f >= N) clearInterval(INTRO_TM);
   }, 75);
 }
+/* uchqunlar: 14 ta kichik <i> (3x3 px) sekundiga ~11 marta siljiydi - faqat o'sha kichik nuqtalar qayta chiziladi.
+ * O'yin paytida (menyu yopiq), oyna ochiq bo'lsa yoki Tizim'da o'chirilsa - hech narsa qilmaydi.
+ * Kompyuter sekin bo'lsa (taymer kechiksa) o'zi o'chadi. */
+var FX = { tm: 0, p: [], last: 0, slow: 0, off: 0, n: 0 };
+function fxVisible() {
+  if (curModal || document.webkitHidden) return false;
+  try { if (NC && NC.gameUi && NC.gameUi.shown === false) return false; } catch (e) {}
+  return true;
+}
+function sparkReset(p, first) {
+  p.x = 150 + Math.random() * 300; p.y = first ? 200 + Math.random() * 380 : 470 + Math.random() * 110;
+  p.vx = (Math.random() - 0.5) * 2.4; p.vy = -(1.6 + Math.random() * 3.2);
+  p.max = 22 + Math.floor(Math.random() * 26); p.life = first ? Math.floor(Math.random() * p.max) : p.max;
+}
+function sparks() {
+  var st = $('stage'); if (!st) return;
+  if (!FX.p.length) {
+    for (var i = 0; i < 14; i++) {
+      var d = document.createElement('i'); d.className = 'spk' + (i % 3 ? '' : ' s2'); st.appendChild(d);
+      var p = { el: d }; sparkReset(p, true); FX.p.push(p);
+    }
+  }
+  clearInterval(FX.tm);
+  var on = DB.fx !== 0 && !FX.off;
+  each(FX.p, function (q) { q.el.style.display = on ? '' : 'none'; });
+  if (!on) return;
+  FX.last = +new Date();
+  FX.tm = setInterval(sparkTick, 90);
+}
+function sparkTick() {
+  var t = +new Date(), dt = t - FX.last; FX.last = t;
+  if (!fxVisible()) return;
+  if (dt > 260 && dt < 3000) { if (++FX.slow >= 12) { FX.off = 1; sparks(); return; } } else if (FX.slow > 0 && dt < 140) FX.slow -= 0.25;
+  each(FX.p, function (p) {
+    p.life--; if (p.life <= 0) sparkReset(p);
+    p.x += p.vx; p.y += p.vy; p.vx += (Math.random() - 0.5) * 0.4;
+    var s = p.el.style;
+    s.left = Math.round(p.x) + 'px'; s.top = Math.round(p.y) + 'px'; s.opacity = (p.life / p.max).toFixed(2);
+  });
+  // kirmaganlarga akkaunt kartasi sekin "nafas oladi"
+  if (!ME && ++FX.n % 11 === 0) { var a = $('acct'); if (a) a.className = 'card acct' + (FX.n % 22 ? ' hi' : ''); }
+}
 function fxLoop() {
-  intro();
+  intro(); sparks();
   try { if (NC && NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('show', intro); } catch (e) {}
 }
 /* ============================================================ XClient.exe bilan aloqa
@@ -482,7 +524,7 @@ function renderHome() {
   // TOP hafta
   var wk = '';
   each(WEEK.slice(0, 3), function (u, i) {
-    wk += '<div class="tr' + (i === 0 ? ' r1' : '') + '" style="cursor:default"><div class="rk c">' + esc((u.name || '?').charAt(0).toUpperCase()) + '</div>' +
+    wk += '<div class="tr' + (i === 0 ? ' r1' : '') + '" style="cursor:default"><div class="rk c av2" style="' + avStyle(u) + '">' + avInner(u, u.name || '?') + '</div>' +
       '<div class="nm one">' + (i + 1) + '. ' + esc(u.name) + (u.vip ? '<span class="vb">VIP</span>' : '') + '</div>' +
       '<div class="sc">' + Math.round(u.week / 6) / 10 + ' <small>' + esc(T('week_h')) + ' \u00b7 ' + esc(T('lvl').replace('{n}', u.level)) + '</small></div></div>';
   });
@@ -494,14 +536,21 @@ function renderHome() {
     on++;
     if (on > 3) return;
     var s = f.server ? srv(f.server) : null;
-    fr += '<div class="tr"' + (f.server ? ' data-ip="' + esc(f.server) + '"' : ' style="cursor:default"') + '><div class="rk c">' + esc(f.name.charAt(0).toUpperCase()) + '</div>' +
+    fr += '<div class="tr"' + (f.server ? ' data-ip="' + esc(f.server) + '"' : ' style="cursor:default"') + '><div class="rk c av2" style="' + avStyle(f) + '">' + avInner(f, f.name) + '</div>' +
       '<div class="nm">' + esc(f.name) + '</div><div class="mt"><span class="gm">\u25cf</span> ' + esc(f.server ? ((s && s.name) || f.server) + (f.map ? ' \u00b7 ' + f.map : '') : T('fr_menu')) + '</div>' +
       (f.server ? '<div class="go">' + esc(T('join')) + '</div>' : '') + '</div>';
   });
   $('frList').innerHTML = fr || '<div class="empty">' + (ME ? esc(T('no_fr')) : '<a data-act="login">' + esc(T('no_fr_login')) + '</a>') + '</div>';
+  $('acct').style.display = ME ? 'none' : ''; $('frCard').style.display = ME ? '' : 'none';
   $('frCnt').innerHTML = on ? on : '';
   $('mFriends').innerHTML = on ? esc(T('fr_on').replace('{n}', on)) : '';
   renderBar();
+}
+/* avatar: rasm bo'lsa rasm, bo'lmasa ism harfi + tanlangan rang */
+function avStyle(u) { return u && /^#[0-9a-fA-F]{6}$/.test(u.avc || '') ? 'background:' + u.avc + ';' : ''; }
+function avInner(u, name) {
+  if (u && u.av) return '<img src="' + esc(u.av) + '" alt="">';
+  return esc(String(name || (u && u.name) || 'X').charAt(0).toUpperCase() || 'X');
 }
 function renderBar() {
   var on = 0, cnt = 0;
@@ -509,11 +558,11 @@ function renderBar() {
   $('bOnline').innerHTML = on; $('bServers').innerHTML = cnt || MASTER.length;
   var nm = ME ? ME.name : ((S && S.name) || T('guest_name'));
   $('meName').innerHTML = esc(nm);
-  $('meAv').innerHTML = esc(nm.charAt(0).toUpperCase() || 'X');
+  $('meAv').innerHTML = avInner(ME, nm); $('meAv').style.cssText = avStyle(ME);
   $('meLvl').innerHTML = ME ? esc(T('lvl').replace('{n}', ME.level)) : '';
   $('meXp').style.width = ME ? Math.round(ME.lvlxp * 100 / (ME.lvlmax || 1000)) + '%' : '0';
   $('meVip').style.display = ME && ME.vip ? '' : 'none';
-  $('bCloud').innerHTML = esc(CONNECTED ? T('st_in') + (srv(CONNECTED).name || CONNECTED) : (ME ? (ME.cloudt ? T('b_saved') : '') : T('b_guest')));
+  $('bCloud').innerHTML = !ME && !CONNECTED ? '<a class="lgin" data-act="login">' + esc(T('ac_short')) + ' \u2192</a>' : esc(CONNECTED ? T('st_in') + (srv(CONNECTED).name || CONNECTED) : (ME.cloudt ? T('b_saved') : ''));
   $('bVer').innerHTML = esc((VERSION ? 'v' + VERSION + ' \u00b7 ' : '') + 'X CLIENT');
 }
 
@@ -574,6 +623,10 @@ function ddItems(kind) {
   } else if (kind === 'mode') {
     out.push(['', T('f_mode')]);
     each(['classic', 'zm', 'awp', 'aim', 'dm', 'gg', 'jail', 'kz', 'other'], function (k) { out.push([k, T('md_' + k)]); });
+  } else if (kind === 'xpre') {
+    each(XPRE, function (p) { out.push([p[0], T(p[1])]); });
+  } else if (kind === 'xsz') {
+    each(SZ, function (z, i) { out.push([z, 'x' + (i + 1)]); });
   } else if (kind === 'res') {
     out.push(['', T('sy_res_auto')]);
     var sw = screen.width || 1920, sh = screen.height || 1080, seen = {};
@@ -583,7 +636,7 @@ function ddItems(kind) {
   }
   return out;
 }
-function ddValue(kind) { return kind === 'map' ? FMAP : kind === 'mode' ? FMODE : OPTS.res || ''; }
+function ddValue(kind) { return kind === 'map' ? FMAP : kind === 'mode' ? FMODE : kind === 'xpre' ? E.xp : kind === 'xsz' ? E.xs : OPTS.res || ''; }
 function ddLabel(kind) {
   var v = ddValue(kind), items = ddItems(kind);
   for (var i = 0; i < items.length; i++) if (items[i][0] === v) return items[i][1];
@@ -607,6 +660,8 @@ function ddPick(v) {
   if (kind === 'map') { FMAP = v; renderServers(); }
   else if (kind === 'mode') { FMODE = v; renderServers(); }
   else if (kind === 'res') { OPTS.res = v; saveOpts(); showSetTab('system'); }
+  else if (kind === 'xpre') { each(XPRE, function (p) { if (p[0] === v) { E.xp = v; E.xt = p[2]; E.xs = p[3]; } }); showSetTab('hud'); }
+  else if (kind === 'xsz') { E.xs = v; E.xp = presetOf(E); showSetTab('hud'); }
 }
 function fillSelects() {
   $('fMap').getElementsByTagName('span')[0].innerHTML = esc(ddLabel('map'));
@@ -743,7 +798,7 @@ function openFriends() {
   var h = '<div class="addf"><input class="tx big" id="frIn" type="text" maxlength="20" placeholder="' + esc(T('fr_add')) + '" value="' + esc(keep) + '"><a class="btn red" data-act="fradd">' + esc(T('fr_addb')) + '</a></div>';
   each(FRIENDS, function (f) {
     var s = f.server ? srv(f.server) : null;
-    h += '<div class="tr" style="cursor:default"><div class="rk c" style="' + (f.online ? '' : 'background:#4a4048') + '">' + esc(f.name.charAt(0).toUpperCase()) + '</div>' +
+    h += '<div class="tr" style="cursor:default"><div class="rk c av2" style="' + (f.online ? avStyle(f) : 'background:#4a4048') + '">' + avInner(f, f.name) + '</div>' +
       '<div class="nm">' + esc(f.name) + ' <span class="mut" style="font-weight:normal;font-size:12px">' + esc(T('lvl').replace('{n}', f.level)) + '</span></div>' +
       '<div class="mt">' + (f.online ? '<span class="gm">\u25cf</span> ' + esc(f.server ? T('fr_in') + ((s && s.name) || f.server) : T('fr_menu')) : esc(T('fr_off'))) + '</div>' +
       (f.server ? '<a class="go" data-ip="' + esc(f.server) + '">' + esc(T('join')) + '</a>' : '<a class="go" data-frdel="' + esc(f.login) + '">' + esc(T('fr_del')) + '</a>') + '</div>';
@@ -856,7 +911,7 @@ function applyCode(code) {
   return true;
 }
 
-var setTab = 'game';
+var setTab = 'game', HSUB = 'main';
 function openSettings(tab) {
   seedFromGame();
   E = copy(S);
@@ -869,7 +924,7 @@ function showSetTab(tab) {
   each(document.querySelectorAll('#setTabs a'), function (a) { a.className = a.getAttribute('data-tab') === tab ? 'on' : ''; });
   $('setBody').innerHTML = (PANES[tab] || PANES.game)();
   $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local'));
-  if (tab === 'hud') drawXhair();
+  if (tab === 'hud') { drawXhair(); drawScope(); }
 }
 function tg(key, label, sub) {
   return '<div class="fr w"><div class="lb">' + esc(T(label)) + (sub ? '<small>' + esc(T(sub)) + '</small>' : '') + '</div>' +
@@ -931,22 +986,45 @@ var PANES = {
       '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('hor', 'v_hor') + tg('vsync', 'v_vsync') + tg('dyn', 'v_dyn') + '</div>';
   },
   hud: function () {
-    var types = '';
-    each(XPRE, function (o) { types += '<a class="' + (E.xp === o[0] ? 'on' : '') + '" data-xpre="' + o[0] + '">' + esc(T(o[1])) + '</a>'; });
+    var sub = '';
+    each([['main', 'hx_main'], ['snip', 'hx_snip'], ['misc', 'hx_misc']], function (o) { sub += '<a class="' + (HSUB === o[0] ? 'on' : '') + '" data-hsub="' + o[0] + '">' + esc(T(o[1])) + '</a>'; });
+    sub = '<div class="hsub">' + sub + '</div>';
+    if (HSUB === 'snip') {
+      return sub + '<div class="pane l hp"><div class="ph2">' + esc(T('hx_snip')) + '</div><div id="xPrev" class="big"><canvas id="xScope" width="524" height="220"></canvas></div>' +
+        '<div class="hnote">' + esc(T('hx_zoom')) + '</div></div>' +
+        '<div class="pane r hp"><div class="ph2">&nbsp;</div>' + sl('zoom', 'mo_zoom', 0.1, 3, 0.05) + sl('sens', 'mo_sens', 0.1, 10, 0.05) + '</div>';
+    }
+    if (HSUB === 'misc') {
+      return sub + '<div class="pane l hp"><div class="ph2">' + esc(T('hx_radar')) + '</div>' +
+        sl('rscale', 'h_rscale', 50, 300, 5, null, '%') + sl('ropac', 'h_ropac', 0, 100, 5, null, '%') + tg('rnames', 'h_rnames') +
+        '<div class="ph2 m">' + esc(T('hx_kill')) + '</div>' + sl('dmax', 'h_kills', 3, 10, 1) + tg('hs', 'h_hs') + '</div>' +
+        '<div class="pane r hp"><div class="ph2">' + esc(T('h_title')) + '</div>' +
+        tg('netg', 'h_net') + tg('cid', 'h_cid') + tg('nover', 'h_draw') + '</div>';
+    }
     var pal = ['255 59 59', '50 250 50', '0 230 255', '255 210 60', '255 80 220', '255 255 255'];
     if (pal.indexOf(E.xc) < 0 && /^\d+ \d+ \d+$/.test(E.xc)) pal.push(E.xc);
     var cols = '';
     each(pal, function (c) { cols += '<a class="' + (E.xc === c ? 'on' : '') + '" data-seg="xc" data-v="' + c + '" style="background:rgb(' + c.split(' ').join(',') + ')"></a>'; });
-    var si = Math.max(0, SZ.indexOf(E.xs)), szl = [T('sz_s'), T('sz_m'), T('sz_l'), T('sz_auto')][si];
-    return '<div class="pane l"><div class="ph2">' + esc(T('x_title')) + '</div>' +
-      '<div style="position:relative;height:172px"><div id="xPrev"><canvas id="xCan" width="240" height="160"></canvas></div><div class="xl">' + types + '</div></div>' +
-      '<div class="fr"><div class="lb">' + esc(T('x_size')) + '</div><div class="ct2"><div class="sl"><input type="range" min="0" max="3" step="1" value="' + si + '" data-xsz="1"><div class="vv" id="vv_xsz">' + esc(szl) + '</div></div></div></div>' +
-      '<div class="fr"><div class="lb">' + esc(T('x_color')) + '</div><div class="ct2 sw">' + cols + '</div></div>' +
-      tg('xtr', 'x_trans') +
+    var si = Math.max(0, SZ.indexOf(E.xs)), xt = Number(E.xt);
+    var off = function (label, val) {             // bu NextClient'da yo'q - kulrang
+      return '<div class="fr dis"><div class="lb">' + esc(T(label)) + '</div><div class="ct2"><div class="sl"><input type="range" min="0" max="10" value="' + val + '" disabled><div class="vv">' + val + '</div></div></div></div>';
+    };
+    var ck = function (k, label, on, dis) {
+      return '<a class="ck' + (on ? ' on' : '') + (dis ? ' dis' : '') + '"' + (dis ? '' : ' data-xchk="' + k + '"') + '><i>' + (on ? '✓' : '') + '</i>' + esc(T(label)) + '</a>';
+    };
+    return sub + '<div class="pane l hp"><div class="ph2">' + esc(T('x_title')) + '</div>' +
+      '<div id="xPrev" class="big"><canvas id="xCan" width="524" height="220"></canvas></div>' +
+      '<div class="fr" style="margin-top:14px"><div class="lb">' + esc(T('hx_style')) + '</div><div class="ct2"><a class="dd wide" data-dd="xpre"><span>' + esc(ddLabel('xpre')) + '</span><i>▾</i></a></div></div>' +
+      '<div class="fr"><div class="lb">' + esc(T('x_color')) + '</div><div class="ct2 sw">' + cols + '<a class="btn pick" data-act="xpick">' + esc(T('hx_pick')) + '</a></div></div>' +
       '<div class="fr cw"><div class="lb">' + esc(T('x_code')) + '</div><div class="ct2 code"><input id="xCode" value="' + esc(xcode(E)) + '"><a class="btn" data-act="xcopy">' + esc(T('x_copy')) + '</a><a class="btn b2" data-act="xcode">' + esc(T('x_apply')) + '</a></div></div></div>' +
-      '<div class="pane r"><div class="ph2">' + esc(T('h_title')) + '</div>' +
-      sl('rscale', 'h_rscale', 50, 300, 5, null, '%') + sl('ropac', 'h_ropac', 0, 100, 5, null, '%') + sl('dmax', 'h_kills', 3, 10, 1) +
-      tg('hs', 'h_hs') + tg('xdyn', 'x_dyn') + tg('netg', 'h_net') + tg('rnames', 'h_rnames') + tg('cid', 'h_cid') + tg('nover', 'h_draw') + '</div>';
+      '<div class="pane r hp"><div class="ph2">&nbsp;</div>' +
+      '<div class="fr"><div class="lb">' + esc(T('x_size')) + '</div><div class="ct2"><a class="dd xsz" data-dd="xsz"><span>' + esc(ddLabel('xsz')) + '</span><i>▾</i></a>' +
+      '<div class="sl sl2"><input type="range" min="0" max="3" step="1" value="' + si + '" data-xsz="1"><div class="vv" id="vv_xsz">x' + (si + 1) + '</div></div></div></div>' +
+      off('hx_thick', 1) + off('hx_gap', 3) +
+      '<div class="fr"><div class="lb">' + esc(T('hx_opaq')) + '</div><div class="ct2"><div class="sl"><input type="range" min="0" max="1" step="1" value="' + (E.xtr ? 0 : 1) + '" data-xop="1"><div class="vv" id="vv_xop">' + (E.xtr ? '60%' : '100%') + '</div></div></div></div>' +
+      off('hx_outl', 0) +
+      '<div class="cks">' + ck('dot', 'hx_dot', xt === 3) + ck('t', 'hx_t', xt === 1) + ck('circle', 'hx_circ', xt === 2) + ck('dyn', 'hx_wdep', !!E.xdyn) + ck('fps', 'hx_fps', false, true) + '</div>' +
+      '<div class="hfoot"><span class="mut">' + esc(T('hx_na')) + '</span><a class="btn" data-act="xdef">' + esc(T('hx_std')) + '</a></div></div>';
   },
   account: function () {
     if (!ME) {
@@ -954,10 +1032,12 @@ var PANES = {
         '<div class="id" style="margin:10px 0 24px">' + esc(T('a_none2')) + '</div><a class="btn red" style="height:44px;line-height:42px;padding:0 30px" data-act="login">' + esc(T('a_login')) + '</a></div></div>';
     }
     var last = ME.cloudt ? (now() / 1000 - ME.cloudt < 120 ? T('a_now') : fmtTime(ME.cloudt * 1000)) : T('a_never');
-    return '<div class="pane l"><div class="ph2">' + esc(T('a_profile')) + '</div><div class="prof"><div class="bigav">' + esc(ME.name.charAt(0).toUpperCase()) + '</div>' +
+    return '<div class="pane l"><div class="ph2">' + esc(T('a_profile')) + '</div><div class="prof"><div class="bigav" style="' + avStyle(ME) + '">' + avInner(ME) + '<a class="avcam" data-act="avpick">' + esc(T('a_photo')) + '</a></div>' +
       '<h2>' + esc(ME.name) + '</h2><div class="id">ID: ' + esc(ME.id) + ' \u00b7 ' + esc(T('lvl').replace('{n}', ME.level)) + '</div>' +
       '<div class="xpw"><i style="width:' + Math.round(ME.lvlxp * 100 / ME.lvlmax) + '%"></i></div><div class="xpt">' + ME.lvlxp + ' / ' + ME.lvlmax + ' XP</div>' +
-      '<a class="btn" data-act="rename" style="margin:0">' + esc(T('a_rename')) + '</a></div>' +
+      '<div class="avcols">' + avColors() + '</div>' +
+      '<a class="btn" data-act="rename" style="margin:0 6px 0 0">' + esc(T('a_rename')) + '</a><a class="btn" data-act="avpick" style="margin:0 6px 0 0">' + esc(T('a_photo')) + '</a>' +
+      (ME.av ? '<a class="btn out" data-act="avdel" style="margin:0">' + esc(T('a_photodel')) + '</a>' : '') + '</div>' +
       (ME.vip ? '<div class="vipbox"><b>' + esc(T('a_vip')) + '</b><span>' + esc(T('a_vip2')) + '</span></div>' : '') + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('a_sec')) + '</div>' +
       '<div class="rowb"><b>' + esc(T('a_email')) + '</b><small>' + esc(ME.email || '\u2014') + '</small><a class="btn" data-act="email">' + esc(T('a_change')) + '</a></div>' +
@@ -988,6 +1068,7 @@ var PANES = {
       otg('auto', 'sy_auto', 'sy_auto2') + otg('beta', 'sy_beta') + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('sy_start')) + '</div>' +
       otg('start', 'sy_win') + otg('win', 'sy_windowed') +
+      '<div class="fr w"><div class="lb">' + esc(T('sy_fx')) + '<small>' + esc(T('sy_fx2')) + '</small></div><div class="tg' + (DB.fx !== 0 && !FX.off ? ' on' : '') + '" data-dbtg="fx"><i></i></div></div>' +
       '<div class="fr"><div class="lb">' + esc(T('sy_screen')) + '</div><div class="ct2"><a class="dd wide" data-dd="res"><span>' + esc(ddLabel('res')) + '</span><i>\u25be</i></a></div></div>' +
       '<div class="ph2 m">' + esc(T('sy_srv')) + '</div>' +
       '<div class="rowb"><b>' + esc(T('sy_cache')) + '</b><small>' + esc(T('sy_cache2').replace('{n}', CACHE_MB)) + (OPTS.clean ? ' \u00b7 ' + esc(T('sy_pending')) : '') + '</small><a class="btn" data-act="cache">' + esc(T('sy_cacheb')) + '</a></div>' +
@@ -1002,11 +1083,18 @@ function drawXhair() {
   g.clearRect(0, 0, w, h);
   var p = String(E.xc).split(' ');
   g.fillStyle = 'rgba(' + p[0] + ',' + p[1] + ',' + p[2] + ',' + (E.xtr ? 0.6 : 1) + ')';
-  var len = { small: 5, medium: 8, large: 11, auto: 11 }[E.xs] || 5, gap = 3, t = 2, type = Number(E.xt);
-  if (type === 3) { g.fillRect(cx - 2, cy - 2, 4, 4); return; }
-  if (type === 2) { g.strokeStyle = g.fillStyle; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, len + 2, 0, Math.PI * 2); g.stroke(); g.fillRect(cx - 1, cy - 1, 2, 2); return; }
-  g.fillRect(cx - gap - len, cy - 1, len, t); g.fillRect(cx + gap, cy - 1, len, t); g.fillRect(cx - 1, cy + gap, t, len);
-  if (type !== 1) g.fillRect(cx - 1, cy - gap - len, t, len);
+  var z = w > 300 ? 2 : 1, len = ({ small: 5, medium: 8, large: 11, auto: 11 }[E.xs] || 5) * z, gap = 3 * z, t = 2 * z, type = Number(E.xt);
+  if (type === 3) { g.fillRect(cx - 2 * z, cy - 2 * z, 4 * z, 4 * z); return; }
+  if (type === 2) { g.strokeStyle = g.fillStyle; g.lineWidth = t; g.beginPath(); g.arc(cx, cy, len + 2 * z, 0, Math.PI * 2); g.stroke(); g.fillRect(cx - z, cy - z, t, t); return; }
+  g.fillRect(cx - gap - len, cy - z, len, t); g.fillRect(cx + gap, cy - z, len, t); g.fillRect(cx - z, cy + gap, t, len);
+  if (type !== 1) g.fillRect(cx - z, cy - gap - len, t, len);
+}
+function drawScope() {
+  var c = $('xScope'); if (!c || !c.getContext) return;
+  var g = c.getContext('2d'), w = c.width, h = c.height, cx = w / 2, cy = h / 2, r = h / 2 - 6;
+  g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
+  g.save(); g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.clip(); g.clearRect(0, 0, w, h); g.restore();
+  g.fillStyle = '#000'; g.fillRect(0, cy, w, 1); g.fillRect(cx, 0, 1, h);
 }
 
 /* ============================================================ tugmalar (bind) */
@@ -1087,6 +1175,39 @@ function askDone(ok) {
   if (ok && cb) cb($('askI').value, $('askI2').value);
 }
 
+/* ============================================================ profil rasmi */
+var AVC = ['#ff3b3b', '#ff8a2a', '#f5c518', '#3ccf4e', '#1fb5d6', '#3b6cff', '#9b4dff', '#ff4fb4', '#6b6470'];
+function avColors() {
+  var h = '';
+  each(AVC, function (c) { h += '<a class="' + (ME && ME.avc === c ? 'on' : '') + '" data-avc="' + c + '" style="background:' + c + '"></a>'; });
+  return h;
+}
+function avUpload(file) {
+  if (!file) return;
+  if (!/^image\//.test(file.type || '')) return toast(T('a_photo_bad'));
+  if (!window.FileReader) return toast(T('a_photo_na'));
+  var rd = new FileReader();
+  rd.onload = function () {
+    var im = new Image();
+    im.onload = function () {
+      // markazdan kvadrat qirqib 128x128 JPEG qilamiz (~10 KB)
+      var c = document.createElement('canvas'); c.width = 128; c.height = 128;
+      var g = c.getContext('2d'), s = Math.min(im.width, im.height);
+      g.fillStyle = '#000'; g.fillRect(0, 0, 128, 128);
+      g.drawImage(im, Math.round((im.width - s) / 2), Math.round((im.height - s) / 2), s, s, 0, 0, 128, 128);
+      var data = '';
+      try { data = c.toDataURL('image/jpeg', 0.85); } catch (e) {}
+      if (data.indexOf('data:image/jpeg') !== 0) { try { data = c.toDataURL('image/png'); } catch (e2) {} }
+      if (!data) return toast(T('a_photo_bad'));
+      toast(T('lg_wait'));
+      api('avatar', { img: data }, function (r) { if (!r.ok) return toast(r.msg || 'Xato'); setMe(r.me); toast(T('saved')); if (curModal === 'mdSettings') showSetTab('account'); });
+    };
+    im.onerror = function () { toast(T('a_photo_bad')); };
+    im.src = rd.result;
+  };
+  rd.readAsDataURL(file);
+}
+
 /* ============================================================ amallar */
 function act(a) {
   if (a === 'quick' || a === 'play') { closeModal(); return quick(); }
@@ -1124,13 +1245,24 @@ function act(a) {
     var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
     return toast(ok ? T('x_copied') : T('x_copy2'));
   }
+  if (a === 'xdef') { each(['xp', 'xt', 'xs', 'xc', 'xtr', 'xdyn'], function (k) { E[k] = DEF[k]; }); return showSetTab('hud'); }
+  if (a === 'xpick') return ask(T('hx_colask'), function (v) {
+    v = String(v || '').replace(/^\s+|\s+$/g, '');
+    var m = /^#?([0-9a-f]{6})$/i.exec(v), r = /^(\d{1,3})[ ,]+(\d{1,3})[ ,]+(\d{1,3})$/.exec(v);
+    if (m) E.xc = parseInt(m[1].slice(0, 2), 16) + ' ' + parseInt(m[1].slice(2, 4), 16) + ' ' + parseInt(m[1].slice(4, 6), 16);
+    else if (r && r[1] < 256 && r[2] < 256 && r[3] < 256) E.xc = Number(r[1]) + ' ' + Number(r[2]) + ' ' + Number(r[3]);
+    else return toast(T('x_badcode'));
+    showSetTab('hud');
+  });
   if (a === 'xcode') { if (applyCode($('xCode').value)) showSetTab('hud'); return; }
   if (a === 'rename') return ask(T('a_newname'), function (v) { api('profile', { name: v }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); }); });
   if (a === 'email') return ask(T('a_newmail'), function (v) { api('profile', { email: v }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); }); });
   if (a === 'passwd') return ask(T('a_oldnew'), function (o, n) { api('profile', { oldpass: o, newpass: n }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); toast(T('saved')); showSetTab('account'); }); }, true, true);
+  if (a === 'avpick') { var fi = $('avFile'); if (!fi) return; fi.value = ''; try { fi.click(); } catch (e) { toast(T('a_photo_na')); } return; }
+  if (a === 'avdel') return api('avatar', { img: 'none' }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); });
   if (a === 'cloudsave') return cloudSave(true);
   if (a === 'cloudget') return api('me', {}, function (r) { if (!r.ok) return; ME = r.me; restoreCloud(r.me.cloud); if (curModal === 'mdSettings') { seedFromGame(); E = copy(S); showSetTab('account'); } });
-  if (a === 'logout') { api('logout', {}); DB.token = ''; ME = null; FRIENDS = []; persist(); closeModal(); renderAll(); return openLogin(); }
+  if (a === 'logout') { api('logout', {}); DB.token = ''; ME = null; FRIENDS = []; persist(); closeModal(); return renderAll(); }
   if (a === 'defaults') { var keep = E.name, tag = E.tag; E = copy(DEF); E.name = keep; E.tag = tag; return showSetTab(setTab); }
   if (a === 'save') {
     var nm = $('fName'); if (nm) E.name = nm.value.replace(/["\\;]/g, '').slice(0, 28);
@@ -1149,9 +1281,17 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-bind'))) { KEYWAIT = KEYWAIT === el.getAttribute('data-bind') ? '' : el.getAttribute('data-bind'); showSetTab('keys'); return; }
   if ((el = closest(t, 'data-fav'))) { toggleFav(el.getAttribute('data-fav')); return; }
   if ((el = closest(t, 'data-frdel'))) { api('friend_del', { login: el.getAttribute('data-frdel') }, function () { loadFriends(); }); return; }
-  if ((el = closest(t, 'data-dbtg'))) { var dk = el.getAttribute('data-dbtg'); var cur = dk === 'autosave' ? !!DB[dk] : DB[dk] !== 0; DB[dk] = cur ? 0 : 1; persist(); if (dk === 'autosave') $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local')); el.className = 'tg' + (DB[dk] ? ' on' : ''); return; }
+  if ((el = closest(t, 'data-dbtg'))) { var dk = el.getAttribute('data-dbtg'); var cur = dk === 'autosave' ? !!DB[dk] : DB[dk] !== 0; DB[dk] = cur ? 0 : 1; persist(); if (dk === 'fx') { FX.off = 0; FX.slow = 0; sparks(); } if (dk === 'autosave') $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local')); el.className = 'tg' + (DB[dk] ? ' on' : ''); return; }
   if ((el = closest(t, 'data-otg'))) { var ok2 = el.getAttribute('data-otg'); OPTS[ok2] = OPTS[ok2] ? 0 : 1; el.className = 'tg' + (OPTS[ok2] ? ' on' : ''); saveOpts(); return; }
   if ((el = closest(t, 'data-tg'))) { var k = el.getAttribute('data-tg'); E[k] = E[k] ? 0 : 1; el.className = 'tg' + (E[k] ? ' on' : ''); if (setTab === 'hud') { drawXhair(); var cd = $('xCode'); if (cd) cd.value = xcode(E); } return; }
+  if ((el = closest(t, 'data-avc'))) { api('avatar', { color: el.getAttribute('data-avc') }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); }); return; }
+  if ((el = closest(t, 'data-hsub'))) { HSUB = el.getAttribute('data-hsub'); showSetTab('hud'); return; }
+  if ((el = closest(t, 'data-xchk'))) {
+    var xk = el.getAttribute('data-xchk'), XT = { dot: 3, t: 1, circle: 2 };
+    if (xk === 'dyn') E.xdyn = E.xdyn ? 0 : 1;
+    else E.xt = Number(E.xt) === XT[xk] ? 0 : XT[xk];
+    E.xp = presetOf(E); showSetTab('hud'); return;
+  }
   if ((el = closest(t, 'data-xpre'))) {
     var id = el.getAttribute('data-xpre');
     each(XPRE, function (p) { if (p[0] === id) { E.xp = id; E.xt = p[2]; E.xs = p[3]; } });
@@ -1174,7 +1314,7 @@ document.onclick = function (e) {
     else { closeModal(); connect(ip); }
     return;
   }
-  if (t && t.className === 'modal on' && t.id !== 'mdAsk' && t.id !== 'mdLogin') closeModal();
+  if (t && t.className === 'modal on' && t.id !== 'mdAsk') closeModal();
 };
 document.ondblclick = function (e) {
   var el = closest(e.target || e.srcElement, 'data-ip');
@@ -1184,7 +1324,12 @@ function onSlide(e) {
   var t = e.target || e.srcElement;
   if (t && t.getAttribute && t.getAttribute('data-xsz')) {
     var i = Number(t.value); E.xs = SZ[i]; E.xp = presetOf(E);
-    $('vv_xsz').innerHTML = esc([T('sz_s'), T('sz_m'), T('sz_l'), T('sz_auto')][i]); drawXhair(); var cd = $('xCode'); if (cd) cd.value = xcode(E);
+    $('vv_xsz').innerHTML = 'x' + (i + 1); drawXhair(); var cd = $('xCode'); if (cd) cd.value = xcode(E);
+    var dl = document.querySelector('.dd.xsz span'); if (dl) dl.innerHTML = esc(ddLabel('xsz'));
+    return;
+  }
+  if (t && t.getAttribute && t.getAttribute('data-xop')) {
+    E.xtr = Number(t.value) ? 0 : 1; $('vv_xop').innerHTML = E.xtr ? '60%' : '100%'; drawXhair(); var cd2 = $('xCode'); if (cd2) cd2.value = xcode(E);
     return;
   }
   if (!t || !t.getAttribute || !t.getAttribute('data-sl')) return;
@@ -1206,11 +1351,12 @@ document.onkeydown = function (e) {
   if ($('mdAsk').className === 'modal on') { if (k === 13) askDone(true); if (k === 27) askDone(false); return; }
   if (curModal === 'mdLogin' && k === 13) { doLogin(); return false; }
   if (curModal === 'mdSide' && k === 13 && $('frIn')) { act('fradd'); return false; }
-  if (k === 27 && curModal && curModal !== 'mdLogin') { closeModal(); return false; }
+  if (k === 27 && curModal) { closeModal(); return false; }
 };
 $('askYes').onclick = function () { askDone(true); };
 $('askNo').onclick = function () { askDone(false); };
 $('srvSearch').onkeyup = function () { renderServers(); };
+$('avFile').onchange = function () { avUpload(this.files && this.files[0]); };
 
 /* ============================================================ boshlash */
 var VERSION = qparam('v') || window.XC_VERSION || '';
@@ -1239,8 +1385,8 @@ step('loadOpts();', function () { loadOpts(); });
 step('each(PINNED.concat(DB.fav).concat(DB.his', function () { each(PINNED.concat(DB.fav).concat(DB.hist.slice(0, 5).map(function (h) { return h.ip; })), function (ip) { query(ip); }); });
 step('renderAll();', function () { renderAll(); });
 
-if (DB.token) api('me', {}, function (r) { if (r.ok) { setMe(r.me); loadFriends(); pingPresence(); } else if (r.err === 'auth' && !DB.guest) openLogin(); });
-else if (!DB.guest) openLogin();
+// kirish oynasi o'zi ochilmaydi - o'ng ustundagi "Akkauntga kiring" kartasi orqali
+if (DB.token) api('me', {}, function (r) { if (r.ok) { setMe(r.me); loadFriends(); pingPresence(); } else if (r.err === 'auth') { DB.token = ''; persist(); renderAll(); } });
 
 if (NC) {
   try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('show', function () { each(TOP.concat(PINNED), function (ip) { query(ip); }); loadFriends(); }); } catch (e) {}

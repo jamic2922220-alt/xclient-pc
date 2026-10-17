@@ -190,7 +190,7 @@ input, select { font-family: inherit; }
 .pane { position: absolute; top: 20px; bottom: 6px; background: #19151b; border: 1px solid #2a2026; padding: 16px 18px; overflow: hidden; }
 .pane.l { left: 20px; width: 560px; } .pane.r { left: 596px; right: 20px; }
 .pane.full { left: 20px; right: 20px; overflow-y: auto; }
-.ph2 { font-size: 13px; letter-spacing: 3px; color: #ff4a4a; font-weight: bold; margin: 0 0 14px; }
+.ph2 { text-transform: uppercase; font-size: 13px; letter-spacing: 3px; color: #ff4a4a; font-weight: bold; margin: 0 0 14px; }
 .ph2.m { margin-top: 22px; }
 .fr { position: relative; min-height: 44px; margin-bottom: 4px; }
 .fr .lb { position: absolute; left: 0; top: 4px; width: 230px; font-size: 15px; line-height: 18px; }
@@ -313,3 +313,57 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 #ddList a:hover { background: #2a1216; color: #fff; }
 #ddList a.on { color: #ff6a6a; }
 #ddList::-webkit-scrollbar { width: 8px; } #ddList::-webkit-scrollbar-thumb { background: #3a2a30; }
+
+/* ===== akkauntga kirish kartasi (mehmonlar uchun) ===== */
+.acct { position: relative; height: 186px; cursor: pointer; background: -webkit-linear-gradient(top, rgba(78,14,20,0.96), rgba(24,12,16,0.96)); border: 1px solid #e5484d; -webkit-box-shadow: 0 0 16px rgba(255,59,59,0.30); }
+.acct.hi { border-color: #ff8a8a; -webkit-box-shadow: 0 0 26px rgba(255,59,59,0.65); }
+.acct .acx { position: absolute; left: 16px; top: 16px; width: 46px; height: 46px; line-height: 46px; text-align: center; border-radius: 23px; background: #ff3b3b; color: #fff; font-family: "Arial Black", Arial, sans-serif; font-size: 24px; font-weight: 900; -webkit-box-shadow: 0 0 0 3px #ff9a8a; }
+.acct .act1 { position: absolute; left: 78px; top: 16px; font-size: 19px; font-weight: bold; letter-spacing: 2px; color: #fff; }
+.acct .act2 { position: absolute; left: 78px; top: 42px; font-size: 13px; color: #ffb3a8; }
+.acct .acl { position: absolute; left: 16px; right: 16px; top: 74px; font-size: 13px; color: #ff6a6a; }
+.acct .acl span { display: block; height: 19px; line-height: 19px; }
+.acct .acl b { font-weight: normal; color: #eadfd9; }
+.acct .acbtn { position: absolute; left: 16px; right: 16px; bottom: 12px; margin: 0; height: 32px; line-height: 30px; font-weight: bold; letter-spacing: 1px; }
+.lgin { color: #ff6a6a; font-weight: bold; }
+
+/* ===== profil rasmi ===== */
+.av, .tr .rk.av2, .prof .bigav { overflow: hidden; }
+.av img { width: 34px; height: 34px; border-radius: 17px; }
+.tr .rk.av2 img { width: 26px; height: 26px; border-radius: 13px; }
+.prof .bigav { position: relative; }
+.prof .bigav img { width: 110px; height: 110px; border-radius: 55px; }
+.prof .bigav .avcam { display: none; position: absolute; left: 0; right: 0; bottom: 0; height: 32px; line-height: 30px; font-size: 12px; font-weight: normal; color: #fff; background: rgba(0,0,0,0.65); cursor: pointer; }
+.prof .bigav:hover .avcam { display: block; }
+.avcols { margin: 2px 0 14px; }
+.avcols a { display: inline-block; width: 20px; height: 20px; margin: 0 3px; border-radius: 10px; border: 2px solid transparent; cursor: pointer; }
+.avcols a.on { border-color: #fff; }
+
+/* ===== uchqunlar (kichik nuqtalar, faqat #stage ichida) ===== */
+.spk { position: absolute; left: -10px; top: -10px; width: 3px; height: 3px; background: #ff9448; }
+.spk.s2 { width: 2px; height: 2px; background: #ffd27a; }
+
+/* ===== HUD: ichki bo'limlar ===== */
+.hsub { position: absolute; left: 20px; top: 14px; height: 34px; }
+.hsub a { display: inline-block; height: 32px; line-height: 30px; padding: 0 18px; margin-right: 6px; font-size: 14px; color: #cfc4cc; background: #19151b; border: 1px solid #2a2026; cursor: pointer; }
+.hsub a.on { color: #fff; border-color: #e5484d; background: #2a1216; }
+.pane.hp { top: 58px; }
+.hp .fr .ct2 { margin-left: 160px; }
+.hp .fr .lb { width: 150px; }
+.hp .fr.w .lb { width: auto; }
+#xPrev.big { position: relative; width: 524px; height: 220px; }
+.hnote { margin-top: 14px; font-size: 13px; line-height: 18px; color: #a99ea6; }
+.hp .sw a { width: 24px; height: 24px; margin-right: 5px; vertical-align: top; }
+.hp .sw a.pick { width: auto; height: 28px; line-height: 26px; padding: 0 12px; margin: 0; border: 1px solid #3a2e34; }
+.dd.xsz { width: 96px; }
+.sl.sl2 { position: absolute; left: 106px; right: 0; top: 0; }
+.sl.sl2 input { width: 120px; }
+.fr.dis { opacity: 0.4; }
+.fr.dis input { cursor: default; }
+.cks { margin-top: 6px; }
+.ck { display: block; height: 28px; line-height: 28px; font-size: 14px; color: #e8dcd6; cursor: pointer; }
+.ck i { display: inline-block; vertical-align: middle; width: 16px; height: 16px; line-height: 16px; margin: -3px 10px 0 0; text-align: center; font-style: normal; font-size: 12px; color: #fff; background: #0f0d12; border: 1px solid #4a3a42; }
+.ck.on i { background: #ff3b3b; border-color: #ff6a6a; }
+.ck.dis { opacity: 0.4; cursor: default; }
+.hfoot { position: absolute; left: 18px; right: 18px; bottom: 14px; height: 34px; }
+.hfoot span { position: absolute; left: 0; right: 130px; top: 0; font-size: 12px; line-height: 16px; }
+.hfoot .btn { position: absolute; right: 0; top: 0; margin: 0; height: 32px; line-height: 30px; }

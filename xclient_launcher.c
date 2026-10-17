@@ -635,13 +635,12 @@ static void ensure_launcher_cfg(void)
  * tanlov cstrike/MiscellaneousSettings.vdf dagi "Scheme" kalitida. Birinchi marta X CLIENT sxemasini
  * tanlab qo'yamiz - keyin o'yinchi Sozlamalar > Misc > Color scheme da o'zgartirishi mumkin. */
 #define XC_SCHEME "TrackerScheme_XClient.res"
-static void ensure_scheme(void)
+/* cstrike/MiscellaneousSettings.vdf (NextClient KeyValues) dagi bitta kalitni o'rnatadi; boshqa kalitlar saqlanadi */
+static BOOL vdf_set(const char *key, const char *val)
 {
-    wchar_t ini[MAX_PATH], vdf[MAX_PATH];
-    ini_path(ini);
-    if (GetPrivateProfileIntW(L"x", L"scheme", 0, ini)) return;
+    wchar_t vdf[MAX_PATH];
     path_join(vdf, g_dir, L"cstrike\\MiscellaneousSettings.vdf");
-    char *buf = NULL, *out = NULL;
+    char *buf = NULL, *out = NULL, qk[64];
     long n = 0;
     FILE *f = _wfopen(vdf, L"rb");
     if (f) {
@@ -649,31 +648,41 @@ static void ensure_scheme(void)
         if (n > 0 && n < 65536 && (buf = (char *)calloc(1, n + 1)) != NULL) fread(buf, 1, n, f);
         fclose(f);
     }
-    out = (char *)malloc(n + 256);
-    if (!out) { free(buf); return; }
-    char *k = buf ? strstr(buf, "\"Scheme\"") : NULL;
+    _snprintf(qk, sizeof(qk), "\"%s\"", key); qk[sizeof(qk) - 1] = 0;
+    out = (char *)malloc(n + 512);
+    if (!out) { free(buf); return FALSE; }
+    char *k = buf ? strstr(buf, qk) : NULL;
     char *close = buf ? strrchr(buf, '}') : NULL;
     if (k) {
-        /* "Scheme" "eski" -> "Scheme" "XClient" (qator oxirigacha almashtiramiz) */
         char *eol = strchr(k, '\n');
         size_t pre = (size_t)(k - buf);
         memcpy(out, buf, pre);
-        sprintf(out + pre, "\"Scheme\"\t\t\"%s\"\r\n%s", XC_SCHEME, eol ? eol + 1 : "");
+        sprintf(out + pre, "%s\t\t\"%s\"\r\n%s", qk, val, eol ? eol + 1 : "");
     } else if (close) {
         size_t pre = (size_t)(close - buf);
         memcpy(out, buf, pre);
-        sprintf(out + pre, "\t\"Scheme\"\t\t\"%s\"\r\n%s", XC_SCHEME, close);
+        sprintf(out + pre, "\t%s\t\t\"%s\"\r\n%s", qk, val, close);
     } else {
-        sprintf(out, "\"MiscellaneousSettings\"\r\n{\r\n\t\"Scheme\"\t\t\"%s\"\r\n}\r\n", XC_SCHEME);
+        sprintf(out, "\"MiscellaneousSettings\"\r\n{\r\n\t%s\t\t\"%s\"\r\n}\r\n", qk, val);
     }
-    mkdirs_for(vdf);
-    f = _wfopen(vdf, L"wb");
-    if (f) {
-        fwrite(out, 1, strlen(out), f);
-        fclose(f);
-        WritePrivateProfileStringW(L"x", L"scheme", L"1", ini);
-    }
+    BOOL ok = FALSE;
+    if (!buf || strcmp(buf, out)) {
+        mkdirs_for(vdf);
+        f = _wfopen(vdf, L"wb");
+        if (f) { fwrite(out, 1, strlen(out), f); fclose(f); ok = TRUE; }
+    } else ok = TRUE;
     free(buf); free(out);
+    return ok;
+}
+static void ensure_scheme(void)
+{
+    wchar_t ini[MAX_PATH];
+    ini_path(ini);
+    /* o'yin ochilganda eski Serverlar oynasi o'zi chiqmasin - serverlar X CLIENT menyusida */
+    vdf_set("DisableAutoOpenServerBrowser", "1");
+    /* X CLIENT rang sxemasi - faqat birinchi marta (keyin o'yinchi o'zgartirishi mumkin) */
+    if (!GetPrivateProfileIntW(L"x", L"scheme", 0, ini) && vdf_set("Scheme", XC_SCHEME))
+        WritePrivateProfileStringW(L"x", L"scheme", L"1", ini);
 }
 
 /* ---------------------------------------------------------------- X CLIENT bosh menyusi (HTML) */
