@@ -732,12 +732,12 @@ static void remove_old_ui(void)
     SHFileOperationW(&op);
 }
 
-/* xclient_launcher.cfg yo'q bo'lsa - bo'sh qilib yaratamiz (o'yinchi sozlamalari config.cfg da qoladi) */
+/* xclient_launcher.cfg har safar qayta yoziladi: eski versiya (Electron oynasi) unga sensitivity, fps_max, pritsel yozgan edi -
+ * u o'yin ochilganda eng oxirida bajarilib, menyudagi sozlamalarni bosib ketardi. Sozlamalar config.cfg da qoladi. */
 static void ensure_launcher_cfg(void)
 {
     wchar_t p[MAX_PATH];
     path_join(p, g_dir, L"cstrike\\xclient_launcher.cfg");
-    if (GetFileAttributesW(p) != INVALID_FILE_ATTRIBUTES) return;
     mkdirs_for(p);
     FILE *f = _wfopen(p, L"wb");
     if (!f) return;

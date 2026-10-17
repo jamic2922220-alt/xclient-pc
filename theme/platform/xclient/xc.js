@@ -1878,6 +1878,8 @@ step("if (DB.forget) { DB.token = ''; DB.forge", function () { if (DB.forget) { 
 step('loadSettings();', function () { loadSettings(); });
 step('loadBinds();', function () { loadBinds(); binAliases(); });
 step('seedFromGame();', function () { seedFromGame(); });
+// saqlangan sozlamalar har ochilishda qayta qo'yiladi: sborkaning userconfig.cfg / eski xclient_launcher.cfg ularni o'zgartirib yuboradi
+step('reapply', function () { if (DB.set) { var ra = function () { applySettings(S); applyBinds(); }; setTimeout(ra, 2500); setTimeout(ra, 12000); } });
 step('fit();', function () { fit(); });
 step('window.onresize = fit;', function () { window.onresize = fit; });
 step('fxLoop();', function () { fxLoop(); });
