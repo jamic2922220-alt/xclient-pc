@@ -908,14 +908,17 @@ var DEF = {
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1,
   fps: 100, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 300,
   xp: 'pro', xt: 0, xs: 'small', xc: '255 59 59', xtr: 0, xdyn: 0, xthick: 1, xgap: 3, xout: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
-  rscale: 115, ropac: 100, rnames: 0, rhp: 0
+  rscale: 115, ropac: 100, rnames: 0, rhp: 0,
+  bob: 0.01, picmip: 0, detail: 1, shadows: 1, minm: 0, interp: 0.01, lw: 1, lc: 1, hisnd: 1, mixa: 0.1, loop: 0, saytm: 5, ngpos: 1
 };
 var S = null, E = null;
 var CVARS = { sens: 'sensitivity', zoom: 'zoom_sensitivity_ratio', raw: 'm_rawinput', filter: 'm_filter', vol: 'volume', vscale: 'voice_scale', voice: 'voice_enable',
   fps: 'fps_max', gamma: 'gamma', fov: 'fov_angle', vmfov: 'viewmodel_fov', hor: 'fov_horplus', xt: 'cl_crosshair_type', xs: 'cl_crosshair_size',
   xc: 'cl_crosshair_color', xtr: 'cl_crosshair_translucent', xdyn: 'cl_dynamiccrosshair', hand: 'cl_righthand', fastsw: 'hud_fastswitch', dl: 'cl_allowdownload',
   spray: 'cl_allowupload', mute: 'snd_mute_losefocus', vsync: 'gl_vsync', dyn: 'r_dynamic', cid: 'hud_centerid', radar: 'cl_radartype', dmax: 'hud_deathnotice_max', decals: 'mp_decals',
-  ropac: 'hud_radar_opacity', rnames: 'hud_radar_names', rhp: 'hud_radar_health' };
+  ropac: 'hud_radar_opacity', rnames: 'hud_radar_names', rhp: 'hud_radar_health',
+  bob: 'cl_bob', picmip: 'gl_picmip', detail: 'r_detailtextures', shadows: 'cl_shadows', minm: 'cl_minmodels', interp: 'ex_interp', lw: 'cl_lw', lc: 'cl_lc',
+  hisnd: 'hisound', mixa: '_snd_mixahead', loop: 'voice_loopback', saytm: 'hud_saytext_time', ngpos: 'net_graphpos' };
 function loadSettings() {
   S = copy(DEF);
   if (DB.set) for (var k in DB.set) if (DB.set.hasOwnProperty(k) && DEF.hasOwnProperty(k)) S[k] = DB.set[k];
@@ -954,6 +957,9 @@ function settingsCmds(s) {
   c.push('volume ' + s.vol, 'voice_enable ' + s.voice, 'voice_scale ' + s.vscale, 'snd_mute_losefocus ' + s.mute);
   c.push('fps_max ' + s.fps, 'gamma ' + s.gamma, 'fov_angle ' + s.fov, 'viewmodel_fov ' + s.vmfov, 'fov_horplus ' + s.hor, 'gl_vsync ' + s.vsync, 'r_dynamic ' + s.dyn, 'mp_decals ' + s.decals);
   each(xhairCmds(s), function (x) { c.push(x); });
+  c.push('cl_bob ' + s.bob, 'gl_picmip ' + s.picmip, 'r_detailtextures ' + s.detail, 'cl_shadows ' + s.shadows, 'cl_minmodels ' + s.minm,
+    'ex_interp ' + s.interp, 'cl_lw ' + s.lw, 'cl_lc ' + s.lc, 'hisound ' + s.hisnd, '_snd_mixahead ' + s.mixa, 'voice_loopback ' + s.loop,
+    'hud_saytext_time ' + s.saytm, 'net_graphpos ' + s.ngpos);
   c.push('net_graph ' + (s.netg ? 3 : 0), 'hud_deathnotice_old ' + (s.hs ? 0 : 1), 'hud_deathnotice_max ' + s.dmax, 'cl_radartype ' + s.radar, 'hud_centerid ' + s.cid, 'scr_drawversion ' + (s.nover ? 0 : 1));
   c.push('hud_radar_scale ' + (s.rscale / 100), 'hud_radar_opacity ' + s.ropac, 'hud_radar_names ' + s.rnames, 'hud_radar_health ' + s.rhp);
   if (s.buykeys) each(BUY, function (b) { c.push('bind ' + b[0] + ' ' + q(b[1])); });
@@ -1096,13 +1102,29 @@ var PANES = {
   },
   sound: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('so_title')) + '</div>' + sl('vol', 'so_vol', 0, 1, 0.05) + sl('mus', 'so_mus', 0, 1, 0.05) + sl('vscale', 'so_vscale', 0, 2, 0.1) + '</div>' +
-      '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('voice', 'so_voice') + tg('mute', 'so_mute') + '</div>';
+      '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('voice', 'so_voice') + tg('loop', 'so_loop') + tg('mute', 'so_mute') +
+      '<div class="ph2 m">' + esc(T('so_q')) + '</div>' + tg('hisnd', 'so_hi') + seg('mixa', 'so_mix', [[0.05, 'so_mix1'], [0.1, 'so_mix2']]) + '</div>';
   },
   video: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('v_title')) + '</div>' +
       seg('fps', 'v_fps', [[60, '60'], [100, '100'], [144, '144'], [200, '200'], [300, '300']]) +
       sl('gamma', 'v_bright', 1.8, 3, 0.1) + sl('fov', 'v_fov', 70, 100, 1, 'v_fov2') + sl('vmfov', 'v_vm', 70, 100, 1) + sl('decals', 'v_dec', 50, 1000, 50) + '</div>' +
       '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('hor', 'v_hor') + tg('vsync', 'v_vsync') + tg('dyn', 'v_dyn') + '</div>';
+  },
+  pro: function () {                              // Kengaytirilgan: grafika, internet, qurol, ekran
+    return '<div class="pane l"><div class="ph2">' + esc(T('pr_gfx')) + '</div>' +
+      seg('picmip', 'pr_tex', [[0, 'pr_tex0'], [1, 'pr_tex1'], [2, 'pr_tex2']]) +
+      '<div class="mut" style="margin:-6px 0 8px;font-size:12px">' + esc(T('pr_tex3')) + '</div>' +
+      tg('detail', 'pr_detail') + tg('shadows', 'pr_shadows') + tg('minm', 'pr_minm', 'pr_minm2') +
+      '<div class="ph2 m">' + esc(T('pr_fps')) + '</div>' +
+      '<div class="rowb"><b>' + esc(T('pr_fps')) + '</b><small>' + esc(T('pr_fps2')) + '</small><a class="btn red" data-act="fpsmode">' + esc(T('pr_fpsb')) + '</a></div></div>' +
+      '<div class="pane r"><div class="ph2">' + esc(T('pr_net')) + '</div>' +
+      seg('interp', 'pr_interp', [[0.01, '0.01'], [0.05, '0.05'], [0.1, '0.1']]) +
+      '<div class="mut" style="margin:-6px 0 8px;font-size:12px">' + esc(T('pr_interp2')) + '</div>' +
+      tg('lw', 'pr_lw', 'pr_lw2') + tg('lc', 'pr_lc') +
+      '<div class="ph2 m">' + esc(T('pr_wpn')) + '</div>' + seg('bob', 'pr_bob', [[0.01, 'pr_bob1'], [0, 'pr_bob0']]) +
+      '<div class="ph2 m">' + esc(T('pr_scr')) + '</div>' + sl('saytm', 'pr_say', 1, 20, 1) +
+      seg('ngpos', 'pr_ngpos', [[1, 'pr_ng1'], [2, 'pr_ng2'], [3, 'pr_ng3']]) + '</div>';
   },
   hud: function () {
     var sub = '';
@@ -1385,6 +1407,10 @@ function act(a) {
       each(xhairCmds(E || S), function (x) { cmd(x); });
     }, 3000);
     return toast(T('hx_test1'), 3000);
+  }
+  if (a === 'fpsmode') {                       // kuchsiz kompyuter: grafikani pasaytiramiz
+    E.picmip = 1; E.detail = 0; E.shadows = 0; E.minm = 1; E.dyn = 0; E.decals = 50; E.vsync = 0;
+    showSetTab('pro'); return toast(T('pr_fpsok'), 5000);
   }
   if (a === 'xdef') { each(['xp', 'xt', 'xs', 'xc', 'xtr', 'xdyn', 'xthick', 'xgap', 'xout'], function (k) { E[k] = DEF[k]; }); return showSetTab('hud'); }
   if (a === 'xpick') return ask(T('hx_colask'), function (v) {
