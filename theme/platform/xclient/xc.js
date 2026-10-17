@@ -572,7 +572,7 @@ function renderHome() {
     var s = srv(ip);
     var meta = s.ok ? pbar(s) + s.pl + '/' + s.max + ' \u00b7 ' + esc(s.map) : (s.fail ? T('offline') : esc(ip));
     html += '<div class="tr' + (i === 0 ? ' r1' : '') + '" data-ip="' + esc(ip) + '"><div class="rk">' + (i + 1) + '</div>' +
-      '<div class="nm">' + flagOf(ip) + esc(s.name || ip) + (isX(s) ? '<span class="xb">X</span>' : '') + '</div><div class="mt">' + meta + '</div>' +
+      '<div class="nm">' + flagOf(ip) + esc(s.name || ip) + '</div><div class="mt">' + meta + '</div>' +
       '<div class="go">' + esc(T('join')) + '</div></div>';
   });
   $('topList').innerHTML = html || '<div class="empty">' + esc(T('no_top')) + '</div>';
@@ -796,7 +796,7 @@ function renderServers() {
     if (isHist && h) c6 = (h.k || h.x) ? (h.k || 0) + ' / ' + (h.x || 0) : '\u2014';
     html += '<div class="sr' + (s.ip === srvSel ? ' on' : '') + '" data-ip="' + esc(s.ip) + '">' +
       '<span class="c0' + (isFavIp(s.ip) ? ' f' : '') + '" data-fav="' + esc(s.ip) + '">\u2605</span>' +
-      c1row(s, (s.name || (h && h.name) || s.ip), (isX(s) ? '<span class="xb">X</span><span class="vb">VIP</span>' : '') + svcBadges(s.ip) + (s.pass ? '<span class="vb">PW</span>' : '') + (isFav && PROMO_FAV.indexOf(s.ip) >= 0 ? '<span class="vb">' + esc(T('ad')) + '</span>' : '')) +
+      c1row(s, (s.name || (h && h.name) || s.ip), s.pass ? '<span class="vb">PW</span>' : '') +
       '<span class="c2">' + (s.ok ? pbar(s) + s.pl + '/' + s.max : (s.fail ? '<span class="rd">' + T('offline') + '</span>' : '...')) + '</span>' +
       '<span class="c3">' + esc(s.map || (h && h.map) || '') + '</span>' +
       '<span class="c4">' + (s.ok ? '<i class="dot ' + pc + '"></i>' + s.ping : '') + '</span>' +
@@ -907,7 +907,7 @@ var DEF = {
   sens: 2.5, zoom: 1.2, raw: 1, filter: 0, inv: 0,
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1,
   fps: 100, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 300,
-  xp: 'pro', xt: 0, xs: 'small', xc: '255 59 59', xtr: 0, xdyn: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
+  xp: 'pro', xt: 0, xs: 'small', xc: '255 59 59', xtr: 0, xdyn: 0, xthick: 1, xgap: 3, xout: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
   rscale: 115, ropac: 100, rnames: 0, rhp: 0
 };
 var S = null, E = null;
@@ -928,6 +928,7 @@ function seedFromGame() {
     if (v == null || v === '') continue;
     if (typeof DEF[k] === 'number') { var n = parseFloat(v); if (!isNaN(n)) S[k] = Math.round(n * 100) / 100; } else S[k] = String(v).replace(/^\s+|\s+$/g, '');
   }
+  for (var xk in XSUP) if (XSUP.hasOwnProperty(xk) && XSUP[xk]) { var xv = parseFloat(readCvar(XSUP[xk])); if (!isNaN(xv)) S[xk] = Math.round(xv * 10) / 10; }
   var pitch = parseFloat(readCvar('m_pitch')); if (!isNaN(pitch)) S.inv = pitch < 0 ? 1 : 0;
   var ng = parseFloat(readCvar('net_graph')); if (!isNaN(ng)) S.netg = ng > 0 ? 1 : 0;
   var old = parseFloat(readCvar('hud_deathnotice_old')); if (!isNaN(old)) S.hs = old > 0 ? 0 : 1;
@@ -952,7 +953,7 @@ function settingsCmds(s) {
   c.push('sensitivity ' + s.sens, 'zoom_sensitivity_ratio ' + s.zoom, 'm_rawinput ' + s.raw, 'm_filter ' + s.filter, 'm_pitch ' + (s.inv ? -0.022 : 0.022));
   c.push('volume ' + s.vol, 'voice_enable ' + s.voice, 'voice_scale ' + s.vscale, 'snd_mute_losefocus ' + s.mute);
   c.push('fps_max ' + s.fps, 'gamma ' + s.gamma, 'fov_angle ' + s.fov, 'viewmodel_fov ' + s.vmfov, 'fov_horplus ' + s.hor, 'gl_vsync ' + s.vsync, 'r_dynamic ' + s.dyn, 'mp_decals ' + s.decals);
-  c.push('cl_crosshair_type ' + s.xt, 'cl_crosshair_size ' + s.xs, 'cl_crosshair_color ' + q(s.xc), 'cl_crosshair_translucent ' + s.xtr, 'cl_dynamiccrosshair ' + s.xdyn);
+  each(xhairCmds(s), function (x) { c.push(x); });
   c.push('net_graph ' + (s.netg ? 3 : 0), 'hud_deathnotice_old ' + (s.hs ? 0 : 1), 'hud_deathnotice_max ' + s.dmax, 'cl_radartype ' + s.radar, 'hud_centerid ' + s.cid, 'scr_drawversion ' + (s.nover ? 0 : 1));
   c.push('hud_radar_scale ' + (s.rscale / 100), 'hud_radar_opacity ' + s.ropac, 'hud_radar_names ' + s.rnames, 'hud_radar_health ' + s.rhp);
   if (s.buykeys) each(BUY, function (b) { c.push('bind ' + b[0] + ' ' + q(b[1])); });
@@ -966,6 +967,7 @@ function verifySettings(s) {
   if (!canRead()) { toast(T('saved')); return; }
   var exp = {}, bad = [], ok = 0;
   for (var k in CVARS) if (CVARS.hasOwnProperty(k)) exp[CVARS[k]] = s[k];
+  for (var xk in XSUP) if (XSUP.hasOwnProperty(xk) && XSUP[xk]) exp[XSUP[xk]] = xextVal(xk, s);
   exp.m_pitch = s.inv ? -0.022 : 0.022; exp.net_graph = s.netg ? 3 : 0; exp.hud_deathnotice_old = s.hs ? 0 : 1; exp.hud_radar_scale = s.rscale / 100;
   if (s.name) exp.name = fullName(s);
   for (var c in exp) {
@@ -1006,7 +1008,29 @@ function applyCode(code) {
 }
 
 var setTab = 'game', HSUB = 'main';
+/* pritsel: o'yinga darhol qo'llanadi (Saqlash bosilmasa - oyna yopilganda qaytariladi).
+ * Qalinlik / interval / kontur: NextClient versiyasida shunday kvar bo'lsa - ishlaydi, bo'lmasa kulrang. */
+var XEXT = { xthick: ['cl_crosshair_thickness', 'cl_crosshairthickness', 'cl_crosshair_width'],
+  xgap: ['cl_crosshair_gap', 'cl_crosshairgap'],
+  xout: ['cl_crosshair_outline', 'cl_crosshair_drawoutline', 'cl_crosshair_outline_draw', 'cl_crosshair_outline_thickness'] };
+var XSUP = {}, XLIVE = false;
+function detectXext() {
+  XSUP = {};
+  for (var k in XEXT) {
+    if (!XEXT.hasOwnProperty(k)) continue;
+    XSUP[k] = '';
+    for (var i = 0; i < XEXT[k].length; i++) { var v = readCvar(XEXT[k][i]); if (v != null && v !== '') { XSUP[k] = XEXT[k][i]; break; } }
+  }
+}
+function xextVal(k, s) { return k === 'xout' && /draw/.test(XSUP[k] || '') ? (s.xout > 0 ? 1 : 0) : s[k]; }
+function xhairCmds(s) {
+  var c = ['cl_crosshair_type ' + s.xt, 'cl_crosshair_size ' + s.xs, 'cl_crosshair_color ' + q(s.xc), 'cl_crosshair_translucent ' + s.xtr, 'cl_dynamiccrosshair ' + s.xdyn];
+  for (var k in XSUP) if (XSUP.hasOwnProperty(k) && XSUP[k]) c.push(XSUP[k] + ' ' + xextVal(k, s));
+  return c;
+}
+function xLive() { if (!E) return; XLIVE = true; each(xhairCmds(E), function (x) { cmd(x); }); }
 function openSettings(tab) {
+  detectXext();
   seedFromGame();
   E = copy(S);
   openModal('mdSettings');
@@ -1018,7 +1042,7 @@ function showSetTab(tab) {
   each(document.querySelectorAll('#setTabs a'), function (a) { a.className = a.getAttribute('data-tab') === tab ? 'on' : ''; });
   $('setBody').innerHTML = (PANES[tab] || PANES.game)();
   $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local'));
-  if (tab === 'hud') { drawXhair(); drawScope(); }
+  if (tab === 'hud') { drawXhair(); drawScope(); if (XLIVE || E && S && xcode(E) !== xcode(S)) xLive(); }
 }
 function tg(key, label, sub) {
   return '<div class="fr w"><div class="lb">' + esc(T(label)) + (sub ? '<small>' + esc(T(sub)) + '</small>' : '') + '</div>' +
@@ -1100,7 +1124,9 @@ var PANES = {
     var cols = '';
     each(pal, function (c) { cols += '<a class="' + (E.xc === c ? 'on' : '') + '" data-seg="xc" data-v="' + c + '" style="background:rgb(' + c.split(' ').join(',') + ')"></a>'; });
     var si = Math.max(0, SZ.indexOf(E.xs)), xt = Number(E.xt);
-    var off = function (label, val) {             // bu NextClient'da yo'q - kulrang
+    var off = function (key, label, min, max) {
+      if (XSUP[key]) return sl(key, label, min, max, 1);           // o'yinda bor - ishlaydi
+      var val = E[key];                                             // bu NextClient'da yo'q - kulrang
       return '<div class="fr dis"><div class="lb">' + esc(T(label)) + '</div><div class="ct2"><div class="sl"><input type="range" min="0" max="10" value="' + val + '" disabled><div class="vv">' + val + '</div></div></div></div>';
     };
     var ck = function (k, label, on, dis) {
@@ -1114,11 +1140,11 @@ var PANES = {
       '<div class="pane r hp"><div class="ph2">&nbsp;</div>' +
       '<div class="fr"><div class="lb">' + esc(T('x_size')) + '</div><div class="ct2"><a class="dd xsz" data-dd="xsz"><span>' + esc(ddLabel('xsz')) + '</span><i>▾</i></a>' +
       '<div class="sl sl2"><input type="range" min="0" max="3" step="1" value="' + si + '" data-xsz="1"><div class="vv" id="vv_xsz">x' + (si + 1) + '</div></div></div></div>' +
-      off('hx_thick', 1) + off('hx_gap', 3) +
+      off('xthick', 'hx_thick', 1, 5) + off('xgap', 'hx_gap', 0, 10) +
       '<div class="fr"><div class="lb">' + esc(T('hx_opaq')) + '</div><div class="ct2"><div class="sl"><input type="range" min="0" max="1" step="1" value="' + (E.xtr ? 0 : 1) + '" data-xop="1"><div class="vv" id="vv_xop">' + (E.xtr ? '60%' : '100%') + '</div></div></div></div>' +
-      off('hx_outl', 0) +
-      '<div class="cks">' + ck('dot', 'hx_dot', xt === 3) + ck('t', 'hx_t', xt === 1) + ck('circle', 'hx_circ', xt === 2) + ck('dyn', 'hx_wdep', !!E.xdyn) + ck('fps', 'hx_fps', false, true) + '</div>' +
-      '<div class="hfoot"><span class="mut">' + esc(T('hx_na')) + '</span><a class="btn" data-act="xdef">' + esc(T('hx_std')) + '</a></div></div>';
+      off('xout', 'hx_outl', 0, 3) +
+      '<div class="cks">' + ck('dot', 'hx_dot', xt === 3) + ck('t', 'hx_t', xt === 1) + ck('circle', 'hx_circ', xt === 2) + ck('dyn', 'hx_wdep', !!E.xdyn) + '</div>' +
+      '<div class="hfoot"><span class="mut">' + (XSUP.xthick && XSUP.xgap && XSUP.xout ? '' : esc(T('hx_na'))) + '</span><a class="btn" data-act="xdef">' + esc(T('hx_std')) + '</a></div></div>';
   },
   account: function () {
     if (!ME) {
@@ -1177,11 +1203,21 @@ function drawXhair() {
   g.clearRect(0, 0, w, h);
   var p = String(E.xc).split(' ');
   g.fillStyle = 'rgba(' + p[0] + ',' + p[1] + ',' + p[2] + ',' + (E.xtr ? 0.6 : 1) + ')';
-  var z = w > 300 ? 2 : 1, len = ({ small: 5, medium: 8, large: 11, auto: 11 }[E.xs] || 5) * z, gap = 3 * z, t = 2 * z, type = Number(E.xt);
-  if (type === 3) { g.fillRect(cx - 2 * z, cy - 2 * z, 4 * z, 4 * z); return; }
-  if (type === 2) { g.strokeStyle = g.fillStyle; g.lineWidth = t; g.beginPath(); g.arc(cx, cy, len + 2 * z, 0, Math.PI * 2); g.stroke(); g.fillRect(cx - z, cy - z, t, t); return; }
-  g.fillRect(cx - gap - len, cy - z, len, t); g.fillRect(cx + gap, cy - z, len, t); g.fillRect(cx - z, cy + gap, t, len);
-  if (type !== 1) g.fillRect(cx - z, cy - gap - len, t, len);
+  var z = w > 300 ? 2 : 1, len = ({ small: 5, medium: 8, large: 11, auto: 11 }[E.xs] || 5) * z, gap = (E.xgap != null ? Number(E.xgap) : 3) * z, t = (Math.max(1, Number(E.xthick) || 1) + 1) * z, type = Number(E.xt);
+  if (Number(E.xout) > 0) {                         // kontur: avval qora, har tomondan kattaroq
+    var o = Number(E.xout) * z, col = g.fillStyle;
+    g.fillStyle = 'rgba(0,0,0,0.85)';
+    xShape(g, cx, cy, z, len, gap, t, type, o);
+    g.fillStyle = col;
+  }
+  xShape(g, cx, cy, z, len, gap, t, type, 0);
+}
+function xShape(g, cx, cy, z, len, gap, t, type, o) {
+  var h = Math.floor(t / 2), R = function (x, y, a, b) { g.fillRect(x - o, y - o, a + 2 * o, b + 2 * o); };
+  if (type === 3) { R(cx - 2 * z, cy - 2 * z, 4 * z, 4 * z); return; }
+  if (type === 2) { g.strokeStyle = g.fillStyle; g.lineWidth = t + 2 * o; g.beginPath(); g.arc(cx, cy, len + 2 * z, 0, Math.PI * 2); g.stroke(); R(cx - z, cy - z, 2 * z, 2 * z); return; }
+  R(cx - gap - len, cy - h, len, t); R(cx + gap, cy - h, len, t); R(cx - h, cy + gap, t, len);
+  if (type !== 1) R(cx - h, cy - gap - len, t, len);
 }
 function drawScope() {
   var c = $('xScope'); if (!c || !c.getContext) return;
@@ -1252,6 +1288,7 @@ function openModal(id) {
 function closeModal() {
   if (DD) ddClose();
   if (!curModal) return;
+  if (curModal === 'mdSettings' && XLIVE && S) { XLIVE = false; each(xhairCmds(S), function (x) { cmd(x); }); }   // saqlanmagan pritselni qaytarish
   KEYWAIT = '';
   $(curModal).className = 'modal'; curModal = '';
 }
@@ -1339,7 +1376,7 @@ function act(a) {
     var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
     return toast(ok ? T('x_copied') : T('x_copy2'));
   }
-  if (a === 'xdef') { each(['xp', 'xt', 'xs', 'xc', 'xtr', 'xdyn'], function (k) { E[k] = DEF[k]; }); return showSetTab('hud'); }
+  if (a === 'xdef') { each(['xp', 'xt', 'xs', 'xc', 'xtr', 'xdyn', 'xthick', 'xgap', 'xout'], function (k) { E[k] = DEF[k]; }); return showSetTab('hud'); }
   if (a === 'xpick') return ask(T('hx_colask'), function (v) {
     v = String(v || '').replace(/^\s+|\s+$/g, '');
     var m = /^#?([0-9a-f]{6})$/i.exec(v), r = /^(\d{1,3})[ ,]+(\d{1,3})[ ,]+(\d{1,3})$/.exec(v);
@@ -1417,18 +1454,19 @@ document.ondblclick = function (e) {
 function onSlide(e) {
   var t = e.target || e.srcElement;
   if (t && t.getAttribute && t.getAttribute('data-xsz')) {
-    var i = Number(t.value); E.xs = SZ[i]; E.xp = presetOf(E);
+    var i = Number(t.value); E.xs = SZ[i]; E.xp = presetOf(E); xLive();
     $('vv_xsz').innerHTML = 'x' + (i + 1); drawXhair(); var cd = $('xCode'); if (cd) cd.value = xcode(E);
     var dl = document.querySelector('.dd.xsz span'); if (dl) dl.innerHTML = esc(ddLabel('xsz'));
     return;
   }
   if (t && t.getAttribute && t.getAttribute('data-xop')) {
-    E.xtr = Number(t.value) ? 0 : 1; $('vv_xop').innerHTML = E.xtr ? '60%' : '100%'; drawXhair(); var cd2 = $('xCode'); if (cd2) cd2.value = xcode(E);
+    E.xtr = Number(t.value) ? 0 : 1; xLive(); $('vv_xop').innerHTML = E.xtr ? '60%' : '100%'; drawXhair(); var cd2 = $('xCode'); if (cd2) cd2.value = xcode(E);
     return;
   }
   if (!t || !t.getAttribute || !t.getAttribute('data-sl')) return;
   var k = t.getAttribute('data-sl');
   E[k] = Math.round(Number(t.value) * 100) / 100; $('vv_' + k).innerHTML = E[k] + (t.getAttribute('data-u') || '');
+  if (XEXT.hasOwnProperty(k)) { drawXhair(); xLive(); }
 }
 document.addEventListener('change', function (e) { onSlide(e); var t = e.target || e.srcElement; if (t && (t.id === 'fMap' || t.id === 'fMode')) renderServers();  }, false);
 document.addEventListener('input', onSlide, false);
