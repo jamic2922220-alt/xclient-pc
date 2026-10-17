@@ -435,7 +435,7 @@ function line_chart($ser, $lines) {
     list($top, $step) = axis_top($max); $n = count($ser); $dx = ($W - $L - 20) / max(1, $n - 1);
     $s = ''; for ($v = 0; $v <= $top; $v += $step) { $y = $H - $B - ($H - $B - 12) * $v / $top; $s .= '<line x1="' . $L . '" x2="' . $W . '" y1="' . $y . '" y2="' . $y . '" class="g"/><text x="' . ($L - 10) . '" y="' . ($y + 4) . '" class="ax" text-anchor="end">' . $v . '</text>'; }
     foreach ($ser as $i => $p) if ($i % max(1, (int)round($n / 10)) === 0 || $i === $n - 1) $s .= '<text x="' . ($L + 10 + $dx * $i) . '" y="' . ($H - 8) . '" class="ax" text-anchor="middle">' . $p['l'] . '</text>';
-    foreach ($lines as $l) {
+    foreach (array_reverse($lines) as $l) {           // Unikal oxirida chiziladi - ustida ko'rinsin
         $pts = array(); foreach ($l[2] as $i => $v) $pts[] = array($L + 10 + $dx * $i, $H - $B - ($H - $B - 12) * $v / $top);
         $d = 'M' . round($pts[0][0], 1) . ',' . round($pts[0][1], 1);
         for ($i = 1; $i < count($pts); $i++) { $cx = ($pts[$i - 1][0] + $pts[$i][0]) / 2; $d .= ' C' . round($cx, 1) . ',' . round($pts[$i - 1][1], 1) . ' ' . round($cx, 1) . ',' . round($pts[$i][1], 1) . ' ' . round($pts[$i][0], 1) . ',' . round($pts[$i][1], 1); }
