@@ -105,22 +105,64 @@ function parse_fav($html, $MARKER, $IPRE, &$dbg) {
     return $list;
 }
 
+// sahifada haqiqiy (skript/CSS dan tashqari) <tr data-service="gamemenu"> jadvali bormi
+function has_gm_table($html) {
+    $h = preg_replace('#<(style|script)\b.*?</\1>#is', ' ', $html);
+    return (bool)preg_match('#<tr\b[^>]*data-service\s*=\s*["\']?(?:gamemenu|favorites)\b#i', $h);
+}
+// bosh sahifadagi ichki havolalar (jadval qaysi sahifada ekanini o'zimiz topamiz)
+function site_links($html, $base) {
+    $out = array(); $pri = array();
+    if (!preg_match_all('#href\s*=\s*["\']([^"\'\#]+)["\']#i', $html, $m)) return $out;
+    foreach ($m[1] as $u) {
+        $u = html_entity_decode(trim($u), ENT_QUOTES, 'UTF-8');
+        if (preg_match('#^https?://(www\.)?boost-top\.com(/.*)?$#i', $u, $mm)) $u = isset($mm[2]) && $mm[2] !== '' ? $mm[2] : '/';
+        if ($u === '' || $u[0] !== '/' || substr($u, 0, 2) === '//') continue;
+        if (preg_match('#^/servers/|^/media/|^/templates/|\.(css|js|png|jpe?g|gif|svg|ico|webp|zip|rar|exe|txt|xml)(\?|$)|logout|login|register|lang=#i', $u)) continue;
+        $full = rtrim($base, '/') . $u;
+        if (in_array($full, $out) || in_array($full, $pri)) continue;
+        if (preg_match('#servic|privileg|xizmat|uslug|tarif|price|buy|shop|vip|gm|game|favor|sevimli|izbran|page=#i', $u)) $pri[] = $full; else $out[] = $full;
+    }
+    return array_merge($pri, $out);
+}
+
 $list = null; $dbg = '';
+$PAGEF = __DIR__ . '/xc_data/fav_page.php';                            // jadval topilgan sahifa (eslab qolinadi)
 if (!$DEBUG && is_file($CACHE) && time() - filemtime($CACHE) < 300) {
     $list = json_decode(substr(file_get_contents($CACHE), 15), true);
 }
 if (!is_array($list)) {
-    $list = array(); $got = false;
-    $tries = array();
-    foreach ($PAGES as $u) $tries[] = array($u, '');
-    $tries[] = array('http://127.0.0.1/', 'boost-top.com');              // sayt shu serverda - ichkaridan
-    foreach ($tries as $t) {
-        $html = fetch_page($t[0], $t[1], $info);
-        $dbg .= $t[0] . ($t[1] ? ' (Host: ' . $t[1] . ')' : '') . ' -> ' . $info . ', ' . strlen($html) . " bayt\n";
+    $list = array(); $got = false; $t0 = time();
+    $known = is_file($PAGEF) ? trim(substr(file_get_contents($PAGEF), 15)) : '';
+    if ($known && !isset($_GET['url'])) array_unshift($PAGES, $known);
+    $home = ''; $homeUrl = '';
+    foreach ($PAGES as $u) {
+        $html = fetch_page($u, '', $info);
+        $dbg .= $u . ' -> ' . $info . ', ' . strlen($html) . " bayt\n";
         if (strlen($html) < 500) continue;
         $got = true;
-        $list = parse_fav($html, $MARKER, $IPRE, $dbg);
-        if ($list) break;
+        if (!$home && $u !== $known) { $home = $html; $homeUrl = $u; }
+        if (has_gm_table($html)) { $list = parse_fav($html, $MARKER, $IPRE, $dbg); if ($list) { $found = $u; break; } }
+        else $dbg .= "  (bu sahifada Sevimlilar jadvali yo'q)\n";
+        if ($home) break;                                               // https/http/www bir xil - bittasi yetadi
+    }
+    // bosh sahifada yo'q - saytdagi boshqa sahifalarni ko'rib chiqamiz (eng ko'pi 25 ta, 40 soniya)
+    if (!$list && $home && !isset($_GET['url'])) {
+        $base = preg_replace('#^(https?://[^/]+).*$#i', '$1', $homeUrl);
+        $links = site_links($home, $base);
+        $dbg .= "\nIchki havolalar: " . count($links) . " ta, tekshirilmoqda...\n";
+        foreach (array_slice($links, 0, 25) as $u) {
+            if (time() - $t0 > 40) { $dbg .= "vaqt tugadi\n"; break; }
+            $html = fetch_page($u, '', $info);
+            $ok = strlen($html) > 500 && has_gm_table($html);
+            $dbg .= '  ' . $u . ' -> ' . $info . ', ' . strlen($html) . ' bayt' . ($ok ? '  <== JADVAL TOPILDI' : '') . "\n";
+            if ($ok) { $list = parse_fav($html, $MARKER, $IPRE, $dbg); if ($list) { $found = $u; break; } }
+        }
+    }
+    if (!empty($found)) {
+        $dbg .= "\nJadval sahifasi: " . $found . "\n";
+        @mkdir(dirname($PAGEF), 0755, true);
+        if (!isset($_GET['url'])) @file_put_contents($PAGEF, "<?php exit; ?>\n" . $found, LOCK_EX);
     }
     if ($got && !$DEBUG) {
         @mkdir(dirname($CACHE), 0755, true);
