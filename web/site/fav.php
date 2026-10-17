@@ -38,6 +38,17 @@ function fetch_page($url, $host = '', &$info = null) {
 
 function parse_fav($html, $MARKER, $IPRE, &$dbg) {
     $list = array();
+    // 0) saytdagi "boost-privileges-table": har bir xizmat qatori <tr data-service="favorites"> ...
+    if (preg_match_all('#<tr\b[^>]*data-service\s*=\s*["\']?(?:favorites|favourites|fav)\b[^>]*>(.*?)</tr>#is', $html, $rows)) {
+        foreach ($rows[1] as $r) {
+            if (preg_match_all('/(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3})(?::(\d{2,5}))?(?![\d.])/', $r, $m, PREG_SET_ORDER))
+                foreach ($m as $x) { $ip = $x[1] . ':' . (isset($x[2]) && $x[2] !== '' ? $x[2] : '27015'); if (!in_array($ip, $list)) $list[] = $ip; }
+        }
+        $dbg .= 'data-service=favorites qatorlari: ' . count($rows[1]) . "\n";
+        if ($rows[1]) $dbg .= 'Birinchi qator: ' . trim(preg_replace('/\s+/u', ' ', strip_tags(str_replace('<', ' <', $rows[1][0])))) . "\n";
+        if ($list) return $list;
+    } else $dbg .= "data-service=favorites qatorlari topilmadi\n";
+    $html = preg_replace('#<(style|script)\b.*?</\1>#is', ' ', $html);      // CSS/JS dagi so'zlar adashtirmasin
     $text = preg_replace('/\s+/u', ' ', strip_tags(str_replace('<', ' <', $html)));
     $text = html_entity_decode($text, ENT_QUOTES, 'UTF-8');
     // 1) "XIZMAT" bloklariga bo'lamiz (katta-kichik harf farqsiz), sarlavhasida Sevimlilar bo'lganini olamiz
