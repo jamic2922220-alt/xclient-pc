@@ -603,6 +603,53 @@ static void apply_theme_dir(const wchar_t *rel)
     FindClose(h);
 }
 
+/* O'yin tilga qarab avval cstrike_russian, cstrike_addon, cstrike_hd ... papkalaridan o'qiydi. Sborka o'z fonini
+ * (bt_*.tga, Background*Layout.txt) o'sha yerga ham qo'ygan bo'lsa, bizning fon ko'rinmaydi - u yerdagini ham almashtiramiz. */
+static BOOL file_exists(const wchar_t *p);
+static void copy_bg_to(const wchar_t *modDir)
+{
+    wchar_t src[MAX_PATH], dst[MAX_PATH], mask[MAX_PATH], from[MAX_PATH], to[MAX_PATH], bg[MAX_PATH];
+    path_join(src, g_dir, L"xc_theme\\cstrike\\resource");
+    path_join(dst, modDir, L"resource");
+    const wchar_t *lay[2] = { L"BackgroundLayout.txt", L"BackgroundLoadingLayout.txt" };
+    for (int i = 0; i < 2; i++) {
+        path_join(from, src, lay[i]); path_join(to, dst, lay[i]);
+        if (!file_exists(from)) continue;
+        mkdirs_for(to); SetFileAttributesW(to, FILE_ATTRIBUTE_NORMAL); CopyFileW(from, to, FALSE);
+    }
+    path_join(bg, src, L"background");
+    path_join(mask, bg, L"*.tga");
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(mask, &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        wchar_t sub[MAX_PATH];
+        path_join(from, bg, fd.cFileName);
+        _snwprintf(sub, MAX_PATH, L"background\\%s", fd.cFileName); sub[MAX_PATH - 1] = 0;
+        path_join(to, dst, sub);
+        mkdirs_for(to); SetFileAttributesW(to, FILE_ATTRIBUTE_NORMAL); CopyFileW(from, to, FALSE);
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+}
+static void fix_override_bg(void)
+{
+    wchar_t mask[MAX_PATH], dir[MAX_PATH], chk[MAX_PATH];
+    path_join(mask, g_dir, L"cstrike_*");
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(mask, &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || !_wcsicmp(fd.cFileName, L"cstrike_downloads")) continue;
+        path_join(dir, g_dir, fd.cFileName);
+        path_join(chk, dir, L"resource\\background");
+        BOOL has = file_exists(chk);
+        path_join(chk, dir, L"resource\\BackgroundLayout.txt"); has = has || file_exists(chk);
+        path_join(chk, dir, L"resource\\BackgroundLoadingLayout.txt"); has = has || file_exists(chk);
+        if (has) copy_bg_to(dir);
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+}
+
 /* eski versiyadagi alohida oyna (x-ui, Electron) va .bat endi kerak emas */
 static void remove_old_ui(void)
 {
@@ -1108,6 +1155,7 @@ static void run_game(void)
     wchar_t exe[MAX_PATH], cmd[1024];
     remove_old_ui();
     apply_theme_dir(L"");
+    fix_override_bg();
     setup_main_menu();
     ensure_scheme();
     ensure_launcher_cfg();
