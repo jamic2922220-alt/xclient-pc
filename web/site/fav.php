@@ -5,50 +5,86 @@
  *
  *  Saytdagi xizmatlar sahifasidan "XIZMAT  GM  Sevimlilar" jadvalini o'qiydi
  *  (keyingi XIZMAT blokigacha bo'lgan IP:port lar). Natija 5 daqiqa keshlanadi.
- *  Sahifa manzili o'zgarsa - $PAGE ni almashtiring.
+ *  Tekshirish: fav.php?debug=1  - sahifa o'qildimi, "Sevimlilar" topildimi ko'rsatadi.
  * ===================================================================== */
-header('Content-Type: application/javascript; charset=utf-8');
+$DEBUG = isset($_GET['debug']);
+header(($DEBUG ? 'Content-Type: text/plain' : 'Content-Type: application/javascript') . '; charset=utf-8');
 header('Cache-Control: no-store');
 
-$PAGE   = 'https://boost-top.com/';          // xizmatlar (TOP / BOOST / VIP / Sevimlilar) jadvallari turgan sahifa
-$MARKER = 'Sevimlilar';                       // jadval sarlavhasi
+// xizmatlar (TOP / BOOST / VIP / Sevimlilar) jadvallari turgan sahifa(lar) - birinchi ishlagani olinadi
+$PAGES  = array('https://boost-top.com/', 'http://boost-top.com/', 'https://www.boost-top.com/');
+$MARKER = '/sevimli|избранн|favorit/iu';      // jadval sarlavhasi
 $CACHE  = __DIR__ . '/xc_data/fav_cache.php';
+$IPRE   = '/(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3}:\d{2,5})(?!\d)/';
 
-function fetch_page($url) {
-    if (strpos($url, 'http') === 0 && function_exists('curl_init')) {
+function fetch_page($url, $host = '', &$info = null) {
+    $info = '';
+    if (function_exists('curl_init')) {
         $c = curl_init($url);
+        $h = array('Accept: text/html', 'Accept-Language: uz,ru;q=0.8');
+        if ($host) $h[] = 'Host: ' . $host;
         curl_setopt_array($c, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_TIMEOUT => 8,
-            CURLOPT_SSL_VERIFYPEER => false, CURLOPT_USERAGENT => 'XClient-fav'));
+            CURLOPT_SSL_VERIFYPEER => false, CURLOPT_SSL_VERIFYHOST => 0, CURLOPT_HTTPHEADER => $h,
+            CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) XClient-fav'));
         $s = curl_exec($c);
+        $info = 'http ' . curl_getinfo($c, CURLINFO_HTTP_CODE) . ($s === false ? ' xato: ' . curl_error($c) : '');
         curl_close($c);
         return $s === false ? '' : $s;
     }
     $s = @file_get_contents($url);
+    $info = $s === false ? 'file_get_contents xato' : 'ok';
     return $s === false ? '' : $s;
 }
 
-$list = null;
-if (is_file($CACHE) && time() - filemtime($CACHE) < 300) {
+function parse_fav($html, $MARKER, $IPRE, &$dbg) {
+    $list = array();
+    $text = preg_replace('/\s+/u', ' ', strip_tags(str_replace('<', ' <', $html)));
+    $text = html_entity_decode($text, ENT_QUOTES, 'UTF-8');
+    // 1) "XIZMAT" bloklariga bo'lamiz (katta-kichik harf farqsiz), sarlavhasida Sevimlilar bo'lganini olamiz
+    $parts = preg_split('/xizmat/iu', $text);
+    foreach ($parts as $p) {
+        $head = mb_substr(trim($p), 0, 60, 'UTF-8');
+        if (!preg_match($MARKER, $head)) continue;
+        if (preg_match_all($IPRE, $p, $m)) foreach ($m[1] as $ip) if (!in_array($ip, $list)) $list[] = $ip;
+    }
+    // 2) topilmasa: "Sevimlilar" so'zidan keyingi qismdan keyingi jadval sarlavhasigacha
+    if (!$list && preg_match($MARKER, $text, $mm, PREG_OFFSET_CAPTURE)) {
+        $chunk = substr($text, $mm[0][1], 6000);
+        $cut = preg_split('/xizmat|\bTOP\s*\d|\bBOOST\b|\bVIP\b|\bREKLAMA\b/iu', substr($chunk, 20), 2);
+        if (preg_match_all($IPRE, substr($chunk, 0, 20) . $cut[0], $m)) foreach ($m[1] as $ip) if (!in_array($ip, $list)) $list[] = $ip;
+    }
+    $pos = preg_match($MARKER, $text, $mm, PREG_OFFSET_CAPTURE) ? $mm[0][1] : -1;
+    $dbg .= 'Matn uzunligi: ' . strlen($text) . ', XIZMAT bloklari: ' . (count($parts) - 1) . ', "Sevimli" joyi: ' . $pos . "\n";
+    if ($pos >= 0) $dbg .= "Atrofi:\n" . substr($text, max(0, $pos - 200), 900) . "\n";
+    preg_match_all($IPRE, $text, $all);
+    $dbg .= 'Sahifadagi jami IP lar: ' . count($all[1]) . "\n";
+    return $list;
+}
+
+$list = null; $dbg = '';
+if (!$DEBUG && is_file($CACHE) && time() - filemtime($CACHE) < 300) {
     $list = json_decode(substr(file_get_contents($CACHE), 15), true);
 }
 if (!is_array($list)) {
-    $html = fetch_page($PAGE);
-    $list = array();
-    // "XIZMAT" bloklariga bo'lamiz va sarlavhasida Sevimlilar bo'lganini olamiz
-    $text = preg_replace('/\s+/u', ' ', strip_tags(str_replace('<', ' <', $html)));
-    $parts = preg_split('/XIZMAT/u', $text);
-    foreach ($parts as $p) {
-        $head = mb_substr(trim($p), 0, 40, 'UTF-8');
-        if (mb_stripos($head, $MARKER, 0, 'UTF-8') === false) continue;
-        if (preg_match_all('/\b(\d{1,3}(?:\.\d{1,3}){3}:\d{2,5})\b/', $p, $m)) {
-            foreach ($m[1] as $ip) if (!in_array($ip, $list)) $list[] = $ip;
-        }
+    $list = array(); $got = false;
+    $tries = array();
+    foreach ($PAGES as $u) $tries[] = array($u, '');
+    $tries[] = array('http://127.0.0.1/', 'boost-top.com');              // sayt shu serverda - ichkaridan
+    foreach ($tries as $t) {
+        $html = fetch_page($t[0], $t[1], $info);
+        $dbg .= $t[0] . ($t[1] ? ' (Host: ' . $t[1] . ')' : '') . ' -> ' . $info . ', ' . strlen($html) . " bayt\n";
+        if (strlen($html) < 500) continue;
+        $got = true;
+        $list = parse_fav($html, $MARKER, $IPRE, $dbg);
+        if ($list) break;
     }
-    if ($html !== '') {
+    if ($got && !$DEBUG) {
         @mkdir(dirname($CACHE), 0755, true);
         @file_put_contents($CACHE, "<?php exit; ?>\n" . json_encode($list), LOCK_EX);
+        if (!$list) @touch($CACHE, time() - 240);                       // bo'sh bo'lsa 1 daqiqadan keyin qayta urinadi
     }
 }
+if ($DEBUG) { echo $dbg . "\nNATIJA: " . json_encode($list) . "\n"; exit; }
 $out = array();
 foreach ($list as $ip) $out[] = array('ip' => $ip);
 echo 'window.BOOST_FAV = ' . json_encode($out) . ";\n";
