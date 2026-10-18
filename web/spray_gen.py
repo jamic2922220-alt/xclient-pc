@@ -2,7 +2,7 @@
 # Ishlatish: python3 spray_gen.py logo.png spray_default.wad [ko'rinish.png]
 import struct, sys
 from PIL import Image, ImageFilter, ImageEnhance
-W, H, CUT = 128, 112, 140                  # 128x112 = 14336 piksel (GoldSrc chegarasi); CUT: yumshoq nur chegarasi
+W, H, CUT = 96, 96, 140                    # 96x96: hamma serverlarda ishlaydi (16 KB dan katta spray rad etiladi)
 src = Image.open(sys.argv[1]).convert('RGBA')
 r, g, b, a = src.split()
 a = a.point(lambda v: 255 if v >= CUT else 0)
