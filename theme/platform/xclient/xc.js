@@ -1763,7 +1763,7 @@ function act(a) {
     if (!PCID) return toast(T('sy_nolaunch'), 5000);
     return api('spray_reset', { d: PCID }, function (r) {
       if (!r.ok) return toast(r.msg || 'Xato', 5000);
-      DB.sprayPrev = 'logo_big.png'; DB.sprayT = now(); persist(); toast(T('sp_ok'), 6000);
+      DB.sprayPrev = 'spray_logo.png'; DB.sprayT = now(); persist(); toast(T('sp_ok'), 6000);
       if (curModal === 'mdSettings' && setTab === 'cont') showSetTab('cont');
     });
   }

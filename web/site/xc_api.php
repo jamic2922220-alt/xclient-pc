@@ -19,7 +19,7 @@ define('XP_PER_LEVEL', 1000);
 
 /* Admin "hamma uchun" deb belgilagan paketlar har bir XClient.exe ga "id~versiya" ko'rinishida qo'shiladi:
  * versiya oshirilsa, eski nusxa olib tashlanib yangisi o'rnatiladi (sborka yangilanishi). */
-define('SPRAY_DEFAULT_VER', 20261020);   // spray_default.wad almashtirilsa - oshiring (hammaga qayta o'rnatiladi)
+define('SPRAY_DEFAULT_VER', 20261021);   // spray_default.wad almashtirilsa - oshiring (hammaga qayta o'rnatiladi)
 function with_forced_packs($o) {
     if (empty($o['spray']) && is_file(__DIR__ . '/spray_default.wad')) $o['spray'] = SPRAY_DEFAULT_VER;   // XClient.exe standart spray'ni qo'yadi
     $mine = array_filter(explode(',', isset($o['packs']) ? $o['packs'] : ''));
