@@ -19,7 +19,9 @@ define('XP_PER_LEVEL', 1000);
 
 /* Admin "hamma uchun" deb belgilagan paketlar har bir XClient.exe ga "id~versiya" ko'rinishida qo'shiladi:
  * versiya oshirilsa, eski nusxa olib tashlanib yangisi o'rnatiladi (sborka yangilanishi). */
+define('SPRAY_DEFAULT_VER', 20261018);   // spray_default.wad almashtirilsa - oshiring (hammaga qayta o'rnatiladi)
 function with_forced_packs($o) {
+    if (empty($o['spray']) && is_file(__DIR__ . '/spray_default.wad')) $o['spray'] = SPRAY_DEFAULT_VER;   // XClient.exe standart spray'ni qo'yadi
     $mine = array_filter(explode(',', isset($o['packs']) ? $o['packs'] : ''));
     $all = array();
     foreach ((array)@scandir(__DIR__ . '/packs') as $id) {
@@ -488,6 +490,7 @@ case 'opts_done':
 /* ---------- spray, skrinshotlar: XClient.exe (kompyuter id) bilan bog'liq ---------- */
 case 'spray':                                            // menyu: tayyor tempdecal.wad (base64) -> keyingi ishga tushishda o'rnatiladi
 case 'spray_get':                                        // XClient.exe: wad faylni olish
+case 'spray_reset':
 case 'shot_up':                                          // XClient.exe: skrinshot (JPEG) yuklash
 case 'shots':                                            // menyu: skrinshotlar ro'yxati
 case 'shot':                                             // menyu: bitta skrinshot
@@ -508,9 +511,20 @@ case 'shot_del':
         $o = rd('dev/' . $d, array()); $o['spray'] = time(); wr('dev/' . $d, $o);
         out(array('ok' => true));
     }
+    if ($a === 'spray_reset') {                            // menyu: "X CLIENT" spray - saytdagi tiniq standart logotip
+        lock();
+        @unlink(XC_DIR . '/spray/' . $d . '.php');
+        $o = rd('dev/' . $d, array()); unset($o['spray']); wr('dev/' . $d, $o);
+        out(array('ok' => true));
+    }
     if ($a === 'spray_get') {
         $f = XC_DIR . '/spray/' . $d . '.php';
-        if (!is_file($f)) { header('HTTP/1.1 404 Not Found'); exit; }
+        if (!is_file($f)) {                                  // o'zi spray tanlamagan - X CLIENT logotipi
+            if (!is_file(__DIR__ . '/spray_default.wad')) { header('HTTP/1.1 404 Not Found'); exit; }
+            header('Content-Type: application/octet-stream');
+            readfile(__DIR__ . '/spray_default.wad');
+            exit;
+        }
         header('Content-Type: application/octet-stream');
         echo substr(file_get_contents($f), strlen(XC_GUARD));
         exit;

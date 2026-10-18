@@ -1169,17 +1169,49 @@ function loadPacks() {
   x.send(null);
   PACKS = undefined;
 }
-/* ---- spray: rasm -> 96x96 -> 256 rangli tempdecal.wad (WAD3, "{LOGO") ---- */
-function sprayQ(r, g, b) { return Math.round(r / 51) * 42 + Math.round(g * 6 / 255) * 6 + Math.round(b / 51); }
-function sprayPal() {
-  var p = [];
-  for (var i = 0; i < 256; i++) {
-    if (i < 252) p.push([Math.floor(i / 42) * 51, Math.round(Math.floor(i % 42 / 6) * 255 / 6), (i % 6) * 51]);
-    else p.push(i === 255 ? [0, 0, 255] : [0, 0, 0]);
+/* ---- spray: rasm -> 112x112 -> 255 rangli tempdecal.wad (WAD3, "{LOGO"); 255-indeks shaffof ----
+ * Palitra rasmning o'zidan (median cut) olinadi - qat'iy palitradagidek dog'lar bo'lmaydi.
+ * GoldSrc spray uchun eng ko'pi 14336 piksel: 112x112 = 12544. */
+var SPR = 112;
+function sprayPalette(px) {
+  var cols = [], i;
+  for (i = 0; i < px.length; i += 4) if (px[i + 3] >= 128) cols.push([px[i], px[i + 1], px[i + 2]]);
+  if (!cols.length) cols.push([0, 0, 0]);
+  var boxes = [cols];
+  while (boxes.length < 255) {
+    var bi = -1, best = -1, ch = 0;
+    for (i = 0; i < boxes.length; i++) {
+      if (boxes[i].length < 2) continue;
+      for (var c = 0; c < 3; c++) {
+        var mn = 255, mx = 0;
+        for (var k = 0; k < boxes[i].length; k++) { var v = boxes[i][k][c]; if (v < mn) mn = v; if (v > mx) mx = v; }
+        if (mx - mn > best) { best = mx - mn; bi = i; ch = c; }
+      }
+    }
+    if (bi < 0 || best <= 0) break;
+    var bx = boxes[bi];
+    bx.sort(function (p, q) { return p[ch] - q[ch]; });
+    var mid = bx.length >> 1;
+    boxes.splice(bi, 1, bx.slice(0, mid), bx.slice(mid));
   }
-  return p;
+  var pal = [];
+  for (i = 0; i < boxes.length; i++) {
+    var r = 0, g = 0, b = 0, n = boxes[i].length;
+    for (var j = 0; j < n; j++) { r += boxes[i][j][0]; g += boxes[i][j][1]; b += boxes[i][j][2]; }
+    pal.push([Math.round(r / n), Math.round(g / n), Math.round(b / n)]);
+  }
+  while (pal.length < 255) pal.push([0, 0, 0]);
+  pal.push([0, 0, 255]);
+  return pal;
 }
-function sprayLevel(px, w, h, f) {           // f marta kichraytirish (o'rtacha rang), indekslar
+function sprayNear(pal, cache, r, g, b) {
+  var key = (r << 16) | (g << 8) | b;
+  if (cache[key] != null) return cache[key];
+  var bi = 0, bd = 1e9;
+  for (var i = 0; i < 255; i++) { var p = pal[i], d = (p[0] - r) * (p[0] - r) * 3 + (p[1] - g) * (p[1] - g) * 4 + (p[2] - b) * (p[2] - b) * 2; if (d < bd) { bd = d; bi = i; } }
+  return (cache[key] = bi);
+}
+function sprayLevel(px, w, h, f, pal, cache) {   // f marta kichraytirish (o'rtacha rang), indekslar
   var ow = w / f, oh = h / f, out = new Array(ow * oh);
   for (var y = 0; y < oh; y++) for (var x = 0; x < ow; x++) {
     var r = 0, g = 0, b = 0, a = 0, n = 0;
@@ -1188,12 +1220,13 @@ function sprayLevel(px, w, h, f) {           // f marta kichraytirish (o'rtacha 
       if (px[o + 3] >= 128) { r += px[o]; g += px[o + 1]; b += px[o + 2]; n++; }
       a++;
     }
-    out[y * ow + x] = n * 2 < a ? 255 : sprayQ(r / n, g / n, b / n);
+    out[y * ow + x] = n * 2 < a ? 255 : sprayNear(pal, cache, Math.round(r / n), Math.round(g / n), Math.round(b / n));
   }
   return out;
 }
 function makeWad(px, w, h) {
-  var mips = [sprayLevel(px, w, h, 1), sprayLevel(px, w, h, 2), sprayLevel(px, w, h, 4), sprayLevel(px, w, h, 8)];
+  var pal = sprayPalette(px), cache = {};
+  var mips = [sprayLevel(px, w, h, 1, pal, cache), sprayLevel(px, w, h, 2, pal, cache), sprayLevel(px, w, h, 4, pal, cache), sprayLevel(px, w, h, 8, pal, cache)];
   var sum = 0; each(mips, function (m) { sum += m.length; });
   var lump = 40 + sum + 2 + 768 + 2, total = 12 + lump + 32, b = new Array(total), i;
   for (i = 0; i < total; i++) b[i] = 0;
@@ -1205,7 +1238,7 @@ function makeWad(px, w, h) {
   var o = m + 40;
   each(mips, function (mm) { for (var k = 0; k < mm.length; k++) b[o++] = mm[k]; });
   b[o] = 0; b[o + 1] = 1; o += 2;                   // 256 rang
-  each(sprayPal(), function (c) { b[o++] = c[0]; b[o++] = c[1]; b[o++] = c[2]; });
+  each(pal, function (c) { b[o++] = c[0]; b[o++] = c[1]; b[o++] = c[2]; });
   var d = 12 + lump; u32(d, 12); u32(d + 4, lump); u32(d + 8, lump); b[d + 12] = 0x43; str(d + 16, '{LOGO');
   var bin = ''; for (i = 0; i < total; i++) bin += String.fromCharCode(b[i]);
   return btoa(bin);
@@ -1214,12 +1247,12 @@ function sprayFrom(src) {
   if (!PCID) return toast(T('sy_nolaunch'), 5000);
   var im = new Image();
   im.onload = function () {
-    var c = document.createElement('canvas'); c.width = 96; c.height = 96;
+    var c = document.createElement('canvas'); c.width = SPR; c.height = SPR;
     var g = c.getContext('2d'), sz = Math.min(im.width, im.height);
-    g.clearRect(0, 0, 96, 96);
-    g.drawImage(im, Math.round((im.width - sz) / 2), Math.round((im.height - sz) / 2), sz, sz, 0, 0, 96, 96);
-    var px; try { px = g.getImageData(0, 0, 96, 96).data; } catch (e) { return toast(T('a_photo_bad')); }
-    var wad = makeWad(px, 96, 96);
+    g.clearRect(0, 0, SPR, SPR);
+    g.drawImage(im, Math.round((im.width - sz) / 2), Math.round((im.height - sz) / 2), sz, sz, 0, 0, SPR, SPR);
+    var px; try { px = g.getImageData(0, 0, SPR, SPR).data; } catch (e) { return toast(T('a_photo_bad')); }
+    var wad = makeWad(px, SPR, SPR);
     toast(T('lg_wait'));
     api('spray', { d: PCID, wad: wad }, function (r) {
       if (!r.ok) return toast(r.msg || 'Xato', 5000);
@@ -1726,7 +1759,14 @@ function act(a) {
   if (a === 'hwauto') return hwAuto();
   if (a === 'spfile') { var sf = $('sprayFile'); if (!sf) return; sf.value = ''; try { sf.click(); } catch (e) { toast(T('a_photo_na')); } return; }
   if (a === 'spav') return ME && ME.av ? sprayFrom(ME.av) : null;
-  if (a === 'splogo') return sprayFrom('logo_big.png');
+  if (a === 'splogo') {                         // standart tiniq X CLIENT spray (saytda tayyorlangan)
+    if (!PCID) return toast(T('sy_nolaunch'), 5000);
+    return api('spray_reset', { d: PCID }, function (r) {
+      if (!r.ok) return toast(r.msg || 'Xato', 5000);
+      DB.sprayPrev = 'logo_big.png'; DB.sprayT = now(); persist(); toast(T('sp_ok'), 6000);
+      if (curModal === 'mdSettings' && setTab === 'cont') showSetTab('cont');
+    });
+  }
   if (a === 'gallery') return api('shots', { d: PCID }, function (r) {
     var h = '';
     if (!r.ok) h = '<div class="empty">' + esc(r.msg || T('sy_nolaunch')) + '</div>';
