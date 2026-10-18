@@ -2130,6 +2130,7 @@ document.onkeydown = function (e) {
   if (curModal === 'mdLogin' && k === 13) { doLogin(); return false; }
   if (curModal === 'mdSide' && k === 13 && $('frIn')) { act('fradd'); return false; }
   if (k === 27 && curModal) { closeModal(); return false; }
+  if (k === 116 || (k === 82 && e.ctrlKey)) { if (e.preventDefault) e.preventDefault(); toast(T('sh_menu'), 3500); return false; }   // F5 menyuni qayta yuklamasin (skrinshot - o'yin ichida)
 };
 $('askYes').onclick = function () { askDone(true); };
 $('askNo').onclick = function () { askDone(false); };
