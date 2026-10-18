@@ -1451,9 +1451,7 @@ var PANES = {
     each(pal, function (c) { cols += '<a class="' + (E.xc === c ? 'on' : '') + '" data-seg="xc" data-v="' + c + '" style="background:rgb(' + c.split(' ').join(',') + ')"></a>'; });
     var si = Math.max(0, SZ.indexOf(E.xs)), xt = Number(E.xt);
     var off = function (key, label, min, max) {
-      if (XSUP[key]) return sl(key, label, min, max, 1);           // o'yinda bor - ishlaydi
-      var val = E[key];                                             // bu NextClient'da yo'q - kulrang
-      return '<div class="fr dis"><div class="lb">' + esc(T(label)) + '</div><div class="ct2"><div class="sl"><input type="range" min="0" max="10" value="' + val + '" disabled><div class="vv">' + val + '</div></div></div></div>';
+      return XSUP[key] ? sl(key, label, min, max, 1) : '';          // NextClient'da bo'lsagina ko'rsatamiz (hozircha yo'q)
     };
     var ck = function (k, label, on, dis) {
       return '<a class="ck' + (on ? ' on' : '') + (dis ? ' dis' : '') + '"' + (dis ? '' : ' data-xchk="' + k + '"') + '><i>' + (on ? '✓' : '') + '</i>' + esc(T(label)) + '</a>';
