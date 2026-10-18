@@ -606,6 +606,34 @@ case 'favs':
     }
     out(array('ok' => true, 'fav' => isset($o['fav']) ? $o['fav'] : array()));
 
+/* menyu holati (kirish tokeni, sevimlilar, tarix, tugmalar, til) - kompyuter bo'yicha; o'yin brauzeri localStorage ni yo'qotsa tiklanadi */
+case 'dstate':
+    $d = strtolower(p('d'));
+    if (!preg_match('/^[a-z0-9]{8,40}$/', $d) || !is_file(XC_DIR . '/dev/' . $d . '.php')) fail('nolaunch', 'XCLauncher.exe topilmadi');
+    lock();
+    $o = rd('dev/' . $d, array());
+    if (!dev_ok($d, $o)) fail('nolaunch', 'XCLauncher.exe topilmadi');
+    $st = isset($o['st']) && is_array($o['st']) ? $o['st'] : array();
+    if (empty($st['fav']) && !empty($o['fav'])) $st['fav'] = $o['fav'];           // eski 'favs' zaxirasi
+    if (p('set') !== '') {
+        if (strlen(p('set')) > 40000) fail('big', 'big');
+        $in = json_decode(p('set'), true);
+        if (!is_array($in)) fail('bad', 'bad');
+        $kv = function ($m) { $r = array(); if (is_array($m)) foreach ($m as $k => $v) if (is_string($k) && strlen($k) <= 40 && is_string($v) && strlen($v) <= 24) $r[$k] = $v; return $r ? $r : null; };
+        $fav = array();
+        foreach ((isset($in['fav']) && is_array($in['fav']) ? $in['fav'] : array()) as $ip) if (is_string($ip) && preg_match('/^[a-z0-9.\-]{3,64}:\d{2,5}$/i', $ip) && !in_array($ip, $fav)) $fav[] = $ip;
+        $hist = array();
+        foreach ((isset($in['hist']) && is_array($in['hist']) ? array_slice($in['hist'], 0, 50) : array()) as $h) if (is_array($h) && isset($h['ip']) && is_string($h['ip']) && preg_match('/^[a-z0-9.\-]{3,64}:\d{2,5}$/i', $h['ip']))
+            $hist[] = array('ip' => $h['ip'], 'name' => clean_str(isset($h['name']) ? (string)$h['name'] : '', 64), 'map' => clean_str(isset($h['map']) ? (string)$h['map'] : '', 32),
+                't' => (float)(isset($h['t']) ? $h['t'] : 0), 'd' => (int)(isset($h['d']) ? $h['d'] : 0), 'k' => (int)(isset($h['k']) ? $h['k'] : 0), 'x' => (int)(isset($h['x']) ? $h['x'] : 0));
+        $tok = isset($in['token']) && is_string($in['token']) && preg_match('/^[a-f0-9]{40}$/', $in['token']) ? $in['token'] : '';
+        $st = array('token' => $tok, 'fav' => array_slice($fav, 0, 100), 'hist' => $hist, 'binds' => $kv(isset($in['binds']) ? $in['binds'] : null), 'binds2' => $kv(isset($in['binds2']) ? $in['binds2'] : null),
+            'lang' => isset($in['lang']) && is_string($in['lang']) && preg_match('/^[a-z]{2,3}$/', $in['lang']) ? $in['lang'] : '', 'wnSeen' => isset($in['wnSeen']) && is_string($in['wnSeen']) ? substr($in['wnSeen'], 0, 40) : '');
+        $o['st'] = $st;
+        wr('dev/' . $d, $o);
+    }
+    out(array('ok' => true, 'st' => $st));
+
 /* ---------- spray, skrinshotlar: XClient.exe (kompyuter id) bilan bog'liq ---------- */
 case 'spray':                                            // menyu: tayyor tempdecal.wad (base64) -> keyingi ishga tushishda o'rnatiladi
 case 'spray_get':                                        // XClient.exe: wad faylni olish

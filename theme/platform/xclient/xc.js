@@ -128,7 +128,7 @@ function load() {
   if (!DB.hist || !DB.hist.length) DB.hist = [];
   if (!DB.device) { DB.device = ''; for (var i = 0; i < 16; i++) DB.device += 'abcdefghijklmnopqrstuvwxyz0123456789'.charAt(Math.floor(Math.random() * 36)); }
 }
-function persist() { try { localStorage.setItem('xclient', JSON.stringify(DB)); } catch (e) {} }
+function persist() { try { localStorage.setItem('xclient', JSON.stringify(DB)); } catch (e) {} if (typeof statePush === 'function') statePush(); }
 
 /* ============================================================ ekranga moslash (1600x900 dizayn) */
 function fit() {
@@ -248,26 +248,46 @@ function loadOpts() {
     if (r.o.ver && !qparam('v')) { VERSION = r.o.ver; renderBar(); }
     if (r.o.cachemb != null && !qparam('c')) CACHE_MB = r.o.cachemb;
     if (r.o.hw) HW = r.o.hw;
-    favSync();
+    stateSync();
     if (curModal === 'mdSettings' && (setTab === 'pro' || setTab === 'cont')) showSetTab(setTab);
     if (curModal === 'mdSettings' && setTab === 'system') showSetTab('system');
   });
 }
-/* Sevimlilar kompyuter (XCLauncher.exe) bo'yicha saytda ham saqlanadi: menyu keshi tozalansa, yangilanishdan keyin
- * yoki menyu boshqa manzildan ochilsa ham qo'shilgan serverlar yo'qolmaydi. Yuklashda birlashtiriladi. */
-var FAV_SYNCED = false;
-function favSync() {
-  if (!PCID) return;
-  api('favs', { d: PCID }, function (r) {
-    if (!r.ok || !r.fav) return;
-    var add = 0;
-    each(r.fav, function (ip) { if (DB.fav.indexOf(ip) < 0) { DB.fav.push(ip); add++; } });
-    FAV_SYNCED = true;
-    if (add) { persist(); renderSoon(); }
-    if (DB.fav.length !== r.fav.length) favPush();
+/* Menyu holati kompyuter (XCLauncher.exe) bo'yicha saytda ham saqlanadi: o'yin brauzeri localStorage ni har doim ham
+ * saqlab qolmaydi (o'yin yopilganda yo'qoladi) - kirish ("Eslab qolish"), sevimlilar, tarix, tugmalar, til qayta tiklanadi. */
+var STATE_SYNCED = false, STATE_TM = 0;
+function stateData() {
+  var h = [];
+  each((DB.hist || []).slice(0, 50), function (x) { h.push({ ip: x.ip, name: x.name, map: x.map, t: x.t, d: x.d, k: x.k, x: x.x }); });
+  return { token: DB.forget ? '' : (DB.token || ''), fav: DB.fav.slice(0, 100), hist: h, binds: DB.binds || null, binds2: DB.binds2 || null, lang: DB.lang || '', wnSeen: DB.wnSeen || '' };
+}
+function statePush() {
+  if (!PCID || !STATE_SYNCED) return;
+  clearTimeout(STATE_TM);
+  STATE_TM = setTimeout(function () { api('dstate', { d: PCID, set: JSON.stringify(stateData()) }, function () {}); }, 1500);
+}
+function stateSync() {
+  if (!PCID || STATE_SYNCED) return;
+  api('dstate', { d: PCID }, function (r) {
+    if (!r.ok) return;
+    var st = r.st || {}, ch = false;
+    each(st.fav || [], function (ip) { if (DB.fav.indexOf(ip) < 0) { DB.fav.push(ip); ch = true; } });
+    if ((!DB.hist || !DB.hist.length) && st.hist && st.hist.length) { DB.hist = st.hist; ch = true; }
+    if (!DB.binds && st.binds) { DB.binds = st.binds; DB.binds2 = st.binds2 || null; loadBinds(); applyBinds(); ch = true; }
+    if (!DB.lang && st.lang) { DB.lang = st.lang; setLang(st.lang); ch = true; }
+    if (!DB.wnSeen && st.wnSeen) { DB.wnSeen = st.wnSeen; ch = true; }
+    STATE_SYNCED = true;
+    if (!DB.token && st.token) {
+      DB.token = st.token;
+      api('me', {}, function (m) {
+        if (m.ok) { setMe(m.me); loadFriends(); pingPresence(); }
+        else if (m.err === 'auth') DB.token = '';
+        persist();
+      });
+    }
+    if (ch) { persist(); renderSoon(); } else statePush();
   });
 }
-function favPush() { if (PCID && FAV_SYNCED) api('favs', { d: PCID, set: JSON.stringify(DB.fav.slice(0, 100)) }, function () {}); }
 /* IP nusxalash: o'yin brauzerida (CEF1) clipboard API yo'q - maydonni belgilab execCommand('copy');
  * bo'lmasa IP belgilangan holda qoladi va "Ctrl+C" deb aytamiz */
 function copyIp(ip, inp) {
@@ -999,7 +1019,6 @@ function toggleFav(ip) {
   if (!ip) return;
   var i = DB.fav.indexOf(ip);
   if (i >= 0) { DB.fav.splice(i, 1); toast(T('removed')); } else { DB.fav.unshift(ip); query(ip); toast(T('added')); }
-  favPush();
   persist(); cloudSave(); renderAll();
 }
 
@@ -1845,7 +1864,7 @@ function act(a) {
   if (a === 'join') { if (srvSel) { closeModal(); connect(srvSel); } return; }
   if (a === 'togglefav') return toggleFav(srvSel);
   if (a === 'clearhist') { DB.hist = []; CUR = null; persist(); return renderAll(); }
-  if (a === 'clearall') { DB.hist = []; DB.fav = []; favPush(); CUR = null; persist(); cloudSave(); toast(T('sy_ok')); return renderAll(); }
+  if (a === 'clearall') { DB.hist = []; DB.fav = []; CUR = null; persist(); cloudSave(); toast(T('sy_ok')); return renderAll(); }
   if (a === 'addip') return ask(T('ask_ip'), function (v) { var ip = normIp(v); if (!ip) return toast(T('bad_ip')); if (!isFavIp(ip)) toggleFav(ip); srvSel = ip; renderServers(); });
   if (a === 'console') { closeModal(); return cmd('toggleconsole'); }
   if (a === 'fradd') {
