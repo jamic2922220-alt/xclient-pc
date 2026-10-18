@@ -54,9 +54,7 @@ $ips = array();
 foreach (explode(',', $raw) as $x) {
     $h = preg_replace('/:\d+$/', '', trim($x));
     if ($h === '' || count($ips) >= 400) continue;
-    if (!preg_match('/^\d{1,3}(\.\d{1,3}){3}$/', $h)) {                 // domen nomi bo'lsa - IP ga aylantiramiz
-        if (!preg_match('/^[a-z0-9.\-]{3,80}$/i', $h)) continue;
-    }
+    if (!preg_match('/^\d{1,3}(\.\d{1,3}){3}$/', $h)) continue;        // faqat IP: domen nomlarini yechish serverni band qiladi
     if (!in_array($h, $ips)) $ips[] = $h;
 }
 $cache = array();
@@ -65,9 +63,9 @@ $now = time(); $need = array();
 foreach ($ips as $h) if (!isset($cache[$h]) || $now - $cache[$h][1] > ($cache[$h][0] === '' ? 86400 : 30 * 86400)) $need[] = $h;
 $dbg = 'So\'ralgan: ' . count($ips) . ', keshda yo\'q: ' . count($need) . "\n";
 if ($need) {
-    foreach (array_chunk(array_slice($need, 0, 300), 100) as $chunk) {   // ip-api.com: bir so'rovda 100 tagacha
+    foreach (array_chunk(array_slice($need, 0, 100), 100) as $chunk) {       // bir so'rovda ko'pi bilan 100 ta yangi IP   // ip-api.com: bir so'rovda 100 tagacha
         $q = array();
-        foreach ($chunk as $h) $q[] = array('query' => preg_match('/^\d{1,3}(\.\d{1,3}){3}$/', $h) ? $h : gethostbyname($h), 'fields' => 'countryCode,query');
+        foreach ($chunk as $h) $q[] = array('query' => $h, 'fields' => 'countryCode,query');
         $res = json_decode(http_get('http://ip-api.com/batch', json_encode($q), $info), true);
         $dbg .= 'ip-api.com -> ' . $info . "\n";
         if (!is_array($res)) break;

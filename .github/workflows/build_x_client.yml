@@ -99,6 +99,17 @@ jobs:
             --data-urlencode "notes=$(git -C own log -1 --pretty=%s)" \
             "$XC_API?a=release"
 
+      - name: Yuklab olish havolasi (GitHub Release, faqat stable)
+        if: env.CHANNEL == 'stable'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # doimiy havola: https://github.com/<repo>/releases/download/xclient-latest/X-Client-CS16.zip
+          gh release delete xclient-latest --repo "$GITHUB_REPOSITORY" --cleanup-tag -y || true
+          gh release create xclient-latest X-Client-CS16.zip --repo "$GITHUB_REPOSITORY" --target "${{ github.sha }}" \
+            --title "X CLIENT $XC_VERSION" --notes "X CLIENT $XC_VERSION - CS 1.6 uchun launcher. Yuklab oling, oching va XCLauncher.exe ni ishga tushiring."
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

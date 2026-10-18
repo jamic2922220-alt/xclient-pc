@@ -7,6 +7,8 @@
  *  (keyingi XIZMAT blokigacha bo'lgan IP:port lar). Natija 5 daqiqa keshlanadi.
  *  Tekshirish: fav.php?debug=1  - sahifa o'qildimi, "Sevimlilar" topildimi ko'rsatadi.
  * ===================================================================== */
+// debug rejimi kesh'ni chetlab o'tadi va sahifa parchalarini ko'rsatadi - faqat admin panelga kirgan bo'lsa
+if (isset($_GET['debug'])) { @session_start(); if (empty($_SESSION['adm'])) { unset($_GET['debug'], $_GET['url']); } }
 $DEBUG = isset($_GET['debug']);
 header(($DEBUG ? 'Content-Type: text/plain' : 'Content-Type: application/javascript') . '; charset=utf-8');
 header('Cache-Control: no-store');

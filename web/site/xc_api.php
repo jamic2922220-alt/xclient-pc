@@ -48,6 +48,8 @@ function ensure_dir() {
         @file_put_contents(XC_DIR . '/index.html', '');
     }
     if (!is_dir(XC_DIR . '/users')) @mkdir(XC_DIR . '/users', 0755, true);
+    if (!is_file(XC_DIR . '/.htaccess')) @file_put_contents(XC_DIR . '/.htaccess', "Require all denied\nDeny from all\n");
+    if (!is_file(XC_DIR . '/index.html')) @file_put_contents(XC_DIR . '/index.html', '');
     if (!is_writable(XC_DIR)) fail('storage', 'xc_data papkasiga yozib bo\'lmadi (ruxsat 755 kerak)');
 }
 function rd($name, $def) {
@@ -72,13 +74,37 @@ function lock() {
     if ($LOCK) flock($LOCK, LOCK_EX);
 }
 
+/* oddiy chastota cheklovi: $key bo'yicha $win soniyada nechta hodisa bo'lgani (xc_data/rl/) */
+function rl_count($key, $win) {
+    $x = rd('rl/' . substr(sha1($key), 0, 24), array());
+    $n = 0; foreach ($x as $t) if (time() - $t < $win) $n++;
+    return $n;
+}
+function rl_add($key, $win) {
+    @mkdir(XC_DIR . '/rl', 0755, true);
+    $k = 'rl/' . substr(sha1($key), 0, 24); $x = rd($k, array()); $y = array();
+    foreach ($x as $t) if (time() - $t < $win) $y[] = $t;
+    $y[] = time(); wr($k, array_slice($y, -200));
+}
+/* papkadagi fayllar sonini cheklash: eng eskilarini o'chiradi */
+function cap_dir($dir, $max) {
+    $all = (array)glob($dir . '/*.php');
+    if (count($all) <= $max) return;
+    usort($all, function ($a, $b) { return filemtime($a) - filemtime($b); });
+    foreach (array_slice($all, 0, count($all) - $max) as $f) @unlink($f);
+}
+/* Kompyuter (XCLauncher) ma'lumotlariga kirish: menyu o'z kaliti (k) bilan, launcher esa
+ * o'sha IP dan yaqinda 'hello' yuborgan bo'lsa. Kalit boshqa hech kimga berilmaydi. */
+function ip_key() { return 'ip/' . substr(sha1(client_ip() . 'xc'), 0, 24); }
+function ip_dev($maxAge) { $m = rd(ip_key(), null); return ($m && time() - $m['t'] <= $maxAge) ? $m['d'] : ''; }
+function dev_ok($d, $o) { $k = p('k'); return ($k !== '' && !empty($o['k']) && hash_equals($o['k'], $k)) || ip_dev(600) === $d; }
 function ukey($login) { return 'users/' . strtolower($login); }
 function user($login) { return rd(ukey($login), null); }
 function save_user($u) { wr(ukey($u['login']), $u); }
 function week_id() { return date('o-W'); }
 
 function auth() {
-    $t = p('token');
+    $t = isset($_POST['token']) ? trim((string)$_POST['token']) : '';   // faqat POST: GET manzillar loglarga tushadi
     if (!preg_match('/^[a-f0-9]{40}$/', $t)) fail('auth', 'Qayta kiring');
     $tokens = rd('tokens', array());
     if (empty($tokens[$t])) fail('auth', 'Qayta kiring');
@@ -89,7 +115,9 @@ function auth() {
 function new_token($login) {
     $t = bin2hex(function_exists('random_bytes') ? random_bytes(20) : openssl_random_pseudo_bytes(20));
     $tokens = rd('tokens', array());
-    $tokens[$t] = strtolower($login);
+    $l = strtolower($login); $mine = array_keys($tokens, $l);
+    foreach (array_slice($mine, 0, max(0, count($mine) - 7)) as $old) unset($tokens[$old]);   // bir akkauntga 8 tagacha qurilma
+    $tokens[$t] = $l;
     wr('tokens', $tokens);
     return $t;
 }
@@ -139,6 +167,8 @@ function geo_cc($ip) {
 function tg_notify($event, $text) {
     $c = xc_cfg();
     if (empty($c['tg_token']) || empty($c['tg_chat']) || empty($c['tg_ev'][$event])) return;
+    if (rl_count('tg', 3600) >= 30) return;              // soatiga 30 tadan ko'p xabar yubormaymiz
+    rl_add('tg', 3600);
     $ctx = stream_context_create(array('http' => array('method' => 'POST', 'timeout' => 3,
         'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
         'content' => http_build_query(array('chat_id' => $c['tg_chat'], 'text' => $text, 'disable_web_page_preview' => 1)))));
@@ -191,8 +221,10 @@ case 'register':
     if (!preg_match('/^[A-Za-z0-9_]{3,20}$/', $login)) fail('login', 'Login 3-20 belgi: harf, raqam, _');
     if (strlen($pass) < 6) fail('pass', 'Parol kamida 6 belgi');
     if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) fail('email', 'Email noto\'g\'ri');
+    if (rl_count('reg' . client_ip(), 3600) >= 5) fail('limit', 'Bir soatda juda ko\'p ro\'yxatdan o\'tish. Keyinroq urinib ko\'ring');
     lock();
     if (user($login)) fail('exists', 'Bu login band');
+    rl_add('reg' . client_ip(), 3600);
     $meta = rd('meta', array('next' => 100001));
     $u = array(
         'id' => 'X-' . $meta['next'], 'login' => $login, 'name' => $login, 'email' => $email,
@@ -215,9 +247,12 @@ case 'login':
         }
     }
     if (!preg_match('/^[A-Za-z0-9_]{3,20}$/', $login)) fail('bad', 'Login yoki parol noto\'g\'ri');
-    lock();
+    $kip = 'lf' . client_ip(); $kl = 'lfu' . strtolower($login);
+    if (rl_count($kip, 900) >= 20 || rl_count($kl, 900) >= 10) fail('limit', 'Juda ko\'p noto\'g\'ri urinish. 15 daqiqadan keyin qayta urinib ko\'ring');
     $u = user($login);
-    if (!$u || !password_verify($pass, $u['pass'])) { usleep(400000); fail('bad', 'Login yoki parol noto\'g\'ri'); }
+    if (!$u || !password_verify($pass, $u['pass'])) { rl_add($kip, 900); rl_add($kl, 900); usleep(400000); fail('bad', 'Login yoki parol noto\'g\'ri'); }
+    lock();                                              // qulf faqat yozish uchun - noto'g'ri urinishlar boshqalarni to'xtatmasin
+    $u = user($login);
     touch_device($u);
     save_user($u);
     out(array('ok' => true, 'token' => new_token($u['login']), 'me' => pub($u, true)));
@@ -352,7 +387,8 @@ case 'av':                                               // rasmni berish
     $l = strtolower(p('l'));
     $a2 = preg_match('/^[a-z0-9_]{3,20}$/', $l) ? rd('av/' . $l, null) : null;
     if (!$a2) { header('HTTP/1.1 404 Not Found'); exit; }
-    header('Content-Type: image/' . $a2['type']);
+    header('Content-Type: image/' . (in_array($a2['type'], array('jpeg', 'png', 'gif', 'webp')) ? $a2['type'] : 'jpeg'));
+    header('X-Content-Type-Options: nosniff');
     header('Cache-Control: public, max-age=86400');
     echo base64_decode($a2['data']);
     exit;
@@ -406,6 +442,7 @@ case 'invite':                                           // do'stni o'zim o'ynay
     lock();
     $u = auth();
     $to = strtolower(p('to')); $ip = p('ip');
+    if (!preg_match('/^[a-z0-9_]{3,20}$/', $to)) fail('bad', 'Login noto\'g\'ri');
     if (!preg_match('/^[\w.\-]+:\d+$/', $ip)) fail('bad', 'Server manzili noto\'g\'ri');
     if (empty($u['friends']) || !in_array($to, array_map('strtolower', $u['friends']))) fail('bad', 'Faqat do\'stlarni taklif qilish mumkin');
     $t = user($to);
@@ -431,6 +468,7 @@ case 'friend_del':
     lock();
     $u = auth();
     $fl = strtolower(p('login'));
+    if (!preg_match('/^[a-z0-9_]{3,20}$/', $fl)) fail('bad', 'Login noto\'g\'ri');
     if (!isset($u['friends'])) $u['friends'] = array();
     if ($a === 'friend_add') {
         if ($fl === strtolower($u['login'])) fail('self', 'O\'zingizni qo\'sha olmaysiz');
@@ -467,9 +505,12 @@ case 'news':                                             // turnirlar / e'lonlar
     out(array('ok' => true, 'news' => is_array($j) ? $j : array(), 'ann' => $ann));
 
 case 'report':                                           // "Xatolik haqida xabar": konsol loglari
+    if (rl_count('rep' . client_ip(), 3600) >= 5) fail('limit', 'Bir soatda 5 tadan ko\'p xabar yuborib bo\'lmaydi');
+    rl_add('rep' . client_ip(), 3600);
     $log = p('log');
     if (strlen($log) > 200000) $log = substr($log, -200000);
     @mkdir(XC_DIR . '/reports', 0755, true);
+    cap_dir(XC_DIR . '/reports', 500);
     $who = preg_replace('/[^\w\-]/', '', p('who', 'anon'));
     wr('reports/' . date('Ymd-His') . '-' . $who . '-' . mt_rand(100, 999), array('t' => time(), 'who' => $who, 'ver' => p('ver'), 'log' => $log, 'ua' => isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : ''));
     tg_notify('report', "X CLIENT: xatolik haqida xabar keldi (" . $who . ", v" . clean_str(p('ver'), 20) . ")");
@@ -491,6 +532,9 @@ case 'opts_done':
         lock();
         $o = rd('dev/' . $d, array());
         $isNew = empty($o['first']) && empty($o['seen']);  // birinchi marta ko'rinayotgan kompyuter = yangi o'rnatish
+        if ($isNew) { if (rl_count('nd' . client_ip(), 86400) >= 30) fail('limit', 'limit'); rl_add('nd' . client_ip(), 86400); }
+        unset($o['kc']);                                   // yangi ishga tushish: menyu kalitni yana bir marta olishi mumkin
+        if (empty($o['k'])) $o['k'] = bin2hex(function_exists('random_bytes') ? random_bytes(16) : openssl_random_pseudo_bytes(16));
         if (empty($o['first'])) $o['first'] = time();
         day_mark('d', $d, $isNew);                         // kunlik statistika: XClient.exe ishga tushirganlar
         $o['ver'] = substr(preg_replace('/[^\w.\-]/', '', p('v')), 0, 20);
@@ -507,15 +551,22 @@ case 'opts_done':
         wr('dev/' . $d, $o);
         if ($isNew) tg_notify('install', "Yangi X CLIENT o'rnatish\n" . strtoupper(isset($o['cc']) ? $o['cc'] : '') . ' ' . $ip . "\n" . (isset($o['os']) ? $o['os'] : '') . (isset($o['res']) ? ' · ' . $o['res'] : ''));
         wr($ipk, array('d' => $d, 't' => time()));
-        out(array('ok' => true, 'o' => with_forced_packs($o, $d)));
+        $ho = with_forced_packs($o, $d); unset($ho['k'], $ho['kc']);
+        out(array('ok' => true, 'o' => $ho));
     }
-    if (!preg_match('/^[a-z0-9]{8,40}$/', $d)) {
-        $m = rd($ipk, null);
-        if (!$m || time() - $m['t'] > 30 * 86400) out(array('ok' => true, 'o' => null));   // XClient.exe hali ulanmagan
-        $d = $m['d'];
+    $claim = false;
+    if (!preg_match('/^[a-z0-9]{8,40}$/', $d)) {           // menyu hali kalitsiz: shu IP dan 10 daqiqa ichida launcher ochilgan bo'lsa - bir marta beramiz
+        $d = ip_dev(600);
+        if ($d === '') out(array('ok' => true, 'o' => null));
+        $claim = true;
     }
     lock();
     $o = rd('dev/' . $d, array());
+    if (!$o) out(array('ok' => true, 'o' => null));
+    if ($claim) {
+        if (!empty($o['kc'])) out(array('ok' => true, 'o' => null));   // kalit allaqachon olingan - begona menyuga bermaymiz
+        $o['kc'] = 1; wr('dev/' . $d, $o);
+    } elseif (!dev_ok($d, $o)) fail('nolaunch', 'XCLauncher.exe topilmadi');
     if ($a === 'opts_set') {
         $in = json_decode(p('o'), true);
         if (!is_array($in)) fail('bad', 'bad');
@@ -529,7 +580,9 @@ case 'opts_done':
         if (p('cache') !== '') $o['cachemb'] = (int)p('cache');
         wr('dev/' . $d, $o);
     }
-    out(array('ok' => true, 'o' => $o, 'd' => $d));
+    $key = isset($o['k']) ? $o['k'] : '';
+    unset($o['k'], $o['kc'], $o['ip']);
+    out(array('ok' => true, 'o' => $o, 'd' => $d, 'k' => $claim ? $key : null));
 
 /* ---------- spray, skrinshotlar: XClient.exe (kompyuter id) bilan bog'liq ---------- */
 case 'spray':                                            // menyu: tayyor tempdecal.wad (base64) -> keyingi ishga tushishda o'rnatiladi
@@ -540,12 +593,9 @@ case 'shots':                                            // menyu: skrinshotlar 
 case 'shot':                                             // menyu: bitta skrinshot
 case 'shot_del':
     $d = strtolower(p('d'));
-    if (!preg_match('/^[a-z0-9]{8,40}$/', $d)) {
-        $m = rd('ip/' . substr(sha1((isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '') . 'xc'), 0, 24), null);
-        if (!$m || time() - $m['t'] > 30 * 86400) fail('nolaunch', 'XClient.exe topilmadi');
-        $d = $m['d'];
-    }
-    if (!is_file(XC_DIR . '/dev/' . $d . '.php')) fail('nolaunch', 'XClient.exe topilmadi');
+    if (!preg_match('/^[a-z0-9]{8,40}$/', $d) || !is_file(XC_DIR . '/dev/' . $d . '.php')) fail('nolaunch', 'XCLauncher.exe topilmadi');
+    if ($a === 'shot_up') { if (ip_dev(1800) !== $d) fail('nolaunch', 'XCLauncher.exe topilmadi'); }   // launcher: shu IP dan yaqinda ochilgan
+    elseif ($a !== 'spray_get' && !dev_ok($d, rd('dev/' . $d, array()))) fail('nolaunch', 'XCLauncher.exe topilmadi');
     if ($a === 'spray') fail('off', 'Spray hammada X CLIENT logotipi');   // o'z rasmini qo'yish o'chirilgan
     if ($a === 'spray_reset') {                            // menyu: "X CLIENT" spray - saytdagi tiniq standart logotip
         lock();
@@ -595,6 +645,7 @@ case 'srvstat':
         if (!is_array($x) || count($x) < 3 || !preg_match('/^[\w.\-]+:\d+$/', $x[0])) continue;
         $pl = max(0, min(64, (int)$x[1])); $mx = max(1, min(64, (int)$x[2]));
         $k = 'stat/' . substr(sha1($x[0]), 0, 20);
+        if (!is_file(XC_DIR . '/' . $k . '.php') && count((array)glob(XC_DIR . '/stat/*.php')) >= 3000) continue;   // yangi server soni chegarasi
         $st = rd($k, array('h' => array_fill(0, 24, array(0, 0)), 'lt' => array_fill(0, 24, 0), 'max' => $mx));
         if (time() - $st['lt'][$h] < 300) continue;      // har soatga 5 daqiqada bir marta
         $st['h'][$h][0] += $pl; $st['h'][$h][1]++;

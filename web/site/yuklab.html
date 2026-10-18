@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>X CLIENT — CS 1.6</title>
+<meta name="description" content="X CLIENT — Counter-Strike 1.6 uchun zamonaviy menyu, avto-yangilanish, pro sozlamalar va kunlik vazifalar.">
+<link rel="icon" href="spray_logo.png">
+<style>
+:root { --bg: #0d0a0e; --panel: #17121a; --line: #2a2026; --text: #f2eef0; --mut: #a39aa0; --red: #ff3b3b; --red2: #c4262e; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 "Segoe UI", Inter, Roboto, Arial, sans-serif; }
+a { color: inherit; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+.page { overflow: hidden; }
+header { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: .5px; font-size: 20px; text-decoration: none; }
+.brand img { width: 36px; height: 36px; object-fit: contain; }
+.brand b { color: var(--red); }
+.lang a { color: var(--mut); text-decoration: none; margin-left: 12px; font-size: 14px; cursor: pointer; }
+.lang a.on { color: var(--text); font-weight: 700; }
+.hero { position: relative; display: grid; grid-template-columns: 1.05fr 1fr; gap: 40px; align-items: center; padding: 40px 0 60px; }
+.hero:before { content: ""; position: absolute; left: 0; right: 0; top: -60px; height: 520px; background: radial-gradient(closest-side, rgba(255, 59, 59, .18), transparent 70%); z-index: -1; }
+.hero h1 { font-size: 52px; line-height: 1.05; margin: 0 0 14px; letter-spacing: -.5px; }
+.hero h1 b { color: var(--red); }
+.hero p.lead { color: var(--mut); font-size: 18px; margin: 0 0 26px; max-width: 520px; }
+.dl { display: inline-flex; align-items: center; gap: 12px; background: linear-gradient(180deg, var(--red), var(--red2)); color: #fff; text-decoration: none; font-weight: 700; font-size: 18px; padding: 16px 28px; border-radius: 10px; box-shadow: 0 10px 30px rgba(255, 59, 59, .25); }
+.dl:hover { filter: brightness(1.08); }
+.dl svg { width: 22px; height: 22px; }
+.meta { margin-top: 12px; color: var(--mut); font-size: 14px; }
+.hero .logo { width: 100%; max-width: 440px; justify-self: center; filter: drop-shadow(0 20px 50px rgba(255, 40, 40, .35)); }
+section { padding: 50px 0; }
+h2 { font-size: 30px; margin: 0 0 8px; }
+.sub { color: var(--mut); margin: 0 0 28px; }
+.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+.card i { display: inline-block; font-style: normal; font-size: 22px; color: var(--red); margin-bottom: 8px; }
+.card b { display: block; margin-bottom: 4px; }
+.card span { color: var(--mut); font-size: 14px; }
+.shots { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.shots img { width: 100%; border-radius: 10px; border: 1px solid var(--line); display: block; }
+.steps { counter-reset: s; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.steps .card { position: relative; padding-top: 52px; }
+.steps .card:before { counter-increment: s; content: counter(s); position: absolute; left: 18px; top: 14px; width: 28px; height: 28px; border-radius: 50%; background: var(--red); color: #fff; font-weight: 700; display: grid; place-items: center; font-size: 15px; }
+.req { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.req ul { margin: 0; padding-left: 18px; color: var(--mut); }
+.req li { margin-bottom: 6px; }
+details { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; margin-bottom: 10px; }
+summary { cursor: pointer; font-weight: 600; }
+details p { color: var(--mut); margin: 10px 0 0; }
+.cta { text-align: center; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 40px 20px; }
+footer { color: var(--mut); font-size: 13px; text-align: center; padding: 30px 0 40px; }
+@media (max-width: 900px) {
+  .hero { grid-template-columns: 1fr; text-align: center; padding-top: 10px; }
+  .hero p.lead { margin-left: auto; margin-right: auto; }
+  .hero .logo { max-width: 260px; order: -1; }
+  .grid { grid-template-columns: 1fr 1fr; }
+  .steps, .req, .shots { grid-template-columns: 1fr; }
+  .hero h1 { font-size: 38px; }
+}
+@media (max-width: 480px) { .grid { grid-template-columns: 1fr; } .dl { width: 100%; justify-content: center; } }
+</style>
+</head>
+<body>
+<div class="page">
+<div class="wrap">
+  <header>
+    <a class="brand" href="#"><img src="spray_logo.png" alt=""><span><b>X</b> CLIENT</span></a>
+    <div class="lang"><a data-l="uz" class="on">O'zbekcha</a><a data-l="ru">Русский</a></div>
+  </header>
+
+  <div class="hero">
+    <div>
+      <h1><b>X</b> CLIENT<br><span data-t="h1">Counter-Strike 1.6 uchun</span></h1>
+      <p class="lead" data-t="lead">Zamonaviy menyu, avtomatik yangilanish, pro sozlamalar, do'stlar, kunlik vazifalar va tiniq spray — hammasi bitta launcherda.</p>
+      <a class="dl" id="dl" href="https://github.com/jamic2922220-alt/xclient-pc/releases/download/xclient-latest/X-Client-CS16.zip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M6 11l6 6 6-6M4 21h16"/></svg>
+        <span data-t="dl">Bepul yuklab olish</span>
+      </a>
+      <div class="meta"><span id="ver">Windows 7/8/10/11</span> · <span data-t="free">bepul</span></div>
+    </div>
+    <img class="logo" src="spray_logo.png" alt="X CLIENT">
+  </div>
+</div>
+
+<section><div class="wrap">
+  <h2 data-t="f_t">Imkoniyatlar</h2>
+  <p class="sub" data-t="f_s">O'yinni ochishingiz bilan hammasi tayyor — hech narsa sozlash shart emas.</p>
+  <div class="grid">
+    <div class="card"><i>⟳</i><b data-t="f1">Avto-yangilanish</b><span data-t="f1s">Yangi versiya o'zi yuklanadi va o'rnatiladi.</span></div>
+    <div class="card"><i>◎</i><b data-t="f2">Serverlar</b><span data-t="f2s">TOP, BOOST, VIP serverlar, ping, bayroqlar, xarita rasmlari.</span></div>
+    <div class="card"><i>✚</i><b data-t="f3">Pritsel va HUD</b><span data-t="f3s">Rang, o'lcham, uslub, HUD kattaligi, radar va kamera.</span></div>
+    <div class="card"><i>⚡</i><b data-t="f4">PRO CFG</b><span data-t="f4s">Bir bosishda lag'siz internet va to'g'ri otdacha.</span></div>
+    <div class="card"><i>★</i><b data-t="f5">Kunlik vazifalar</b><span data-t="f5s">Vazifalarni bajaring, XP va daraja oling.</span></div>
+    <div class="card"><i>☺</i><b data-t="f6">Do'stlar</b><span data-t="f6s">Kim qaysi serverda — bir bosishda qo'shiling.</span></div>
+    <div class="card"><i>☁</i><b data-t="f7">Bulutga saqlash</b><span data-t="f7s">Sozlamalar har kompyuterda bir xil.</span></div>
+    <div class="card"><i>♪</i><b data-t="f8">Ovozlar va spray</b><span data-t="f8s">Menyu ovozlari, musiqa va X CLIENT spreyi.</span></div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <h2 data-t="s_t">Ko'rinishi</h2>
+  <p class="sub" data-t="s_s">O'yin ichidagi menyu.</p>
+  <div class="shots">
+    <img src="img/home.jpg" alt="" loading="lazy"><img src="img/hud.jpg" alt="" loading="lazy">
+    <img src="img/radar.jpg" alt="" loading="lazy"><img src="img/mis.jpg" alt="" loading="lazy">
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <h2 data-t="i_t">O'rnatish — 3 qadam</h2>
+  <p class="sub" data-t="i_s">Bir daqiqadan kam vaqt oladi.</p>
+  <div class="steps">
+    <div class="card"><b data-t="i1">Yuklab oling</b><span data-t="i1s">Yuqoridagi tugmani bosing va zip faylni saqlang.</span></div>
+    <div class="card"><b data-t="i2">Oching</b><span data-t="i2s">Zipni CS 1.6 papkasiga (cstrike.exe yonida) yoki istalgan joyga oching.</span></div>
+    <div class="card"><b data-t="i3">XCLauncher.exe ni ishga tushiring</b><span data-t="i3s">Ish stolida X CLIENT yorlig'i paydo bo'ladi. O'yin yo'q bo'lsa, o'zi o'rnatadi.</span></div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="req">
+    <div class="card"><b data-t="r_t">Talablar</b><ul>
+      <li data-t="r1">Windows 7, 8, 10 yoki 11</li><li data-t="r2">Internet (yangilanish uchun)</li><li data-t="r3">CS 1.6 (bo'lmasa o'zi o'rnatadi)</li></ul></div>
+    <div class="card"><b data-t="q_t">Ko'p so'raladigan savollar</b>
+      <details><summary data-t="q1">Windows "noma'lum dastur" deb ogohlantirsa?</summary><p data-t="q1a">Launcher raqamli imzosiz, shuning uchun SmartScreen ogohlantirishi mumkin. "Подробнее / More info" → "Выполнить в любом случае / Run anyway" ni bosing.</p></details>
+      <details><summary data-t="q2">Serverlarda ban yoki kick bo'lmaydimi?</summary><p data-t="q2a">Yo'q. X CLIENT cheat emas: u faqat menyu, sozlamalar va yangilanishni boshqaradi, o'yinning o'z sozlamalaridan foydalanadi.</p></details>
+      <details><summary data-t="q3">Pullikmi?</summary><p data-t="q3a">Yo'q, butunlay bepul.</p></details>
+    </div>
+  </div>
+</div></section>
+
+<div class="wrap"><div class="cta">
+  <h2 data-t="c_t">Tayyormisiz?</h2>
+  <p class="sub" data-t="c_s">Yuklab oling va bir daqiqada o'ynang.</p>
+  <a class="dl" href="https://github.com/jamic2922220-alt/xclient-pc/releases/download/xclient-latest/X-Client-CS16.zip"><span data-t="dl">Bepul yuklab olish</span></a>
+</div></div>
+
+</div>
+<footer><span>© X CLIENT</span> · <a href="https://boost-top.com/">boost-top.com</a></footer>
+
+<script>
+(function () {
+  var RU = {
+    h1: 'для Counter-Strike 1.6', lead: 'Современное меню, автообновление, про-настройки, друзья, ежедневные задания и чёткий спрей — всё в одном лаунчере.',
+    dl: 'Скачать бесплатно', free: 'бесплатно', f_t: 'Возможности', f_s: 'Всё готово сразу после запуска — ничего настраивать не нужно.',
+    f1: 'Автообновление', f1s: 'Новая версия скачивается и ставится сама.', f2: 'Серверы', f2s: 'TOP, BOOST, VIP серверы, пинг, флаги, картинки карт.',
+    f3: 'Прицел и HUD', f3s: 'Цвет, размер, стиль, размер HUD, радар и камера.', f4: 'PRO CFG', f4s: 'В один клик — интернет без лагов и правильная отдача.',
+    f5: 'Ежедневные задания', f5s: 'Выполняйте задания, получайте XP и уровни.', f6: 'Друзья', f6s: 'Кто на каком сервере — заходите в один клик.',
+    f7: 'Облачное сохранение', f7s: 'Настройки одинаковые на любом компьютере.', f8: 'Звуки и спрей', f8s: 'Звуки меню, музыка и спрей X CLIENT.',
+    s_t: 'Как выглядит', s_s: 'Меню внутри игры.', i_t: 'Установка — 3 шага', i_s: 'Меньше минуты.',
+    i1: 'Скачайте', i1s: 'Нажмите кнопку выше и сохраните zip.', i2: 'Распакуйте', i2s: 'В папку CS 1.6 (рядом с cstrike.exe) или в любое место.',
+    i3: 'Запустите XCLauncher.exe', i3s: 'На рабочем столе появится ярлык X CLIENT. Если игры нет — установит сам.',
+    r_t: 'Требования', r1: 'Windows 7, 8, 10 или 11', r2: 'Интернет (для обновлений)', r3: 'CS 1.6 (если нет — установит сам)',
+    q_t: 'Частые вопросы', q1: 'Windows предупреждает о «неизвестной программе»?', q1a: 'У лаунчера нет цифровой подписи, поэтому SmartScreen может предупредить. Нажмите «Подробнее» → «Выполнить в любом случае».',
+    q2: 'Не будет бана или кика на серверах?', q2a: 'Нет. X CLIENT — не чит: он управляет только меню, настройками и обновлениями и использует обычные настройки игры.',
+    q3: 'Это платно?', q3a: 'Нет, полностью бесплатно.', c_t: 'Готовы?', c_s: 'Скачайте и играйте через минуту.'
+  };
+  var UZ = {};
+  var els = document.querySelectorAll('[data-t]');
+  for (var i = 0; i < els.length; i++) UZ[els[i].getAttribute('data-t')] = els[i].innerHTML;
+  function set(l) {
+    for (var i = 0; i < els.length; i++) { var k = els[i].getAttribute('data-t'), d = l === 'ru' ? RU : UZ; if (d[k]) els[i].innerHTML = d[k]; }
+    var ls = document.querySelectorAll('.lang a'); for (var j = 0; j < ls.length; j++) ls[j].className = ls[j].getAttribute('data-l') === l ? 'on' : '';
+    document.documentElement.lang = l; try { localStorage.setItem('xc_dl_lang', l); } catch (e) {}
+  }
+  var ls = document.querySelectorAll('.lang a');
+  for (var j = 0; j < ls.length; j++) ls[j].onclick = function () { set(this.getAttribute('data-l')); };
+  var saved = null; try { saved = localStorage.getItem('xc_dl_lang'); } catch (e) {}
+  if (saved === 'ru' || (!saved && /^(ru|uk|kk|ky|be)/i.test(navigator.language || ''))) set('ru');
+  // oxirgi versiya (xclient/api.php)
+  var x = new XMLHttpRequest();
+  x.open('GET', 'xclient/api.php?a=update&ch=stable', true);
+  x.onload = function () { var m = /version=([\w.\-]+)/.exec(x.responseText || ''); if (m) document.getElementById('ver').innerHTML = 'v' + m[1] + ' · Windows 7/8/10/11'; };
+  x.send();
+})();
+</script>
+</body>
+</html>

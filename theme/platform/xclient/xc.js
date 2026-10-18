@@ -217,13 +217,16 @@ function fxLoop() {
  * Tizim sozlamalari (beta, Windows bilan ishga tushish, ekran, kesh, fayllarni tekshirish)
  * xc_api.php ga yoziladi va XClient.exe ularni keyingi ishga tushishda bajaradi. */
 function qparam(k) { var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search || ''); return m ? decodeURIComponent(m[1]) : ''; }
-var PCID = /^[a-z0-9]{8,40}$/.test(qparam('xc')) ? qparam('xc') : '';
+var PCID = /^[a-z0-9]{8,40}$/.test(qparam('xc')) ? qparam('xc') : '';   // kompyuter id (DB.pcid) va uning maxfiy kaliti (DB.pck) load() dan keyin olinadi
 var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '', hud: 100 }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
 function loadOpts() {
   // id berilmasa server shu IP dan oxirgi ulangan XClient.exe ni topadi
+  if (!PCID && DB.pcid && DB.pck) PCID = DB.pcid;
   api('opts', PCID ? { d: PCID } : {}, function (r) {
+    if (!r.ok && r.err === 'nolaunch' && PCID) { PCID = ''; DB.pcid = DB.pck = ''; persist(); return loadOpts(); }   // kalit eskirgan
     if (!r.ok || !r.o) return;
     if (r.d) PCID = r.d;
+    if (r.k) { DB.pcid = r.d; DB.pck = r.k; persist(); }
     for (var k in r.o) if (r.o.hasOwnProperty(k) && OPTS.hasOwnProperty(k)) OPTS[k] = r.o[k];
     if (r.o.ver && !qparam('v')) { VERSION = r.o.ver; renderBar(); }
     if (r.o.cachemb != null && !qparam('c')) CACHE_MB = r.o.cachemb;
@@ -240,7 +243,7 @@ function saveOpts(msg) {
 /* ============================================================ akkaunt API (xc_api.php) */
 var ME = null, FRIENDS = [], WEEK = [];
 function api(a, params, cb) {
-  var body = 'a=' + encodeURIComponent(a) + '&device=' + DB.device + (DB.token ? '&token=' + DB.token : '');
+  var body = 'a=' + encodeURIComponent(a) + '&device=' + DB.device + (DB.token ? '&token=' + DB.token : '') + (params && params.d && DB.pck ? '&k=' + DB.pck : '');
   for (var k in params) if (params.hasOwnProperty(k)) body += '&' + k + '=' + encodeURIComponent(params[k]);
   var x;
   try { x = new XMLHttpRequest(); x.open('POST', 'xc_api.php', true); x.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded'); }
@@ -1814,7 +1817,7 @@ function act(a) {
     if (!r.ok) h = '<div class="empty">' + esc(r.msg || T('sy_nolaunch')) + '</div>';
     else if (!r.list.length) h = '<div class="empty">' + esc(T('sh_none')) + '</div>';
     else each(r.list, function (x) {
-      var u = 'xc_api.php?a=shot&d=' + encodeURIComponent(r.d) + '&f=' + encodeURIComponent(x.f);
+      var u = 'xc_api.php?a=shot&d=' + encodeURIComponent(r.d) + '&k=' + encodeURIComponent(DB.pck || '') + '&f=' + encodeURIComponent(x.f);
       h += '<div class="shot"><img src="' + u + '" alt=""><small>' + esc(fmtTime(x.t * 1000)) + '</small><a class="x2" data-shdel="' + esc(x.f) + '">✕</a></div>';
     });
     openSide('shots', T('sh_title2'), '<div class="shots">' + h + '</div>');

@@ -20,7 +20,11 @@ function rd($name, $def) {
     $j = json_decode(substr((string)@file_get_contents($f), strlen(XC_GUARD)), true);
     return is_array($j) ? $j : $def;
 }
-function wr($name, $data) { @mkdir(dirname(XC_DIR . '/' . $name), 0755, true); @file_put_contents(XC_DIR . '/' . $name . '.php', XC_GUARD . json_encode($data), LOCK_EX); }
+function wr($name, $data) {                            // vaqtinchalik fayl + nomini almashtirish: o'qiyotgan so'rov yarim yozilgan faylni ko'rmasin
+    @mkdir(dirname(XC_DIR . '/' . $name), 0755, true);
+    $f = XC_DIR . '/' . $name . '.php'; $tmp = $f . '.' . mt_rand() . '.tmp';
+    if (@file_put_contents($tmp, XC_GUARD . json_encode($data), LOCK_EX) !== false) @rename($tmp, $f);
+}
 function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 function g($k, $d = '') { return isset($_GET[$k]) ? (string)$_GET[$k] : $d; }
 function pp($k, $d = '') { return isset($_POST[$k]) ? (is_array($_POST[$k]) ? $_POST[$k] : trim((string)$_POST[$k])) : $d; }
@@ -66,7 +70,17 @@ if (isset($_GET['api'])) {
     exit;
 }
 
+$https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
+/* parol va sessiya ochiq internetda ochiq matnda ketmasin: admin panel faqat https orqali (?nohttps=1 - favqulodda) */
+if (!$https && !isset($_GET['nohttps']) && !empty($_SERVER['HTTP_HOST']) && !preg_match('/^(localhost|127\.)/', $_SERVER['HTTP_HOST'])) {
+    header('Location: https://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'], true, 302); exit;
+}
+if (PHP_VERSION_ID >= 70300) session_set_cookie_params(array('lifetime' => 0, 'path' => '/', 'secure' => $https, 'httponly' => true, 'samesite' => 'Lax'));
+else session_set_cookie_params(0, '/; samesite=Lax', '', $https, true);
 session_start();
+/* xc_data brauzerdan ko'rinmasin: .htaccess va har papkada bo'sh index.html */
+if (!is_file(XC_DIR . '/.htaccess')) @file_put_contents(XC_DIR . '/.htaccess', "Require all denied\nDeny from all\n");
+foreach (array_merge(array(XC_DIR), (array)glob(XC_DIR . '/*', GLOB_ONLYDIR)) as $dd) if (!is_file($dd . '/index.html')) @file_put_contents($dd . '/index.html', '');
 header('Content-Type: text/html; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Frame-Options: DENY');
@@ -99,10 +113,16 @@ if (!$adm) {
 if (g('logout')) { $_SESSION = array(); session_destroy(); go(''); }
 if (empty($_SESSION['adm'])) {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $lk = rd('admin_lock', array('n' => 0, 't' => 0));
+        // urinishlar IP bo'yicha sanaladi (begona odam adminni bloklay olmaydi), sanash qulf ostida (parallel so'rovlar chetlab o'tolmaydi)
+        $lkk = 'admin_lock_' . substr(sha1(isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : ''), 0, 16);
+        $fh = fopen(XC_DIR . '/.alock', 'c'); if ($fh) flock($fh, LOCK_EX);
+        $lk = rd($lkk, array('n' => 0, 't' => 0)); $ok = false;
         if ($lk['n'] >= 5 && time() - $lk['t'] < 600) $msg = 'Ko\'p urinish. 10 daqiqadan keyin qayta urinib ko\'ring';
-        elseif (password_verify(pp('pass'), $adm['pass'])) { wr('admin_lock', array('n' => 0, 't' => 0)); session_regenerate_id(true); $_SESSION['adm'] = 1; go(''); }
-        else { usleep(700000); wr('admin_lock', array('n' => $lk['n'] + 1, 't' => time())); $msg = 'Parol noto\'g\'ri'; }
+        elseif (password_verify(pp('pass'), $adm['pass'])) { wr($lkk, array('n' => 0, 't' => 0)); $ok = true; }
+        else { wr($lkk, array('n' => ($lk['n'] >= 5 ? 0 : $lk['n']) + 1, 't' => time())); $msg = 'Parol noto\'g\'ri'; }
+        if ($fh) { flock($fh, LOCK_UN); fclose($fh); }
+        if ($ok) { session_regenerate_id(true); $_SESSION['adm'] = 1; go(''); }
+        usleep(700000);
     }
     head('Kirish');
     echo '<div class="login"><h1><span>X</span> CLIENT</h1><p class="mut">Admin panel</p>' . ($msg ? '<div class="err">' . h($msg) . '</div>' : '')
@@ -151,7 +171,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $rel = trim(str_replace('\\', '/', pp('path')), '/');
         if ($rel === '' && isset($_FILES['f']['name'])) $rel = 'cstrike/' . basename($_FILES['f']['name']);
         if (!is_dir(PACKS_DIR . '/' . $id) || strpos($rel, '..') !== false || !preg_match('#^[A-Za-z0-9_\-./ ]+$#', $rel) || empty($_FILES['f']['tmp_name']) || !is_uploaded_file($_FILES['f']['tmp_name'])) { flash('Fayl yuklanmadi (yo\'l yoki fayl noto\'g\'ri)'); go('?p=packs&id=' . $id); }
-        if (preg_match('/\.(php\d?|phtml|phar|htaccess|cgi|pl|sh)$/i', $rel)) { flash('Bu turdagi faylni yuklab bo\'lmaydi'); go('?p=packs&id=' . $id); }
+        // faqat o'yin fayllari (ruxsat etilganlar ro'yxati): .php, .html, .svg va boshqalar saytda kod sifatida ishlashi mumkin
+        if (!preg_match('/\.(wav|mp3|mdl|spr|bmp|tga|wad|cfg|txt|res|dll|exe|bsp|nav|ini|lst|gam|jpg|jpeg|png|ttf|otf|vtf|fgd|scr|vgui|json|dat|zip)$/i', $rel) || preg_match('/\.(php\d?|phtml|phar|html?|svg|shtml|cgi|pl|sh)\./i', $rel) || basename($rel)[0] === '.') { flash('Bu turdagi faylni yuklab bo\'lmaydi (faqat o\'yin fayllari: wav, mdl, spr, cfg, txt, wad, bsp ...)'); go('?p=packs&id=' . $id); }
         $dst = PACKS_DIR . '/' . $id . '/files/' . $rel;
         @mkdir(dirname($dst), 0755, true);
         move_uploaded_file($_FILES['f']['tmp_name'], $dst);
@@ -223,6 +244,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         else { $adm['pass'] = password_hash(pp('new'), PASSWORD_DEFAULT); wr('admin', $adm); flash('Parol almashtirildi ✓'); }
         go('?p=settings');
     }
+    if ($act === 'backup') {                            // xc_data zaxirasi: akkauntlar, XP, statistika, sozlamalar
+        @set_time_limit(300);
+        $shots = pp('shots') === '1';
+        $tmp = tempnam(sys_get_temp_dir(), 'xcb');
+        $files = array();
+        foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator(XC_DIR, FilesystemIterator::SKIP_DOTS)) as $f) {
+            $rel = str_replace('\\', '/', substr($f->getPathname(), strlen(XC_DIR) + 1));
+            if (!$shots && strpos($rel, 'shots/') === 0) continue;   // skrinshotlar katta - xohlasa qo'shiladi
+            $files[$rel] = $f->getPathname();
+        }
+        if (class_exists('ZipArchive')) {
+            $z = new ZipArchive(); $z->open($tmp, ZipArchive::OVERWRITE);
+            foreach ($files as $rel => $path) $z->addFile($path, 'xc_data/' . $rel);
+            $z->close(); $name = 'xclient-zaxira-' . date('Ymd-Hi') . '.zip';
+        } else {
+            @unlink($tmp); $tmp .= '.tar'; $t = new PharData($tmp);
+            foreach ($files as $rel => $path) $t->addFile($path, 'xc_data/' . $rel);
+            $name = 'xclient-zaxira-' . date('Ymd-Hi') . '.tar';
+        }
+        $CFG['backup_t'] = time(); cfg_save();
+        header('Content-Type: application/octet-stream'); header('Content-Disposition: attachment; filename="' . $name . '"'); header('Content-Length: ' . filesize($tmp));
+        readfile($tmp); @unlink($tmp); exit;
+    }
     if ($act === 'clean_days') {
         $keep = max(30, (int)pp('keep')); $n = 0;
         foreach ((array)glob(XC_DIR . '/daily/*.php') as $f) if (basename($f, '.php') < date('Y-m-d', strtotime("-$keep day"))) { @unlink($f); $n++; }
@@ -264,6 +308,7 @@ if ($P === 'dash') {
         $sp = ''; if ($key) { $mx = 1; foreach ($last14 as $s) $mx = max($mx, $s[$key]); $pts = array(); foreach ($last14 as $i => $s) $pts[] = round($i * 200 / 13) . ',' . round(34 - 30 * $s[$key] / $mx); $sp = '<svg class="spark" viewBox="0 0 200 36" preserveAspectRatio="none"><polyline points="' . implode(' ', $pts) . '"/></svg>'; }
         return '<div class="card ' . $cls . '"><span class="ct">' . $title . '</span><b>' . $val . '</b>' . ($prev === null ? '' : $tr) . $sp . '</div>';
     };
+    if (empty($CFG['backup_t']) || time() - $CFG['backup_t'] > 7 * 86400) echo '<div class="flash" style="margin-bottom:14px">Zaxira nusxa ' . (empty($CFG['backup_t']) ? 'hali olinmagan' : '7 kundan ko\'p oldin olingan') . ' - <a href="?p=settings">Sozlamalar → Zaxira nusxa</a></div>';
     echo '<h1>Infopanel</h1><div class="cards">'
         . $card('xc', $t['xc'], 'X CLIENT o\'yinchilar bugun', $y['xc'], 'xc')
         . $card('nc', $t['nc'], 'NextClient o\'yinchilar bugun', $y['nc'], 'nc')
@@ -517,7 +562,10 @@ if ($P === 'settings') {
     $sz = 0; $n = 0; foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator(XC_DIR, FilesystemIterator::SKIP_DOTS)) as $f) { $sz += $f->getSize(); $n++; }
     echo '<h1>Sozlamalar</h1><div class="grid2"><div class="panel"><div class="ph">Admin parolini almashtirish</div><form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="pass"><input type="password" name="old" placeholder="Eski parol"><input type="password" name="new" placeholder="Yangi parol (8+ belgi)"><button class="btn red">Almashtirish</button></form></div>'
         . '<div class="panel"><div class="ph">Ma\'lumotlar</div><div class="kv"><span>xc_data hajmi</span><b>' . size_h($sz) . ' · ' . $n . ' fayl</b></div><div class="kv"><span>PHP</span><b>' . h(PHP_VERSION) . '</b></div>'
-        . '<form method="post" class="frm" style="margin-top:10px">' . csrf_in() . '<input type="hidden" name="act" value="clean_days"><div class="row"><select name="keep"><option value="90">90 kundan eski</option><option value="180">180 kundan eski</option><option value="365" selected>1 yildan eski</option></select><button class="btn">Kunlik statistikani tozalash</button></div></form></div></div>';
+        . '<form method="post" class="frm" style="margin-top:10px">' . csrf_in() . '<input type="hidden" name="act" value="clean_days"><div class="row"><select name="keep"><option value="90">90 kundan eski</option><option value="180">180 kundan eski</option><option value="365" selected>1 yildan eski</option></select><button class="btn">Kunlik statistikani tozalash</button></div></form></div></div>'
+        . '<div class="panel"><div class="ph">Zaxira nusxa</div><div class="mut small" style="margin-bottom:10px">Akkauntlar, XP, do\'stlar, statistika, e\'lonlar, sozlamalar - hammasi bitta faylga yuklab olinadi. Haftada bir marta olib, kompyuteringizda saqlang. Tiklash: faylni ochib, ichidagi xc_data papkasini FastPanel orqali mmb ga qayta yuklang.</div>'
+        . '<form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="backup"><label class="chk"><input type="checkbox" name="shots" value="1"> Skrinshotlarni ham qo\'shish (katta bo\'lishi mumkin)</label>'
+        . '<button class="btn red">⬇ Zaxirani yuklab olish</button> <span class="mut small">Oxirgi: ' . (empty($CFG['backup_t']) ? 'hali olinmagan' : dt($CFG['backup_t'])) . '</span></form></div>';
 }
 echo '</div>';
 foot();
@@ -621,7 +669,7 @@ pre{background:#121418;border:1px solid #262a33;border-radius:8px;padding:12px;o
 function foot() {
     echo '<script>(function(){var cs=document.querySelectorAll(".chart");for(var j=0;j<cs.length;j++)(function(c){var t=c.querySelector(".tip");
 c.addEventListener("mousemove",function(e){var r=e.target;if(!r.getAttribute||!r.getAttribute("data-v")){t.style.display="none";return;}
-var b=c.getBoundingClientRect();t.innerHTML="<i style=\"background:"+(r.getAttribute("fill")||"#888")+"\"></i><b>"+r.getAttribute("data-v")+"</b>"+r.getAttribute("data-l");
+var b=c.getBoundingClientRect();t.innerHTML="";var ti=document.createElement("i");ti.style.background=r.getAttribute("fill")||"#888";var tb=document.createElement("b");tb.textContent=r.getAttribute("data-v");t.appendChild(ti);t.appendChild(tb);t.appendChild(document.createTextNode(r.getAttribute("data-l")));
 t.style.display="block";var x=e.clientX-b.left+14;if(x+t.offsetWidth>b.width)x=e.clientX-b.left-t.offsetWidth-10;t.style.left=x+"px";t.style.top=(e.clientY-b.top-44)+"px";});
 c.addEventListener("mouseleave",function(){t.style.display="none";});})(cs[j]);})();</script></body></html>';
 }
