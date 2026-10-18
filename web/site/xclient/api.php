@@ -16,6 +16,7 @@ $a = isset($_GET['a']) ? (string)$_GET['a'] : '';
 $ch = isset($_GET['ch']) && $_GET['ch'] === 'beta' ? 'beta' : 'stable';
 
 if ($a === 'update') {
+    header('Access-Control-Allow-Origin: *');   // yuklab olish sahifasi boshqa saytda (cssborka.uz) turganda versiyani ko'rsatish uchun
     $r = rel_current($ch);
     $line = function ($k, $v) { echo $k . '=' . str_replace(array("\r", "\n"), ' ', (string)$v) . "\n"; };
     $line('status', 'ok');

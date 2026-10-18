@@ -343,9 +343,9 @@ footer { color: var(--mut); font-size: 13px; text-align: center; padding: 30px 0
   for (var j = 0; j < ls.length; j++) ls[j].onclick = function () { set(this.getAttribute('data-l')); };
   var saved = null; try { saved = localStorage.getItem('xc_dl_lang'); } catch (e) {}
   if (saved === 'ru' || (!saved && /^(ru|uk|kk|ky|be)/i.test(navigator.language || ''))) set('ru');
-  // oxirgi versiya (xclient/api.php)
-  var x = new XMLHttpRequest();
-  x.open('GET', 'xclient/api.php?a=update&ch=stable', true);
+  // oxirgi versiya (xclient/api.php); sahifa boshqa saytda (cssborka.uz) bo'lsa - mmb.boost-top.com dan
+  var x = new XMLHttpRequest(), api = /(^|\.)mmb\.boost-top\.com$|^127\.|^localhost$/.test(location.hostname) ? '' : location.protocol + '//mmb.boost-top.com/';
+  x.open('GET', api + 'xclient/api.php?a=update&ch=stable', true);
   x.onload = function () { var m = /version=([\w.\-]+)/.exec(x.responseText || ''); if (m) document.getElementById('ver').innerHTML = 'v' + m[1] + ' · Windows 7/8/10/11'; };
   x.send();
 })();
