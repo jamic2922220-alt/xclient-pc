@@ -19,14 +19,11 @@ define('XP_PER_LEVEL', 1000);
 
 /* Admin "hamma uchun" deb belgilagan paketlar har bir XClient.exe ga "id~versiya" ko'rinishida qo'shiladi:
  * versiya oshirilsa, eski nusxa olib tashlanib yangisi o'rnatiladi (sborka yangilanishi). */
-define('SPRAY_DEFAULT_VER', 20261022);   // spray_default.wad almashtirilsa - oshiring (hammaga qayta o'rnatiladi)
-define('SPRAY_CUTOFF', 1792285200);      // 2026-10-18 06:00 dan oldingi o'yinchi spraylari eski usulda (xira) yasalgan - bekor
+define('SPRAY_DEFAULT_VER', 20261023);   // spray_default.wad almashtirilsa - oshiring (hammaga qayta o'rnatiladi)
 function with_forced_packs($o, $d) {
-    $sf = XC_DIR . '/spray/' . $d . '.php';
-    if (!empty($o['spray']) && (!is_file($sf) || filemtime($sf) < SPRAY_CUTOFF)) { @unlink($sf); unset($o['spray']); }
-    // sprays: o'yinchida bo'lishi kerak bo'lgan tempdecal.wad hajmi - XClient.exe farq qilsa qayta yozadi
-    if (!empty($o['spray'])) $o['sprays'] = filesize($sf) - strlen(XC_GUARD);
-    elseif (is_file(__DIR__ . '/spray_default.wad')) { $o['spray'] = SPRAY_DEFAULT_VER; $o['sprays'] = filesize(__DIR__ . '/spray_default.wad'); }
+    // spray hammada bir xil - X CLIENT logotipi. sprays: tempdecal.wad hajmi - launcher farq qilsa qayta yozadi
+    unset($o['spray'], $o['sprays']);
+    if (is_file(__DIR__ . '/spray_default.wad')) { $o['spray'] = SPRAY_DEFAULT_VER; $o['sprays'] = filesize(__DIR__ . '/spray_default.wad'); }
     $mine = array_filter(explode(',', isset($o['packs']) ? $o['packs'] : ''));
     $all = array();
     foreach ((array)@scandir(__DIR__ . '/packs') as $id) {
@@ -507,31 +504,17 @@ case 'shot_del':
         $d = $m['d'];
     }
     if (!is_file(XC_DIR . '/dev/' . $d . '.php')) fail('nolaunch', 'XClient.exe topilmadi');
-    if ($a === 'spray') {
-        $w = base64_decode(p('wad'), true);
-        if (!$w || substr($w, 0, 4) !== 'WAD3' || strlen($w) > 20000) fail('bad', 'Spray noto\'g\'ri');
-        lock();
-        @mkdir(XC_DIR . '/spray', 0755, true);
-        file_put_contents(XC_DIR . '/spray/' . $d . '.php', XC_GUARD . $w, LOCK_EX);
-        $o = rd('dev/' . $d, array()); $o['spray'] = time(); wr('dev/' . $d, $o);
-        out(array('ok' => true));
-    }
+    if ($a === 'spray') fail('off', 'Spray hammada X CLIENT logotipi');   // o'z rasmini qo'yish o'chirilgan
     if ($a === 'spray_reset') {                            // menyu: "X CLIENT" spray - saytdagi tiniq standart logotip
         lock();
         @unlink(XC_DIR . '/spray/' . $d . '.php');
         $o = rd('dev/' . $d, array()); unset($o['spray']); wr('dev/' . $d, $o);
         out(array('ok' => true));
     }
-    if ($a === 'spray_get') {
-        $f = XC_DIR . '/spray/' . $d . '.php';
-        if (!is_file($f)) {                                  // o'zi spray tanlamagan - X CLIENT logotipi
-            if (!is_file(__DIR__ . '/spray_default.wad')) { header('HTTP/1.1 404 Not Found'); exit; }
-            header('Content-Type: application/octet-stream');
-            readfile(__DIR__ . '/spray_default.wad');
-            exit;
-        }
+    if ($a === 'spray_get') {                              // hammaga X CLIENT logotipi
+        if (!is_file(__DIR__ . '/spray_default.wad')) { header('HTTP/1.1 404 Not Found'); exit; }
         header('Content-Type: application/octet-stream');
-        echo substr(file_get_contents($f), strlen(XC_GUARD));
+        readfile(__DIR__ . '/spray_default.wad');
         exit;
     }
     $sd = XC_DIR . '/shots/' . $d;

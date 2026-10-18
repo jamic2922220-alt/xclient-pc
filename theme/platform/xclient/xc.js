@@ -1012,7 +1012,7 @@ function settingsCmds(s) {
   var n = NETS[s.net] || NETS.fast, c = [];
   if (s.name) c.push('name ' + q(fullName(s)));
   c.push('rate ' + n[0], 'cl_updaterate ' + n[1], 'cl_cmdrate ' + n[2]);
-  c.push('cl_allowdownload ' + s.dl, 'cl_allowupload ' + s.spray, 'cl_righthand ' + s.hand, 'hud_fastswitch ' + s.fastsw);
+  c.push('cl_allowdownload 1', 'cl_allowupload 1', 'cl_righthand ' + s.hand, 'hud_fastswitch ' + s.fastsw);
   c.push('mp3volume ' + (s.mp3off ? 0 : s.mus));
   c.push('sensitivity ' + s.sens, 'zoom_sensitivity_ratio ' + s.zoom, 'm_rawinput ' + s.raw, 'm_filter ' + s.filter, 'm_pitch ' + (s.inv ? -0.022 : 0.022));
   c.push('volume ' + s.vol, 'voice_enable ' + s.voice, 'voice_scale ' + s.vscale, 'snd_mute_losefocus ' + s.mute);
@@ -1021,7 +1021,7 @@ function settingsCmds(s) {
   c.push('fps_override ' + (s.fps > 100 ? 1 : 0), 'cl_showfps ' + s.showfps, 'cl_dlmax 512', 'm_customaccel 0');
   c.push('fps_max ' + s.fps, 'gamma ' + s.gamma, 'fov_angle ' + s.fov, 'viewmodel_fov ' + s.vmfov, 'fov_horplus ' + s.hor, 'gl_vsync ' + s.vsync, 'r_dynamic ' + s.dyn, 'mp_decals ' + s.decals);
   each(xhairCmds(s), function (x) { c.push(x); });
-  c.push('cl_bob ' + s.bob, 'gl_picmip ' + s.picmip, 'r_detailtextures ' + s.detail, 'cl_shadows ' + s.shadows, 'cl_minmodels ' + s.minm,
+  c.push('cl_bob ' + s.bob, 'gl_picmip ' + s.picmip, 'r_detailtextures ' + s.detail, 'cl_shadows ' + s.shadows, 'cl_minmodels 0',   // serverning o'yinchi va qurol modellari doim ko'rinsin
     'ex_interp ' + s.interp, 'cl_lw ' + s.lw, 'cl_lc ' + s.lc, 'hisound ' + s.hisnd, '_snd_mixahead ' + s.mixa, 'voice_loopback ' + s.loop,
     'hud_saytext_time ' + s.saytm, 'net_graphpos ' + s.ngpos);
   c.push('net_graph ' + (s.netg ? 3 : 0), 'hud_deathnotice_old ' + (s.hs ? 0 : 1), 'hud_deathnotice_max ' + s.dmax, 'cl_radartype ' + s.radar, 'hud_centerid ' + s.cid, 'scr_drawversion ' + (s.nover ? 0 : 1));
@@ -1154,9 +1154,9 @@ function hwText() {
   return Math.round(HW.ram / 1024) + ' GB RAM · ' + HW.cpu + ' ' + T('hw_cores') + (HW.gpu ? ' · ' + HW.gpu : '');
 }
 function hwAuto() {
-  var c = hwClass(), v = c === 'weak' ? { picmip: 1, detail: 0, shadows: 0, minm: 1, dyn: 0, decals: 50, vsync: 0 }
-    : c === 'mid' ? { picmip: 0, detail: 0, shadows: 1, minm: 0, dyn: 0, decals: 150, vsync: 0 }
-    : { picmip: 0, detail: 1, shadows: 1, minm: 0, dyn: 1, decals: 300, vsync: 0 };
+  var c = hwClass(), v = c === 'weak' ? { picmip: 1, detail: 0, shadows: 0, dyn: 0, decals: 50, vsync: 0 }
+    : c === 'mid' ? { picmip: 0, detail: 0, shadows: 1, dyn: 0, decals: 150, vsync: 0 }
+    : { picmip: 0, detail: 1, shadows: 1, dyn: 1, decals: 300, vsync: 0 };
   for (var k in v) if (v.hasOwnProperty(k)) E[k] = v[k];
   showSetTab('pro'); toast(T('hw_done').replace('{c}', T('hw_' + c)), 5000);
 }
@@ -1351,11 +1351,11 @@ var PANES = {
     });
     return '<div class="pane l"><div class="ph2">' + esc(T('g_player')) + '</div>' +
       '<div class="fr"><div class="lb">' + esc(T('g_name')) + '</div><div class="ct2"><input class="tx" id="fName" maxlength="28" value="' + esc(E.name) + '"></div></div>' +
-      seg('tag', 'g_tag', [['X | ', 'X |'], ['[UZ] ', '[UZ]'], ['', 'g_none']]) + tg('spray', 'g_spray') +
+      seg('tag', 'g_tag', [['X | ', 'X |'], ['[UZ] ', '[UZ]'], ['', 'g_none']]) +
       '<div class="ph2 m">' + esc(T('g_net')) + '</div><div class="big">' + nets + '</div>' +
       '<div class="mut" style="margin:10px 0 14px;font-size:12px">' + esc(T('g_net_note')) + '</div>' + tg('reconn', 'g_reconn') + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('g_server')) + '</div>' +
-      tg('queue', 'g_queue', 'g_queue2') + tg('dl', 'g_dl', 'g_dl2') + tg('mp3off', 'g_mp3', 'g_mp32') + tg('hand', 'g_hand') + tg('fastsw', 'g_fast') +
+      tg('queue', 'g_queue', 'g_queue2') + tg('mp3off', 'g_mp3', 'g_mp32') + tg('hand', 'g_hand') + tg('fastsw', 'g_fast') +
       '<div class="ph2 m">' + esc(T('g_demo')) + '</div>' + tg('demo', 'g_rec', 'g_rec2') + '</div>';
   },
   keys: function () {
@@ -1421,9 +1421,8 @@ var PANES = {
     });
     var nol = PCID ? '' : '<div class="chk bad">' + esc(T('sy_nolaunch')) + '</div>';
     return '<div class="pane l"><div class="ph2">' + esc(T('sp_title')) + '</div>' + nol +
-      '<div class="spr"><div class="sprv">' + (DB.sprayPrev ? '<img src="' + DB.sprayPrev + '" alt="">' : '') + '</div>' +
-      '<a class="btn red" data-act="spfile">' + esc(T('sp_file')) + '</a>' + (ME && ME.av ? '<a class="btn" data-act="spav">' + esc(T('sp_av')) + '</a>' : '') +
-      '<a class="btn" data-act="splogo">X CLIENT</a><div class="mut">' + esc(DB.sprayT ? T('sp_sent').replace('{t}', fmtTime(DB.sprayT)) : T('sp_note')) + '</div></div>' +
+      // spray hammada bir xil - X CLIENT logotipi (XCLauncher.exe har ochilishda o'zi qo'yadi)
+      '<div class="spr"><div class="sprv"><img src="spray_logo.png" alt=""></div><div class="mut">' + esc(T('sp_fixed')) + '</div></div>' +
       '<div class="ph2 m">' + esc(T('sh_title')) + '</div>' +
       '<div class="fr w"><div class="lb">' + esc(T('sh_up')) + '<small>' + esc(T('sh_up2')) + '</small></div><div class="tg' + (OPTS.shots ? ' on' : '') + '" data-otg="shots"><i></i></div></div>' +
       '<a class="btn" style="margin:0" data-act="gallery">' + esc(T('sh_open')) + '</a>' +
@@ -1436,7 +1435,7 @@ var PANES = {
     return '<div class="pane l"><div class="ph2">' + esc(T('pr_gfx')) + '</div>' +
       seg('picmip', 'pr_tex', [[0, 'pr_tex0'], [1, 'pr_tex1'], [2, 'pr_tex2']]) +
       '<div class="mut" style="margin:-6px 0 8px;font-size:12px">' + esc(T('pr_tex3')) + '</div>' +
-      tg('detail', 'pr_detail') + tg('shadows', 'pr_shadows') + tg('minm', 'pr_minm', 'pr_minm2') +
+      tg('detail', 'pr_detail') + tg('shadows', 'pr_shadows') +
       '<div class="ph2 m">' + esc(T('pr_fps')) + '</div>' +
       '<div class="rowb"><b>' + esc(T('pr_cfg')) + '</b><small>' + esc(T('pr_cfg2')) + '</small><a class="btn red" data-act="procfg">' + esc(T('pr_cfgb')) + '</a></div>' +
       '<div class="rowb"><b>' + esc(T('pr_fps')) + '</b><small>' + esc(T('pr_fps2')) + '</small><a class="btn red" data-act="fpsmode">' + esc(T('pr_fpsb')) + '</a></div>' +
@@ -1783,11 +1782,11 @@ function act(a) {
   });
   if (a === 'procfg') {                        // Pro CFG: lag'siz internet, yuqori FPS, aniq sichqoncha
     E.net = 'fast'; E.fps = 300; E.vsync = 0; E.raw = 1; E.filter = 0; E.fastsw = 1; E.bob = 0; E.interp = 0.01; E.lw = 1; E.lc = 1;
-    E.dyn = 0; E.decals = 100; E.detail = 0; E.hisnd = 1; E.mixa = 0.05; E.dl = 1; E.xdyn = 0;
+    E.dyn = 0; E.decals = 100; E.detail = 0; E.hisnd = 1; E.mixa = 0.05; E.xdyn = 0;
     showSetTab('pro'); return toast(T('pr_cfgok'), 5000);
   }
   if (a === 'fpsmode') {                       // kuchsiz kompyuter: grafikani pasaytiramiz
-    E.picmip = 1; E.detail = 0; E.shadows = 0; E.minm = 1; E.dyn = 0; E.decals = 50; E.vsync = 0; if (E.fps < 200) E.fps = 200;
+    E.picmip = 1; E.detail = 0; E.shadows = 0; E.dyn = 0; E.decals = 50; E.vsync = 0; if (E.fps < 200) E.fps = 200;
     showSetTab('pro'); return toast(T('pr_fpsok'), 5000);
   }
   if (a === 'vmdef') { each(['vmx', 'vmy', 'vmz', 'vmshift', 'bobst', 'lagst', 'camint', 'vmfov', 'bob'], function (k) { E[k] = DEF[k]; }); return showSetTab('hud'); }
