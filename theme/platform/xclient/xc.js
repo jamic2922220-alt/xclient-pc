@@ -1014,7 +1014,8 @@ function settingsCmds(s) {
   c.push('sensitivity ' + s.sens, 'zoom_sensitivity_ratio ' + s.zoom, 'm_rawinput ' + s.raw, 'm_filter ' + s.filter, 'm_pitch ' + (s.inv ? -0.022 : 0.022));
   c.push('volume ' + s.vol, 'voice_enable ' + s.voice, 'voice_scale ' + s.vscale, 'snd_mute_losefocus ' + s.mute);
   // fps_override 1 bo'lmasa NextClient FPS ni 100 da ushlab qoladi
-  c.push('fps_override ' + (s.fps > 100 ? 1 : 0), 'cl_showfps ' + s.showfps, 'cl_cmdbackup 2', 'cl_dlmax 1024', 'm_customaccel 0');
+  // cl_dlmax standart (512): 1024 ba'zi serverlar himoyasida (DProto/ReChecker) "FakePlayers" deb kick qilinishi mumkin
+  c.push('fps_override ' + (s.fps > 100 ? 1 : 0), 'cl_showfps ' + s.showfps, 'cl_dlmax 512', 'm_customaccel 0');
   c.push('fps_max ' + s.fps, 'gamma ' + s.gamma, 'fov_angle ' + s.fov, 'viewmodel_fov ' + s.vmfov, 'fov_horplus ' + s.hor, 'gl_vsync ' + s.vsync, 'r_dynamic ' + s.dyn, 'mp_decals ' + s.decals);
   each(xhairCmds(s), function (x) { c.push(x); });
   c.push('cl_bob ' + s.bob, 'gl_picmip ' + s.picmip, 'r_detailtextures ' + s.detail, 'cl_shadows ' + s.shadows, 'cl_minmodels ' + s.minm,

@@ -827,7 +827,7 @@ static char *read_all(const wchar_t *path, long *len)
 /* O'yin ichidagi X CLIENT menyusi (Sozlamalar > Tizim) ularni xc_api.php ga shu kompyuter id'si (g_id)
  * bilan yozadi; XClient.exe har ishga tushganda o'qiydi va bajaradi. */
 static int  o_beta = -1, o_auto = 1, o_start = -1, o_win = 0, o_clean = 0, o_verify = 0;
-static int  o_prio = 0, o_shots = 0, o_spray = 0, o_ok = 0, o_hud = 100;   /* o_hud: HUD kattaligi, % */   /* o_ok: sozlamalar saytdan olindi */
+static int  o_prio = 0, o_shots = 0, o_spray = 0, o_sprays = 0, o_ok = 0, o_hud = 100;   /* o_hud: HUD kattaligi, % */   /* o_ok: sozlamalar saytdan olindi */
 static char o_res[16] = "", o_packs[256] = "";
 
 static int jint(const char *b, const char *k, int def)
@@ -899,7 +899,7 @@ static void fetch_opts(void)
     if (!r || !strstr(r, "\"ok\":true")) { free(r); return; }
     o_beta = jint(r, "beta", -1); o_auto = jint(r, "auto", 1); o_start = jint(r, "start", -1);
     o_win = jint(r, "win", 0); o_clean = jint(r, "clean", 0); o_verify = jint(r, "verify", 0);
-    o_prio = jint(r, "prio", 0); o_hud = jint(r, "hud", 100); o_shots = jint(r, "shots", 0); o_spray = jint(r, "spray", 0);
+    o_prio = jint(r, "prio", 0); o_hud = jint(r, "hud", 100); o_shots = jint(r, "shots", 0); o_spray = jint(r, "spray", 0); o_sprays = jint(r, "sprays", 0);
     jstr(r, "packs", o_packs, sizeof(o_packs));
     o_ok = 1;
     const char *p = strstr(r, "\"res\":\"");
@@ -968,10 +968,14 @@ static void ini_set_int(const wchar_t *k, int v) { wchar_t ini[MAX_PATH], w[24];
 /* Spray: menyu tayyorlagan tempdecal.wad ni o'rnatish */
 static void install_spray(void)
 {
-    if (o_spray <= 0 || o_spray == ini_int(L"sprayt")) return;
     wchar_t dst[MAX_PATH], tmp[MAX_PATH];
     char url[256];
     path_join(dst, g_dir, L"cstrike\\tempdecal.wad");
+    if (o_spray <= 0) return;
+    if (o_spray == ini_int(L"sprayt")) {                   /* o'rnatilgan - lekin o'yin yoki boshqa dastur almashtirgan bo'lsa qayta yozamiz */
+        WIN32_FILE_ATTRIBUTE_DATA fa;
+        if (!o_sprays || (GetFileAttributesExW(dst, GetFileExInfoStandard, &fa) && fa.nFileSizeLow == (DWORD)o_sprays)) return;
+    }
     path_join(tmp, g_dir, L"cstrike\\tempdecal.xcdl");
     _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=spray_get&d=%s", g_id); url[sizeof(url) - 1] = 0;
     status(L"Spray o‘rnatilmoqda...", 1);

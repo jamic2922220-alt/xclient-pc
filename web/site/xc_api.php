@@ -19,9 +19,14 @@ define('XP_PER_LEVEL', 1000);
 
 /* Admin "hamma uchun" deb belgilagan paketlar har bir XClient.exe ga "id~versiya" ko'rinishida qo'shiladi:
  * versiya oshirilsa, eski nusxa olib tashlanib yangisi o'rnatiladi (sborka yangilanishi). */
-define('SPRAY_DEFAULT_VER', 20261021);   // spray_default.wad almashtirilsa - oshiring (hammaga qayta o'rnatiladi)
-function with_forced_packs($o) {
-    if (empty($o['spray']) && is_file(__DIR__ . '/spray_default.wad')) $o['spray'] = SPRAY_DEFAULT_VER;   // XClient.exe standart spray'ni qo'yadi
+define('SPRAY_DEFAULT_VER', 20261022);   // spray_default.wad almashtirilsa - oshiring (hammaga qayta o'rnatiladi)
+define('SPRAY_CUTOFF', 1792285200);      // 2026-10-18 06:00 dan oldingi o'yinchi spraylari eski usulda (xira) yasalgan - bekor
+function with_forced_packs($o, $d) {
+    $sf = XC_DIR . '/spray/' . $d . '.php';
+    if (!empty($o['spray']) && (!is_file($sf) || filemtime($sf) < SPRAY_CUTOFF)) { @unlink($sf); unset($o['spray']); }
+    // sprays: o'yinchida bo'lishi kerak bo'lgan tempdecal.wad hajmi - XClient.exe farq qilsa qayta yozadi
+    if (!empty($o['spray'])) $o['sprays'] = filesize($sf) - strlen(XC_GUARD);
+    elseif (is_file(__DIR__ . '/spray_default.wad')) { $o['spray'] = SPRAY_DEFAULT_VER; $o['sprays'] = filesize(__DIR__ . '/spray_default.wad'); }
     $mine = array_filter(explode(',', isset($o['packs']) ? $o['packs'] : ''));
     $all = array();
     foreach ((array)@scandir(__DIR__ . '/packs') as $id) {
@@ -463,7 +468,7 @@ case 'opts_done':
         wr('dev/' . $d, $o);
         if ($isNew) tg_notify('install', "Yangi X CLIENT o'rnatish\n" . strtoupper(isset($o['cc']) ? $o['cc'] : '') . ' ' . $ip . "\n" . (isset($o['os']) ? $o['os'] : '') . (isset($o['res']) ? ' · ' . $o['res'] : ''));
         wr($ipk, array('d' => $d, 't' => time()));
-        out(array('ok' => true, 'o' => with_forced_packs($o)));
+        out(array('ok' => true, 'o' => with_forced_packs($o, $d)));
     }
     if (!preg_match('/^[a-z0-9]{8,40}$/', $d)) {
         $m = rd($ipk, null);
