@@ -59,6 +59,34 @@ footer { color: var(--mut); font-size: 13px; text-align: center; padding: 30px 0
 .perk i { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 9px; background: rgba(255, 59, 59, .15); color: var(--red); font-style: normal; font-size: 18px; margin-bottom: 10px; }
 .perk b { display: block; margin-bottom: 4px; }
 .perk span { color: var(--mut); font-size: 14px; }
+.tour { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 18px; align-items: start; }
+.tnav { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px; position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
+.tnav small { display: block; color: var(--red); font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 10px 10px 4px; }
+.tnav a { display: block; padding: 7px 10px; border-radius: 7px; color: var(--mut); font-size: 14px; text-decoration: none; cursor: pointer; }
+.tnav a:hover { color: var(--text); background: rgba(255, 255, 255, .04); }
+.tnav a.on { color: #fff; background: rgba(255, 59, 59, .16); box-shadow: inset 3px 0 0 var(--red); }
+.tview { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.tview .ph { position: relative; display: block; background: #000; aspect-ratio: 16 / 9; max-width: 100%; }
+.tview .ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tview .ph em { position: absolute; right: 10px; bottom: 10px; font-style: normal; font-size: 12px; background: rgba(0, 0, 0, .65); color: #fff; padding: 4px 9px; border-radius: 6px; }
+.tbody { padding: 20px 22px 22px; }
+.tbody .path { color: var(--red); font-size: 12px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; }
+.tbody h3 { margin: 4px 0 8px; font-size: 22px; }
+.tbody p { color: var(--mut); margin: 0 0 12px; max-width: 70ch; }
+.tbody ul { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 22px; }
+.tbody li { position: relative; padding-left: 16px; font-size: 14px; color: var(--text); }
+.tbody li:before { content: ""; position: absolute; left: 0; top: .62em; width: 6px; height: 6px; border-radius: 2px; background: var(--red); }
+.tfoot { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 0 22px 20px; color: var(--mut); font-size: 13px; }
+.tfoot button { background: transparent; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; font: inherit; font-size: 14px; cursor: pointer; }
+.tfoot button:hover { border-color: var(--red); }
+@media (max-width: 900px) {
+  .tour { grid-template-columns: 1fr; }
+  .tnav { position: static; max-height: none; display: flex; overflow-x: auto; gap: 4px; padding: 6px; }
+  .tnav small { display: none; }
+  .tnav a { flex: 0 0 auto; white-space: nowrap; }
+  .tbody ul { grid-template-columns: 1fr; }
+  .tbody { padding: 16px; } .tfoot { padding: 0 16px 16px; }
+}
 @media (max-width: 900px) { .cols, .perks { grid-template-columns: 1fr; } }
 @media (min-width: 901px) and (max-width: 1100px) { .cols { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 900px) {
@@ -121,12 +149,16 @@ footer { color: var(--mut); font-size: 13px; text-align: center; padding: 30px 0
   <div class="cols" id="full"></div>
 </div></section>
 
-<section><div class="wrap">
-  <h2 data-t="s_t">Ko'rinishi</h2>
-  <p class="sub" data-t="s_s">O'yin ichidagi menyu.</p>
-  <div class="shots">
-    <img src="img/home.jpg" alt="" loading="lazy"><img src="img/hud.jpg" alt="" loading="lazy">
-    <img src="img/radar.jpg" alt="" loading="lazy"><img src="img/mis.jpg" alt="" loading="lazy">
+<section id="menyu"><div class="wrap">
+  <h2 data-t="s_t">Menyu bo'ylab sayohat</h2>
+  <p class="sub" data-t="s_s">Har bir menyu va oyna — rasm va izoh bilan. Ro'yxatdan tanlang yoki ← → tugmalarini bosing.</p>
+  <div class="tour">
+    <nav class="tnav" id="tnav"></nav>
+    <div class="tview">
+      <a class="ph" id="tph" target="_blank" rel="noopener"><img id="timg" alt=""><em data-t="s_big">Kattalashtirish ↗</em></a>
+      <div class="tbody"><div class="path" id="tpath"></div><h3 id="th"></h3><p id="tp"></p><ul id="tul"></ul></div>
+      <div class="tfoot"><button type="button" id="tprev">←</button><span id="tnum"></span><button type="button" id="tnext">→</button></div>
+    </div>
   </div>
 </div></section>
 
@@ -170,7 +202,7 @@ footer { color: var(--mut); font-size: 13px; text-align: center; padding: 30px 0
     f3: 'Прицел и HUD', f3s: 'Цвет, размер, стиль, размер HUD, радар и камера.', f4: 'PRO CFG', f4s: 'В один клик — интернет без лагов и правильная отдача.',
     f5: 'Ежедневные задания', f5s: 'Выполняйте задания, получайте XP и уровни.', f6: 'Друзья', f6s: 'Кто на каком сервере — заходите в один клик.',
     f7: 'Облачное сохранение', f7s: 'Настройки одинаковые на любом компьютере.', f8: 'Звуки и спрей', f8s: 'Звуки меню, музыка и спрей X CLIENT.',
-    s_t: 'Как выглядит', s_s: 'Меню внутри игры.', i_t: 'Установка — 3 шага', i_s: 'Меньше минуты.',
+    s_t: 'Экскурсия по меню', s_s: 'Каждое меню и окно — со скриншотом и описанием. Выберите в списке или нажимайте ← →.', s_big: 'Увеличить ↗', i_t: 'Установка — 3 шага', i_s: 'Меньше минуты.',
     i1: 'Скачайте', i1s: 'Нажмите кнопку выше и сохраните zip.', i2: 'Распакуйте', i2s: 'В папку CS 1.6 (рядом с cstrike.exe) или в любое место.',
     i3: 'Запустите XCLauncher.exe', i3s: 'На рабочем столе появится ярлык X CLIENT. Если игры нет — установит сам.',
     r_t: 'Требования', r1: 'Windows 7, 8, 10 или 11', r2: 'Интернет (для обновлений)', r3: 'CS 1.6 (если нет — установит сам)',
@@ -207,7 +239,90 @@ footer { color: var(--mut); font-size: 13px; text-align: center; padding: 30px 0
          ['Аккаунт и друзья', ['Регистрация, восстановление пароля кодом на email', 'Аватар, цвет и имя', 'Друзья: кто на каком сервере, вход в один клик', 'Приглашение друга на свой сервер', 'Самые активные игроки недели (TOP недели)', 'Статус игры в Discord']],
          ['Лаунчер', ['Автообновление (stable / beta)', 'Нет игры - установит сам', 'Оформление X CLIENT и экран загрузки', 'Чёткий спрей X CLIENT у всех', 'Очистка кэша и проверка файлов', 'Ускорение игры (высокий приоритет), автозапуск', 'Запись демо и галерея скриншотов']]]
   };
+
+  /* Menyu bo'ylab: [rasm, guruh, [uz nom, uz izoh, [uz bandlar]], [ru nom, ru izoh, [ru bandlar]]] */
+  var G = { uz: { m: 'Asosiy', s: 'Serverlar', o: 'Sozlamalar', h: 'Sozlamalar → HUD' }, ru: { m: 'Главное', s: 'Серверы', o: 'Настройки', h: 'Настройки → HUD' } };
+  var TOUR = [
+    ['home', 'm', ['Bosh menyu', "O'yin ochilganda birinchi ko'rinadigan oyna. Chapda asosiy bo'limlar, o'ngda reklama qilingan TOP serverlar va onlayn do'stlar, pastda profilingiz.", ["Tezkor o'yin — eng yaxshi bo'sh serverga bir tugmada kirish", "Serverlar, Do'stlar, Profil, Vazifalar, Sozlamalar", "X TOP serverlar — bir bosishda kirish", "Do'stlar onlayn — kim qaysi serverda", "Pastki panel: daraja, XP, VIP belgisi, onlayn soni", "Menyu musiqasi va tugma ovozlari"]],
+                ['Главное меню', 'Первое окно при запуске игры. Слева разделы, справа рекламные TOP-серверы и друзья онлайн, внизу ваш профиль.', ['Быстрая игра — лучший свободный сервер в один клик', 'Серверы, Друзья, Профиль, Задания, Настройки', 'X TOP серверы — вход в один клик', 'Друзья онлайн — кто на каком сервере', 'Нижняя панель: уровень, XP, значок VIP, онлайн', 'Музыка меню и звуки кнопок']]],
+    ['login', 'm', ['Akkauntga kirish', "Bepul akkaunt 30 soniyada ochiladi. Akkaunt bilan sozlamalar bulutda saqlanadi — boshqa kompyuterga kirsangiz ham hammasi joyida.", ["Login yoki e-mail bilan kirish", "Ro'yxatdan o'tish va «Eslab qolish»", "Parolni unutdingizmi — e-mailga kod", "Akkauntsiz o'ynash ham mumkin", "Sozlamalar, statistika, do'stlar saqlanadi"]],
+                ['Вход в аккаунт', 'Бесплатный аккаунт за 30 секунд. Настройки хранятся в облаке — на другом компьютере всё будет на месте.', ['Вход по логину или e-mail', 'Регистрация и «Запомнить меня»', 'Забыли пароль — код на e-mail', 'Можно играть без аккаунта', 'Сохраняются настройки, статистика, друзья']]],
+    ['mis', 'm', ['Kunlik vazifalar', "Har kuni yangi 3 ta vazifa. Bajarsangiz XP olasiz va darajangiz oshadi.", ["Masalan: 20 ta frag, 60 daqiqa o'yin, 3 xil serverda o'ynash", "Jarayon chizig'i — qancha qolganini ko'rasiz", "«Olish» tugmasi bilan XP yig'ish", "Har kuni yarim tunda yangilanadi"]],
+              ['Ежедневные задания', 'Каждый день 3 новых задания. За выполнение — XP и рост уровня.', ['Например: 20 фрагов, 60 минут игры, 3 разных сервера', 'Полоса прогресса — сколько осталось', 'Кнопка «Забрать» для получения XP', 'Обновляются каждый день в полночь']]],
+    ['side', 'm', ["Do'stlar", "Do'stlaringizni qo'shing va ular qaysi serverda o'ynayotganini ko'ring.", ["Login bo'yicha do'st qo'shish", "Kim onlayn, qaysi server va xaritada", "«Kirish» — do'stingiz serveriga bir bosishda", "Do'stni o'z serveringizga taklif qilish"]],
+               ['Друзья', 'Добавляйте друзей и смотрите, на каком сервере они играют.', ['Добавление друга по логину', 'Кто онлайн, на каком сервере и карте', '«Войти» — на сервер друга в один клик', 'Пригласить друга на свой сервер']]],
+    ['srv', 's', ['Serverlar — Internet', "Barcha CS 1.6 serverlar ro'yxati. Serverni tanlasangiz o'ngda xarita rasmi, o'yinchilar va ping ko'rinadi.", ["Qidirish: nom, IP yoki xarita bo'yicha", "Filtr: xarita, rejim (Zombie, Jail, KZ, GunGame…)", "Ping < 50, Bo'sh emas, To'la emas", "TOP / BOOST / VIP serverlar alohida guruhda", "O'yinchilar ro'yxati: hisob va o'ynagan vaqt", "Yulduzcha bilan sevimlilarga qo'shish"]],
+            ['Серверы — Интернет', 'Список всех серверов CS 1.6. При выборе сервера справа — карта, игроки и пинг.', ['Поиск по имени, IP или карте', 'Фильтры: карта, режим (Zombie, Jail, KZ, GunGame…)', 'Пинг < 50, Не пустой, Не полный', 'TOP / BOOST / VIP серверы отдельной группой', 'Список игроков: счёт и время в игре', 'Звёздочка — добавить в избранное']]],
+    ['srv_favs', 's', ['Serverlar — Sevimlilar', "O'zingiz yoqtirgan serverlar. Akkauntga saqlanadi va hamma kompyuterda chiqadi.", ["Bir bosishda kirish", "Serverlar bo'shligi va xaritasi doim ko'rinib turadi", "IP qo'lda qo'shish"]],
+                 ['Серверы — Избранное', 'Ваши любимые серверы. Сохраняются в аккаунте и видны на любом компьютере.', ['Вход в один клик', 'Заполненность и карта всегда видны', 'Добавление IP вручную']]],
+    ['srv_history', 's', ['Serverlar — Tarix', "Oxirgi o'ynagan serverlaringiz va statistika.", ["Bugun qancha o'ynadingiz", "Fraglar soni va K/D", "Eng ko'p o'ynagan serveringiz", "Qaytadan bir bosishda kirish", "Tarixni tozalash"]],
+                    ['Серверы — История', 'Последние серверы, на которых вы играли, и статистика.', ['Сколько вы сыграли сегодня', 'Фраги и K/D', 'Самый любимый сервер', 'Повторный вход в один клик', 'Очистка истории']]],
+    ['srv_top', 's', ['Serverlar — X TOP', "boost-top.com saytida TOP o'rinni olgan serverlar.", ["Eng yaxshi serverlar birinchi turadi", "Onlayn va xarita darhol ko'rinadi", "O'z serveringizni shu yerga chiqarish — boost-top.com"]],
+                ['Серверы — X TOP', 'Серверы с TOP-местом на сайте boost-top.com.', ['Лучшие серверы — первыми', 'Онлайн и карта видны сразу', 'Разместить свой сервер — на boost-top.com']]],
+    ['s_game', 'o', ["O'yin", "Asosiy o'yin sozlamalari: ism, klan tegi, internet tezligi va Discord.", ["O'yindagi nom va klan tegi", "Internet: Sekin / O'rtacha / Tez — rate o'zi sozlanadi", "Uzilsa avtomatik qayta ulanish", "Server to'la bo'lsa — navbatda turib kirish", "Server reklama ovozlarini o'chirish", "Qurol o'ng/chap qo'lda, tez almashtirish", "Har o'yinni demo qilib yozish", "Discord holati: server nomi va qo'shilish"]],
+               ['Игра', 'Основные настройки: ник, клан-тег, скорость интернета и Discord.', ['Ник и клан-тег', 'Интернет: Медленный / Средний / Быстрый — rate настраивается сам', 'Автопереподключение при обрыве', 'Сервер полный — вход по очереди', 'Отключение рекламных звуков сервера', 'Оружие в правой/левой руке, быстрая смена', 'Автозапись демо каждой игры', 'Статус в Discord: имя сервера и присоединение']]],
+    ['s_keys', 'o', ['Tugmalar', "Hamma tugmalarni o'zgartirish. Vazifani bosing, keyin yangi tugmani bosing.", ["Harakat: oldinga, orqaga, chapga, o'ngga, sakrash, o'tirish", "Qurollar: asosiy, pistolet, pichoq, granata, C4", "Sotib olish menyusi, chatlar, ovozli chat", "Spray, tungi ko'rish, skrinshot, radio buyruqlar", "Esc — bekor qilish"]],
+               ['Кнопки', 'Переназначение всех кнопок. Нажмите действие, затем новую клавишу.', ['Движение: вперёд, назад, влево, вправо, прыжок, присед', 'Оружие: основное, пистолет, нож, гранаты, C4', 'Меню покупки, чаты, голосовой чат', 'Спрей, ночное видение, скриншот, радио', 'Esc — отмена']]],
+    ['s_mouse', 'o', ['Sichqoncha', "Nishonga aniq olish uchun sichqoncha sozlamalari.", ["Sezgirlik (slider + aniq raqam)", "Pritsel (zoom) sezgirligi alohida", "To'g'ridan-to'g'ri kiritish (raw input) — Windows tezlanishisiz", "Sichqoncha filtri", "Teskari sichqoncha"]],
+                ['Мышь', 'Настройки мыши для точного прицеливания.', ['Чувствительность (ползунок + точное число)', 'Отдельная чувствительность в зуме', 'Raw input — без ускорения Windows', 'Фильтр мыши', 'Инверсия мыши']]],
+    ['s_sound', 'o', ['Ovoz', "Ovoz balandligi, ovozli chat va menyu ovozlari.", ["Umumiy ovoz, musiqa, ovozli chat balandligi", "Ovozli chatni yoqish / o'z ovozingizni eshitish", "O'yin oynasi yopilganda ovozni o'chirish", "Menyu ovozlari va menyu musiqasi", "Yuqori sifatli ovoz, ovoz kechikishi"]],
+                ['Звук', 'Громкость, голосовой чат и звуки меню.', ['Общая громкость, музыка, голосовой чат', 'Включить голосовой чат / слышать себя', 'Без звука, когда окно игры свёрнуто', 'Звуки и музыка меню', 'Высокое качество звука, задержка звука']]],
+    ['s_video', 'o', ['Video', "Grafika va FPS sozlamalari.", ["FPS chegarasi: 100 / 144 / 200 / 300 / 500", "Yorqinlik (gamma)", "Ko'rish burchagi (FOV) va qurol FOV", "O'q izlari (decal) soni", "Keng ekran (Hor+), VSync", "FPS ni ekranda ko'rsatish, dinamik yorug'lik"]],
+                ['Видео', 'Графика и FPS.', ['Лимит FPS: 100 / 144 / 200 / 300 / 500', 'Яркость (гамма)', 'Угол обзора (FOV) и FOV оружия', 'Количество следов от пуль (decal)', 'Широкий экран (Hor+), VSync', 'FPS на экране, динамический свет']]],
+    ['h_main', 'h', ['Pritsel — Asosiy', "Pritselni jonli ko'rib turib sozlang. Kodni do'stingizga yuborishingiz mumkin.", ["Uslub: Pro kichik, klassik va boshqalar", "Kattaligi: x1 (eng kichik) dan Katta gacha", "Rang: tayyor ranglar yoki o'zingiz tanlash", "Noshaffoflik, nuqta markazda, T-shakl, doira", "Pritsel kodi: nusxa olish va qo'llash", "«O'yinda sinash» tugmasi"]],
+                ['Прицел — Основное', 'Настройка прицела с живым предпросмотром. Кодом можно поделиться с другом.', ['Стиль: Pro маленький, классический и др.', 'Размер: от x1 (самый маленький) до Большого', 'Цвет: готовые или свой', 'Прозрачность, точка, T-образный, круг', 'Код прицела: копировать и применить', 'Кнопка «Проверить в игре»']]],
+    ['h_snip', 'h', ['Pritsel — Snayper', "AWP va Scout zoomi uchun alohida sezgirlik.", ["Zoomdagi sichqoncha sezgirligi", "Oddiy sezgirlik bilan solishtirish", "Snayper pritselini o'yinning o'zi chizadi"]],
+                ['Прицел — Снайпер', 'Отдельная чувствительность для зума AWP и Scout.', ['Чувствительность мыши в зуме', 'Сравнение с обычной чувствительностью', 'Снайперский прицел рисует сама игра']]],
+    ['h_wpn', 'h', ['Qurol', "Qurol ekranda qayerda turishi va qanday harakatlanishi.", ["Chapga/o'ngga, oldinga/orqaga, pastga/tepaga", "Qurol FOV", "Qurol siljimasin — tepaga qaraganda joyida turadi", "Qurol orqada qolishi: Yo'q / HL2 / CS:GO", "Kuchi va tezligi", "Silliq qurol almashtirish"]],
+              ['Оружие', 'Положение оружия на экране и его движение.', ['Влево/вправо, вперёд/назад, вниз/вверх', 'FOV оружия', 'Оружие не смещается при взгляде вверх', 'Отставание оружия: Нет / HL2 / CS:GO', 'Сила и скорость', 'Плавная смена оружия']]],
+    ['h_cam', 'h', ['Kamera', "Yugurganda qurol va kamera qanday chayqalishi.", ["Chayqalish uslubi: Standart / Eski / CS:GO", "Kamera ham chayqalsin", "Kamera og'ishi va og'ish tezligi", "Snayper zoomi silliqligi (FOV)", "Kamera harakati kuchi"]],
+              ['Камера', 'Как покачиваются оружие и камера при беге.', ['Стиль покачивания: Стандарт / Старый / CS:GO', 'Покачивание камеры', 'Наклон камеры и скорость наклона', 'Плавность снайперского зума (FOV)', 'Сила движения камеры']]],
+    ['h_radar', 'h', ['Radar', "Yangi xarita-radar yoki klassik radar.", ["Radar turi: Yangi (xarita) / Klassik", "Kattalik, yaqinlik, shaffoflik, fon", "Dumaloq radar", "Qarash bilan aylanish, Tab — to'liq xarita", "Jamoadoshlar izi, ismlari va joni", "Ism va jon chizig'i kattaligi"]],
+                ['Радар', 'Новый радар-карта или классический.', ['Тип: Новый (карта) / Классический', 'Размер, приближение, прозрачность, фон', 'Круглый радар', 'Поворот по взгляду, Tab — полная карта', 'Следы, имена и здоровье союзников', 'Размер имён и полоски здоровья']]],
+    ['h_misc', 'h', ['HUD — Boshqa', "Ekran (HUD) kattaligi va kill feed.", ["HUD kattaligi: 100% / 150% / 200% (jon, pul, o'q)", "Kill feed qatorlari soni va turish vaqti", "Kill feed'da headshot belgisi", "FPS va pingni ko'rsatish", "Nishondagi o'yinchi nomi markazda", "O'yin versiyasini yashirish"]],
+               ['HUD — Прочее', 'Размер HUD и килл-фид.', ['Размер HUD: 100% / 150% / 200% (жизни, деньги, патроны)', 'Строки и время килл-фида', 'Значок хедшота в килл-фиде', 'Показ FPS и пинга', 'Имя игрока в прицеле по центру', 'Скрыть версию игры']]],
+    ['s_pro', 'o', ['Kengaytirilgan', "Professional sozlamalar va internet tekshiruvi.", ["PRO CFG — bir bosishda pro sozlamalar (100 FPS, rate 100000)", "FPS rejimi — kuchsiz kompyuter uchun", "Internet tekshiruvi: ping, tebranish, yo'qotish va tavsiya", "Interpolyatsiya 0.01 / 0.05 / 0.1", "Qurol bashorati va kechikish kompensatsiyasi", "O'yinni tezlashtirish (yuqori ustuvorlik)", "Chat vaqti, FPS va ping joyi"]],
+               ['Расширенные', 'Профессиональные настройки и проверка интернета.', ['PRO CFG — про-настройки в один клик (100 FPS, rate 100000)', 'Режим FPS — для слабых ПК', 'Проверка интернета: пинг, джиттер, потери и совет', 'Интерполяция 0.01 / 0.05 / 0.1', 'Предсказание оружия и компенсация лагов', 'Ускорение игры (высокий приоритет)', 'Время чата, место FPS и пинга']]],
+    ['s_tools', 'o', ["Qo'shimcha", "Profillar, tayyor uslublar va sezgirlik kalkulyatori.", ["4 ta profil: O'yin, Turnir, AWP va boshqa", "Tayyor uslublar: Avtomatchi, Snayper, Klassik 1.6, Yangi boshlovchi, Hujumchi, Past sezgirlik, CS:GO hissi", "Sezgirlik kalkulyatori: CS2 / CS:GO, Valorant, Overwatch 2, Apex → CS 1.6", "Demolar ro'yxati"]],
+                 ['Дополнительно', 'Профили, готовые стили и калькулятор чувствительности.', ['4 профиля: Игра, Турнир, AWP и др.', 'Готовые стили: Автоматчик, Снайпер, Классика 1.6, Новичок, Штурмовик, Низкая чувствительность, Ощущение CS:GO', 'Калькулятор: CS2 / CS:GO, Valorant, Overwatch 2, Apex → CS 1.6', 'Список демо']]],
+    ['s_cont', 'o', ['Kontent', "Spray, skrinshotlar va menyu rangi.", ["X CLIENT spreyi — hammada tiniq, T tugmasi bilan", "Skrinshotlarni galereyaga yuklash (F5)", "Galereyani ochish", "Menyu rangi: qizil, ko'k, havorang, yashil, binafsha, to'q sariq", "Paketlar (ovoz, model) — ixtiyoriy"]],
+                ['Контент', 'Спрей, скриншоты и цвет меню.', ['Спрей X CLIENT — у всех чёткий, кнопка T', 'Загрузка скриншотов в галерею (F5)', 'Открыть галерею', 'Цвет меню: красный, синий, голубой, зелёный, фиолетовый, оранжевый', 'Пакеты (звуки, модели) — по желанию']]],
+    ['s_account', 'o', ['Akkaunt', "Profilingiz, xavfsizlik va bulutga saqlash.", ["Avatar rangi, rasm qo'yish, nomni o'zgartirish", "Daraja va XP", "VIP holati", "E-mail va parolni o'zgartirish", "Sozlamalar avtomatik bulutga saqlanadi", "Hozir saqlash / Bulutdan tiklash, nechta kompyuter"]],
+                   ['Аккаунт', 'Профиль, безопасность и облачное сохранение.', ['Цвет аватара, загрузка фото, смена имени', 'Уровень и XP', 'Статус VIP', 'Смена e-mail и пароля', 'Настройки автоматически в облаке', 'Сохранить сейчас / Восстановить, число компьютеров']]],
+    ['s_system', 'o', ['Tizim', "Til, yangilanish va texnik xizmat.", ["10 til: o'zbek, rus, ingliz, turk, ukrain, qozoq, qirg'iz, tojik, ozarbayjon, turkman", "Versiya, avtomatik yangilanish, beta versiyalar", "Windows bilan ishga tushirish, oynali rejim", "Menyu animatsiyasi, ekran tanlash", "Keshni tozalash, fayllarni tekshirish", "Xatolik haqida xabar yuborish"]],
+                  ['Система', 'Язык, обновления и обслуживание.', ['10 языков: узбекский, русский, английский, турецкий, украинский, казахский, киргизский, таджикский, азербайджанский, туркменский', 'Версия, автообновление, бета-версии', 'Автозапуск с Windows, оконный режим', 'Анимации меню, выбор экрана', 'Очистка кэша, проверка файлов', 'Отправить отчёт об ошибке']]]
+  ];
+  TOUR = TOUR.filter(function (t) { return t[1] !== 'h'; }).concat(TOUR.filter(function (t) { return t[1] === 'h'; }));
+  var TI = 0, TL = 'uz';
+  function tshow(i) {
+    TI = (i + TOUR.length) % TOUR.length;
+    var t = TOUR[TI], d = t[TL === 'ru' ? 3 : 2], src = 'img/m/' + t[0] + '.jpg';
+    document.getElementById('timg').src = src; document.getElementById('timg').alt = d[0];
+    document.getElementById('tph').href = src;
+    document.getElementById('tpath').textContent = G[TL][t[1]];
+    document.getElementById('th').textContent = d[0];
+    document.getElementById('tp').textContent = d[1];
+    document.getElementById('tul').innerHTML = d[2].map(function (x) { return '<li>' + x + '</li>'; }).join('');
+    document.getElementById('tnum').textContent = (TI + 1) + ' / ' + TOUR.length;
+    var a = document.querySelectorAll('#tnav a');
+    for (var k = 0; k < a.length; k++) { a[k].className = +a[k].getAttribute('data-i') === TI ? 'on' : ''; }
+    var on = document.querySelector('#tnav a.on'); if (on && window.innerWidth <= 900) { var n = document.getElementById('tnav'); n.scrollLeft = on.offsetLeft - n.clientWidth / 2 + on.offsetWidth / 2; }
+  }
+  function tnav(l) {
+    TL = l; var h = '', g = '';
+    TOUR.forEach(function (t, i) { if (t[1] !== g) { g = t[1]; h += '<small>' + G[l][g] + '</small>'; } h += '<a data-i="' + i + '">' + t[l === 'ru' ? 3 : 2][0] + '</a>'; });
+    document.getElementById('tnav').innerHTML = h; tshow(TI);
+  }
+  document.getElementById('tnav').onclick = function (e) { var a = e.target.closest ? e.target.closest('a[data-i]') : null; if (a) tshow(+a.getAttribute('data-i')); };
+  document.getElementById('tprev').onclick = function () { tshow(TI - 1); };
+  document.getElementById('tnext').onclick = function () { tshow(TI + 1); };
+  document.addEventListener('keydown', function (e) {
+    var r = document.getElementById('menyu').getBoundingClientRect(); if (r.bottom < 0 || r.top > window.innerHeight) return;
+    if (e.key === 'ArrowLeft') tshow(TI - 1); else if (e.key === 'ArrowRight') tshow(TI + 1);
+  });
+  (function () { var im = new Image(); TOUR.forEach(function (t, i) { if (i < 3) { im = new Image(); im.src = 'img/m/' + t[0] + '.jpg'; } }); })();
   function render(l) {
+    tnav(l);
     var h = '';
     PERKS[l].forEach(function (x) { h += '<div class="perk"><i>' + x[0] + '</i><b>' + x[1] + '</b><span>' + x[2] + '</span></div>'; });
     document.getElementById('perks').innerHTML = h; h = '';
