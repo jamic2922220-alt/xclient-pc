@@ -21,6 +21,12 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Windows runner git'i matnli fayllarni CRLF ga o'giradi: manifest CRLF bo'yicha hisoblanadi, raw.githubusercontent
+      # esa LF beradi - launcher hash mos kelmay yangilanishni hech qachon yakunlamaydi. Baytlar o'zgarmasin.
+      - name: Git - qator oxirlarini o'zgartirmaslik
+        shell: bash
+        run: git config --global core.autocrlf false
+
       - name: Checkout X CLIENT fayllari
         uses: actions/checkout@v5
         with:
@@ -65,6 +71,7 @@ jobs:
           KEEP='^cstrike/(config|userconfig|video|opengl|boosttop_settings|autoexec)\.cfg$'
           : > .gitignore
           git init -q
+          git config core.autocrlf false
           git ls-files --others --cached --exclude-standard | grep -v -e '^manifest.txt$' -e '^.gitignore$' | LC_ALL=C sort | while IFS= read -r f; do
             h=$(sha256sum "$f" | cut -d' ' -f1); sz=$(stat -c%s "$f"); p=""
             if echo "$f" | grep -Eq "$KEEP"; then p="?"; fi
