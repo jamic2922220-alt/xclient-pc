@@ -279,7 +279,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 if ($P === 'installs' && g('csv')) {
     header('Content-Type: text/csv; charset=utf-8'); header('Content-Disposition: attachment; filename="xclient-installs-' . date('Ymd') . '.csv"');
     echo "\xEF\xBB\xBFUID;IP;Davlat;Versiya;Windows;Ekran;RAM MB;CPU;GPU;Hamkor;O'rnatilgan;Oxirgi\n";
-    foreach (all_of('dev') as $o) echo implode(';', array($o['id'], isset($o['ip']) ? $o['ip'] : '', isset($o['cc']) ? strtoupper($o['cc']) : '', isset($o['ver']) ? $o['ver'] : '', isset($o['os']) ? $o['os'] : '', isset($o['res']) ? $o['res'] : '',
+    foreach (all_of('dev') as $o) echo implode(';', array($o['id'], isset($o['ip']) ? $o['ip'] : '', isset($o['cc']) ? strtoupper($o['cc']) : '', isset($o['ver']) ? $o['ver'] : '', isset($o['os']) ? $o['os'] : '', (isset($o['scr']) ? $o['scr'] : (isset($o['res']) ? $o['res'] : '')),
         isset($o['hw']['ram']) ? $o['hw']['ram'] : '', isset($o['hw']['cpu']) ? $o['hw']['cpu'] : '', isset($o['hw']['gpu']) ? str_replace(';', ',', $o['hw']['gpu']) : '', isset($o['pt']) ? $o['pt'] : '', dt(isset($o['first']) ? $o['first'] : 0), dt(isset($o['seen']) ? $o['seen'] : 0))) . "\n";
     exit;
 }
@@ -336,7 +336,7 @@ if ($P === 'dash') {
         . '<div class="panel"><div class="ph">Davlatlar · NextClient</div>' . pie($agg($ncs, $cc), true) . '</div>'
         . '<div class="panel"><div class="ph">X CLIENT versiyalari</div>' . pie($agg($devs, function ($o) { return isset($o['ver']) ? 'v' . $o['ver'] : ''; })) . '</div>'
         . '<div class="panel"><div class="ph">Windows</div>' . pie($agg($devs, function ($o) { return isset($o['os']) && is_string($o['os']) ? $o['os'] : ''; })) . '</div>'
-        . '<div class="panel"><div class="ph">Ekran o\'lchami</div>' . pie($agg(array_merge($devs, $ncs), function ($o) { return isset($o['res']) ? $o['res'] : ''; })) . '</div>'
+        . '<div class="panel"><div class="ph">Ekran o\'lchami</div>' . pie($agg(array_merge($devs, $ncs), function ($o) { return isset($o['scr']) ? $o['scr'] : (isset($o['res']) ? $o['res'] : ''); })) . '</div>'
         . '<div class="panel"><div class="ph">Kompyuter quvvati</div>' . pie($agg($devs, 'hw_class')) . '</div>'
         . '<div class="panel"><div class="ph">Hamkorlar</div>' . pie($agg($devs, function ($o) { return isset($o['pt']) ? $o['pt'] : ''; })) . '</div>'
         . '<div class="panel"><div class="ph">Vetka</div>' . pie($agg($devs, function ($o) { return isset($o['ch']) ? $o['ch'] : ''; })) . '</div>'
@@ -377,7 +377,7 @@ if ($P === 'player') {
             . '<div class="panel"><div class="ph">Asosiy ma\'lumot</div>' . $row('UID', '<span class="mono">' . h(strtoupper($id)) . '</span>') . $row('IP manzil', h(isset($o['ip']) ? $o['ip'] : '—'))
             . $row('Nik', h(isset($o['nick']) ? $o['nick'] : '—')) . $row('Davlat', flag(isset($o['cc']) ? $o['cc'] : '') . ' ' . h(isset($o['cc']) ? strtoupper($o['cc']) : '—'))
             . ($src === 'xc' ? $row('Hamkor', h(isset($o['pt']) ? $o['pt'] : '—')) . $row('Vetka', h(isset($o['ch']) ? $o['ch'] : '—')) : '') . '</div>'
-            . '<div class="panel"><div class="ph">Batafsil</div>' . $row('Ekran o\'lchami', h(isset($o['res']) ? $o['res'] : '—'))
+            . '<div class="panel"><div class="ph">Batafsil</div>' . $row('Ekran o\'lchami', h(isset($o['scr']) ? $o['scr'] : (isset($o['res']) ? $o['res'] : '—'))) . $row('O\'yin o\'lchami (tanlangan)', h(!empty($o['res']) ? $o['res'] : 'Avto'))
             . ($src === 'xc' ? $row('X CLIENT versiyasi', 'v' . h(isset($o['ver']) ? $o['ver'] : '?')) . $row('Windows', h(isset($o['os']) ? $o['os'] : '—'))
                 . $row('Kompyuter', $hw ? h(round($hw['ram'] / 1024) . ' GB RAM · ' . $hw['cpu'] . ' yadro · ' . $hw['gpu']) . ' <span class="tag">' . h(hw_class($o)) . '</span>' : '—')
                 . $row('Ishga tushirishlar', (int)(isset($o['runs']) ? $o['runs'] : 0)) . $row('Kesh', (int)(isset($o['cachemb']) ? $o['cachemb'] : 0) . ' MB')

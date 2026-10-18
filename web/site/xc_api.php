@@ -541,7 +541,12 @@ case 'opts_done':
         $o['cachemb'] = (int)p('cache');
         $o['seen'] = time();
         if (p('ram') !== '') $o['hw'] = array('ram' => (int)p('ram'), 'cpu' => (int)p('cpu'), 'gpu' => substr(preg_replace('/[^\w .()\-\/]/', '', p('gpu')), 0, 80));
-        if (p('res') !== '') $o['res'] = preg_match('/^\d{3,5}x\d{3,5}$/', p('res')) ? p('res') : '';
+        /* launcher monitor o'lchamini yuboradi - 'scr' ga. 'res' = o'yinchi menyuda tanlagan o'yin o'lchami (bosib ketilmasin).
+         * Eski versiya 'res' ga monitor o'lchamini yozib qo'ygan: tanlov ko'rinmasdi - bir marta tozalaymiz. */
+        if (p('res') !== '' && preg_match('/^\d{3,5}x\d{3,5}$/', p('res'))) {
+            if (!isset($o['scr']) && isset($o['res']) && $o['res'] === p('res')) unset($o['res']);
+            $o['scr'] = p('res');
+        }
         if (p('os') !== '') $o['os'] = clean_str(p('os'), 80);
         if (p('ch') !== '') $o['ch'] = preg_replace('/[^a-z]/', '', p('ch'));
         if (p('pt') !== '') $o['pt'] = clean_str(p('pt'), 60);
@@ -549,7 +554,7 @@ case 'opts_done':
         if (empty($o['ip']) || $o['ip'] !== $ip || !isset($o['cc'])) { $o['ip'] = $ip; $o['cc'] = geo_cc($ip); }
         $o['runs'] = (isset($o['runs']) ? $o['runs'] : 0) + 1;
         wr('dev/' . $d, $o);
-        if ($isNew) tg_notify('install', "Yangi X CLIENT o'rnatish\n" . strtoupper(isset($o['cc']) ? $o['cc'] : '') . ' ' . $ip . "\n" . (isset($o['os']) ? $o['os'] : '') . (isset($o['res']) ? ' · ' . $o['res'] : ''));
+        if ($isNew) tg_notify('install', "Yangi X CLIENT o'rnatish\n" . strtoupper(isset($o['cc']) ? $o['cc'] : '') . ' ' . $ip . "\n" . (isset($o['os']) ? $o['os'] : '') . (isset($o['scr']) ? ' · ' . $o['scr'] : ''));
         wr($ipk, array('d' => $d, 't' => time()));
         $ho = with_forced_packs($o, $d); unset($ho['k'], $ho['kc']);
         out(array('ok' => true, 'o' => $ho));
