@@ -248,9 +248,10 @@ function loadOpts() {
     if (r.o.ver && !qparam('v')) { VERSION = r.o.ver; renderBar(); }
     if (r.o.cachemb != null && !qparam('c')) CACHE_MB = r.o.cachemb;
     if (r.o.hw) HW = r.o.hw;
+    if (!DB.lang && /^(ru|uz|en)$/.test(r.o.ilang || '')) { DB.lang = r.o.ilang; setLang(DB.lang); persist(); }   // o'rnatishda tanlangan til
     stateSync();
     if (curModal === 'mdSettings' && (setTab === 'pro' || setTab === 'cont')) showSetTab(setTab);
-    if (curModal === 'mdSettings' && setTab === 'system') showSetTab('system');
+    if (curModal === 'mdSettings' && (setTab === 'system' || setTab === 'video')) showSetTab(setTab);
   });
 }
 /* Menyu holati kompyuter (XCLauncher.exe) bo'yicha saytda ham saqlanadi: o'yin brauzeri localStorage ni har doim ham
@@ -853,7 +854,7 @@ function ddPick(v) {
   var kind = DD; ddClose();
   if (kind === 'map') { FMAP = v; renderServers(); }
   else if (kind === 'mode') { FMODE = v; renderServers(); }
-  else if (kind === 'res') { OPTS.res = v; saveOpts(); showSetTab('system'); }
+  else if (kind === 'res') { OPTS.res = v; saveOpts(); showSetTab(setTab); }
   else if (kind === 'xpre') { each(XPRE, function (p) { if (p[0] === v) { E.xp = v; E.xt = p[2]; E.xs = p[3]; } }); showSetTab('hud'); }
   else if (kind === 'xsz') { E.xs = v; E.xp = presetOf(E); showSetTab('hud'); }
 }
@@ -1605,7 +1606,9 @@ var PANES = {
       seg('fps', 'v_fps', [[100, '100'], [144, '144'], [200, '200'], [300, '300'], [500, '500']]) +
       '<div class="mut" style="margin:-6px 0 8px;font-size:12px">' + esc(T('v_fps2')) + '</div>' +
       sl('gamma', 'v_bright', 1.8, 3, 0.1) + sl('fov', 'v_fov', 70, 100, 1, 'v_fov2') + sl('vmfov', 'v_vm', 70, 100, 1) + sl('decals', 'v_dec', 300, 4000, 100) + '</div>' +
-      '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('hor', 'v_hor') + tg('vsync', 'v_vsync') + tg('showfps', 'v_showfps') + tg('dyn', 'v_dyn') + '</div>';
+      '<div class="pane r"><div class="ph2">&nbsp;</div>' +
+      '<div class="fr"><div class="lb">' + esc(T('sy_screen')) + '</div><div class="ct2"><a class="dd wide" data-dd="res"><span>' + esc(ddLabel('res')) + '</span><i>\u25be</i></a></div></div>' +
+      tg('hor', 'v_hor') + tg('vsync', 'v_vsync') + tg('showfps', 'v_showfps') + tg('dyn', 'v_dyn') + '</div>';
   },
   tools: function () {                            // Qo'shimcha: profillar, kalkulyator, tayyor uslublar, demolar
     var pr = '';
@@ -1786,7 +1789,6 @@ var PANES = {
       '<div class="pane r"><div class="ph2">' + esc(T('sy_start')) + '</div>' +
       otg('start', 'sy_win') + otg('win', 'sy_windowed') +
       '<div class="fr w"><div class="lb">' + esc(T('sy_fx')) + '<small>' + esc(T('sy_fx2')) + '</small></div><div class="tg' + (DB.fx !== 0 && !FX.off ? ' on' : '') + '" data-dbtg="fx"><i></i></div></div>' +
-      '<div class="fr"><div class="lb">' + esc(T('sy_screen')) + '</div><div class="ct2"><a class="dd wide" data-dd="res"><span>' + esc(ddLabel('res')) + '</span><i>\u25be</i></a></div></div>' +
       '<div class="ph2 m">' + esc(T('sy_srv')) + '</div>' +
       '<div class="rowb"><b>' + esc(T('sy_cache')) + '</b><small>' + esc(T('sy_cache2').replace('{n}', CACHE_MB)) + (OPTS.clean ? ' \u00b7 ' + esc(T('sy_pending')) : '') + '</small><a class="btn" data-act="cache">' + esc(T('sy_cacheb')) + '</a></div>' +
       '<div class="rowb"><b>' + esc(T('sy_files')) + '</b><small>' + esc(T('sy_files2')) + (OPTS.verify ? ' \u00b7 ' + esc(T('sy_pending')) : '') + '</small><a class="btn" data-act="verify">' + esc(T('sy_filesb')) + '</a></div>' +

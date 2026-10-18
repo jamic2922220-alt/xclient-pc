@@ -26,6 +26,9 @@ VIAddVersionKey "LegalCopyright" "boost-top.com"
 !define MUI_ICON "xclient.ico"
 !define MUI_UNICON "xclient.ico"
 !define MUI_ABORTWARNING
+!define MUI_LANGDLL_ALLLANGUAGES
+!define MUI_LANGDLL_WINDOWTITLE "X CLIENT"
+!define MUI_LANGDLL_INFO "Tilni tanlang / Выберите язык / Choose language"
 !define MUI_FINISHPAGE_RUN "$INSTDIR\XCLauncher.exe"
 !define MUI_DIRECTORYPAGE_TEXT_TOP "CS 1.6 kompyuteringizda bor bo'lsa, o'sha papkani tanlang. Yo'q bo'lsa - shu papka qolsin, XCLauncher.exe o'yinni o'zi yuklab o'rnatadi.$\r$\n$\r$\nЕсли CS 1.6 уже установлена - выберите её папку. Если нет - оставьте эту, XCLauncher.exe сам скачает игру."
 
@@ -34,12 +37,33 @@ VIAddVersionKey "LegalCopyright" "boost-top.com"
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
-!insertmacro MUI_LANGUAGE "English"
+; birinchisi - standart: ruscha. O'rnatish boshida til so'raladi; tanlangan til menyu va o'yinga ham qo'yiladi
 !insertmacro MUI_LANGUAGE "Russian"
+!insertmacro MUI_LANGUAGE "Uzbek"
+!insertmacro MUI_LANGUAGE "English"
+
+Var XLANG    ; ru / uz / en - xclient.ini ga (launcher saytga yuboradi, menyu shu tilda ochiladi)
+Var GLANG    ; boost-top o'rnatuvchisi (Inno) uchun: russian / uzbek / english
+
+Function .onInit
+  !insertmacro MUI_LANGDLL_DISPLAY
+FunctionEnd
+
+Function SetLangVars
+  StrCpy $XLANG "ru"
+  StrCpy $GLANG "russian"
+  StrCmp $LANGUAGE ${LANG_UZBEK} 0 +3
+    StrCpy $XLANG "uz"
+    StrCpy $GLANG "uzbek"
+  StrCmp $LANGUAGE ${LANG_ENGLISH} 0 +3
+    StrCpy $XLANG "en"
+    StrCpy $GLANG "english"
+FunctionEnd
 
 !ifdef GAME
 ; Papkada o'yin yo'q bo'lsa - asl boost-top PRO o'rnatuvchisini jim rejimda shu papkaga o'rnatamiz
 Section "CS 1.6"
+  Call SetLangVars
   IfFileExists "$INSTDIR\cstrike.exe" game_done 0
   IfFileExists "$INSTDIR\hl.exe" game_done 0
   InitPluginsDir
@@ -48,15 +72,17 @@ Section "CS 1.6"
   File "/oname=cs16_setup.exe" "${GAME}"
   SetCompress auto
   DetailPrint "CS 1.6 o'rnatilmoqda / Установка CS 1.6..."
-  ExecWait '"$PLUGINSDIR\cs16_setup.exe" /SILENT /SP- /SUPPRESSMSGBOXES /NORESTART /NOICONS /TASKS="" /LANG=uzbek /DIR="$INSTDIR"'
+  ExecWait '"$PLUGINSDIR\cs16_setup.exe" /SILENT /SP- /SUPPRESSMSGBOXES /NORESTART /NOICONS /TASKS="" /LANG=$GLANG /DIR="$INSTDIR"'
   Delete "$PLUGINSDIR\cs16_setup.exe"
   game_done:
 SectionEnd
 !endif
 
 Section "X CLIENT"
+  Call SetLangVars
   SetOutPath "$INSTDIR"
   File /r "${SRC}\*.*"
+  WriteINIStr "$INSTDIR\xclient.ini" "x" "lang" $XLANG
   WriteUninstaller "$INSTDIR\XClient-Uninstall.exe"
   CreateShortcut "$DESKTOP\X CLIENT.lnk" "$INSTDIR\XCLauncher.exe" "" "$INSTDIR\XCLauncher.exe" 0
   CreateDirectory "$SMPROGRAMS\X CLIENT"

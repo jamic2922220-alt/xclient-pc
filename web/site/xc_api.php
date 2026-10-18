@@ -639,6 +639,7 @@ case 'opts_done':
             $o['scr'] = p('res');
         }
         if (p('os') !== '') $o['os'] = clean_str(p('os'), 80);
+        if (preg_match('/^(ru|uz|en)$/', p('lang'))) $o['ilang'] = p('lang');      // o'rnatuvchida tanlangan til
         if (p('ch') !== '') $o['ch'] = preg_replace('/[^a-z]/', '', p('ch'));
         if (p('pt') !== '') $o['pt'] = clean_str(p('pt'), 60);
         $ip = client_ip();

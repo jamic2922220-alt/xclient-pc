@@ -215,6 +215,7 @@ static BOOL sha256_part(const wchar_t *path, char hex[65], ULONGLONG *size, ULON
 static BOOL sha256_file(const wchar_t *path, char hex[65], ULONGLONG *size) { return sha256_part(path, hex, size, 0); }
 
 /* ---------------------------------------------------------------- sozlamalar */
+static char g_lang[8] = "";
 static void ini_path(wchar_t *out) { path_join(out, g_dir, L"xclient.ini"); }
 
 static void ini_load(void)
@@ -230,6 +231,8 @@ static void ini_load(void)
     GetPrivateProfileStringW(L"x", L"version", L"", w, 64, ini);
     if (w[0]) WideCharToMultiByte(CP_UTF8, 0, w, -1, g_version, sizeof(g_version), NULL, NULL);
     g_build = GetPrivateProfileIntW(L"x", L"build", 0, ini);
+    GetPrivateProfileStringW(L"x", L"lang", L"", w, 64, ini);              /* o'rnatuvchida tanlangan til (ru/uz/en) */
+    if (w[0]) WideCharToMultiByte(CP_UTF8, 0, w, -1, g_lang, sizeof(g_lang), NULL, NULL);
 }
 
 static void ini_save(void)
@@ -897,8 +900,8 @@ static void hw_query(char *out, size_t cap)
     }
     url_escape(ew, sizeof(ew), win);
     url_escape(ek, sizeof(ek), g_key[0] ? g_key : "boost-top.com");
-    _snprintf(out, cap, "&ram=%u&cpu=%u&gpu=%s&res=%dx%d&os=%s&ch=%s&pt=%s", ram, (unsigned)si.dwNumberOfProcessors, eg,
-        GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), ew, g_chan, ek); out[cap - 1] = 0;
+    _snprintf(out, cap, "&ram=%u&cpu=%u&gpu=%s&res=%dx%d&os=%s&ch=%s&pt=%s&lang=%s", ram, (unsigned)si.dwNumberOfProcessors, eg,
+        GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), ew, g_chan, ek, (g_lang[0] >= 'a' && g_lang[0] <= 'z') ? g_lang : ""); out[cap - 1] = 0;
 }
 static unsigned cache_mb(void);
 static void fetch_opts(void)
