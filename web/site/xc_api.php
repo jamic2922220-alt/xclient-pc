@@ -371,6 +371,12 @@ case 'avatar':                                           // profil rasmi (JPEG/P
         $u['avc'] = $c;
     }
     $img = p('img');
+    $pre = (int)p('preset');                              // o'yin ichida fayl oynasi ochilmaydi - tayyor rasmlardan biri (av/p1..p12.png)
+    if ($pre >= 1 && $pre <= 12 && is_file(__DIR__ . '/av/p' . $pre . '.png')) {
+        @mkdir(XC_DIR . '/av', 0755, true);
+        wr('av/' . strtolower($u['login']), array('type' => 'png', 'data' => base64_encode(file_get_contents(__DIR__ . '/av/p' . $pre . '.png'))));
+        $u['avt'] = time(); $img = '';
+    }
     if ($img === 'none') { $u['avt'] = 0; @unlink(XC_DIR . '/av/' . strtolower($u['login']) . '.php'); }
     elseif ($img !== '') {
         if (!preg_match('#^data:image/(jpeg|png);base64,([A-Za-z0-9+/=]+)$#', $img, $m)) fail('bad', 'Rasm noto\'g\'ri');

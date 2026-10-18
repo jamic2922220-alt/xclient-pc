@@ -484,3 +484,13 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 .chin { position: relative; height: 42px; margin-top: 10px; }
 .chin input { position: absolute; left: 0; top: 0; width: 560px; }
 .chin .btn { position: absolute; right: 0; top: 0; margin: 0; height: 42px; line-height: 40px; }
+
+/* profil rasmi tanlash */
+.avg { overflow: hidden; margin-bottom: 6px; }
+.avg a { float: left; width: 96px; height: 96px; margin: 0 12px 12px 0; border: 2px solid #2a2026; cursor: pointer; }
+.avg a:hover { border-color: #ff3b3b; }
+.avg img { width: 96px; height: 96px; display: block; }
+.avown { color: #b8aeb4; font-size: 13px; line-height: 19px; }
+.avurl { position: relative; height: 30px; margin-top: 10px; }
+.avurl .ipin { position: absolute; left: 0; top: 0; width: 300px; height: 30px; padding: 0 8px; border: 1px solid #2f2530; background: #120f14; color: #fff; font-size: 14px; outline: none; -webkit-user-select: text; }
+.avurl .cpy { position: absolute; left: 312px; top: 0; height: 30px; line-height: 28px; padding: 0 12px; border: 1px solid #5a2a30; background: #2a1216; color: #ff8a7a; font-size: 12px; font-weight: bold; cursor: pointer; }

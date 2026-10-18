@@ -1151,6 +1151,17 @@ function pollNotif() {
   });
 }
 
+/* profil rasmi: tayyor rasmlar + o'z rasmini brauzer orqali (mmb.boost-top.com/rasm.html) */
+function openAvatars() {
+  if (!ME) return openLogin();
+  var h = '<div class="ph2">' + esc(T('av_pick')) + '</div><div class="avg">';
+  for (var i = 1; i <= 12; i++) h += '<a data-avpre="' + i + '"><img src="av/p' + i + '.png" alt=""></a>';
+  h += '</div><div class="ph2 m">' + esc(T('av_own')) + '</div><div class="avown">' + esc(T('av_own2')) +
+    '<div class="avurl"><input class="ipin" readonly value="mmb.boost-top.com/rasm.html"><a class="cpy" data-copyip="mmb.boost-top.com/rasm.html">' + esc(T('ip_copy')) + '</a></div></div>' +
+    (ME.av ? '<a class="btn" style="margin:16px 0 0" data-act="avdel">' + esc(T('av_del')) + '</a>' : '');
+  openSide('avatars', T('av_title'), h);
+}
+
 /* ============================================================ SOZLAMALAR */
 var DEF = {
   name: '', tag: 'X | ', net: 'fast', dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, buykeys: 0, queue: 1, reconn: 1, demo: 0,
@@ -1979,6 +1990,7 @@ function act(a) {
     if (FR_SUG && FR_SUG.length === 1 && !FR_SUG[0].st) v = FR_SUG[0].login;   // bitta variant bo'lsa - o'sha
     return frAdd(v);
   }
+  if (a === 'avdel') return api('avatar', { img: 'none' }, function (r) { if (r.ok) { setMe(r.me); toast(T('saved')); openAvatars(); } });
   if (a === 'frback') { CHAT = null; return openFriends(); }
   if (a === 'chatsend') return chatSend();
   if (a === 'keysdef') { each(ACTIONS, function (x) { if (BINDS2[x[0]]) cmd('unbind ' + q(BINDS2[x[0]])); }); DB.binds = null; DB.binds2 = null; loadBinds(); applyBinds(); persist(); cloudSave(); toast(T('sy_ok')); return showSetTab('keys'); }
@@ -2047,7 +2059,7 @@ function act(a) {
   if (a === 'rename') return ask(T('a_newname'), function (v) { api('profile', { name: v }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); }); });
   if (a === 'email') return ask(T('a_newmail'), function (v) { api('profile', { email: v }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); }); });
   if (a === 'passwd') return ask(T('a_oldnew'), function (o, n) { api('profile', { oldpass: o, newpass: n }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); toast(T('saved')); showSetTab('account'); }); }, true, true);
-  if (a === 'avpick') { var fi = $('avFile'); if (!fi) return; fi.value = ''; try { fi.click(); } catch (e) { toast(T('a_photo_na')); } return; }
+  if (a === 'avpick') return openAvatars();   // o'yin to'liq ekranda bo'lganda Windows fayl oynasi o'yin ortida ochilib, o'yin "qotib" qolardi
   if (a === 'avdel') return api('avatar', { img: 'none' }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); });
   if (a === 'cloudsave') return cloudSave(true);
   if (a === 'cloudget') return api('me', {}, function (r) { if (!r.ok) return; ME = r.me; restoreCloud(r.me.cloud); if (curModal === 'mdSettings') { seedFromGame(); E = copy(S); showSetTab('account'); } });
@@ -2163,7 +2175,7 @@ function showAdminMsgs(list) {
 
 /* ---- menyu ovozlari: o'yin sound/xclient/*.wav ni chaladi (XCLauncher.exe ularni o'yin papkasiga qo'yadi) ---- */
 var SFX_ATTR = ['data-act', 'data-tab', 'data-hsub', 'data-seg', 'data-tg', 'data-otg', 'data-ohud', 'data-dd', 'data-ddv', 'data-xchk', 'data-pack',
-  'data-sort', 'data-flt', 'data-theme', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec'];
+  'data-sort', 'data-flt', 'data-theme', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec', 'data-avpre'];
 var SFX_QUIET = false, sfxLast = null, sfxT = 0;
 function sfx(n) {
   if (!S || S.uisnd === 0 || !hasApi()) return;
@@ -2200,6 +2212,7 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-bind2'))) { var kb = el.getAttribute('data-bind2'); KEYWAIT = KEYWAIT === kb && KEYSLOT === 2 ? '' : kb; KEYSLOT = 2; showSetTab('keys'); return; }
   if ((el = closest(t, 'data-fav'))) { toggleFav(el.getAttribute('data-fav')); return; }
   if ((el = closest(t, 'data-inv'))) { api('invite', { to: el.getAttribute('data-inv'), ip: CONNECTED }, function (r) { toast(r.ok ? T('iv_sent') : (r.msg || 'Xato')); }); return; }
+  if ((el = closest(t, 'data-avpre'))) { toast(T('lg_wait')); api('avatar', { preset: el.getAttribute('data-avpre') }, function (r) { if (!r.ok) return toast(r.msg || 'Xato'); setMe(r.me); toast(T('saved')); closeModal(); openSettings('account'); }); return; }
   if ((el = closest(t, 'data-fradd2'))) { frAdd(el.getAttribute('data-fradd2')); return; }
   if ((el = closest(t, 'data-fracc'))) { frAdd(el.getAttribute('data-fracc')); return; }
   if ((el = closest(t, 'data-frdec'))) { api('friend_decline', { login: el.getAttribute('data-frdec') }, function () { loadFriends(); }); return; }
