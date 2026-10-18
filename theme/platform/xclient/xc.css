@@ -450,3 +450,37 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 .mis .msr .xpw { height: 6px; background: #2a2026; overflow: hidden; margin-right: 96px; }
 .mis .msr .xpw i { display: block; height: 100%; background: linear-gradient(90deg, #c4262e, #ff4d4d); }
 .mis .msr.got .xpw i { background: #3fa45b; }
+
+/* do'stlar: qidiruv variantlari, so'rovlar, yozishma */
+#menu .mi em.frn, .mi em.frn { display: inline-block; margin-left: 8px; min-width: 20px; height: 20px; line-height: 20px; padding: 0 6px; border-radius: 10px; background: #ff3b3b; color: #fff; font-size: 12px; font-style: normal; font-weight: bold; text-align: center; vertical-align: middle; }
+.frsug { position: absolute; left: 0; top: 46px; width: 560px; max-height: 330px; overflow-y: auto; background: #1d171f; border: 1px solid #5a2a30; z-index: 20; -webkit-box-shadow: 0 12px 30px rgba(0,0,0,0.6); }
+.frsug .sg { position: relative; height: 52px; border-bottom: 1px solid #2a2026; padding-left: 58px; }
+.frsug .sg .rk { position: absolute; left: 10px; top: 8px; width: 36px; height: 36px; line-height: 36px; }
+.frsug .sg b { display: block; padding-top: 8px; font-size: 15px; color: #fff; }
+.frsug .sg small { display: block; font-size: 12px; color: #8f8590; }
+.frsug .sg.em { padding: 0 14px; height: 46px; line-height: 46px; color: #8f8590; }
+.frsug .sgb, .frsug .sgs { position: absolute; right: 10px; top: 12px; height: 28px; line-height: 26px; padding: 0 12px; font-size: 12px; font-weight: bold; }
+.frsug .sgb { border: 1px solid #ff3b3b; background: #ff3b3b; color: #fff; cursor: pointer; }
+.frsug .sgb:hover { background: #ff5a4a; }
+.frsug .sgs { color: #7ee35a; }
+.tr .fra { position: absolute; right: 10px; top: 9px; }
+.tr .fra a { display: inline-block; margin-left: 6px; height: 28px; line-height: 26px; padding: 0 12px; font-size: 12px; font-weight: bold; border: 1px solid #5a3a40; color: #fff; background: #1b1418; cursor: pointer; }
+.tr .fra a:hover { background: #3a1a20; }
+.tr .fra a.ok { background: #ff3b3b; border-color: #ff3b3b; }
+.tr .fra a.inv { color: #7ee35a; border-color: #3a6a2e; }
+.tr .fra a.ch { color: #8ac8ff; border-color: #2e4a6a; position: relative; }
+.tr .fra .unb { position: absolute; right: -8px; top: -8px; min-width: 18px; height: 18px; line-height: 18px; border-radius: 9px; background: #ff3b3b; color: #fff; font-size: 11px; text-align: center; }
+.tr.frq { background: rgba(255,59,59,0.07); }
+.chh { position: relative; height: 40px; margin-bottom: 10px; }
+.chh .btn { margin: 0; height: 34px; line-height: 32px; }
+.chh b { position: absolute; left: 140px; top: 6px; font-size: 18px; color: #fff; }
+.chbox { position: relative; height: 410px; overflow-y: auto; background: #120f14; border: 1px solid #2a2026; padding: 10px; }
+.cm { margin: 6px 0; text-align: left; }
+.cm span { display: inline-block; max-width: 70%; padding: 8px 12px; background: #2a2328; color: #ece6ea; font-size: 14px; line-height: 19px; text-align: left; word-wrap: break-word; }
+.cm span i { display: block; margin-top: 3px; font-style: normal; font-size: 11px; color: #8f8590; }
+.cm.me { text-align: right; }
+.cm.me span { background: #6a1c22; color: #fff; }
+.cm.me span i { color: #f0a8a0; }
+.chin { position: relative; height: 42px; margin-top: 10px; }
+.chin input { position: absolute; left: 0; top: 0; width: 560px; }
+.chin .btn { position: absolute; right: 0; top: 0; margin: 0; height: 42px; line-height: 40px; }

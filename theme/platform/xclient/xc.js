@@ -325,7 +325,7 @@ function api(a, params, cb) {
   };
   try { x.send(body); } catch (e) { done = true; clearTimeout(tm); if (cb) cb({ ok: false, err: 'net', msg: T('lg_neterr') }); }
 }
-function setMe(me) { ME = me; renderAll(); }
+function setMe(me) { var was = !!ME; ME = me; renderAll(); if (me && !was) setTimeout(pollNotif, 3000); }
 function afterLogin(r) {
   DB.token = r.token; DB.guest = 0; persist();
   setMe(r.me);
@@ -364,7 +364,7 @@ function loadFriends() {
     if (!r.ok) return;
     var before = {};
     each(FRIENDS, function (f) { before[f.login] = f.server; });
-    FRIENDS = r.friends || [];
+    FRIENDS = r.friends || []; FR_REQ = r.req || []; FR_SENT = r.sent || [];
     each(FRIENDS, function (f) {                                   // do'st sevimli serverga kirdi
       if (f.server && before[f.login] !== undefined && before[f.login] !== f.server && isFavIp(f.server) && DB.notifyFr !== 0)
         toast(f.name + T('fr_joined') + (srv(f.server).name || f.server), 5000);
@@ -373,6 +373,7 @@ function loadFriends() {
     renderHome();
     if (curModal === 'mdServers' && srvTab === 'friends') renderServers();
     if (curModal === 'mdSide' && sideMode === 'friends') openFriends();
+    frBadge();
   });
 }
 function loadWeek() { api('top', {}, function (r) { if (r.ok) { WEEK = r.top || []; renderHome(); } }); }
@@ -1029,20 +1030,125 @@ function openSide(mode, title, body) {
   if (curModal !== 'mdSide') openModal('mdSide');
   $('sideTitle').innerHTML = esc(title); $('sideBody').innerHTML = body;
 }
+var FR_REQ = [], FR_SENT = [], FR_Q = '', FR_SUG = null, FR_TM = 0, CHAT = null, CHAT_TM = 0, NOTIF_TM = 0, NOTIF_SEEN = {};
+function frAv(f) { return '<div class="rk c av2" style="' + (f.online ? avStyle(f) : 'background:#4a4048') + '">' + avInner(f, f.name) + '</div>'; }
 function openFriends() {
   if (!ME) { openLogin(); return; }
-  var keep = $('frIn') ? $('frIn').value : '';
-  var h = '<div class="addf"><input class="tx big" id="frIn" type="text" maxlength="20" placeholder="' + esc(T('fr_add')) + '" value="' + esc(keep) + '"><a class="btn red" data-act="fradd">' + esc(T('fr_addb')) + '</a></div>';
+  var keep = $('frIn') ? $('frIn').value : FR_Q;
+  var h = '<div class="addf"><input class="tx big" id="frIn" type="text" maxlength="20" autocomplete="off" placeholder="' + esc(T('fr_add')) + '" value="' + esc(keep) + '">' +
+    '<a class="btn red" data-act="fradd">' + esc(T('fr_addb')) + '</a><div class="frsug" id="frSug"' + (FR_SUG ? '' : ' style="display:none"') + '>' + frSugHtml() + '</div></div>';
+  if (FR_REQ.length) {
+    h += '<div class="ph2 m">' + esc(T('fr_req_t')) + ' (' + FR_REQ.length + ')</div>';
+    each(FR_REQ, function (f) {
+      h += '<div class="tr frq" style="cursor:default">' + frAv(f) + '<div class="nm">' + esc(f.name) + ' <span class="mut" style="font-weight:normal;font-size:12px">@' + esc(f.login) + '</span></div>' +
+        '<div class="mt">' + esc(T('fr_wants')) + '</div><div class="fra"><a class="ok" data-fracc="' + esc(f.login) + '">' + esc(T('fr_acc')) + '</a><a data-frdec="' + esc(f.login) + '">' + esc(T('fr_dec')) + '</a></div></div>';
+    });
+    h += '<div class="ph2 m">' + esc(T('m_friends')) + '</div>';
+  }
   each(FRIENDS, function (f) {
-    var s = f.server ? srv(f.server) : null;
-    h += '<div class="tr" style="cursor:default"><div class="rk c av2" style="' + (f.online ? avStyle(f) : 'background:#4a4048') + '">' + avInner(f, f.name) + '</div>' +
+    var s = f.server ? srv(f.server) : null, un = f.unread ? '<b class="unb">' + f.unread + '</b>' : '';
+    h += '<div class="tr" style="cursor:default">' + frAv(f) +
       '<div class="nm">' + esc(f.name) + ' <span class="mut" style="font-weight:normal;font-size:12px">' + esc(T('lvl').replace('{n}', f.level)) + '</span></div>' +
-      '<div class="mt">' + (f.online ? '<span class="gm">\u25cf</span> ' + esc(f.server ? T('fr_in') + ((s && s.name) || f.server) : T('fr_menu')) : esc(T('fr_off'))) + '</div>' +
-      (CONNECTED && f.online && f.server !== CONNECTED ? '<a class="go inv" data-inv="' + esc(f.login) + '">' + esc(T('iv_btn')) + '</a>' : '') +
-      (f.server ? '<a class="go" data-ip="' + esc(f.server) + '">' + esc(T('join')) + '</a>' : '<a class="go" data-frdel="' + esc(f.login) + '">' + esc(T('fr_del')) + '</a>') + '</div>';
+      '<div class="mt">' + (f.online ? '<span class="gm">●</span> ' + esc(f.server ? T('fr_in') + ((s && s.name) || f.server) : T('fr_menu')) : esc(T('fr_off'))) + '</div>' +
+      '<div class="fra"><a class="ch" data-chat="' + esc(f.login) + '" data-chatn="' + esc(f.name) + '">' + esc(T('ch_btn')) + un + '</a>' +
+      (CONNECTED && f.online && f.server !== CONNECTED ? '<a class="inv" data-inv="' + esc(f.login) + '">' + esc(T('iv_btn')) + '</a>' : '') +
+      (f.server ? '<a class="ok" data-ip="' + esc(f.server) + '">' + esc(T('join')) + '</a>' : '<a data-frdel="' + esc(f.login) + '">' + esc(T('fr_del')) + '</a>') + '</div></div>';
   });
-  if (!FRIENDS.length) h += '<div class="empty">' + esc(T('fr_none')) + '</div>';
+  if (!FRIENDS.length && !FR_REQ.length) h += '<div class="empty">' + esc(T('fr_none')) + '</div>';
   openSide('friends', T('m_friends'), h);
+  var i = $('frIn'); if (i && keep) { try { i.focus(); i.setSelectionRange(keep.length, keep.length); } catch (e) {} }
+}
+/* qidiruv: 2 ta harfdan keyin ostida variantlar ("li" -> limonchik ...) */
+function frSugHtml() {
+  if (!FR_SUG) return '';
+  if (!FR_SUG.length) return '<div class="sg em">' + esc(T('fr_noresult')) + '</div>';
+  var h = '';
+  each(FR_SUG, function (f) {
+    var b = f.st === 'friend' ? '<span class="sgs">' + esc(T('fr_isf')) + '</span>' : f.st === 'sent' ? '<span class="sgs">' + esc(T('fr_sent')) + '</span>' :
+      f.st === 'req' ? '<a class="sgb" data-fracc="' + esc(f.login) + '">' + esc(T('fr_acc')) + '</a>' : '<a class="sgb" data-fradd2="' + esc(f.login) + '">' + esc(T('fr_add2')) + '</a>';
+    h += '<div class="sg">' + frAv(f) + '<b>' + esc(f.name) + '</b><small>@' + esc(f.login) + ' · ' + esc(T('lvl').replace('{n}', f.level)) + '</small>' + b + '</div>';
+  });
+  return h;
+}
+function frSearch(v) {
+  FR_Q = v; clearTimeout(FR_TM);
+  v = String(v || '').replace(/\s+/g, '');
+  if (v.length < 2) { FR_SUG = null; var b0 = $('frSug'); if (b0) b0.style.display = 'none'; return; }
+  FR_TM = setTimeout(function () {
+    api('user_search', { q: v }, function (r) {
+      if (!r.ok || FR_Q.replace(/\s+/g, '') !== v) return;
+      FR_SUG = r.list || []; var b = $('frSug'); if (b) { b.innerHTML = frSugHtml(); b.style.display = 'block'; }
+    });
+  }, 300);
+}
+function frAdd(login) {
+  api('friend_add', { login: login }, function (r) {
+    if (!r.ok) return toast(r.msg);
+    toast(r.st === 'friend' ? T('fr_now') : T('fr_sent_t'), 3500);
+    if (FR_SUG) each(FR_SUG, function (f) { if (f.login.toLowerCase() === login.toLowerCase()) f.st = r.st; });
+    loadFriends();
+  });
+}
+/* yozishma */
+function openChat(login, name) {
+  CHAT = { login: login, name: name || login, list: [] };
+  var h = '<div class="chh"><a class="btn" data-act="frback">' + esc(T('ch_back')) + '</a><b>' + esc(CHAT.name) + '</b></div>' +
+    '<div class="chbox" id="chatBox"><div class="empty">' + esc(T('loading')) + '</div></div>' +
+    '<div class="chin"><input class="tx big" id="chatIn" type="text" maxlength="300" autocomplete="off" placeholder="' + esc(T('ch_ph')) + '"><a class="btn red" data-act="chatsend">' + esc(T('ch_send')) + '</a></div>';
+  openSide('chat', T('ch_title').replace('{n}', CHAT.name), h);
+  try { $('chatIn').focus(); } catch (e) {}
+  chatLoad();
+}
+function chatRender() {
+  var b = $('chatBox'); if (!b || !CHAT) return;
+  var me = ME ? ME.login.toLowerCase() : '', h = '';
+  each(CHAT.list, function (m) {
+    var d = new Date(m.t * 1000);
+    h += '<div class="cm' + (m.f === me ? ' me' : '') + '"><span>' + esc(m.m) + '<i>' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + '</i></span></div>';
+  });
+  b.innerHTML = h || '<div class="empty">' + esc(T('ch_empty')) + '</div>';
+  b.scrollTop = b.scrollHeight;
+}
+function chatLoad() {
+  clearTimeout(CHAT_TM);
+  if (!CHAT || curModal !== 'mdSide' || sideMode !== 'chat') return;
+  var c = CHAT;
+  api('msg_list', { login: c.login }, function (r) {
+    if (CHAT !== c) return;
+    if (r.ok) { var n = (r.list || []).length; if (n !== c.list.length || !$('chatBox').getElementsByTagName('div').length) { c.list = r.list || []; chatRender(); } }
+    each(FRIENDS, function (f) { if (f.login.toLowerCase() === c.login.toLowerCase()) f.unread = 0; }); NOTIF_SEEN['m:' + c.login.toLowerCase()] = 0; frBadge();
+    CHAT_TM = setTimeout(chatLoad, 4000);
+  });
+}
+function chatSend() {
+  var i = $('chatIn'); if (!i || !CHAT) return;
+  var v = String(i.value || '').replace(/^\s+|\s+$/g, ''); if (!v) return;
+  i.value = '';
+  CHAT.list.push({ f: ME.login.toLowerCase(), m: v, t: Math.floor(now() / 1000) }); chatRender();
+  api('msg_send', { login: CHAT.login, text: v }, function (r) { if (!r.ok) toast(r.msg); chatLoad(); });
+}
+/* bildirishnoma: 15 soniyada bir - yangi xabarlar va do'stlik so'rovlari */
+var NOTIF = { unread: [], req: [] };
+function frBadge() {
+  var n = FR_REQ.length; each(NOTIF.unread, function (u) { if (!(CHAT && sideMode === 'chat' && curModal === 'mdSide' && CHAT.login.toLowerCase() === u.login)) n += u.n; });
+  var e = $('mFrNew'); if (e) { e.innerHTML = n ? String(n) : ''; e.style.display = n ? 'inline-block' : 'none'; }
+}
+function pollNotif() {
+  clearTimeout(NOTIF_TM);
+  if (!ME) return;
+  api('notif', {}, function (r) {
+    NOTIF_TM = setTimeout(pollNotif, 15000);
+    if (!r.ok) return;
+    NOTIF = { unread: r.unread || [], req: r.req || [] };
+    var changed = r.req.length !== FR_REQ.length;
+    each(NOTIF.req, function (q) { if (!NOTIF_SEEN['r:' + q.login]) { NOTIF_SEEN['r:' + q.login] = 1; toast(T('fr_newreq').replace('{n}', q.name), 6000); changed = true; } });
+    each(NOTIF.unread, function (u) {
+      var k = 'm:' + u.login, inChat = CHAT && sideMode === 'chat' && curModal === 'mdSide' && CHAT.login.toLowerCase() === u.login;
+      if (!inChat && (NOTIF_SEEN[k] || 0) < u.n) { toast(T('fr_newmsg').replace('{n}', u.name).replace('{c}', u.n), 6000); changed = true; }
+      NOTIF_SEEN[k] = u.n;
+    });
+    if (changed) loadFriends(); else frBadge();
+  });
 }
 
 /* ============================================================ SOZLAMALAR */
@@ -1870,8 +1976,11 @@ function act(a) {
   if (a === 'fradd') {
     var v = ($('frIn').value || '').replace(/\s+/g, '');
     if (!v) return;
-    return api('friend_add', { login: v }, function (r) { if (!r.ok) return toast(r.msg); $('frIn').value = ''; loadFriends(); });
+    if (FR_SUG && FR_SUG.length === 1 && !FR_SUG[0].st) v = FR_SUG[0].login;   // bitta variant bo'lsa - o'sha
+    return frAdd(v);
   }
+  if (a === 'frback') { CHAT = null; return openFriends(); }
+  if (a === 'chatsend') return chatSend();
   if (a === 'keysdef') { each(ACTIONS, function (x) { if (BINDS2[x[0]]) cmd('unbind ' + q(BINDS2[x[0]])); }); DB.binds = null; DB.binds2 = null; loadBinds(); applyBinds(); persist(); cloudSave(); toast(T('sy_ok')); return showSetTab('keys'); }
   if (a === 'cache') { OPTS.clean = 1; saveOpts(); return showSetTab('system'); }
   if (a === 'verify') { OPTS.verify = 1; saveOpts(); return showSetTab('system'); }
@@ -2054,7 +2163,7 @@ function showAdminMsgs(list) {
 
 /* ---- menyu ovozlari: o'yin sound/xclient/*.wav ni chaladi (XCLauncher.exe ularni o'yin papkasiga qo'yadi) ---- */
 var SFX_ATTR = ['data-act', 'data-tab', 'data-hsub', 'data-seg', 'data-tg', 'data-otg', 'data-ohud', 'data-dd', 'data-ddv', 'data-xchk', 'data-pack',
-  'data-sort', 'data-flt', 'data-theme', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-copyip'];
+  'data-sort', 'data-flt', 'data-theme', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec'];
 var SFX_QUIET = false, sfxLast = null, sfxT = 0;
 function sfx(n) {
   if (!S || S.uisnd === 0 || !hasApi()) return;
@@ -2091,6 +2200,10 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-bind2'))) { var kb = el.getAttribute('data-bind2'); KEYWAIT = KEYWAIT === kb && KEYSLOT === 2 ? '' : kb; KEYSLOT = 2; showSetTab('keys'); return; }
   if ((el = closest(t, 'data-fav'))) { toggleFav(el.getAttribute('data-fav')); return; }
   if ((el = closest(t, 'data-inv'))) { api('invite', { to: el.getAttribute('data-inv'), ip: CONNECTED }, function (r) { toast(r.ok ? T('iv_sent') : (r.msg || 'Xato')); }); return; }
+  if ((el = closest(t, 'data-fradd2'))) { frAdd(el.getAttribute('data-fradd2')); return; }
+  if ((el = closest(t, 'data-fracc'))) { frAdd(el.getAttribute('data-fracc')); return; }
+  if ((el = closest(t, 'data-frdec'))) { api('friend_decline', { login: el.getAttribute('data-frdec') }, function () { loadFriends(); }); return; }
+  if ((el = closest(t, 'data-chat'))) { openChat(el.getAttribute('data-chat'), el.getAttribute('data-chatn')); return; }
   if ((el = closest(t, 'data-frdel'))) { api('friend_del', { login: el.getAttribute('data-frdel') }, function () { loadFriends(); }); return; }
   if ((el = closest(t, 'data-dbtg'))) { var dk = el.getAttribute('data-dbtg'); var cur = dk === 'autosave' ? !!DB[dk] : DB[dk] !== 0; DB[dk] = cur ? 0 : 1; persist(); if (dk === 'fx') { FX.off = 0; FX.slow = 0; sparks(); } if (dk === 'autosave') $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local')); el.className = 'tg' + (DB[dk] ? ' on' : ''); return; }
   if ((el = closest(t, 'data-misclaim'))) {
@@ -2184,7 +2297,7 @@ function onSlide(e) {
 }
 document.addEventListener('change', function (e) { onSlide(e); var t = e.target || e.srcElement; if (t && (t.id === 'fMap' || t.id === 'fMode')) renderServers();  }, false);
 document.addEventListener('input', onSlide, false);
-document.addEventListener('keyup', function (e) { var t = e.target || e.srcElement; if (t && t.id === 'calcIn') { CALC_V = t.value; var o = $('calcOut'); if (o) o.innerHTML = calcOut(); } }, false);
+document.addEventListener('keyup', function (e) { var t = e.target || e.srcElement; if (t && t.id === 'frIn' && e.keyCode !== 13) frSearch(t.value); if (t && t.id === 'calcIn') { CALC_V = t.value; var o = $('calcOut'); if (o) o.innerHTML = calcOut(); } }, false);
 document.addEventListener('mousedown', function (e) {
   if (!KEYWAIT || closest(e.target || e.srcElement, 'data-bind') || closest(e.target || e.srcElement, 'data-bind2')) return;
   var b = e.button === 0 ? 'MOUSE1' : e.button === 2 ? 'MOUSE2' : e.button === 1 ? 'MOUSE3' : e.button === 3 ? 'MOUSE4' : 'MOUSE5';
@@ -2197,6 +2310,7 @@ document.onkeydown = function (e) {
   if (KEYWAIT) { finishWait(k === 27 ? '' : keyName(e)); return false; }
   if ($('mdAsk').className === 'modal on') { if (k === 13) askDone(true); if (k === 27) askDone(false); return; }
   if (curModal === 'mdLogin' && k === 13) { doLogin(); return false; }
+  if (curModal === 'mdSide' && k === 13 && $('chatIn')) { chatSend(); return false; }
   if (curModal === 'mdSide' && k === 13 && $('frIn')) { act('fradd'); return false; }
   if (k === 27 && curModal) { closeModal(); return false; }
   if (k === 116 || (k === 82 && e.ctrlKey)) { if (e.preventDefault) e.preventDefault(); toast(T('sh_menu'), 3500); return false; }   // F5 menyuni qayta yuklamasin (skrinshot - o'yin ichida)

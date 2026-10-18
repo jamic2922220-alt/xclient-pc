@@ -458,26 +458,111 @@ case 'friends':
     $list = array();
     foreach ((isset($u['friends']) ? $u['friends'] : array()) as $fl) {
         $f = user($fl);
-        if ($f) $list[] = pub($f, false);
+        if ($f) { $x = pub($f, false); $x['unread'] = isset($u['unread'][strtolower($fl)]) ? (int)$u['unread'][strtolower($fl)] : 0; $list[] = $x; }
     }
     usort($list, function ($a, $b) { return ($b['online'] ? 1 : 0) - ($a['online'] ? 1 : 0); });
-    out(array('ok' => true, 'friends' => $list));
+    $req = array();                                      // menga kelgan do'stlik so'rovlari
+    foreach ((isset($u['freq']) ? $u['freq'] : array()) as $fl => $t) { $f = user($fl); if ($f) $req[] = pub($f, false); }
+    out(array('ok' => true, 'friends' => $list, 'req' => $req, 'sent' => array_keys(isset($u['fsent']) ? $u['fsent'] : array())));
 
+/* o'yinchi qidirish: login yoki ism bo'yicha (kamida 2 harf), ostida variantlar chiqadi */
+case 'user_search':
+    $u = auth();
+    $q = strtolower(p('q'));
+    if (strlen($q) < 2 || strlen($q) > 20) out(array('ok' => true, 'list' => array()));
+    if (rl_count('us' . $u['login'], 60) >= 90) out(array('ok' => true, 'list' => array()));
+    rl_add('us' . $u['login'], 60);
+    $me = strtolower($u['login']); $fr = array_map('strtolower', isset($u['friends']) ? $u['friends'] : array());
+    $hit = array();
+    foreach (glob(XC_DIR . '/users/*.php') as $f) {
+        $l = basename($f, '.php');
+        if ($l === $me) continue;
+        $x = null;
+        if (strpos($l, $q) !== false) $x = user($l);
+        if (!$x) continue;
+        $hit[] = array('x' => $x, 's' => strpos($l, $q) === 0 ? 0 : 1);
+        if (count($hit) >= 40) break;
+    }
+    usort($hit, function ($a, $b) { return $a['s'] - $b['s'] ?: strcmp($a['x']['login'], $b['x']['login']); });
+    $list = array();
+    foreach (array_slice($hit, 0, 8) as $h) {
+        $l = strtolower($h['x']['login']); $r = pub($h['x'], false); unset($r['server'], $r['map']);
+        $r['st'] = in_array($l, $fr) ? 'friend' : (isset($u['fsent'][$l]) ? 'sent' : (isset($u['freq'][$l]) ? 'req' : ''));
+        $list[] = $r;
+    }
+    out(array('ok' => true, 'list' => $list));
+
+/* do'stlik: so'rov yuboriladi, u tomonda "qabul qilish / rad etish" chiqadi */
 case 'friend_add':
+case 'friend_accept':
+case 'friend_decline':
 case 'friend_del':
     lock();
     $u = auth();
-    $fl = strtolower(p('login'));
+    $fl = strtolower(p('login')); $me = strtolower($u['login']);
     if (!preg_match('/^[a-z0-9_]{3,20}$/', $fl)) fail('bad', 'Login noto\'g\'ri');
-    if (!isset($u['friends'])) $u['friends'] = array();
-    if ($a === 'friend_add') {
-        if ($fl === strtolower($u['login'])) fail('self', 'O\'zingizni qo\'sha olmaysiz');
-        if (!user($fl)) fail('nouser', 'Bunday o\'yinchi yo\'q');
-        if (!in_array($fl, $u['friends'])) $u['friends'][] = $fl;
+    if ($fl === $me) fail('self', 'O\'zingizni qo\'sha olmaysiz');
+    $t = user($fl);
+    if (!$t) fail('nouser', 'Bunday o\'yinchi yo\'q');
+    foreach (array('friends', 'freq', 'fsent') as $k) { if (!isset($u[$k]) || !is_array($u[$k])) $u[$k] = array(); if (!isset($t[$k]) || !is_array($t[$k])) $t[$k] = array(); }
+    $u['friends'] = array_map('strtolower', $u['friends']); $t['friends'] = array_map('strtolower', $t['friends']);
+    $st = '';
+    if ($a === 'friend_add' || $a === 'friend_accept') {
+        if (in_array($fl, $u['friends']) && in_array($me, $t['friends'])) $st = 'friend';
+        elseif (isset($u['freq'][$fl]) || in_array($me, $t['friends'])) {             // u menga so'rov yuborgan (yoki eski usulda qo'shgan) - qabul
+            if (!in_array($fl, $u['friends'])) $u['friends'][] = $fl;
+            if (!in_array($me, $t['friends'])) $t['friends'][] = $me;
+            unset($u['freq'][$fl], $t['fsent'][$me], $u['fsent'][$fl], $t['freq'][$me]);
+            $st = 'friend';
+        } elseif ($a === 'friend_add') {
+            if (count($u['fsent']) >= 50) fail('many', 'Juda ko\'p so\'rov yuborilgan');
+            if (count($t['freq']) >= 100) fail('many', 'Bu o\'yinchiga juda ko\'p so\'rov kelgan');
+            $u['fsent'][$fl] = time(); $t['freq'][$me] = time();
+            $st = 'sent';
+        } else fail('noreq', 'So\'rov topilmadi');
         if (count($u['friends']) > 200) fail('many', 'Do\'stlar ko\'p');
-    } else $u['friends'] = array_values(array_diff($u['friends'], array($fl)));
-    save_user($u);
-    out(array('ok' => true, 'friends' => $u['friends']));
+    } elseif ($a === 'friend_decline') {
+        unset($u['freq'][$fl], $t['fsent'][$me]);
+    } else {
+        $u['friends'] = array_values(array_diff($u['friends'], array($fl))); $t['friends'] = array_values(array_diff($t['friends'], array($me)));
+        unset($u['fsent'][$fl], $t['freq'][$me]);
+    }
+    save_user($u); save_user($t);
+    out(array('ok' => true, 'st' => $st, 'friends' => $u['friends']));
+
+/* do'stlar bilan yozishma: xc_data/chat/<a>__<b> (oxirgi 100 ta xabar) */
+case 'msg_send':
+case 'msg_list':
+    if ($a === 'msg_send') lock();
+    $u = auth();
+    $fl = strtolower(p('login')); $me = strtolower($u['login']);
+    if (!preg_match('/^[a-z0-9_]{3,20}$/', $fl) || $fl === $me) fail('bad', 'Login noto\'g\'ri');
+    $pair = array($me, $fl); sort($pair); $ck = 'chat/' . $pair[0] . '__' . $pair[1];
+    if ($a === 'msg_send') {
+        if (!in_array($fl, array_map('strtolower', isset($u['friends']) ? $u['friends'] : array()))) fail('bad', 'Faqat do\'stlarga yozish mumkin');
+        $txt = trim(preg_replace('/[\x00-\x1f]+/u', ' ', p('text')));
+        if ($txt === '') fail('empty', 'Xabar bo\'sh');
+        if (function_exists('mb_substr')) $txt = mb_substr($txt, 0, 300, 'UTF-8'); else $txt = substr($txt, 0, 300);
+        if (rl_count('ms' . $me, 60) >= 20) fail('limit', 'Juda tez yozyapsiz, biroz kuting');
+        rl_add('ms' . $me, 60);
+        @mkdir(XC_DIR . '/chat', 0755, true);
+        $c = rd($ck, array());
+        $c[] = array('f' => $me, 'm' => $txt, 't' => time());
+        wr($ck, array_slice($c, -100));
+        $t = user($fl);
+        if ($t) { if (!isset($t['unread']) || !is_array($t['unread'])) $t['unread'] = array(); $t['unread'][$me] = (isset($t['unread'][$me]) ? (int)$t['unread'][$me] : 0) + 1; save_user($t); }
+        out(array('ok' => true));
+    }
+    $c = rd($ck, array());
+    if (!empty($u['unread'][$fl])) { lock(); $u = user($me); unset($u['unread'][$fl]); save_user($u); }
+    out(array('ok' => true, 'list' => array_slice($c, -60)));
+
+/* tez-tez (15 soniyada) so'raladigan engil bildirishnoma: yangi xabarlar va do'stlik so'rovlari */
+case 'notif':
+    $u = auth();
+    $un = array(); foreach ((isset($u['unread']) && is_array($u['unread']) ? $u['unread'] : array()) as $k => $n) if ($n > 0) { $f = user($k); $un[] = array('login' => $k, 'name' => $f ? $f['name'] : $k, 'n' => (int)$n); }
+    $rq = array(); foreach ((isset($u['freq']) && is_array($u['freq']) ? $u['freq'] : array()) as $k => $tm) { $f = user($k); if ($f) $rq[] = array('login' => $k, 'name' => $f['name'], 't' => $tm); }
+    out(array('ok' => true, 'unread' => $un, 'req' => $rq));
 
 case 'top':                                              // haftaning eng faol o'yinchilari (o'yin vaqti bo'yicha)
     $cache = rd('topcache', null);
