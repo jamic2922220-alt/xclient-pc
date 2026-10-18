@@ -248,10 +248,26 @@ function loadOpts() {
     if (r.o.ver && !qparam('v')) { VERSION = r.o.ver; renderBar(); }
     if (r.o.cachemb != null && !qparam('c')) CACHE_MB = r.o.cachemb;
     if (r.o.hw) HW = r.o.hw;
+    favSync();
     if (curModal === 'mdSettings' && (setTab === 'pro' || setTab === 'cont')) showSetTab(setTab);
     if (curModal === 'mdSettings' && setTab === 'system') showSetTab('system');
   });
 }
+/* Sevimlilar kompyuter (XCLauncher.exe) bo'yicha saytda ham saqlanadi: menyu keshi tozalansa, yangilanishdan keyin
+ * yoki menyu boshqa manzildan ochilsa ham qo'shilgan serverlar yo'qolmaydi. Yuklashda birlashtiriladi. */
+var FAV_SYNCED = false;
+function favSync() {
+  if (!PCID) return;
+  api('favs', { d: PCID }, function (r) {
+    if (!r.ok || !r.fav) return;
+    var add = 0;
+    each(r.fav, function (ip) { if (DB.fav.indexOf(ip) < 0) { DB.fav.push(ip); add++; } });
+    FAV_SYNCED = true;
+    if (add) { persist(); renderSoon(); }
+    if (DB.fav.length !== r.fav.length) favPush();
+  });
+}
+function favPush() { if (PCID && FAV_SYNCED) api('favs', { d: PCID, set: JSON.stringify(DB.fav.slice(0, 100)) }, function () {}); }
 function saveOpts(msg) {
   if (!PCID) { toast(T('sy_nolaunch'), 4000); return; }
   api('opts_set', { d: PCID, o: JSON.stringify(OPTS) }, function (r) { toast(r.ok ? (msg || T('sy_next')) : (r.msg || 'Xato'), 3500); });
@@ -288,7 +304,7 @@ function afterLogin(r) {
   else cloudSave(true);
   loadFriends();
 }
-function cloudData() { return { set: DB.set, binds: DB.binds, fav: DB.fav, lang: DB.lang }; }
+function cloudData() { return { set: DB.set, binds: DB.binds, binds2: DB.binds2, fav: DB.fav, lang: DB.lang }; }
 var cloudTm = 0;
 function cloudSave(force) {
   if (!ME || (!DB.autosave && !force)) return;
@@ -304,7 +320,7 @@ function cloudSave(force) {
 function restoreCloud(c, silent) {
   if (!c) return;
   if (c.set) { DB.set = c.set; loadSettings(); applySettings(S); }
-  if (c.binds) { DB.binds = c.binds; loadBinds(); applyBinds(); }
+  if (c.binds) { DB.binds = c.binds; if (c.binds2) DB.binds2 = c.binds2; loadBinds(); applyBinds(); }
   if (c.fav && c.fav.length) each(c.fav, function (ip) { if (DB.fav.indexOf(ip) < 0) DB.fav.push(ip); });
   if (c.lang) { DB.lang = c.lang; setLang(c.lang); }
   DB.cloudt = ME ? ME.cloudt : 0; persist();
@@ -972,6 +988,7 @@ function toggleFav(ip) {
   if (!ip) return;
   var i = DB.fav.indexOf(ip);
   if (i >= 0) { DB.fav.splice(i, 1); toast(T('removed')); } else { DB.fav.unshift(ip); query(ip); toast(T('added')); }
+  favPush();
   persist(); cloudSave(); renderAll();
 }
 
@@ -1162,13 +1179,13 @@ function profSlots() {
 function profSave(i) {
   var p = DB.profiles || [], sl = profSlots()[i], set = copy(E);
   delete set.name; delete set.tag;
-  p[i] = { n: sl.n, t: now(), s: set, b: copy(BINDS) };
+  p[i] = { n: sl.n, t: now(), s: set, b: copy(BINDS), b2: copy(BINDS2) };
   DB.profiles = p; persist(); cloudSave(); toast(T('pf_saved').replace('{n}', sl.n));
 }
 function profLoad(i) {
   var sl = (DB.profiles || [])[i]; if (!sl || !sl.s) return;
   for (var k in sl.s) if (sl.s.hasOwnProperty(k) && DEF.hasOwnProperty(k)) E[k] = sl.s[k];
-  if (sl.b) { DB.binds = copy(sl.b); loadBinds(); applyBinds(); persist(); }
+  if (sl.b) { DB.binds = copy(sl.b); DB.binds2 = sl.b2 ? copy(sl.b2) : {}; loadBinds(); applyBinds(); persist(); }
   toast(T('pf_loaded').replace('{n}', sl.n), 4000);
 }
 /* ---- sezgirlik kalkulyatori (CS 1.6 m_yaw 0.022) ---- */
@@ -1416,9 +1433,10 @@ var PANES = {
   keys: function () {
     var rows = '';
     each(ACTIONS, function (ac) {
-      var k = BINDS[ac[0]] || '';
-      rows += '<div class="kb' + (KEYWAIT === ac[0] ? ' wait' : '') + '" data-bind="' + esc(ac[0]) + '">' + esc(CUR_LANG === 'ru' || LFALL[CUR_LANG] === 'ru' ? ac[2] : ac[1]) +
-        '<span>' + (KEYWAIT === ac[0] ? esc(T('k_press')) : esc(keyLabel(k) || '\u2014')) + '</span></div>';
+      var k = BINDS[ac[0]] || '', k2 = BINDS2[ac[0]] || '', w1 = KEYWAIT === ac[0] && KEYSLOT === 1, w2 = KEYWAIT === ac[0] && KEYSLOT === 2;
+      rows += '<div class="kb">' + esc(CUR_LANG === 'ru' || LFALL[CUR_LANG] === 'ru' ? ac[2] : ac[1]) +
+        '<span class="k1' + (w1 ? ' w' : '') + '" data-bind="' + esc(ac[0]) + '">' + (w1 ? esc(T('k_press')) : esc(keyLabel(k) || '\u2014')) + '</span>' +
+        '<span class="k2' + (w2 ? ' w' : '') + '" data-bind2="' + esc(ac[0]) + '">' + (w2 ? esc(T('k_press')) : esc(keyLabel(k2) || '+')) + '</span></div>';
     });
     return '<div class="pane full"><div class="ph2">' + esc(T('k_title')) + '<span class="mut" style="float:right;letter-spacing:0;font-weight:normal">' + esc(T('k_note2')) + '</span></div>' +
       '<div class="kcols">' + rows + '</div>' +
@@ -1684,17 +1702,22 @@ var ACTIONS = [
   ['say_team Need backup!', 'Jamoaga: yordam kerak', '\u041a\u043e\u043c\u0430\u043d\u0434\u0435: \u043d\u0443\u0436\u043d\u0430 \u043f\u043e\u043c\u043e\u0449\u044c', ''],
   ['say_team Bomb planted!', 'Jamoaga: bomba qo\'yildi', '\u041a\u043e\u043c\u0430\u043d\u0434\u0435: \u0431\u043e\u043c\u0431\u0430 \u0437\u0430\u043b\u043e\u0436\u0435\u043d\u0430', '']
 ];
-var BINDS = {}, KEYWAIT = '';
+var BINDS = {}, BINDS2 = {}, KEYWAIT = '', KEYSLOT = 1;   // BINDS2 - ikkinchi (qo'shimcha) tugma
 function loadBinds() {
   BINDS = {};
   each(ACTIONS, function (a) { BINDS[a[0]] = a[3]; });
   if (DB.binds) for (var k in DB.binds) if (DB.binds.hasOwnProperty(k)) BINDS[k] = DB.binds[k];
+  BINDS2 = DB.binds2 ? copy(DB.binds2) : {};
 }
 function binAliases() {                        // tayyor bindlar uchun aliaslar
   cmd('alias +jumpthrow "+jump; -attack"'); cmd('alias -jumpthrow "-jump"');
   cmd('alias xc_qs "slot3; wait; lastinv"');
 }
-function applyBinds() { binAliases(); for (var a in BINDS) if (BINDS.hasOwnProperty(a) && BINDS[a]) cmd('bind ' + q(BINDS[a]) + ' ' + q(a)); }
+function applyBinds() {
+  binAliases();
+  for (var a in BINDS) if (BINDS.hasOwnProperty(a) && BINDS[a]) cmd('bind ' + q(BINDS[a]) + ' ' + q(a));
+  for (var b in BINDS2) if (BINDS2.hasOwnProperty(b) && BINDS2[b]) cmd('bind ' + q(BINDS2[b]) + ' ' + q(b));
+}
 var KEYNAMES = { 8: 'BACKSPACE', 9: 'TAB', 13: 'ENTER', 16: 'SHIFT', 17: 'CTRL', 18: 'ALT', 19: 'PAUSE', 20: 'CAPSLOCK', 32: 'SPACE',
   33: 'PGUP', 34: 'PGDN', 35: 'END', 36: 'HOME', 37: 'LEFTARROW', 38: 'UPARROW', 39: 'RIGHTARROW', 40: 'DOWNARROW', 45: 'INS', 46: 'DEL',
   96: 'KP_INS', 97: 'KP_END', 98: 'KP_DOWNARROW', 99: 'KP_PGDN', 100: 'KP_LEFTARROW', 101: 'KP_5', 102: 'KP_RIGHTARROW', 103: 'KP_HOME',
@@ -1708,18 +1731,21 @@ function keyName(e) {
   return '';
 }
 function keyLabel(k) { return /^[a-z]$/.test(k) ? k.toUpperCase() : k; }
-function setBind(action, key) {
-  var old = BINDS[action];
-  for (var a in BINDS) if (BINDS.hasOwnProperty(a) && a !== action && BINDS[a] === key) BINDS[a] = '';
-  BINDS[action] = key;
+function setBind(action, key, slot) {
+  var M = slot === 2 ? BINDS2 : BINDS, old = M[action];
+  // bitta tugma faqat bitta vazifada: boshqa joyda (1- yoki 2-ustunda) bo'lsa - o'sha yerdan olib tashlanadi
+  for (var a in BINDS) if (BINDS.hasOwnProperty(a) && BINDS[a] === key && !(M === BINDS && a === action)) BINDS[a] = '';
+  for (var b in BINDS2) if (BINDS2.hasOwnProperty(b) && BINDS2[b] === key && !(M === BINDS2 && b === action)) BINDS2[b] = '';
+  M[action] = key;
   binAliases();
   if (old && old !== key) cmd('unbind ' + q(old));
-  cmd('bind ' + q(key) + ' ' + q(action));
-  DB.binds = BINDS; persist(); cloudSave();
+  if (key) cmd('bind ' + q(key) + ' ' + q(action));
+  DB.binds = BINDS; DB.binds2 = BINDS2; persist(); cloudSave();
 }
 function finishWait(key) {
   var a = KEYWAIT; KEYWAIT = '';
-  if (key) { setBind(a, key); toast(keyLabel(key) + ' \u2192 ' + a); }
+  if (key === 'BACKSPACE' && KEYSLOT === 2) { setBind(a, '', 2); }   // 2-tugmani tozalash
+  else if (key) { setBind(a, key, KEYSLOT); toast(keyLabel(key) + ' \u2192 ' + a); }
   showSetTab('keys');
 }
 
@@ -1808,7 +1834,7 @@ function act(a) {
   if (a === 'join') { if (srvSel) { closeModal(); connect(srvSel); } return; }
   if (a === 'togglefav') return toggleFav(srvSel);
   if (a === 'clearhist') { DB.hist = []; CUR = null; persist(); return renderAll(); }
-  if (a === 'clearall') { DB.hist = []; DB.fav = []; CUR = null; persist(); cloudSave(); toast(T('sy_ok')); return renderAll(); }
+  if (a === 'clearall') { DB.hist = []; DB.fav = []; favPush(); CUR = null; persist(); cloudSave(); toast(T('sy_ok')); return renderAll(); }
   if (a === 'addip') return ask(T('ask_ip'), function (v) { var ip = normIp(v); if (!ip) return toast(T('bad_ip')); if (!isFavIp(ip)) toggleFav(ip); srvSel = ip; renderServers(); });
   if (a === 'console') { closeModal(); return cmd('toggleconsole'); }
   if (a === 'fradd') {
@@ -1816,7 +1842,7 @@ function act(a) {
     if (!v) return;
     return api('friend_add', { login: v }, function (r) { if (!r.ok) return toast(r.msg); $('frIn').value = ''; loadFriends(); });
   }
-  if (a === 'keysdef') { DB.binds = null; loadBinds(); applyBinds(); persist(); cloudSave(); toast(T('sy_ok')); return showSetTab('keys'); }
+  if (a === 'keysdef') { each(ACTIONS, function (x) { if (BINDS2[x[0]]) cmd('unbind ' + q(BINDS2[x[0]])); }); DB.binds = null; DB.binds2 = null; loadBinds(); applyBinds(); persist(); cloudSave(); toast(T('sy_ok')); return showSetTab('keys'); }
   if (a === 'cache') { OPTS.clean = 1; saveOpts(); return showSetTab('system'); }
   if (a === 'verify') { OPTS.verify = 1; saveOpts(); return showSetTab('system'); }
   if (a === 'check') { if (!canRead()) return toast(T('chk_na')); return verifySettings(S); }
@@ -2031,7 +2057,8 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-ddv'))) { ddPick(el.getAttribute('data-ddv')); return; }
   if ((el = closest(t, 'data-dd'))) { ddOpen(el); return; }
   if (DD) ddClose();
-  if ((el = closest(t, 'data-bind'))) { KEYWAIT = KEYWAIT === el.getAttribute('data-bind') ? '' : el.getAttribute('data-bind'); showSetTab('keys'); return; }
+  if ((el = closest(t, 'data-bind'))) { var ka = el.getAttribute('data-bind'); KEYWAIT = KEYWAIT === ka && KEYSLOT === 1 ? '' : ka; KEYSLOT = 1; showSetTab('keys'); return; }
+  if ((el = closest(t, 'data-bind2'))) { var kb = el.getAttribute('data-bind2'); KEYWAIT = KEYWAIT === kb && KEYSLOT === 2 ? '' : kb; KEYSLOT = 2; showSetTab('keys'); return; }
   if ((el = closest(t, 'data-fav'))) { toggleFav(el.getAttribute('data-fav')); return; }
   if ((el = closest(t, 'data-inv'))) { api('invite', { to: el.getAttribute('data-inv'), ip: CONNECTED }, function (r) { toast(r.ok ? T('iv_sent') : (r.msg || 'Xato')); }); return; }
   if ((el = closest(t, 'data-frdel'))) { api('friend_del', { login: el.getAttribute('data-frdel') }, function () { loadFriends(); }); return; }
@@ -2127,7 +2154,7 @@ document.addEventListener('change', function (e) { onSlide(e); var t = e.target 
 document.addEventListener('input', onSlide, false);
 document.addEventListener('keyup', function (e) { var t = e.target || e.srcElement; if (t && t.id === 'calcIn') { CALC_V = t.value; var o = $('calcOut'); if (o) o.innerHTML = calcOut(); } }, false);
 document.addEventListener('mousedown', function (e) {
-  if (!KEYWAIT || closest(e.target || e.srcElement, 'data-bind')) return;
+  if (!KEYWAIT || closest(e.target || e.srcElement, 'data-bind') || closest(e.target || e.srcElement, 'data-bind2')) return;
   var b = e.button === 0 ? 'MOUSE1' : e.button === 2 ? 'MOUSE2' : e.button === 1 ? 'MOUSE3' : e.button === 3 ? 'MOUSE4' : 'MOUSE5';
   e.preventDefault(); e.stopPropagation(); finishWait(b);
 }, true);

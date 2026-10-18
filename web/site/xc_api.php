@@ -589,6 +589,23 @@ case 'opts_done':
     unset($o['k'], $o['kc'], $o['ip']);
     out(array('ok' => true, 'o' => $o, 'd' => $d, 'k' => $claim ? $key : null));
 
+/* ---------- sevimli serverlar kompyuter bo'yicha zaxirada (menyu keshi tozalansa yoki manzil o'zgarsa yo'qolmasin) ---------- */
+case 'favs':
+    $d = strtolower(p('d'));
+    if (!preg_match('/^[a-z0-9]{8,40}$/', $d) || !is_file(XC_DIR . '/dev/' . $d . '.php')) fail('nolaunch', 'XCLauncher.exe topilmadi');
+    lock();
+    $o = rd('dev/' . $d, array());
+    if (!dev_ok($d, $o)) fail('nolaunch', 'XCLauncher.exe topilmadi');
+    if (p('set') !== '') {
+        $in = json_decode(p('set'), true);
+        if (!is_array($in)) fail('bad', 'bad');
+        $fav = array();
+        foreach ($in as $ip) if (is_string($ip) && preg_match('/^[a-z0-9.\-]{3,64}:\d{2,5}$/i', $ip) && !in_array($ip, $fav)) $fav[] = $ip;
+        $o['fav'] = array_slice($fav, 0, 100);
+        wr('dev/' . $d, $o);
+    }
+    out(array('ok' => true, 'fav' => isset($o['fav']) ? $o['fav'] : array()));
+
 /* ---------- spray, skrinshotlar: XClient.exe (kompyuter id) bilan bog'liq ---------- */
 case 'spray':                                            // menyu: tayyor tempdecal.wad (base64) -> keyingi ishga tushishda o'rnatiladi
 case 'spray_get':                                        // XClient.exe: wad faylni olish

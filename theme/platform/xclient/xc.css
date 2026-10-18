@@ -242,7 +242,10 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 .kb { position: relative; float: left; width: 48%; margin-right: 2%; height: 34px; line-height: 34px; border-bottom: 1px solid #221a1f; font-size: 14px; cursor: pointer; padding-left: 8px; }
 .kb span { position: absolute; right: 10px; top: 4px; min-width: 80px; height: 26px; line-height: 24px; text-align: center; border: 1px solid #3a2e34; background: #0f0d12; color: #ff8a7a; font-weight: bold; padding: 0 8px; }
 .kb:hover { background: rgba(255,59,59,0.08); }
-.kb.wait span { border-color: #ff3b3b; color: #fff; background: #2a1216; }
+.kb.wait span, .kb span.w { border-color: #ff3b3b; color: #fff; background: #2a1216; }
+.kb span.k1 { right: 96px; min-width: 64px; cursor: pointer; }
+.kb span.k2 { right: 10px; min-width: 64px; cursor: pointer; color: #c9a9a4; }
+.kb span:hover { border-color: #ff6a5a; }
 .chk { margin: -2px 0 10px; padding: 8px 12px; font-size: 12px; line-height: 18px; border: 1px solid #2a2026; }
 .chk.ok { color: #7ee35a; } .chk.bad { color: #ff8a7a; border-color: #5a2a30; }
 .chk div { color: #c9bfc6; }
