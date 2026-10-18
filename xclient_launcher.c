@@ -579,6 +579,16 @@ static BOOL same_file(const wchar_t *a, const wchar_t *b)
     return sha256_file(a, ha, &sa) && sha256_file(b, hb, &sb) && sa == sb && !strcmp(ha, hb);
 }
 
+/* nDirect (NextClient yangilovchisi) shu fayllarni har ochilishda serverdagi bilan solishtiradi: biz almashtirsak,
+ * o'yin har safar "Downloading updates" bilan ularni qayta yuklaydi. Ularga tegmaymiz - X CLIENT foni
+ * cstrike_<til> papkasidan (lang_bg, fix_override_bg) ko'rinadi, bosh menyu esa saytdan ochiladi. */
+static BOOL ndirect_managed(const wchar_t *r)
+{
+    return !_wcsnicmp(r, L"cstrike\\resource\\background\\", 28) || !_wcsicmp(r, L"cstrike\\resource\\BackgroundLayout.txt")
+        || !_wcsicmp(r, L"cstrike\\resource\\BackgroundLoadingLayout.txt") || !_wcsnicmp(r, L"platform\\mmb\\", 13)
+        || !_wcsicmp(r, L"platform\\mmb_error_page.html");
+}
+
 static void apply_theme_dir(const wchar_t *rel)
 {
     wchar_t src[MAX_PATH], mask[MAX_PATH];
@@ -593,6 +603,7 @@ static void apply_theme_dir(const wchar_t *rel)
         wchar_t r[MAX_PATH], from[MAX_PATH], to[MAX_PATH], bak[MAX_PATH];
         if (rel[0]) path_join(r, rel, fd.cFileName); else lstrcpynW(r, fd.cFileName, MAX_PATH);
         if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) { apply_theme_dir(r); continue; }
+        if (ndirect_managed(r)) continue;
         path_join(from, src, fd.cFileName);
         path_join(to, g_dir, r);
         if (GetFileAttributesW(to) != INVALID_FILE_ATTRIBUTES) {
@@ -658,7 +669,7 @@ static void fix_override_bg(void)
 /* nDirect (NextClient yangilovchisi) o'yin ochilganda sborka fonini (bt_*.tga, platform/mmb...) qaytarib qo'yadi.
  * 1) O'yin tilining papkasi (cstrike_russian ...) cstrike dan oldin o'qiladi va nDirect uni kuzatmaydi:
  *    fonni shu yerga o'z nomlari (xcl_*.tga) bilan yozamiz.
- * 2) O'yin ochilgandan keyin bir necha daqiqa kuzatamiz: fayl qaytarilsa - X CLIENT nikini qayta qo'yamiz. */
+ * cstrike/ va platform/ dagi nDirect fayllariga tegilmaydi (ndirect_managed). */
 static void lang_bg_dir(const wchar_t *lang)
 {
     wchar_t dir[MAX_PATH], src[MAX_PATH], from[MAX_PATH], to[MAX_PATH], sub[MAX_PATH];
@@ -704,24 +715,6 @@ static void lang_bg(void)
     for (wchar_t *c = lang; *c; c++) if (!((*c >= L'a' && *c <= L'z') || (*c >= L'A' && *c <= L'Z'))) { lang[0] = 0; break; }
     if (lang[0] && _wcsicmp(lang, L"russian") && _wcsicmp(lang, L"english")) lang_bg_dir(lang);
 }
-static BOOL theme_changed(const wchar_t *rel)
-{
-    wchar_t a[MAX_PATH], b[MAX_PATH], t[MAX_PATH];
-    path_join(t, L"xc_theme", rel);
-    path_join(a, g_dir, t); path_join(b, g_dir, rel);
-    return file_exists(a) && !same_file(a, b);
-}
-static void guard_theme(HANDLE game)
-{
-    const wchar_t *watch[] = { L"platform\\mmb_error_page.html", L"cstrike\\resource\\background\\bt_1_1.tga",
-        L"cstrike\\resource\\BackgroundLoadingLayout.txt", L"platform\\mmb\\bg_1920.jpg" };
-    DWORD start = GetTickCount();
-    while (GetTickCount() - start < 240000) {              /* 4 daqiqa */
-        if (WaitForSingleObject(game, 1500) == WAIT_OBJECT_0) break;   /* o'yin yopildi */
-        for (int i = 0; i < 4; i++) if (theme_changed(watch[i])) { apply_theme_dir(L""); break; }
-    }
-}
-
 /* eski versiyadagi alohida oyna (x-ui, Electron) va .bat endi kerak emas */
 static void remove_old_ui(void)
 {
@@ -1426,7 +1419,7 @@ static void run_game(void)
     if (CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, g_dir, &si, &pi)) {
         if (o_prio) SetPriorityClass(pi.hProcess, HIGH_PRIORITY_CLASS);   /* "O'yinni tezlashtirish" */
         CloseHandle(pi.hThread);
-        guard_theme(pi.hProcess);
+        /* guard_theme olib tashlandi: nDirect fayllarini qayta yozish har ochilishda yangilanishga sabab bo'lardi */
         CloseHandle(pi.hProcess);
     }
 }
