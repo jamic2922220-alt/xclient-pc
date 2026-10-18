@@ -964,7 +964,7 @@ var DEF = {
   name: '', tag: 'X | ', net: 'fast', dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, buykeys: 0, queue: 1, reconn: 1, demo: 0,
   sens: 2.5, zoom: 1.2, raw: 1, filter: 0, inv: 0,
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1,
-  fps: 200, showfps: 0, uisnd: 1, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 300,
+  fps: 200, showfps: 0, uisnd: 1, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
   xp: 'pro', xt: 0, xs: 'small', xc: '255 59 59', xtr: 0, xdyn: 0, xthick: 1, xgap: 3, xout: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
   rscale: 115, ropac: 100, rnames: 0, rhp: 0, rmode: 1, rround: 1, rrot: 1, rmap: 0.8,
   vmx: 0, vmy: 0, vmz: 0, vmshift: 0, bobst: 0, lagst: 0, camint: 0,
@@ -1019,7 +1019,7 @@ function settingsCmds(s) {
   // fps_override 1 bo'lmasa NextClient FPS ni 100 da ushlab qoladi
   // cl_dlmax standart (512): 1024 ba'zi serverlar himoyasida (DProto/ReChecker) "FakePlayers" deb kick qilinishi mumkin
   c.push('fps_override ' + (s.fps > 100 ? 1 : 0), 'cl_showfps ' + s.showfps, 'cl_dlmax 512', 'm_customaccel 0');
-  c.push('fps_max ' + s.fps, 'gamma ' + s.gamma, 'fov_angle ' + s.fov, 'viewmodel_fov ' + s.vmfov, 'fov_horplus ' + s.hor, 'gl_vsync ' + s.vsync, 'r_dynamic ' + s.dyn, 'mp_decals ' + s.decals);
+  c.push('fps_max ' + s.fps, 'gamma ' + s.gamma, 'fov_angle ' + s.fov, 'viewmodel_fov ' + s.vmfov, 'fov_horplus ' + s.hor, 'gl_vsync ' + s.vsync, 'r_dynamic ' + s.dyn, 'mp_decals ' + Math.max(300, s.decals));   // kam bo'lsa spray o'q izlari orasida tez o'chib ketadi
   each(xhairCmds(s), function (x) { c.push(x); });
   // gl_picmip 0 va cl_minmodels 0 qotirilgan: aks holda serverning o'yinchi skinlari, qurollari va spray buziladi
   c.push('cl_bob ' + s.bob, 'gl_picmip 0', 'r_detailtextures ' + s.detail, 'cl_shadows ' + s.shadows, 'cl_minmodels 0',
@@ -1155,9 +1155,9 @@ function hwText() {
   return Math.round(HW.ram / 1024) + ' GB RAM · ' + HW.cpu + ' ' + T('hw_cores') + (HW.gpu ? ' · ' + HW.gpu : '');
 }
 function hwAuto() {
-  var c = hwClass(), v = c === 'weak' ? { detail: 0, shadows: 0, dyn: 0, decals: 50, vsync: 0 }
-    : c === 'mid' ? { detail: 0, shadows: 1, dyn: 0, decals: 150, vsync: 0 }
-    : { detail: 1, shadows: 1, dyn: 1, decals: 300, vsync: 0 };
+  var c = hwClass(), v = c === 'weak' ? { detail: 0, shadows: 0, dyn: 0, vsync: 0 }
+    : c === 'mid' ? { detail: 0, shadows: 1, dyn: 0, vsync: 0 }
+    : { detail: 1, shadows: 1, dyn: 1, vsync: 0 };
   for (var k in v) if (v.hasOwnProperty(k)) E[k] = v[k];
   showSetTab('pro'); toast(T('hw_done').replace('{c}', T('hw_' + c)), 5000);
 }
@@ -1384,7 +1384,7 @@ var PANES = {
   video: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('v_title')) + '</div>' +
       seg('fps', 'v_fps', [[100, '100'], [144, '144'], [200, '200'], [300, '300'], [500, '500']]) +
-      sl('gamma', 'v_bright', 1.8, 3, 0.1) + sl('fov', 'v_fov', 70, 100, 1, 'v_fov2') + sl('vmfov', 'v_vm', 70, 100, 1) + sl('decals', 'v_dec', 50, 1000, 50) + '</div>' +
+      sl('gamma', 'v_bright', 1.8, 3, 0.1) + sl('fov', 'v_fov', 70, 100, 1, 'v_fov2') + sl('vmfov', 'v_vm', 70, 100, 1) + sl('decals', 'v_dec', 300, 4000, 100) + '</div>' +
       '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('hor', 'v_hor') + tg('vsync', 'v_vsync') + tg('showfps', 'v_showfps') + tg('dyn', 'v_dyn') + '</div>';
   },
   tools: function () {                            // Qo'shimcha: profillar, kalkulyator, tayyor uslublar, demolar
@@ -1783,11 +1783,11 @@ function act(a) {
   });
   if (a === 'procfg') {                        // Pro CFG: lag'siz internet, yuqori FPS, aniq sichqoncha
     E.net = 'fast'; E.fps = 300; E.vsync = 0; E.raw = 1; E.filter = 0; E.fastsw = 1; E.bob = 0; E.interp = 0.01; E.lw = 1; E.lc = 1;
-    E.dyn = 0; E.decals = 100; E.detail = 0; E.hisnd = 1; E.mixa = 0.05; E.xdyn = 0;
+    E.dyn = 0; E.detail = 0; E.hisnd = 1; E.mixa = 0.05; E.xdyn = 0;
     showSetTab('pro'); return toast(T('pr_cfgok'), 5000);
   }
   if (a === 'fpsmode') {                       // kuchsiz kompyuter: grafikani pasaytiramiz
-    E.detail = 0; E.shadows = 0; E.dyn = 0; E.decals = 50; E.vsync = 0; if (E.fps < 200) E.fps = 200;
+    E.detail = 0; E.shadows = 0; E.dyn = 0; E.vsync = 0; if (E.fps < 200) E.fps = 200;
     showSetTab('pro'); return toast(T('pr_fpsok'), 5000);
   }
   if (a === 'vmdef') { each(['vmx', 'vmy', 'vmz', 'vmshift', 'bobst', 'lagst', 'camint', 'vmfov', 'bob'], function (k) { E[k] = DEF[k]; }); return showSetTab('hud'); }
