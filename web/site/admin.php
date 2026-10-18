@@ -186,7 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = strtolower(preg_replace('/[^a-z0-9_\-]/i', '', pp('id'))); $f = PACKS_DIR . '/' . $id . '/pack.json';
         if ($id !== '' && is_dir(PACKS_DIR . '/' . $id)) {
             $m = json_decode((string)@file_get_contents($f), true); if (!is_array($m)) $m = array('name' => $id);
-            if (pp('do') === 'on') { $m['all'] = true; if (empty($m['ver'])) $m['ver'] = 1; flash('Paket endi HAMMA o\'yinchilarga o\'rnatiladi (XClient.exe ochilganda)'); }
+            if (pp('do') === 'on') { $m['all'] = true; if (empty($m['ver'])) $m['ver'] = 1; flash('Paket endi HAMMA o\'yinchilarga o\'rnatiladi (XCLauncher.exe ochilganda)'); }
             if (pp('do') === 'off') { $m['all'] = false; flash('Paket majburiy emas - o\'yinchilarda olib tashlanadi'); }
             if (pp('do') === 'bump') { $m['ver'] = (isset($m['ver']) ? (int)$m['ver'] : 1) + 1; flash('Versiya ' . $m['ver'] . ' - hammada qayta o\'rnatiladi'); }
             @file_put_contents($f, json_encode($m));
@@ -400,7 +400,7 @@ if ($P === 'packs') {
     @mkdir(PACKS_DIR, 0755, true);
     $id = strtolower(preg_replace('/[^a-z0-9_\-]/i', '', g('id')));
     $files_of = function ($dir, $rel = '') use (&$files_of) { $o = array(); foreach ((array)@scandir($dir) as $f) { if ($f === '.' || $f === '..' || $f === '') continue; if (is_dir("$dir/$f")) $o = array_merge($o, $files_of("$dir/$f", $rel . $f . '/')); else $o[] = array($rel . $f, filesize("$dir/$f")); } return $o; };
-    echo '<h1>Paketlar</h1><div class="mut" style="margin:-8px 0 16px">Paketdagi fayllar o\'yinchi menyuda (Sozlamalar > Kontent) yoqqanda XClient.exe orqali o\'yin papkasiga o\'rnatiladi. Ovozlar, modellar, NextClient yangilanishi va boshqalar.</div><div class="grid2"><div class="panel"><div class="ph">Paketlar ro\'yxati</div><table class="list">';
+    echo '<h1>Paketlar</h1><div class="mut" style="margin:-8px 0 16px">Paketdagi fayllar o\'yinchi menyuda (Sozlamalar > Kontent) yoqqanda XCLauncher.exe orqali o\'yin papkasiga o\'rnatiladi. Ovozlar, modellar, NextClient yangilanishi va boshqalar.</div><div class="grid2"><div class="panel"><div class="ph">Paketlar ro\'yxati</div><table class="list">';
     foreach ((array)@scandir(PACKS_DIR) as $p) { if (!preg_match('/^[a-z0-9_\-]+$/', $p) || !is_dir(PACKS_DIR . "/$p/files")) continue;
         $m = json_decode((string)@file_get_contents(PACKS_DIR . "/$p/pack.json"), true); $fl = $files_of(PACKS_DIR . "/$p/files"); $sz = 0; foreach ($fl as $x) $sz += $x[1];
         echo '<tr class="' . ($p === $id ? 'sel' : '') . '"><td><a href="?p=packs&id=' . $p . '"><b>' . h(isset($m['name']) ? $m['name'] : $p) . '</b></a><br><small class="mut">' . h($p) . ' · ' . count($fl) . ' fayl · ' . size_h($sz) . '</small></td></tr>'; }
@@ -417,7 +417,7 @@ if ($P === 'packs') {
         echo '</table><div class="ph" style="margin-top:16px">Kimga o\'rnatiladi</div>'
             . ($pall ? '<p><b style="color:#3fb950">HAMMA o\'yinchilarga</b> · versiya ' . $pv . '</p>' . $pb('bump', 'Fayllarni yangiladim - hammaga qayta tarqatish', 'red') . $pb('off', 'Majburiy emas qilish', 'out')
                      : '<p class="mut">Faqat menyuda (Sozlamalar > Kontent) o\'zi yoqqanlarga.</p>' . $pb('on', 'Hamma o\'yinchilarga o\'rnatish', 'red'))
-            . '<div class="mut small" style="margin-top:6px">Sborka yangilanishi: fayllarni shu paketga yuklang → "Hamma o\'yinchilarga" → keyin har o\'zgartirganda "qayta tarqatish". O\'yinchi XClient.exe ni ochganda yuklab oladi; paket o\'chirilsa asl fayllar qaytariladi.</div>'
+            . '<div class="mut small" style="margin-top:6px">Sborka yangilanishi: fayllarni shu paketga yuklang → "Hamma o\'yinchilarga" → keyin har o\'zgartirganda "qayta tarqatish". O\'yinchi XCLauncher.exe ni ochganda yuklab oladi; paket o\'chirilsa asl fayllar qaytariladi.</div>'
             . '<form method="post" onsubmit="return confirm(\'Paket butunlay o\\\'chirilsinmi?\')" style="margin-top:12px">' . csrf_in() . '<input type="hidden" name="act" value="pack_del"><input type="hidden" name="id" value="' . h($id) . '"><button class="btn out">Paketni o\'chirish</button></form></div>';
     } else echo '<div class="panel mut">Chapdan paketni tanlang yoki yangisini yarating.</div>';
     echo '</div>';
@@ -427,7 +427,7 @@ if ($P === 'packs') {
 if ($P === 'upd') {
     $cfg = rel_rd('release', array()); $hist = rel_rd('rel_hist', array());
     $vers = array(); foreach (all_of('dev') as $o) { $k = isset($o['ver']) && $o['ver'] !== '' ? $o['ver'] : "noma'lum"; $vers[$k] = (isset($vers[$k]) ? $vers[$k] : 0) + 1; } arsort($vers);
-    echo '<h1>Yangilanishlar</h1><div class="mut" style="margin:-8px 0 16px">XClient.exe har ochilganda shu yerdan so\'raydi va yangi build bo\'lsa o\'zgargan fayllarni (XClient.exe, dizayn xc_theme) o\'zi yuklab oladi.'
+    echo '<h1>Yangilanishlar</h1><div class="mut" style="margin:-8px 0 16px">XCLauncher.exe har ochilganda shu yerdan so\'raydi va yangi build bo\'lsa o\'zgargan fayllarni (XCLauncher.exe, dizayn xc_theme) o\'zi yuklab oladi.'
         . ' Yangi build: GitHub Actions → "X CLIENT CS 1.6 PC" → Run workflow (stable). O\'yin fayllari (sborka) uchun - <a href="?p=packs">Paketlar</a> → "Hamma o\'yinchilarga".</div>'
         . '<form method="post" style="margin-bottom:12px">' . csrf_in() . '<input type="hidden" name="act" value="rel_check"><button class="btn">GitHub\'ni hozir tekshirish</button></form><div class="grid2">';
     foreach (array('stable' => 'Stable (hamma)', 'beta' => 'Beta (sinov)') as $ch => $title) {

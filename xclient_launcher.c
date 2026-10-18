@@ -37,6 +37,10 @@
 #define XC_GAME_URL "https://cssborka.uz/uploads/files/1791198609_6ac38591b615c_CS_1_6_boost-top_PRO_2_5_3.exe"
 #endif
 #define XC_VERSION_FILE L"xclient_version.txt"
+/* Launcher fayli nomi. Eski nomi "XClient.exe" ba'zi server himoyalarida (Vanga/ReChecker) 5 yil oldingi
+ * shu nomli cheat sifatida ro'yxatda turibdi - o'yin papkasida bu nomdagi fayl qolmasligi kerak. */
+#define XC_EXE        L"XCLauncher.exe"
+#define XC_EXE_LEGACY L"XClient.exe"
 #define WM_XC_STATUS (WM_APP + 1)
 #define WM_XC_DONE   (WM_APP + 2)
 
@@ -384,7 +388,8 @@ static int sync_files(const UpdInfo *u, BOOL *selfUpdated)
         path_join(dst, g_dir, wrel);
 
         if (onlyMissing && GetFileAttributesW(dst) != INVALID_FILE_ATTRIBUTES) continue;
-        BOOL isSelf = !_wcsicmp(wrel, L"XClient.exe");
+        if (!_wcsicmp(wrel, XC_EXE_LEGACY)) continue;   /* faqat eski launcherlar o'zini yangilashi uchun */
+        BOOL isSelf = !_wcsicmp(wrel, XC_EXE);
         char have[65] = {0}; ULONGLONG hs = 0;
         /* o'z exe'mizda oxirida kalit bo'lishi mumkin - faqat asosiy qismini solishtiramiz */
         if (sha256_part(isSelf ? g_self : dst, have, &hs, isSelf ? size : 0) && hs == size && !_stricmp(have, sha)) continue;
@@ -479,7 +484,7 @@ static BOOL ensure_installed(BOOL *fresh)
     if (!g_dir[0]) return FALSE;
 
     wchar_t dst[MAX_PATH];
-    path_join(dst, g_dir, L"XClient.exe");
+    path_join(dst, g_dir, XC_EXE);
     if (_wcsicmp(dst, g_self)) {
         CopyFileW(g_self, dst, FALSE);
         /* paket ichida kelgan X CLIENT dizaynini ham ko'chiramiz */
@@ -1494,11 +1499,69 @@ static LRESULT CALLBACK wndproc(HWND h, UINT m, WPARAM w, LPARAM l)
     return DefWindowProcW(h, m, w, l);
 }
 
+/* Eski nom (XClient.exe) bilan ishga tushgan bo'lsak: o'zimizni XCLauncher.exe qilib nusxalaymiz va o'shani ochamiz.
+ * Yangi nusxa eski faylni o'chiradi, ish stoli yorlig'i va avto-ishga tushirishni yangi nomga o'tkazadi. */
+static BOOL g_migrated = FALSE;
+static BOOL migrate_name(void)
+{
+    wchar_t *base = wcsrchr(g_self, L'\\');
+    if (!base || _wcsicmp(base + 1, XC_EXE_LEGACY)) return FALSE;
+    wchar_t dir[MAX_PATH], dst[MAX_PATH];
+    lstrcpynW(dir, g_self, MAX_PATH);
+    dir[base - g_self] = 0;
+    path_join(dst, dir, XC_EXE);
+    if (!CopyFileW(g_self, dst, FALSE)) return FALSE;
+    STARTUPINFOW si = { sizeof(si) };
+    PROCESS_INFORMATION pi;
+    if (!CreateProcessW(dst, NULL, NULL, NULL, FALSE, 0, NULL, dir, &si, &pi)) return FALSE;
+    CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+    return TRUE;
+}
+static void remove_legacy_exe(void)
+{
+    wchar_t dir[MAX_PATH], old[MAX_PATH], oldBak[MAX_PATH];
+    lstrcpynW(dir, g_self, MAX_PATH);
+    wchar_t *bs = wcsrchr(dir, L'\\');
+    if (!bs) return;
+    *bs = 0;
+    path_join(old, dir, XC_EXE_LEGACY);
+    _snwprintf(oldBak, MAX_PATH, L"%s.old", old);
+    DeleteFileW(oldBak);
+    if (GetFileAttributesW(old) == INVALID_FILE_ATTRIBUTES) return;
+    for (int i = 0; i < 40; i++) {                        /* eski jarayon yopilishini kutamiz (10 s gacha) */
+        SetFileAttributesW(old, FILE_ATTRIBUTE_NORMAL);
+        if (DeleteFileW(old)) { g_migrated = TRUE; return; }
+        Sleep(250);
+    }
+    MoveFileExW(old, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
+    g_migrated = TRUE;
+}
+/* yorliq va avto-ishga tushirish eski exe'ga qarab turgan bo'lsa - yangisiga */
+static void fix_links_after_migration(void)
+{
+    if (!g_migrated) return;
+    make_shortcut(g_self);
+    HKEY k; wchar_t v[MAX_PATH + 4]; DWORD sz = sizeof(v), type = 0;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_QUERY_VALUE, &k) == ERROR_SUCCESS) {
+        BOOL had = RegQueryValueExW(k, L"X CLIENT", NULL, &type, (BYTE *)v, &sz) == ERROR_SUCCESS;
+        RegCloseKey(k);
+        if (had) set_autostart(1);
+    }
+}
+
 int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, LPWSTR cmdline, int show)
 {
     (void)hp; (void)cmdline; (void)show;
     CoInitialize(NULL);
     GetModuleFileNameW(NULL, g_self, MAX_PATH);
+    if (migrate_name()) { CoUninitialize(); return 0; }
+    remove_legacy_exe();
+    if (g_migrated) {                                       /* yorliq uchun ishchi papka - exe turgan papka */
+        lstrcpynW(g_dir, g_self, MAX_PATH);
+        wchar_t *bs = wcsrchr(g_dir, L'\\'); if (bs) *bs = 0;
+        fix_links_after_migration();
+        g_dir[0] = 0;
+    }
     detect_os();
 
     /* oldingi yangilanishdan qolgan eski exe */
