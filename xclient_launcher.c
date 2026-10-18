@@ -971,25 +971,52 @@ static int ini_int(const wchar_t *k) { wchar_t ini[MAX_PATH]; ini_path(ini); ret
 static void ini_set_int(const wchar_t *k, int v) { wchar_t ini[MAX_PATH], w[24]; ini_path(ini); _snwprintf(w, 24, L"%d", v); WritePrivateProfileStringW(L"x", k, w, ini); }
 
 /* Spray: menyu tayyorlagan tempdecal.wad ni o'rnatish */
+/* O'yin tempdecal.wad ni avval til/qo'shimcha papkalardan (cstrike_russian, cstrike_addon, cstrike_hd ...) qidiradi,
+ * shuning uchun spray cstrike\ dagina emas, o'sha papkalarda turgan tempdecal.wad o'rniga ham yoziladi. */
+static int spray_targets(wchar_t out[][MAX_PATH], int cap)
+{
+    int n = 0;
+    path_join(out[n++], g_dir, L"cstrike\\tempdecal.wad");
+    wchar_t pat[MAX_PATH];
+    path_join(pat, g_dir, L"cstrike_*");
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(pat, &fd);
+    if (h == INVALID_HANDLE_VALUE) return n;
+    do {
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || n >= cap) continue;
+        wchar_t sub[MAX_PATH];
+        _snwprintf(sub, MAX_PATH, L"%s\\tempdecal.wad", fd.cFileName); sub[MAX_PATH - 1] = 0;
+        path_join(out[n], g_dir, sub);
+        if (file_exists(out[n])) n++;
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+    return n;
+}
 static void install_spray(void)
 {
-    wchar_t dst[MAX_PATH], tmp[MAX_PATH];
+    wchar_t dst[16][MAX_PATH], tmp[MAX_PATH];
     char url[256];
-    path_join(dst, g_dir, L"cstrike\\tempdecal.wad");
     if (o_spray <= 0) return;
-    if (o_spray == ini_int(L"sprayt")) {                   /* o'rnatilgan - lekin o'yin yoki boshqa dastur almashtirgan bo'lsa qayta yozamiz */
-        WIN32_FILE_ATTRIBUTE_DATA fa;
-        if (!o_sprays || (GetFileAttributesExW(dst, GetFileExInfoStandard, &fa) && fa.nFileSizeLow == (DWORD)o_sprays)) return;
+    int n = spray_targets(dst, 16);
+    if (o_spray == ini_int(L"sprayt") && o_sprays) {      /* o'rnatilgan - lekin o'yin yoki boshqa dastur almashtirgan bo'lsa qayta yozamiz */
+        BOOL ok = TRUE;
+        for (int i = 0; i < n && ok; i++) {
+            WIN32_FILE_ATTRIBUTE_DATA fa;
+            ok = GetFileAttributesExW(dst[i], GetFileExInfoStandard, &fa) && fa.nFileSizeLow == (DWORD)o_sprays;
+        }
+        if (ok) return;
     }
     path_join(tmp, g_dir, L"cstrike\\tempdecal.xcdl");
     _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=spray_get&d=%s", g_id); url[sizeof(url) - 1] = 0;
     status(L"Spray o‘rnatilmoqda...", 1);
     if (!http_download(url, tmp)) { DeleteFileW(tmp); return; }
-    SetFileAttributesW(dst, FILE_ATTRIBUTE_NORMAL);
-    if (MoveFileExW(tmp, dst, MOVEFILE_REPLACE_EXISTING)) {
-        SetFileAttributesW(dst, FILE_ATTRIBUTE_READONLY);   /* o'yin ustidan yozib yubormasin */
-        ini_set_int(L"sprayt", o_spray);
-    } else DeleteFileW(tmp);
+    int done = 0;
+    for (int i = 0; i < n; i++) {
+        SetFileAttributesW(dst[i], FILE_ATTRIBUTE_NORMAL);
+        if (CopyFileW(tmp, dst[i], FALSE)) { SetFileAttributesW(dst[i], FILE_ATTRIBUTE_READONLY); done++; }   /* o'yin ustidan yozib yubormasin */
+    }
+    DeleteFileW(tmp);
+    if (done == n) ini_set_int(L"sprayt", o_spray);
 }
 
 /* Paketlar: saytdagi mmb/packs/<id>/files/ o'yin papkasiga ko'chiriladi, asl fayllar xc_backup/<id>/ ga saqlanadi */
