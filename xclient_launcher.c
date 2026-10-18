@@ -1409,10 +1409,30 @@ static void hud_scale(void)
     if (file_exists(ru)) hud_scale_dir(L"cstrike_russian\\sprites", pct);
 }
 
+/* O'yin brauzeri (CEF) menyuni (mmb.boost-top.com/index.html) htmlcache dan soatlab ochishi mumkin - yangi menyu ko'rinmay qoladi.
+ * Launcher yangi versiyaga o'tganda keshni bir marta tozalaymiz (sozlamalar va kirish saytdan qayta tiklanadi). */
+static void clear_menu_cache(void)
+{
+    wchar_t ini[MAX_PATH], p[MAX_PATH + 2] = {0};
+    ini_path(ini);
+    int done = GetPrivateProfileIntW(L"x", L"cachebuild", 0, ini);
+    if (done == g_build || g_build <= 0) return;
+    path_join(p, g_dir, L"htmlcache");
+    if (GetFileAttributesW(p) != INVALID_FILE_ATTRIBUTES) {
+        SHFILEOPSTRUCTW op = {0};
+        op.wFunc = FO_DELETE; op.pFrom = p;   /* pFrom ikki marta 0 bilan tugaydi */
+        op.fFlags = FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
+        SHFileOperationW(&op);
+    }
+    wchar_t w[24]; _snwprintf(w, 24, L"%d", g_build);
+    WritePrivateProfileStringW(L"x", L"cachebuild", w, ini);
+}
+
 static void run_game(void)
 {
     wchar_t exe[MAX_PATH], cmd[1024];
     remove_old_ui();
+    clear_menu_cache();
     apply_theme_dir(L"");
     fix_override_bg();
     lang_bg();
