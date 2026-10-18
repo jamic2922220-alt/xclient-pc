@@ -1021,7 +1021,8 @@ function settingsCmds(s) {
   c.push('fps_override ' + (s.fps > 100 ? 1 : 0), 'cl_showfps ' + s.showfps, 'cl_dlmax 512', 'm_customaccel 0');
   c.push('fps_max ' + s.fps, 'gamma ' + s.gamma, 'fov_angle ' + s.fov, 'viewmodel_fov ' + s.vmfov, 'fov_horplus ' + s.hor, 'gl_vsync ' + s.vsync, 'r_dynamic ' + s.dyn, 'mp_decals ' + s.decals);
   each(xhairCmds(s), function (x) { c.push(x); });
-  c.push('cl_bob ' + s.bob, 'gl_picmip ' + s.picmip, 'r_detailtextures ' + s.detail, 'cl_shadows ' + s.shadows, 'cl_minmodels 0',   // serverning o'yinchi va qurol modellari doim ko'rinsin
+  // gl_picmip 0 va cl_minmodels 0 qotirilgan: aks holda serverning o'yinchi skinlari, qurollari va spray buziladi
+  c.push('cl_bob ' + s.bob, 'gl_picmip 0', 'r_detailtextures ' + s.detail, 'cl_shadows ' + s.shadows, 'cl_minmodels 0',
     'ex_interp ' + s.interp, 'cl_lw ' + s.lw, 'cl_lc ' + s.lc, 'hisound ' + s.hisnd, '_snd_mixahead ' + s.mixa, 'voice_loopback ' + s.loop,
     'hud_saytext_time ' + s.saytm, 'net_graphpos ' + s.ngpos);
   c.push('net_graph ' + (s.netg ? 3 : 0), 'hud_deathnotice_old ' + (s.hs ? 0 : 1), 'hud_deathnotice_max ' + s.dmax, 'cl_radartype ' + s.radar, 'hud_centerid ' + s.cid, 'scr_drawversion ' + (s.nover ? 0 : 1));
@@ -1154,9 +1155,9 @@ function hwText() {
   return Math.round(HW.ram / 1024) + ' GB RAM · ' + HW.cpu + ' ' + T('hw_cores') + (HW.gpu ? ' · ' + HW.gpu : '');
 }
 function hwAuto() {
-  var c = hwClass(), v = c === 'weak' ? { picmip: 1, detail: 0, shadows: 0, dyn: 0, decals: 50, vsync: 0 }
-    : c === 'mid' ? { picmip: 0, detail: 0, shadows: 1, dyn: 0, decals: 150, vsync: 0 }
-    : { picmip: 0, detail: 1, shadows: 1, dyn: 1, decals: 300, vsync: 0 };
+  var c = hwClass(), v = c === 'weak' ? { detail: 0, shadows: 0, dyn: 0, decals: 50, vsync: 0 }
+    : c === 'mid' ? { detail: 0, shadows: 1, dyn: 0, decals: 150, vsync: 0 }
+    : { detail: 1, shadows: 1, dyn: 1, decals: 300, vsync: 0 };
   for (var k in v) if (v.hasOwnProperty(k)) E[k] = v[k];
   showSetTab('pro'); toast(T('hw_done').replace('{c}', T('hw_' + c)), 5000);
 }
@@ -1433,8 +1434,6 @@ var PANES = {
   },
   pro: function () {                              // Kengaytirilgan: grafika, internet, qurol, ekran
     return '<div class="pane l"><div class="ph2">' + esc(T('pr_gfx')) + '</div>' +
-      seg('picmip', 'pr_tex', [[0, 'pr_tex0'], [1, 'pr_tex1'], [2, 'pr_tex2']]) +
-      '<div class="mut" style="margin:-6px 0 8px;font-size:12px">' + esc(T('pr_tex3')) + '</div>' +
       tg('detail', 'pr_detail') + tg('shadows', 'pr_shadows') +
       '<div class="ph2 m">' + esc(T('pr_fps')) + '</div>' +
       '<div class="rowb"><b>' + esc(T('pr_cfg')) + '</b><small>' + esc(T('pr_cfg2')) + '</small><a class="btn red" data-act="procfg">' + esc(T('pr_cfgb')) + '</a></div>' +
@@ -1786,7 +1785,7 @@ function act(a) {
     showSetTab('pro'); return toast(T('pr_cfgok'), 5000);
   }
   if (a === 'fpsmode') {                       // kuchsiz kompyuter: grafikani pasaytiramiz
-    E.picmip = 1; E.detail = 0; E.shadows = 0; E.dyn = 0; E.decals = 50; E.vsync = 0; if (E.fps < 200) E.fps = 200;
+    E.detail = 0; E.shadows = 0; E.dyn = 0; E.decals = 50; E.vsync = 0; if (E.fps < 200) E.fps = 200;
     showSetTab('pro'); return toast(T('pr_fpsok'), 5000);
   }
   if (a === 'vmdef') { each(['vmx', 'vmy', 'vmz', 'vmshift', 'bobst', 'lagst', 'camint', 'vmfov', 'bob'], function (k) { E[k] = DEF[k]; }); return showSetTab('hud'); }
