@@ -88,7 +88,21 @@ jobs:
         run: |
           copy /Y own\installer.nsi . && copy /Y own\xclient.ico .
           if not exist "%ProgramFiles(x86)%\NSIS\makensis.exe" choco install nsis -y --no-progress
-          "%ProgramFiles(x86)%\NSIS\makensis.exe" /V2 /DSRC=full /DVER=%XC_VERSION% installer.nsi
+          rem CS 1.6 (boost-top PRO) o'rnatuvchisi ham ichiga qo'shiladi - yuklab bo'lmasa, faqat launcher
+          curl -fsSL --retry 3 -o game_setup.exe "https://cssborka.uz/uploads/files/1791198609_6ac38591b615c_CS_1_6_boost-top_PRO_2_5_3.exe" || del game_setup.exe
+          if exist game_setup.exe ( "%ProgramFiles(x86)%\NSIS\makensis.exe" /V2 /DSRC=full /DVER=%XC_VERSION% /DGAME=game_setup.exe installer.nsi ) else ( echo ::warning::CS 1.6 o'rnatuvchisi yuklanmadi - Setup faqat launcher bilan && "%ProgramFiles(x86)%\NSIS\makensis.exe" /V2 /DSRC=full /DVER=%XC_VERSION% installer.nsi )
+          for %%F in (X-Client-Setup.exe) do echo Setup hajmi: %%~zF bayt
+
+      - name: Sinov o'rnatuvchisi (beta - GitHub pre-release)
+        if: env.CHANNEL == 'beta'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # havola: https://github.com/<repo>/releases/download/xclient-beta/X-Client-Setup.exe (hammaga yangilanish bo'lib bormaydi)
+          gh release delete xclient-beta --repo "$GITHUB_REPOSITORY" --cleanup-tag -y || true
+          gh release create xclient-beta X-Client-Setup.exe --repo "$GITHUB_REPOSITORY" --target "${{ github.sha }}" --prerelease \
+            --title "X CLIENT $XC_VERSION (beta sinov)" --notes "Sinov versiyasi."
 
       - name: Panelga xabar (hamma klientlar yangilanadi)
         shell: bash
