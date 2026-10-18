@@ -181,6 +181,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash($ch . ': hamma o\'yinchilarga build ' . $b . ' beriladi ✓'); }
         go('?p=upd');
     }
+    if ($act === 'acc_msg' && pp('text') !== '') {
+        $l = strtolower($safeId(pp('login'))); $u = rd('users/' . $l, null);
+        if ($u) { if (empty($u['msgs'])) $u['msgs'] = array(); $u['msgs'][] = array('t' => time(), 'text' => mb_substr(pp('text'), 0, 500, 'UTF-8')); $u['msgs'] = array_slice($u['msgs'], -10); wr('users/' . $l, $u);
+            flash($l . ' ga xabar yuborildi - menyuni ochganda (1 daqiqa ichida) ko\'radi'); }
+        go(pp('back') === 'online' ? '?p=online' : '?p=accounts&q=' . urlencode(g('q')));
+    }
+    if ($act === 'wn_save') {
+        $items = array(); foreach (preg_split('/\r?\n/', (string)pp('items')) as $x) { $x = trim($x); if ($x !== '') $items[] = mb_substr($x, 0, 300, 'UTF-8'); }
+        wr('whatsnew', $items ? array('id' => substr(rnd(4), 0, 8), 'title' => mb_substr(pp('title'), 0, 80, 'UTF-8'), 'ver' => mb_substr(pp('ver'), 0, 40, 'UTF-8'), 'items' => array_slice($items, 0, 20), 't' => time()) : null);
+        flash($items ? '"Nima yangi" saqlandi - har o\'yinchida bir marta chiqadi' : '"Nima yangi" o\'chirildi'); go('?p=upd');
+    }
     if ($act === 'rel_check') { rel_latest('stable', true); rel_latest('beta', true); flash('GitHub tekshirildi'); go('?p=upd'); }
     if ($act === 'pack_all') {
         $id = strtolower(preg_replace('/[^a-z0-9_\-]/i', '', pp('id'))); $f = PACKS_DIR . '/' . $id . '/pack.json';
@@ -230,7 +241,7 @@ if ($P === 'installs' && g('csv')) {
 }
 
 /* ---------- sahifa ---------- */
-$NAV = array('dash' => array('Infopanel', '⌂'), 'players' => array("O'yinchilar", '☺'), 'installs' => array("O'rnatishlar", '↓'), 'accounts' => array('Akkauntlar', '✉'),
+$NAV = array('dash' => array('Infopanel', '⌂'), 'online' => array('Onlayn', '●'), 'players' => array("O'yinchilar", '☺'), 'installs' => array("O'rnatishlar", '↓'), 'accounts' => array('Akkauntlar', '✉'),
     'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
 $devCount = count((array)glob(XC_DIR . '/dev/*.php')); $ncCount = count((array)glob(XC_DIR . '/nc/*.php')); $accCount = count((array)glob(XC_DIR . '/users/*.php')); $repCount = count((array)glob(XC_DIR . '/reports/*.php'));
 $badge = array('players' => $devCount + $ncCount, 'installs' => $devCount, 'accounts' => $accCount, 'reports' => $repCount);
@@ -359,10 +370,32 @@ if ($P === 'accounts') {
         echo '<tr><td>' . ($on ? '<i class="dot"></i>' : '') . h($u['login']) . '</td><td>' . h($u['name']) . '</td><td class="mut">' . h($u['id']) . '</td><td>' . h(isset($u['email']) ? $u['email'] : '') . '</td>'
             . '<td>' . ((int)floor($u['xp'] / 1000) + 1) . '</td><td>' . round($u['xp'] / 60, 1) . ' soat</td><td>' . cnt(isset($u['devices']) ? $u['devices'] : null) . '</td><td>' . ago(isset($u['seen']) ? $u['seen'] : 0) . ($on && !empty($u['server']) ? '<br><small class="mut">' . h($u['server']) . '</small>' : '') . '</td>'
             . '<td>' . $f('acc_vip', !empty($u['vip']) ? 'VIP' : '—', 'tg' . (!empty($u['vip']) ? ' on' : ''), '') . '</td>'
-            . '<td class="r">' . $f('acc_pass', 'Parol tiklash', 'lnk', 'Yangi parol yaratilsinmi?') . ' ' . $f('acc_del', "O'chirish", 'lnk red', "Akkaunt butunlay o\\'chirilsinmi?") . '</td></tr>';
+            . '<td class="r">' . msg_form($u['login'], 'accounts') . ' ' . $f('acc_pass', 'Parol tiklash', 'lnk', 'Yangi parol yaratilsinmi?') . ' ' . $f('acc_del', "O'chirish", 'lnk red', "Akkaunt butunlay o\\'chirilsinmi?") . '</td></tr>';
     }
     if (!$rows) echo '<tr><td colspan="10" class="mut">Akkaunt topilmadi</td></tr>';
     echo '</table>' . $pg['html'] . '</div>';
+}
+
+/* ===== ONLAYN ===== */
+if ($P === 'online') {
+    $by = array(); $menu = array(); $n = 0;
+    foreach (all_of('users') as $u) {
+        if (empty($u['seen']) || time() - $u['seen'] >= 150) continue;
+        $n++;
+        if (!empty($u['server'])) $by[$u['server']][] = $u; else $menu[] = $u;
+    }
+    uasort($by, function ($a, $b) { return count($b) - count($a); });
+    $dev = 0; foreach ((array)glob(XC_DIR . '/dev/*.php') as $f) if (time() - filemtime($f) < 900) $dev++;
+    echo '<h1>Onlayn</h1><div class="cards"><div class="card xc"><b>' . $n . '</b><span class="ct">Akkaunt bilan onlayn</span></div><div class="card nc"><b>' . count($by) . '</b><span class="ct">Serverlarda</span></div><div class="card"><b>' . count($menu) . '</b><span class="ct">Menyuda</span></div><div class="card"><b>' . $dev . '</b><span class="ct">XCLauncher 15 daqiqada ochilgan</span></div></div>';
+    $row = function ($u) { return '<tr><td><i class="dot"></i>' . h($u['name']) . ' <small class="mut">' . h($u['login']) . '</small></td><td>' . (!empty($u['map']) ? h($u['map']) : '—') . '</td><td>' . ((int)floor($u['xp'] / 1000) + 1) . '-daraja</td><td class="r">' . msg_form($u['login'], 'online') . '</td></tr>'; };
+    foreach ($by as $srv => $us) {
+        echo '<div class="panel"><div class="ph">' . h($srv) . ' <span class="mut">· ' . count($us) . ' o\'yinchi</span> <a class="lnk r" href="steam://connect/' . h($srv) . '">Ulanish</a></div><table class="list"><tr><th>O\'yinchi</th><th>Xarita</th><th>Daraja</th><th></th></tr>';
+        foreach ($us as $u) echo $row($u);
+        echo '</table></div>';
+    }
+    if ($menu) { echo '<div class="panel"><div class="ph">Bosh menyuda</div><table class="list"><tr><th>O\'yinchi</th><th>Xarita</th><th>Daraja</th><th></th></tr>'; foreach ($menu as $u) echo $row($u); echo '</table></div>'; }
+    if (!$n) echo '<div class="panel mut">Hozir akkaunt bilan kirgan hech kim onlayn emas. (Akkauntsiz o\'ynayotganlar bu yerda ko\'rinmaydi.)</div>';
+    echo '<div class="mut small">Har daqiqada yangilanadi. Sahifani yangilang (F5).</div>';
 }
 
 /* ===== E'LONLAR ===== */
@@ -450,6 +483,11 @@ if ($P === 'upd') {
     }
     if (!$hist) echo '<tr><td colspan="5" class="mut">Hali yo\'q - GitHub\'da build bo\'lganda shu yerda paydo bo\'ladi</td></tr>';
     echo '</table></div><div class="panel"><div class="ph">O\'yinchilardagi versiyalar</div>' . pie($vers) . '</div></div>';
+    $wn = rd('whatsnew', null);
+    echo '<div class="panel"><div class="ph">"Nima yangi" oynasi</div><div class="mut small" style="margin-bottom:8px">Yangilanishdan keyin har o\'yinchining menyusida bir marta chiqadi. Har qatorga bitta yangilik. Bo\'sh qoldirib saqlasangiz - o\'chadi.</div>'
+        . '<form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="wn_save"><div class="row"><input name="title" value="' . h($wn ? $wn['title'] : '') . '" placeholder="Sarlavha (masalan: X CLIENT yangilandi!)"><input name="ver" value="' . h($wn ? $wn['ver'] : '') . '" placeholder="Versiya (masalan: v1.0.46)"></div>'
+        . '<textarea name="items" rows="7" placeholder="Menyu ovozlari qo\'shildi&#10;Pritsel eng kichik o\'lchami (x1)&#10;Kunlik vazifalar va XP">' . h($wn ? implode("\n", $wn['items']) : '') . '</textarea><button class="btn red">Saqlash va tarqatish</button>'
+        . ($wn ? ' <span class="mut small">Oxirgi: ' . dt($wn['t']) . '</span>' : '') . '</form></div>';
 }
 
 /* ===== TELEGRAM ===== */
@@ -485,6 +523,10 @@ echo '</div>';
 foot();
 
 /* ===================================================================== yordamchi chizish funksiyalari */
+function msg_form($login, $back) {
+    return '<form method="post" class="inl msgf" onsubmit="var t=prompt(\'' . h($login) . ' ga xabar (menyusida chiqadi):\');if(!t)return false;this.text.value=t;">' . csrf_in()
+        . '<input type="hidden" name="act" value="acc_msg"><input type="hidden" name="login" value="' . h($login) . '"><input type="hidden" name="back" value="' . $back . '"><input type="hidden" name="text" value=""><button class="lnk">✉ Xabar</button></form>';
+}
 function pager($total) {
     $pages = max(1, (int)ceil($total / PER_PAGE)); $cur = max(1, min($pages, (int)g('pg', 1)));
     $q = $_GET; $html = '<div class="pager"><span class="mut">Ko\'rsatilgan: ' . min($total, ($cur - 1) * PER_PAGE + 1) . '–' . min($total, $cur * PER_PAGE) . ' / ' . $total . '</span>';

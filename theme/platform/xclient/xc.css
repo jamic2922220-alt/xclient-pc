@@ -427,3 +427,20 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 .ann.warn .anh { color: #ffc46a; } .ann.promo .anh { color: #ff6a6a; }
 .ann .anx { position: absolute; right: -4px; top: -4px; width: 22px; height: 22px; line-height: 22px; text-align: center; color: #8f8590; cursor: pointer; letter-spacing: 0; }
 .ann .ant { font-size: 14px; line-height: 19px; color: #eadfd9; }
+
+/* kunlik vazifalar, "nima yangi", admin xabarlari */
+.mis .msr { position: relative; background: #1d171c; border: 1px solid #2a2026; padding: 12px 14px 12px; margin-bottom: 10px; }
+.mis .msr b { display: block; font-size: 15px; font-weight: 600; padding-right: 80px; }
+.mis .msr .gr { position: absolute; right: 14px; top: 12px; font-weight: 700; }
+.mis .msr .xpw { margin: 10px 0 4px; }
+.mis .msr small { color: #9a8e94; font-size: 12px; }
+.mis .msr .btn { position: absolute; right: 12px; bottom: 10px; margin: 0; height: 28px; line-height: 26px; }
+.mis .msr em { position: absolute; right: 14px; bottom: 12px; color: #4cd964; font-style: normal; font-size: 13px; }
+.mis .msr.got { opacity: .7; }
+.wn ul { margin: 8px 0 0; padding-left: 18px; }
+.wn li { margin: 0 0 9px; line-height: 1.45; font-size: 14px; }
+.amsg { background: #1d171c; border-left: 3px solid #ff3b3b; padding: 12px 14px; margin-bottom: 10px; font-size: 14px; line-height: 1.5; }
+.amsg small { display: block; margin-top: 6px; }
+.mis .msr .xpw { height: 6px; background: #2a2026; overflow: hidden; margin-right: 96px; }
+.mis .msr .xpw i { display: block; height: 100%; background: linear-gradient(90deg, #c4262e, #ff4d4d); }
+.mis .msr.got .xpw i { background: #3fa45b; }

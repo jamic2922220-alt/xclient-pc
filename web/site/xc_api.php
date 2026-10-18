@@ -144,6 +144,23 @@ function tg_notify($event, $text) {
         'content' => http_build_query(array('chat_id' => $c['tg_chat'], 'text' => $text, 'disable_web_page_preview' => 1)))));
     @file_get_contents('https://api.telegram.org/bot' . $c['tg_token'] . '/sendMessage', false, $ctx);
 }
+/* Kunlik vazifalar: sana bo'yicha hammaga bir xil 3 ta vazifa. Bajarilishini menyu o'yin tarixidan hisoblaydi,
+ * mukofot (XP) bu yerda kuniga bir marta beriladi. */
+function missions_today() {
+    @date_default_timezone_set('Asia/Tashkent');
+    $pool = array(
+        array('min', array(30, 45, 60), 60), array('kills', array(20, 35, 50), 70), array('servers', array(2, 3), 40),
+        array('xsrv', array(15, 30), 60), array('maps', array(2, 3, 4), 50), array('kd', array(10, 15), 80),
+    );
+    $seed = crc32(date('Y-m-d')) & 0x7fffffff; $out = array(); $used = array();
+    for ($i = 0; count($out) < 3 && $i < 50; $i++) {
+        $k = ($seed + $i * 7) % count($pool);
+        if (isset($used[$k])) continue;
+        $used[$k] = 1; $g = $pool[$k][1];
+        $out[] = array('id' => $pool[$k][0], 'goal' => $g[($seed >> 4) % count($g)], 'xp' => $pool[$k][2]);
+    }
+    return $out;
+}
 function clean_str($s, $n) { return substr(preg_replace('/[\x00-\x1f<>"\\\\]/u', '', (string)$s), 0, $n); }
 
 /* kunlik statistika (admin.php): xc_data/daily/YYYY-MM-DD.php  {d:{qurilma:1}, n:{yangi:1}, m:{menyu:1}} */
@@ -357,8 +374,33 @@ case 'ping':                                             // har daqiqada: onlayn
     $u['seen'] = $now;
     $inv = array();                                      // do'stlardan kelgan takliflar (bir marta beriladi)
     if (!empty($u['inv'])) { foreach ($u['inv'] as $i) if ($now - $i['t'] < 600) $inv[] = $i; $u['inv'] = array(); }
+    $msgs = !empty($u['msgs']) ? $u['msgs'] : array(); $u['msgs'] = array();   // admin yuborgan shaxsiy xabarlar (bir marta)
     save_user($u);
-    out(array('ok' => true, 'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL, 'inv' => $inv));
+    out(array('ok' => true, 'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL, 'inv' => $inv, 'msgs' => $msgs));
+
+case 'missions':                                         // bugungi vazifalar va qaysilari olingan
+    $u = auth();
+    $list = missions_today(); $day = date('Y-m-d');
+    out(array('ok' => true, 'day' => $day, 'list' => $list, 'done' => isset($u['mis'][$day]) ? array_keys($u['mis'][$day]) : array()));
+
+case 'mission_claim':                                    // vazifa mukofoti (kuniga bir marta)
+    lock();
+    $u = auth();
+    $list = missions_today(); $day = date('Y-m-d'); $id = p('id'); $m = null;
+    foreach ($list as $x) if ($x['id'] === $id) $m = $x;
+    if (!$m) fail('bad', 'Vazifa topilmadi');
+    if (!isset($u['mis']) || !is_array($u['mis'])) $u['mis'] = array();
+    foreach (array_keys($u['mis']) as $d) if ($d !== $day) unset($u['mis'][$d]);
+    if (!empty($u['mis'][$day][$id])) fail('done', 'Allaqachon olingan');
+    $u['mis'][$day][$id] = 1;
+    $u['xp'] = (int)$u['xp'] + $m['xp'];
+    if (!isset($u['wk']) || $u['wk'] !== week_id()) { $u['wk'] = week_id(); $u['wkxp'] = 0; }
+    $u['wkxp'] = (int)$u['wkxp'] + $m['xp'];
+    save_user($u);
+    out(array('ok' => true, 'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL, 'got' => $m['xp']));
+
+case 'whatsnew':                                         // "Nima yangi" oynasi (admin panelda yoziladi)
+    out(array('ok' => true, 'w' => rd('whatsnew', null)));
 
 case 'invite':                                           // do'stni o'zim o'ynayotgan serverga taklif qilish
     lock();

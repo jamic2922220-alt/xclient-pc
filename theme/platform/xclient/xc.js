@@ -321,6 +321,7 @@ function pingPresence() {
   api('ping', { server: CONNECTED || '', map: (s && s.map) || '' }, function (r) {
     if (r.ok && ME) { ME.xp = r.xp; ME.level = r.level; ME.lvlxp = r.lvlxp; renderBar(); }
     if (r.ok && r.inv && r.inv.length) showInvite(r.inv[r.inv.length - 1]);
+    if (r.ok && r.msgs && r.msgs.length) showAdminMsgs(r.msgs);
   });
 }
 
@@ -536,7 +537,7 @@ function pad(n) { return (n < 10 ? '0' : '') + n; }
 function onConnectEvt(addr) {
   addr = normIp(addr);
   if (!addr || addr === CONNECTED) return;
-  CONNECTED = addr; startGame(addr);
+  CONNECTED = addr; startGame(addr); musicSync();
   if (S.demo) setTimeout(function () {
     var d = new Date(), nm = 'xc_' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '_' + pad(d.getHours()) + pad(d.getMinutes());
     cmd('record ' + nm);
@@ -547,6 +548,7 @@ function onConnectEvt(addr) {
 }
 function onDisconnectEvt() {
   var was = CONNECTED;
+  setTimeout(musicSync, 500);
   if (CUR) { CUR.d = Math.round((now() - CUR.t) / 1000); persist(); }
   if (S.demo) cmd('stop');
   CONNECTED = ''; renderAll(); pingPresence();
@@ -968,6 +970,8 @@ var DEF = {
   xp: 'pro', xt: 0, xs: 'small', xc: '255 59 59', xtr: 0, xdyn: 0, xthick: 1, xgap: 3, xout: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
   rscale: 115, ropac: 100, rnames: 0, rhp: 0, rmode: 1, rround: 1, rrot: 1, rmap: 0.8,
   vmx: 0, vmy: 0, vmz: 0, vmshift: 0, bobst: 0, lagst: 0, camint: 0,
+  roll: 0, rollspd: 200, bobv: 0.13, bobl: 0.32, boblow: 8, bobcam: 1, lagsc: 1, lagsp: 8, fovlerp: 0, camsc: 1,
+  rtracks: 0, rfull: 1, rbg: 0, rallies: 1, rns: 0.8, rhs: 1, dtime: 6, drpc: 1, drpcs: 1, drpcj: 1, mmusic: 1,
   bob: 0.01, picmip: 0, detail: 1, shadows: 1, minm: 0, interp: 0.01, lw: 1, lc: 1, hisnd: 1, mixa: 0.1, loop: 0, saytm: 5, ngpos: 1
 };
 var S = null, E = null;
@@ -977,6 +981,10 @@ var CVARS = { sens: 'sensitivity', zoom: 'zoom_sensitivity_ratio', raw: 'm_rawin
   spray: 'cl_allowupload', mute: 'snd_mute_losefocus', vsync: 'gl_vsync', dyn: 'r_dynamic', cid: 'hud_centerid', radar: 'cl_radartype', dmax: 'hud_deathnotice_max', decals: 'mp_decals',
   ropac: 'hud_radar_opacity', rnames: 'hud_radar_names', rhp: 'hud_radar_health', rmode: 'hud_radar_mode', rround: 'hud_radar_round', rrot: 'hud_radar_rotate', rmap: 'hud_radar_map_scale',
   vmx: 'viewmodel_offset_x', vmy: 'viewmodel_offset_y', vmz: 'viewmodel_offset_z', vmshift: 'viewmodel_disable_shift', bobst: 'cl_bobstyle', lagst: 'viewmodel_lag_style',
+  roll: 'cl_rollangle', rollspd: 'cl_rollspeed', bobv: 'cl_bobamt_vert', bobl: 'cl_bobamt_lat', boblow: 'cl_bob_lower_amt', bobcam: 'cl_bob_camera',
+  lagsc: 'viewmodel_lag_scale', lagsp: 'viewmodel_lag_speed', fovlerp: 'fov_lerp', camsc: 'camera_movement_scale',
+  rtracks: 'hud_radar_tracks', rfull: 'hud_radar_fullmap', rbg: 'hud_radar_bg', rallies: 'hud_radar_allies', rns: 'hud_radar_name_size', rhs: 'hud_radar_health_size',
+  dtime: 'hud_deathnotice_time', drpc: 'cl_discordrpc', drpcs: 'cl_discordrpc_server', drpcj: 'cl_discordrpc_join',
   bob: 'cl_bob', picmip: 'gl_picmip', detail: 'r_detailtextures', shadows: 'cl_shadows', minm: 'cl_minmodels', interp: 'ex_interp', lw: 'cl_lw', lc: 'cl_lc',
   hisnd: 'hisound', mixa: '_snd_mixahead', loop: 'voice_loopback', saytm: 'hud_saytext_time', ngpos: 'net_graphpos' };
 function loadSettings() {
@@ -1030,6 +1038,10 @@ function settingsCmds(s) {
   c.push('hud_radar_mode ' + s.rmode, 'hud_radar_round ' + s.rround, 'hud_radar_rotate ' + s.rrot, 'hud_radar_map_scale ' + s.rmap);
   c.push('viewmodel_offset_x ' + s.vmx, 'viewmodel_offset_y ' + s.vmy, 'viewmodel_offset_z ' + s.vmz, 'viewmodel_disable_shift ' + s.vmshift,
     'cl_bobstyle ' + s.bobst, 'viewmodel_lag_style ' + s.lagst, 'camera_movement_interp ' + (s.camint ? 0.1 : 0));
+  c.push('cl_rollangle ' + s.roll, 'cl_rollspeed ' + s.rollspd, 'cl_bobamt_vert ' + s.bobv, 'cl_bobamt_lat ' + s.bobl, 'cl_bob_lower_amt ' + s.boblow, 'cl_bob_camera ' + s.bobcam,
+    'viewmodel_lag_scale ' + s.lagsc, 'viewmodel_lag_speed ' + s.lagsp, 'fov_lerp ' + s.fovlerp, 'camera_movement_scale ' + s.camsc);
+  c.push('hud_radar_tracks ' + s.rtracks, 'hud_radar_fullmap ' + s.rfull, 'hud_radar_bg ' + s.rbg, 'hud_radar_allies ' + s.rallies, 'hud_radar_name_size ' + s.rns,
+    'hud_radar_health_size ' + s.rhs, 'hud_deathnotice_time ' + s.dtime, 'cl_discordrpc ' + s.drpc, 'cl_discordrpc_server ' + s.drpcs, 'cl_discordrpc_join ' + s.drpcj);
   if (s.buykeys) each(BUY, function (b) { c.push('bind ' + b[0] + ' ' + q(b[1])); });
   return c;
 }
@@ -1136,7 +1148,10 @@ var STYLES = [
   ['rifle', 'st_rifle', 'st_rifle2', { sens: 2.2, zoom: 1, raw: 1, xt: 0, xs: 'small', xc: '50 250 50', xdyn: 0, interp: 0.01, lw: 1, lc: 1, bob: 0 }],
   ['awp', 'st_awp', 'st_awp2', { sens: 1.8, zoom: 0.85, raw: 1, xt: 3, xs: 'small', xc: '0 230 255', xdyn: 0, interp: 0.01, lw: 1, lc: 1, bob: 0 }],
   ['classic', 'st_classic', 'st_classic2', { sens: 2.5, zoom: 1.2, raw: 1, xt: 0, xs: 'medium', xc: '50 250 50', xdyn: 1, bob: 0.01 }],
-  ['new', 'st_new', 'st_new2', { sens: 3, zoom: 1.2, raw: 1, xt: 0, xs: 'medium', xc: '255 210 60', xdyn: 1, bob: 0.01 }]
+  ['new', 'st_new', 'st_new2', { sens: 3, zoom: 1.2, raw: 1, xt: 0, xs: 'medium', xc: '255 210 60', xdyn: 1, bob: 0.01 }],
+  ['entry', 'st_entry', 'st_entry2', { sens: 3.2, zoom: 1, raw: 1, filter: 0, xt: 0, xs: 'small', xc: '0 230 255', xdyn: 0, interp: 0.01, lw: 1, lc: 1, bob: 0, fastsw: 1 }],
+  ['low', 'st_low', 'st_low2', { sens: 1.4, zoom: 0.9, raw: 1, filter: 0, xt: 0, xs: 'extra_small', xc: '255 255 255', xdyn: 0, interp: 0.01, lw: 1, lc: 1, bob: 0 }],
+  ['csgo', 'st_csgo', 'st_csgo2', { bobst: 2, bobv: 0.13, bobl: 0.32, boblow: 8, lagst: 2, lagsc: 1, fovlerp: 0.2, camint: 1, vmx: 1, vmy: 0, vmz: -1, vmfov: 90, xt: 0, xs: 'small', xc: '50 250 50', xdyn: 0 }]
 ];
 function applyStyle(id) {
   each(STYLES, function (x) { if (x[0] === id) for (var k in x[3]) if (x[3].hasOwnProperty(k)) E[k] = x[3][k]; });
@@ -1357,7 +1372,8 @@ var PANES = {
       '<div class="mut" style="margin:10px 0 14px;font-size:12px">' + esc(T('g_net_note')) + '</div>' + tg('reconn', 'g_reconn') + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('g_server')) + '</div>' +
       tg('queue', 'g_queue', 'g_queue2') + tg('mp3off', 'g_mp3', 'g_mp32') + tg('hand', 'g_hand') + tg('fastsw', 'g_fast') +
-      '<div class="ph2 m">' + esc(T('g_demo')) + '</div>' + tg('demo', 'g_rec', 'g_rec2') + '</div>';
+      '<div class="ph2 m">' + esc(T('g_demo')) + '</div>' + tg('demo', 'g_rec', 'g_rec2') +
+      '<div class="ph2 m">Discord</div>' + tg('drpc', 'g_drpc', 'g_drpc2') + tg('drpcs', 'g_drpcs') + tg('drpcj', 'g_drpcj') + '</div>';
   },
   keys: function () {
     var rows = '';
@@ -1378,7 +1394,7 @@ var PANES = {
   },
   sound: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('so_title')) + '</div>' + sl('vol', 'so_vol', 0, 1, 0.05) + sl('mus', 'so_mus', 0, 1, 0.05) + sl('vscale', 'so_vscale', 0, 2, 0.1) + '</div>' +
-      '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('voice', 'so_voice') + tg('loop', 'so_loop') + tg('mute', 'so_mute') + tg('uisnd', 'so_ui', 'so_ui2') +
+      '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('voice', 'so_voice') + tg('loop', 'so_loop') + tg('mute', 'so_mute') + tg('uisnd', 'so_ui', 'so_ui2') + tg('mmusic', 'so_music', 'so_music2') +
       '<div class="ph2 m">' + esc(T('so_q')) + '</div>' + tg('hisnd', 'so_hi') + seg('mixa', 'so_mix', [[0.05, 'so_mix1'], [0.1, 'so_mix2']]) + '</div>';
   },
   video: function () {
@@ -1443,6 +1459,8 @@ var PANES = {
       (HW ? '<a class="btn" data-act="hwauto">' + esc(T('hw_auto')) + '</a>' : '') + '</div>' +
       '<div class="fr w"><div class="lb">' + esc(T('pr_prio')) + '<small>' + esc(T('pr_prio2')) + '</small></div><div class="tg' + (OPTS.prio ? ' on' : '') + '" data-otg="prio"><i></i></div></div></div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('pr_net')) + '</div>' +
+      '<div class="rowb"><b>' + esc(T('nt_title')) + '</b><small>' + esc(NETT_RUN ? T('nt_run') : NETT ? T('nt_res').replace('{p}', NETT.best).replace('{j}', NETT.jit).replace('{l}', NETT.loss) + ' \u2192 ' + T('n_' + NETT.rec.net) : T('nt_desc')) + '</small>' +
+        (NETT && !NETT_RUN ? '<a class="btn red" style="right:110px" data-act="netapply">' + esc(T('x_apply')) + '</a>' : '') + '<a class="btn" data-act="nettest">' + esc(T('nt_btn')) + '</a></div>' +
       seg('interp', 'pr_interp', [[0.01, '0.01'], [0.05, '0.05'], [0.1, '0.1']]) +
       '<div class="mut" style="margin:-6px 0 8px;font-size:12px">' + esc(T('pr_interp2')) + '</div>' +
       tg('lw', 'pr_lw', 'pr_lw2') + tg('lc', 'pr_lc') +
@@ -1452,7 +1470,7 @@ var PANES = {
   },
   hud: function () {
     var sub = '';
-    each([['main', 'hx_main'], ['snip', 'hx_snip'], ['wpn', 'hx_wpn'], ['misc', 'hx_misc']], function (o) { sub += '<a class="' + (HSUB === o[0] ? 'on' : '') + '" data-hsub="' + o[0] + '">' + esc(T(o[1])) + '</a>'; });
+    each([['main', 'hx_main'], ['snip', 'hx_snip'], ['wpn', 'hx_wpn'], ['cam', 'hx_cam'], ['radar', 'hx_radar'], ['misc', 'hx_misc']], function (o) { sub += '<a class="' + (HSUB === o[0] ? 'on' : '') + '" data-hsub="' + o[0] + '">' + esc(T(o[1])) + '</a>'; });
     sub = '<div class="hsub">' + sub + '</div>';
     if (HSUB === 'snip') {
       return sub + '<div class="pane l hp"><div class="ph2">' + esc(T('hx_snip')) + '</div><div id="xPrev" class="big"><canvas id="xScope" width="524" height="220"></canvas></div>' +
@@ -1463,23 +1481,39 @@ var PANES = {
       return sub + '<div class="pane l hp"><div class="ph2">' + esc(T('hw_pos')) + '</div>' +
         sl('vmx', 'hw_x', -10, 10, 0.5) + sl('vmy', 'hw_y', -10, 10, 0.5) + sl('vmz', 'hw_z', -10, 10, 0.5) + sl('vmfov', 'v_vm', 70, 100, 1) +
         tg('vmshift', 'hw_shift', 'hw_shift2') + '</div>' +
-        '<div class="pane r hp"><div class="ph2">' + esc(T('hw_anim')) + '</div>' +
-        seg('bobst', 'hw_bob', [[0, 'hw_bob0'], [1, 'hw_bob1'], [2, 'hw_bob2']]) + seg('bob', 'pr_bob', [[0.01, 'pr_bob1'], [0, 'pr_bob0']]) +
-        seg('lagst', 'hw_lag', [[0, 'hw_lag0'], [1, 'hw_lag1'], [2, 'hw_lag2']]) + tg('camint', 'hw_cam', 'hw_cam2') +
+        '<div class="pane r hp"><div class="ph2">' + esc(T('hw_lagt')) + '</div>' +
+        seg('lagst', 'hw_lag', [[0, 'hw_lag0'], [1, 'hw_lag1'], [2, 'hw_lag2']]) + sl('lagsc', 'hw_lagsc', 0, 3, 0.1) + sl('lagsp', 'hw_lagsp', 1, 20, 0.5) +
+        seg('bob', 'pr_bob', [[0.01, 'pr_bob1'], [0, 'pr_bob0']]) + tg('camint', 'hw_cam', 'hw_cam2') +
         '<div class="hfoot"><span class="mut">' + esc(T('hw_note')) + '</span><a class="btn" data-act="vmdef">' + esc(T('hx_std')) + '</a></div></div>';
+    }
+    if (HSUB === 'cam') {
+      return sub + '<div class="pane l hp"><div class="ph2">' + esc(T('hw_anim')) + '</div>' +
+        seg('bobst', 'hw_bob', [[0, 'hw_bob0'], [1, 'hw_bob1'], [2, 'hw_bob2']]) +
+        (Number(E.bobst) === 2 ? sl('bobv', 'hc_bobv', 0, 1, 0.01) + sl('bobl', 'hc_bobl', 0, 1, 0.01) + sl('boblow', 'hc_boblow', 0, 20, 0.5) :
+          '<div class="mut" style="margin:-4px 0 10px;font-size:12px">' + esc(T('hc_csgo')) + '</div>') +
+        tg('bobcam', 'hc_bobcam', 'hc_bobcam2') + '</div>' +
+        '<div class="pane r hp"><div class="ph2">' + esc(T('hc_title')) + '</div>' +
+        sl('roll', 'hc_roll', 0, 5, 0.5) + sl('rollspd', 'hc_rollspd', 50, 400, 10) + sl('fovlerp', 'hc_fov', 0, 0.5, 0.05) + sl('camsc', 'hc_camsc', 0, 2, 0.1) +
+        '<div class="mut" style="font-size:12px;margin-top:4px">' + esc(T('hc_roll2')) + '<br>' + esc(T('hc_fov2')) + '</div>' +
+        '<div class="hfoot"><span class="mut">' + esc(T('hw_note')) + '</span><a class="btn" data-act="camdef">' + esc(T('hx_std')) + '</a></div></div>';
+    }
+    if (HSUB === 'radar') {
+      return sub + '<div class="pane l hp"><div class="ph2">' + esc(T('hx_radar')) + '</div>' +
+        seg('rmode', 'h_rmode', [[1, 'h_rmode1'], [0, 'h_rmode0']]) +
+        sl('rscale', 'h_rscale', 50, 300, 5, null, '%') + sl('rmap', 'h_rmap', 0.25, 3, 0.05) + sl('ropac', 'h_ropac', 0, 100, 5, null, '%') +
+        seg('rbg', 'h_rbg', [[0, 'h_rbg0'], [1, 'h_rbg1']]) + tg('rround', 'h_rround') + '</div>' +
+        '<div class="pane r hp"><div class="ph2">&nbsp;</div>' +
+        tg('rrot', 'h_rrot') + tg('rfull', 'h_rfull') + tg('rtracks', 'h_rtracks') + tg('rallies', 'h_rallies', 'h_rallies2') +
+        tg('rnames', 'h_rnames') + sl('rns', 'h_rns', 0.6, 2, 0.1) + tg('rhp', 'h_rhp') + sl('rhs', 'h_rhs', 0.3, 4, 0.1) + '</div>';
     }
     if (HSUB === 'misc') {
       var hz = '';
       each([[100, '100%'], [150, '150%'], [200, '200%']], function (o) { hz += '<a class="' + ((OPTS.hud || 100) === o[0] ? 'on' : '') + '" data-ohud="' + o[0] + '">' + o[1] + '</a>'; });
-      return sub + '<div class="pane l hp"><div class="ph2">' + esc(T('hx_radar')) + '</div>' +
-        seg('rmode', 'h_rmode', [[1, 'h_rmode1'], [0, 'h_rmode0']]) +
-        sl('rscale', 'h_rscale', 50, 300, 5, null, '%') + sl('rmap', 'h_rmap', 0.25, 3, 0.05) + sl('ropac', 'h_ropac', 0, 100, 5, null, '%') +
-        tg('rround', 'h_rround') + tg('rrot', 'h_rrot') + tg('rnames', 'h_rnames') + '</div>' +
-        '<div class="pane r hp"><div class="ph2">' + esc(T('h_size')) + '</div>' +
+      return sub + '<div class="pane l hp"><div class="ph2">' + esc(T('h_size')) + '</div>' +
         '<div class="fr"><div class="lb">' + esc(T('h_size2')) + '</div><div class="ct2 seg">' + hz + '</div></div>' +
         '<div class="mut" style="margin:-6px 0 10px;font-size:12px">' + esc(PCID ? T('h_size3') : T('sy_nolaunch')) + '</div>' +
-        '<div class="ph2 m">' + esc(T('hx_kill')) + '</div>' + sl('dmax', 'h_kills', 3, 10, 1) + tg('hs', 'h_hs') +
-        '<div class="ph2 m">' + esc(T('h_title')) + '</div>' + tg('netg', 'h_net') + tg('cid', 'h_cid') + tg('nover', 'h_draw') + '</div>';
+        '<div class="ph2 m">' + esc(T('hx_kill')) + '</div>' + sl('dmax', 'h_kills', 3, 10, 1) + sl('dtime', 'h_dtime', 2, 15, 1, null, 's') + tg('hs', 'h_hs') + '</div>' +
+        '<div class="pane r hp"><div class="ph2">' + esc(T('h_title')) + '</div>' + tg('netg', 'h_net') + tg('cid', 'h_cid') + tg('nover', 'h_draw') + '</div>';
     }
     var pal = ['255 59 59', '50 250 50', '0 230 255', '255 210 60', '255 80 220', '255 255 255'];
     if (pal.indexOf(E.xc) < 0 && /^\d+ \d+ \d+$/.test(E.xc)) pal.push(E.xc);
@@ -1719,6 +1753,9 @@ function act(a) {
   if (a === 'quick' || a === 'play') { closeModal(); return quick(); }
   if (a === 'servers') return openServers('internet');
   if (a === 'friends') return openFriends();
+  if (a === 'missions') return openMissions();
+  if (a === 'nettest') return netTest();
+  if (a === 'netapply') { if (!NETT) return; E.net = NETT.rec.net; E.interp = NETT.rec.interp; showSetTab('pro'); return toast(T('nt_applied'), 4000); }
   if (a === 'weekall') return openServers('history');
   if (a === 'profile') return ME ? openSettings('account') : openLogin();
   if (a === 'login') return openLogin();
@@ -1792,7 +1829,8 @@ function act(a) {
     E.detail = 0; E.shadows = 0; E.dyn = 0; E.vsync = 0; if (E.fps < 200) E.fps = 200;
     showSetTab('pro'); return toast(T('pr_fpsok'), 5000);
   }
-  if (a === 'vmdef') { each(['vmx', 'vmy', 'vmz', 'vmshift', 'bobst', 'lagst', 'camint', 'vmfov', 'bob'], function (k) { E[k] = DEF[k]; }); return showSetTab('hud'); }
+  if (a === 'vmdef') { each(['vmx', 'vmy', 'vmz', 'vmshift', 'lagst', 'lagsc', 'lagsp', 'camint', 'vmfov', 'bob'], function (k) { E[k] = DEF[k]; }); return showSetTab('hud'); }
+  if (a === 'camdef') { each(['bobst', 'bobv', 'bobl', 'boblow', 'bobcam', 'roll', 'rollspd', 'fovlerp', 'camsc'], function (k) { E[k] = DEF[k]; }); return showSetTab('hud'); }
   if (a === 'xdef') { each(['xp', 'xt', 'xs', 'xc', 'xtr', 'xdyn', 'xthick', 'xgap', 'xout'], function (k) { E[k] = DEF[k]; }); return showSetTab('hud'); }
   if (a === 'xpick') return ask(T('hx_colask'), function (v) {
     v = String(v || '').replace(/^\s+|\s+$/g, '');
@@ -1814,12 +1852,112 @@ function act(a) {
   if (a === 'defaults') { var keep = E.name, tag = E.tag; E = copy(DEF); E.name = keep; E.tag = tag; return showSetTab(setTab); }
   if (a === 'save') {
     var nm = $('fName'); if (nm) E.name = nm.value.replace(/["\\;]/g, '').slice(0, 28);
-    S = copy(E); DB.set = S; persist(); applySettings(S); closeModal(); renderBar(); cloudSave();
+    S = copy(E); DB.set = S; persist(); applySettings(S); closeModal(); renderBar(); cloudSave(); setTimeout(musicSync, 300);
     setTimeout(function () { verifySettings(S); }, 700);
   }
 }
 
 /* ============================================================ hodisalar */
+/* ---- menyu musiqasi: CS ning o'z menyu kuyi (media/gamestartup.mp3), faqat serverda bo'lmaganda ---- */
+var MUSIC_ON = false;
+function musicSync() {
+  var want = !!(S && S.mmusic && !CONNECTED && hasApi());
+  if (want && !MUSIC_ON) { cmd('mp3volume ' + (S.mp3off ? 0 : S.mus)); cmd('mp3 loop media/gamestartup.mp3'); MUSIC_ON = true; }
+  else if (!want && MUSIC_ON) { cmd('mp3 stop'); MUSIC_ON = false; }
+}
+
+/* ---- internet tekshiruvi: bir nechta serverga 3 martadan so'rov - ping, tebranish, yo'qotish -> mos rate ---- */
+var NETT = null, NETT_RUN = false;
+function netTest() {
+  if (NETT_RUN) return;
+  if (CONNECTED) return toast(T('nt_ingame'), 4500);
+  if (!hasMM()) return toast(T('nt_na'), 4000);
+  var ips = [], i, j, res = [], jobs = [];
+  each(PINNED.concat(TOP), function (ip) { if (ips.length < 5 && ips.indexOf(ip) < 0) ips.push(ip); });
+  for (j = 0; j < 3; j++) for (i = 0; i < ips.length; i++) jobs.push(ips[i]);
+  NETT_RUN = true; NETT = null; showSetTab('pro'); toast(T('nt_run'), 5000);
+  function next() {
+    if (!jobs.length) return finish();
+    var ip = jobs.shift(), t0 = now(), done = false;
+    var tm = setTimeout(function () { if (done) return; done = true; res.push(-1); setTimeout(next, 120); }, 2500);
+    try {
+      NC.matchmaking.getServerInfo(ip).then(function () { if (done) return; done = true; clearTimeout(tm); res.push(now() - t0); setTimeout(next, 120); },
+        function () { if (done) return; done = true; clearTimeout(tm); res.push(-1); setTimeout(next, 120); });
+    } catch (e) { done = true; clearTimeout(tm); res.push(-1); setTimeout(next, 120); }
+  }
+  function finish() {
+    var ok = [], sum = 0, jit = 0, k;
+    for (k = 0; k < res.length; k++) if (res[k] >= 0) { ok.push(res[k]); sum += res[k]; }
+    var loss = res.length ? Math.round((res.length - ok.length) * 100 / res.length) : 100;
+    var avg = ok.length ? Math.round(sum / ok.length) : 0, best = ok.length ? Math.min.apply(null, ok) : 0;
+    for (k = 0; k < ok.length; k++) jit += Math.abs(ok[k] - avg);
+    jit = ok.length ? Math.round(jit / ok.length) : 0;
+    var rec = (!ok.length || loss > 10 || best > 150) ? { net: 'slow', interp: 0.1 } : (loss > 2 || jit > 30 || best > 80) ? { net: 'mid', interp: 0.05 } : { net: 'fast', interp: 0.01 };
+    NETT = { best: best, avg: avg, jit: jit, loss: loss, rec: rec }; NETT_RUN = false;
+    if (curModal === 'mdSettings' && setTab === 'pro') showSetTab('pro');
+    toast(T('nt_done').replace('{p}', best).replace('{l}', loss), 5000);
+  }
+  next();
+}
+
+/* ---- "Nima yangi": admin panelda yozilgan yangiliklar - har yangisini bir marta ko'rsatamiz ---- */
+function loadWhatsNew() {
+  api('whatsnew', {}, function (r) {
+    if (!r.ok || !r.w || !r.w.id || DB.wnSeen === r.w.id || !r.w.items || !r.w.items.length) return;
+    if (curModal) return setTimeout(loadWhatsNew, 30000);              // boshqa oyna ochiq - keyinroq
+    var h = '<div class="wn">' + (r.w.ver ? '<div class="mut">' + esc(r.w.ver) + '</div>' : '') + '<ul>';
+    each(r.w.items, function (x) { h += '<li>' + esc(x) + '</li>'; });
+    openSide('whatsnew', r.w.title || T('wn_title'), h + '</ul></div>');
+    DB.wnSeen = r.w.id; persist();
+  });
+}
+
+/* ---- kunlik vazifalar: ro'yxat serverdan, bajarilishi o'yin tarixidan ---- */
+var MIS = null;
+function misProgress(m) {
+  var today = new Date().toDateString(), v = 0, set = {}, k = 0, x = 0;
+  each(DB.hist || [], function (h) {
+    if (new Date(h.t).toDateString() !== today) return;
+    var d = h.d || 0;
+    if (m.id === 'min') v += d / 60;
+    else if (m.id === 'kills') v += h.k || 0;
+    else if (m.id === 'servers') set[h.ip] = 1;
+    else if (m.id === 'maps') { if (h.map) set[h.map] = 1; }
+    else if (m.id === 'xsrv') { if (PINNED.indexOf(h.ip) >= 0 || /x\s*client/i.test(h.name || '')) v += d / 60; }
+    else if (m.id === 'kd') { k += h.k || 0; x += h.x || 0; }
+  });
+  if (m.id === 'servers' || m.id === 'maps') { for (var s2 in set) if (set.hasOwnProperty(s2)) v++; }
+  if (m.id === 'kd') v = (x === 0 || k / x >= 1) ? k : 0;           // K/D 1 dan yuqori bo'lgandagina hisoblanadi
+  return Math.min(m.goal, Math.floor(v));
+}
+function openMissions() {
+  if (!ME) return openSide('missions', T('ms_title'), '<div class="empty">' + esc(T('ms_login')) + '</div><a class="btn red" data-act="login" style="margin-top:12px">' + esc(T('a_login')) + '</a>');
+  api('missions', {}, function (r) {
+    if (!r.ok) return toast(r.msg || 'Xato');
+    MIS = r; renderMissions();
+  });
+}
+function renderMissions() {
+  if (!MIS) return;
+  var h = '<div class="mis">';
+  each(MIS.list, function (m) {
+    var p = misProgress(m), done = MIS.done.indexOf(m.id) >= 0, full = p >= m.goal;
+    h += '<div class="msr' + (done ? ' got' : '') + '"><b>' + esc(T('ms_' + m.id).replace('{n}', m.goal)) + '</b><span class="gr">+' + m.xp + ' XP</span>' +
+      '<div class="xpw"><i style="width:' + Math.round(p * 100 / m.goal) + '%"></i></div><small>' + p + ' / ' + m.goal + '</small>' +
+      (done ? '<em>\u2713 ' + esc(T('ms_got')) + '</em>' : full ? '<a class="btn red" data-misclaim="' + esc(m.id) + '">' + esc(T('ms_claim')) + '</a>' : '') + '</div>';
+  });
+  h += '<div class="mut" style="font-size:12px;margin-top:10px">' + esc(T('ms_note')) + '</div></div>';
+  openSide('missions', T('ms_title'), h);
+}
+
+/* ---- admin yuborgan shaxsiy xabarlar ---- */
+function showAdminMsgs(list) {
+  if (!list || !list.length) return;
+  var h = '';
+  each(list, function (m) { h += '<div class="amsg"><div>' + esc(m.text) + '</div><small class="mut">' + esc(fmtTime(m.t * 1000)) + '</small></div>'; });
+  openSide('amsg', T('am_title'), h);
+}
+
 /* ---- menyu ovozlari: o'yin sound/xclient/*.wav ni chaladi (XCLauncher.exe ularni o'yin papkasiga qo'yadi) ---- */
 var SFX_ATTR = ['data-act', 'data-tab', 'data-hsub', 'data-seg', 'data-tg', 'data-otg', 'data-ohud', 'data-dd', 'data-ddv', 'data-xchk', 'data-pack',
   'data-sort', 'data-flt', 'data-theme', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo'];
@@ -1860,6 +1998,15 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-inv'))) { api('invite', { to: el.getAttribute('data-inv'), ip: CONNECTED }, function (r) { toast(r.ok ? T('iv_sent') : (r.msg || 'Xato')); }); return; }
   if ((el = closest(t, 'data-frdel'))) { api('friend_del', { login: el.getAttribute('data-frdel') }, function () { loadFriends(); }); return; }
   if ((el = closest(t, 'data-dbtg'))) { var dk = el.getAttribute('data-dbtg'); var cur = dk === 'autosave' ? !!DB[dk] : DB[dk] !== 0; DB[dk] = cur ? 0 : 1; persist(); if (dk === 'fx') { FX.off = 0; FX.slow = 0; sparks(); } if (dk === 'autosave') $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local')); el.className = 'tg' + (DB[dk] ? ' on' : ''); return; }
+  if ((el = closest(t, 'data-misclaim'))) {
+    var mid = el.getAttribute('data-misclaim');
+    api('mission_claim', { id: mid }, function (r) {
+      if (!r.ok) return toast(r.msg || 'Xato');
+      if (ME) { ME.xp = r.xp; ME.level = r.level; ME.lvlxp = r.lvlxp; renderBar(); }
+      MIS.done.push(mid); renderMissions(); toast(T('ms_ok').replace('{n}', r.got), 4000);
+    });
+    return;
+  }
   if ((el = closest(t, 'data-ohud'))) { OPTS.hud = Number(el.getAttribute('data-ohud')); saveOpts(T('h_size4')); showSetTab('hud'); return; }
   if ((el = closest(t, 'data-otg'))) { var ok2 = el.getAttribute('data-otg'); OPTS[ok2] = OPTS[ok2] ? 0 : 1; el.className = 'tg' + (OPTS[ok2] ? ' on' : ''); saveOpts(); return; }
   if ((el = closest(t, 'data-tg'))) { var k = el.getAttribute('data-tg'); E[k] = E[k] ? 0 : 1; el.className = 'tg' + (E[k] ? ' on' : ''); if (setTab === 'hud') { drawXhair(); var cd = $('xCode'); if (cd) cd.value = xcode(E); } return; }
@@ -1989,6 +2136,8 @@ step('window.onresize = fit;', function () { window.onresize = fit; });
 step('fxLoop();', function () { fxLoop(); });
 step('beat', function () { if (DB.beat !== new Date().toDateString()) api('beat', { nick: MYNAME || (S && S.name) || '', res: (screen.width || 0) + 'x' + (screen.height || 0), mv: VERSION }, function (r) { if (r.ok) { DB.beat = new Date().toDateString(); persist(); } }); });   // statistika: menyu ochildi
 step('loadAnn', function () { loadAnn(); });
+step('music', function () { setTimeout(musicSync, 3000); });
+step('whatsnew', function () { setTimeout(loadWhatsNew, 4000); });
 step('applyTheme', function () { if (DB.theme && DB.theme !== 'red') applyTheme(DB.theme); });
 step('detectLang();', function () { detectLang(); });
 step('loadMaster();', function () { loadMaster(); });
