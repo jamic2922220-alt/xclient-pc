@@ -83,6 +83,13 @@ jobs:
           mkdir -p full && cp -r dist/. full/ && rm -rf full/.git full/.gitignore full/manifest.txt full/XClient.exe
           7z a -tzip X-Client-CS16.zip ./full/* > /dev/null
 
+      - name: O'rnatuvchi (X-Client-Setup.exe)
+        shell: cmd
+        run: |
+          copy /Y own\installer.nsi . && copy /Y own\xclient.ico .
+          if not exist "%ProgramFiles(x86)%\NSIS\makensis.exe" choco install nsis -y --no-progress
+          "%ProgramFiles(x86)%\NSIS\makensis.exe" /V2 /DSRC=full /DVER=%XC_VERSION% installer.nsi
+
       - name: Panelga xabar (hamma klientlar yangilanadi)
         shell: bash
         env:
@@ -105,13 +112,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # doimiy havola: https://github.com/<repo>/releases/download/xclient-latest/X-Client-CS16.zip
+          # doimiy havolalar: .../releases/download/xclient-latest/X-Client-Setup.exe va X-Client-CS16.zip
           gh release delete xclient-latest --repo "$GITHUB_REPOSITORY" --cleanup-tag -y || true
-          gh release create xclient-latest X-Client-CS16.zip --repo "$GITHUB_REPOSITORY" --target "${{ github.sha }}" \
-            --title "X CLIENT $XC_VERSION" --notes "X CLIENT $XC_VERSION - CS 1.6 uchun launcher. Yuklab oling, oching va XCLauncher.exe ni ishga tushiring."
+          gh release create xclient-latest X-Client-Setup.exe X-Client-CS16.zip --repo "$GITHUB_REPOSITORY" --target "${{ github.sha }}" \
+            --title "X CLIENT $XC_VERSION" --notes "X CLIENT $XC_VERSION - CS 1.6 uchun launcher. X-Client-Setup.exe ni yuklab o'rnating (yoki zipni oching va XCLauncher.exe ni ishga tushiring)."
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: X-Client-build${{ github.run_number }}
-          path: X-Client-CS16.zip
+          path: |
+            X-Client-CS16.zip
+            X-Client-Setup.exe

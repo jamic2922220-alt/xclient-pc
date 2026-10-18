@@ -564,8 +564,8 @@ case 'opts_done':
     $o = rd('dev/' . $d, array());
     if (!$o) out(array('ok' => true, 'o' => null));
     if ($claim) {
-        if (!empty($o['kc'])) out(array('ok' => true, 'o' => null));   // kalit allaqachon olingan - begona menyuga bermaymiz
-        $o['kc'] = 1; wr('dev/' . $d, $o);
+        if (!empty($o['kc'])) $claim = false;   // kalit allaqachon olingan: kalitni qayta bermaymiz, lekin sozlamalar ochiladi (dev_ok - shu IP dan 10 daqiqa ichida launcher)
+        else { $o['kc'] = 1; wr('dev/' . $d, $o); }
     } elseif (!dev_ok($d, $o)) fail('nolaunch', 'XCLauncher.exe topilmadi');
     if ($a === 'opts_set') {
         $in = json_decode(p('o'), true);

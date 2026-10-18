@@ -225,6 +225,7 @@ function fxLoop() {
 function qparam(k) { var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search || ''); return m ? decodeURIComponent(m[1]) : ''; }
 var PCID = /^[a-z0-9]{8,40}$/.test(qparam('xc')) ? qparam('xc') : '';   // kompyuter id (DB.pcid) va uning maxfiy kaliti (DB.pck) load() dan keyin olinadi
 var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '', hud: 100 }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
+var OPTS_TRY = 0;
 function loadOpts() {
   // id berilmasa server shu IP dan oxirgi ulangan XClient.exe ni topadi
   if (!PCID && DB.pcid && DB.pck) PCID = DB.pcid;
@@ -1346,6 +1347,7 @@ function openSettings(tab) {
 function showSetTab(tab) {
   var nm = $('fName'); if (nm && E) E.name = nm.value.replace(/["\\;]/g, '').slice(0, 28);
   setTab = tab;
+  if (!PCID && (tab === 'cont' || tab === 'pro' || tab === 'system') && now() - OPTS_TRY > 5000) { OPTS_TRY = now(); loadOpts(); }   // launcher keyinroq ochilgan bo'lsa - qayta topamiz
   each(document.querySelectorAll('#setTabs a'), function (a) { a.className = a.getAttribute('data-tab') === tab ? 'on' : ''; });
   $('setBody').innerHTML = (PANES[tab] || PANES.game)();
   $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local'));
