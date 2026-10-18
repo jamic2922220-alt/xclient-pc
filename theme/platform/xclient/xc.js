@@ -46,6 +46,12 @@ var DEBUG = /[?&]debug=1/.test(location.search);
 function dbg(m) { if (!DEBUG) return; var d = $('dbg'); d.style.display = 'block'; d.innerHTML = esc(m) + '<br>' + d.innerHTML.slice(0, 2000); }
 
 var NC = window.nextclient || null;
+/* Oddiy brauzerda (o'yindan tashqarida) ochilsa - yuklab olish sahifasiga. O'yin brauzeri CEF1 (Chrome 17), ?menu - tekshirish uchun */
+(function () {
+  var ua = navigator.userAgent || '', m = /Chrome\/(\d+)/.exec(ua);
+  var modern = m ? +m[1] >= 50 : /Firefox|Safari|Edge/.test(ua);
+  if (!NC && modern && !/[?#&]menu/.test(location.href)) location.replace('yuklab.html');
+})();
 function hasApi() { return !!(NC && typeof NC.exec === 'function'); }
 function hasMM() { return !!(NC && NC.matchmaking && NC.matchmaking.getServerInfo); }
 function canRead() { return !!(NC && typeof NC.getCvarValue === 'function'); }
