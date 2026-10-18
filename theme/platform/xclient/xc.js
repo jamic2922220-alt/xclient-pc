@@ -544,23 +544,36 @@ function startGame(ip) {
   persist(); renderSoon();
 }
 function pad(n) { return (n < 10 ? '0' : '') + n; }
-function onConnectEvt(addr) {
+/* Demo yozish: o'yinchi serverga to'liq kirgach ('putinserver') boshlanadi - ulanish/yuklanish paytida
+ * "record" ishlamaydi. Ro'yxatga faqat konsolda "Recording to ..." chiqqanda qo'shiladi (konsol API bo'lmasa - darhol). */
+var REC = '', REC_TM = 0;
+function demoName() { var d = new Date(); return 'xc_' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '_' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds()); }
+function demoAdd(nm) {
+  if (!nm || (DB.demos && DB.demos[0] && DB.demos[0].n === nm)) return;
+  var sv = srv(CONNECTED);
+  DB.demos = [{ n: nm, s: sv.name || CONNECTED, m: sv.map || '', t: now() }].concat(DB.demos || []).slice(0, 30); persist();
+}
+function startRecord(delay) {
+  clearTimeout(REC_TM);
+  REC_TM = setTimeout(function () {
+    if (!S.demo || !CONNECTED || REC) return;
+    REC = demoName();
+    cmd('record ' + REC);
+    var nm = REC; setTimeout(function () { if (REC === nm) demoAdd(nm); }, 8000);   // konsol javobi kelmasa ham (xato yo'q bo'lsa) ro'yxatga
+  }, delay);
+}
+function stopRecord() { clearTimeout(REC_TM); if (REC) { cmd('stop'); REC = ''; } }
+function onConnectEvt(addr, inGame) {
   addr = normIp(addr);
-  if (!addr || addr === CONNECTED) return;
-  CONNECTED = addr; startGame(addr); musicSync();
-  if (S.demo) setTimeout(function () {
-    var d = new Date(), nm = 'xc_' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '_' + pad(d.getHours()) + pad(d.getMinutes());
-    cmd('record ' + nm);
-    var sv = srv(addr);
-    DB.demos = [{ n: nm, s: sv.name || addr, m: sv.map || '', t: now() }].concat(DB.demos || []).slice(0, 30); persist();
-  }, 4000);
-  pingPresence(); renderAll();
+  if (!addr) return;
+  if (addr !== CONNECTED) { CONNECTED = addr; startGame(addr); musicSync(); pingPresence(); renderAll(); }
+  if (S.demo) startRecord(inGame ? 1500 : 25000);   // 'connect' dan keyin 'putinserver' kelmasa ham 25 soniyadan so'ng urinamiz
 }
 function onDisconnectEvt() {
   var was = CONNECTED;
   setTimeout(musicSync, 500);
   if (CUR) { CUR.d = Math.round((now() - CUR.t) / 1000); persist(); }
-  if (S.demo) cmd('stop');
+  stopRecord();
   CONNECTED = ''; renderAll(); pingPresence();
   // o'yinchi o'zi menyudan chiqmagan bo'lsa (menyu yopiq) - qayta ulanamiz
   var shown = false;
@@ -572,6 +585,10 @@ var MYNAME = '', CONLOG = [];
 function onConsole(txt) {
   txt = String(txt || '');
   CONLOG.push(txt); if (CONLOG.length > 400) CONLOG.shift();
+  var r = /Recording to (\S+?)(?:\.dem)?\.?\s*$/i.exec(txt);
+  if (r && REC && r[1].indexOf(REC) === 0) demoAdd(REC);
+  else if (REC && /(can'?t|cannot|not) record|must be connected/i.test(txt)) { REC = ''; if (S.demo && CONNECTED) startRecord(10000); }   // erta bo'ldi - keyinroq qayta
+  if (/\b(wrote|writing|saved)\b.*\.(bmp|tga|jpg|png)\b/i.test(txt)) toast(T('sh_saved'), 2500);   // F5: skrinshot saqlandi
   if (!CUR || !MYNAME) return;
   var m = /^(.+?) killed (.+?) with ([\w\-]+)/.exec(txt.replace(/^\s+/, ''));
   if (!m) return;
@@ -2165,11 +2182,11 @@ if (NC) {
   try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('show', function () { each(TOP.concat(PINNED), function (ip) { query(ip); }); loadFriends(); }); } catch (e) {}
   try {
     if (NC.addEventListener) {
-      NC.addEventListener('connect', function (e) { onConnectEvt(e && e.detail && e.detail.address); });
-      NC.addEventListener('putinserver', function (e) { onConnectEvt(e && e.detail && e.detail.address); });
+      NC.addEventListener('connect', function (e) { onConnectEvt(e && e.detail && e.detail.address, false); });
+      NC.addEventListener('putinserver', function (e) { onConnectEvt(e && e.detail && e.detail.address, true); });
       NC.addEventListener('disconnect', function () { onDisconnectEvt(); });
     }
-    if (NC.connectedHost) onConnectEvt(NC.connectedHost);
+    if (NC.connectedHost) onConnectEvt(NC.connectedHost, true);
   } catch (e) {}
   try {
     if (NC.console) {
