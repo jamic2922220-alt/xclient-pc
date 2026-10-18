@@ -1427,6 +1427,12 @@ static void run_game(void)
     unsigned w = 0, h = 0;
     if (o_res[0] && sscanf(o_res, "%ux%u", &w, &h) == 2) _snwprintf(vid, 64, L" -width %u -height %u%s", w, h, o_win ? L" -window" : L" -full");
     else if (o_win) lstrcpyW(vid, L" -window");
+    else {
+        /* "Avto": o'yin monitorning haqiqiy o'lchamida ochiladi (Windows masshtabi 125%/150% bo'lsa ham - EnumDisplaySettings) */
+        DEVMODEW dm; ZeroMemory(&dm, sizeof(dm)); dm.dmSize = sizeof(dm);
+        if (EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &dm) && dm.dmPelsWidth >= 640 && dm.dmPelsHeight >= 480)
+            _snwprintf(vid, 64, L" -width %lu -height %lu -full", dm.dmPelsWidth, dm.dmPelsHeight);
+    }
     _snwprintf(cmd, 1024, L"\"%s\" -game cstrike%s -noforcemparms -noforcemaccel +exec xclient_launcher.cfg", exe, vid);
     STARTUPINFOW si = { sizeof(si) };
     PROCESS_INFORMATION pi;
