@@ -1,2 +1,0 @@
-<?php exit; ?>
-{"build":45,"version":"1.0.45","sha":"46fd35fd7da7fc25b0b16860a4435e236515beba","base":"https:\/\/raw.githubusercontent.com\/jamic2922220-alt\/xclient-pc\/46fd35fd7da7fc25b0b16860a4435e236515beba","chk":1792313147,"date":1792310567}
