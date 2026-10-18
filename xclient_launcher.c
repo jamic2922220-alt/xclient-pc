@@ -1435,6 +1435,12 @@ static void run_game(void)
         if (o_prio) SetPriorityClass(pi.hProcess, HIGH_PRIORITY_CLASS);   /* "O'yinni tezlashtirish" */
         CloseHandle(pi.hThread);
         /* guard_theme olib tashlandi: nDirect fayllarini qayta yozish har ochilishda yangilanishga sabab bo'lardi */
+        /* O'yin yopilgach skrinshotlarni (F5) darhol galereyaga yuklaymiz - keyingi ishga tushishni kutmasdan.
+         * fetch_opts qayta: menyuda o'yin paytida yoqilgan "galereyaga yuklash" ham hisobga olinadi va
+         * sayt shu kompyuterni yana taniydi (shot_up 30 daqiqalik IP tekshiruvi). */
+        WaitForSingleObject(pi.hProcess, INFINITE);
+        fetch_opts();
+        if (o_ok && o_shots) upload_shots();
         CloseHandle(pi.hProcess);
     }
 }
