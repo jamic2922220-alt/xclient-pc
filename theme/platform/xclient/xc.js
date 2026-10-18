@@ -136,7 +136,17 @@ function fit() {
   var h = window.innerHeight || document.documentElement.clientHeight || 900;
   var z = Math.min(w / 1600, h / 900);
   var app = $('app');
-  app.style.zoom = z;
+  /* Kichik ekranda (z < 1) "zoom" bilan o'yin brauzeri matnni kichraytirmaydi (eng kichik shrift chegarasi) -
+   * yozuvlar kattalashib, oynadan chiqib ketardi. Shuning uchun kichraytirish transform bilan: hammasi bir xil
+   * nisbatda kichrayadi. Katta ekranda (z >= 1) zoom - matn tiniq qoladi. */
+  if (z < 1) {
+    app.style.zoom = 1;
+    app.style.webkitTransformOrigin = '0 0'; app.style.transformOrigin = '0 0';
+    app.style.webkitTransform = 'scale(' + z + ')'; app.style.transform = 'scale(' + z + ')';
+  } else {
+    app.style.webkitTransform = ''; app.style.transform = '';
+    app.style.zoom = z;
+  }
   var W = Math.round(w / z), H = Math.round(h / z);
   app.style.width = W + 'px'; app.style.height = H + 'px';
   each(document.querySelectorAll('.modal'), function (m) { m.style.width = W + 'px'; m.style.height = H + 'px'; });
