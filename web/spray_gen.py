@@ -2,8 +2,10 @@
 # Ishlatish: python3 spray_gen.py logo.png spray_default.wad [ko'rinish.png]
 import struct, sys
 from PIL import Image, ImageFilter, ImageEnhance
-W, H, CUT = 96, 96, 140                    # 96x96: hamma serverlarda ishlaydi (16 KB dan katta spray rad etiladi)
+W, H, CUT = 64, 64, 140                    # 64x64: ReHLDS serverlari kattaroq spreyni rad etadi (sv_rehlds_allow_large_sprays 0)
+TOP = float(sys.argv[4]) if len(sys.argv) > 4 else 1.0   # rasmning yuqori qismi (masalan 0.71 - faqat X, yozuvsiz)
 src = Image.open(sys.argv[1]).convert('RGBA')
+src = src.crop((0, 0, src.width, int(src.height * TOP)))
 r, g, b, a = src.split()
 a = a.point(lambda v: 255 if v >= CUT else 0)
 src = Image.merge('RGBA', (r, g, b, a)).crop(a.getbbox())
@@ -20,7 +22,7 @@ def level(f):
         for x in range(tw):
             av = ap[x, y]
             if av: px[x, y] = tuple(min(255, c * 255 // av) for c in px[x, y])
-    rgb = rgb.filter(ImageFilter.UnsharpMask(radius=1, percent=120, threshold=1))
+    rgb = rgb.filter(ImageFilter.UnsharpMask(radius=1, percent=160, threshold=1))
     rgb = ImageEnhance.Color(rgb).enhance(1.15)
     out = Image.new('RGB', (w, h)); msk = Image.new('L', (w, h), 0)
     ox, oy = (w - tw) // 2, (h - th) // 2
@@ -44,7 +46,7 @@ for m in mips: offs.append(o); o += len(m)
 lump = name + struct.pack('<6I', W, H, *offs) + b''.join(mips) + struct.pack('<H', 256) + bytes(pal) + b'\0\0'
 wad = b'WAD3' + struct.pack('<II', 1, 12 + len(lump)) + lump + struct.pack('<iii', 12, len(lump), len(lump)) + bytes([0x43, 0, 0, 0]) + name
 open(sys.argv[2], 'wb').write(wad)
-if len(sys.argv) > 3:                      # devordagi ko'rinish (sinov uchun)
+if len(sys.argv) > 3 and sys.argv[3] != '-':                      # devordagi ko'rinish (sinov uchun)
     p = Image.frombytes('P', (W, H), mips[0]); p.putpalette(pal)
     wall = Image.new('RGB', (W, H), (150, 120, 80)); m = Image.frombytes('L', (W, H), bytes(0 if v == 255 else 255 for v in mips[0]))
     wall.paste(p.convert('RGB'), mask=m); wall.resize((W * 4, H * 4), Image.BILINEAR).save(sys.argv[3])
