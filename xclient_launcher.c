@@ -713,6 +713,20 @@ static void lang_bg(void)
         if (RegQueryValueExW(k, L"Language", NULL, &type, (BYTE *)w, &sz) == ERROR_SUCCESS && type == REG_SZ) lstrcpynW(lang, w, 32);
         RegCloseKey(k);
     }
+    /* O'yin tili inglizcha (yoki yozilmagan) bo'lsa cstrike_<til> papkasi o'qilmaydi va X CLIENT foni ko'rinmaydi.
+     * Steam o'rnatilmagan bo'lsa (bu kalit faqat o'yin tilini bildiradi) - ruscha qilib qo'yamiz: o'yin cstrike_russian ni o'qiydi. */
+    if (!_wcsicmp(lang, L"russian") || !_wcsicmp(lang, L"english")) {
+        BOOL steam = FALSE; wchar_t sp[MAX_PATH]; DWORD spsz = sizeof(sp);
+        if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Valve\\Steam", 0, KEY_QUERY_VALUE, &k) == ERROR_SUCCESS) {
+            steam = RegQueryValueExW(k, L"SteamExe", NULL, NULL, (BYTE *)sp, &spsz) == ERROR_SUCCESS;
+            RegCloseKey(k);
+        }
+        if (!steam && RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Valve\\Steam", 0, NULL, 0, KEY_SET_VALUE, NULL, &k, NULL) == ERROR_SUCCESS) {
+            RegSetValueExW(k, L"Language", 0, REG_SZ, (const BYTE *)L"russian", (DWORD)sizeof(L"russian"));
+            RegCloseKey(k);
+            lstrcpynW(lang, L"russian", 32);
+        }
+    }
     for (wchar_t *c = lang; *c; c++) if (!((*c >= L'a' && *c <= L'z') || (*c >= L'A' && *c <= L'Z'))) { lang[0] = 0; break; }
     if (lang[0] && _wcsicmp(lang, L"russian") && _wcsicmp(lang, L"english")) lang_bg_dir(lang);
 }
