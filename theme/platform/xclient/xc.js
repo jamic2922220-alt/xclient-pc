@@ -964,7 +964,7 @@ var DEF = {
   name: '', tag: 'X | ', net: 'fast', dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, buykeys: 0, queue: 1, reconn: 1, demo: 0,
   sens: 2.5, zoom: 1.2, raw: 1, filter: 0, inv: 0,
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1,
-  fps: 200, showfps: 0, uisnd: 1, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
+  fps: 100, showfps: 0, uisnd: 1, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
   xp: 'pro', xt: 0, xs: 'small', xc: '255 59 59', xtr: 0, xdyn: 0, xthick: 1, xgap: 3, xout: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
   rscale: 115, ropac: 100, rnames: 0, rhp: 0, rmode: 1, rround: 1, rrot: 1, rmap: 0.8,
   vmx: 0, vmy: 0, vmz: 0, vmshift: 0, bobst: 0, lagst: 0, camint: 0,
@@ -999,7 +999,7 @@ function seedFromGame() {
   var rs = parseFloat(readCvar('hud_radar_scale')); if (!isNaN(rs)) S.rscale = Math.round(rs * 100);
   // eski NextClient "extra_small" ni katta (auto) qilib chizadi - eng kichigi "small"
   if (S.xs === 'auto') S.xs = 'large';
-  if (S.xs !== 'small' && S.xs !== 'medium' && S.xs !== 'large') S.xs = 'small';
+  if (SZ.indexOf(S.xs) < 0) S.xs = 'small';
   S.xc = String(S.xc).replace(/\s+/g, ' ');
   S.xp = presetOf(S);
   var nm = readCvar('name');
@@ -1066,7 +1066,7 @@ function presetOf(s) {
   for (i = 0; i < XPRE.length; i++) if (Number(s.xt) === XPRE[i][2]) return XPRE[i][0];
   return 'classic';
 }
-var SZ = ['small', 'medium', 'large'];   // NextClient: large eng katta (auto ham shunday); qalinlik doim 1 piksel
+var SZ = ['extra_small', 'small', 'medium', 'large'];   // NextClient: large eng katta (auto ham shunday); qalinlik doim 1 piksel
 function xcode(s) {
   var hex = '';
   each(String(s.xc).split(' '), function (v) { var h = (Number(v) || 0).toString(16).toUpperCase(); hex += h.length < 2 ? '0' + h : h; });
@@ -1384,6 +1384,7 @@ var PANES = {
   video: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('v_title')) + '</div>' +
       seg('fps', 'v_fps', [[100, '100'], [144, '144'], [200, '200'], [300, '300'], [500, '500']]) +
+      '<div class="mut" style="margin:-6px 0 8px;font-size:12px">' + esc(T('v_fps2')) + '</div>' +
       sl('gamma', 'v_bright', 1.8, 3, 0.1) + sl('fov', 'v_fov', 70, 100, 1, 'v_fov2') + sl('vmfov', 'v_vm', 70, 100, 1) + sl('decals', 'v_dec', 300, 4000, 100) + '</div>' +
       '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('hor', 'v_hor') + tg('vsync', 'v_vsync') + tg('showfps', 'v_showfps') + tg('dyn', 'v_dyn') + '</div>';
   },
@@ -1498,7 +1499,7 @@ var PANES = {
       '<div class="fr cw"><div class="lb">' + esc(T('x_code')) + '</div><div class="ct2 code"><input id="xCode" value="' + esc(xcode(E)) + '"><a class="btn" data-act="xcopy">' + esc(T('x_copy')) + '</a><a class="btn b2" data-act="xcode">' + esc(T('x_apply')) + '</a></div></div></div>' +
       '<div class="pane r hp"><div class="ph2">&nbsp;</div>' +
       '<div class="fr"><div class="lb">' + esc(T('x_size')) + '</div><div class="ct2"><a class="dd xsz" data-dd="xsz"><span>' + esc(ddLabel('xsz')) + '</span><i>▾</i></a>' +
-      '<div class="sl sl2"><input type="range" min="0" max="2" step="1" value="' + si + '" data-xsz="1"><div class="vv" id="vv_xsz">x' + (si + 1) + '</div></div></div></div>' +
+      '<div class="sl sl2"><input type="range" min="0" max="3" step="1" value="' + si + '" data-xsz="1"><div class="vv" id="vv_xsz">x' + (si + 1) + '</div></div></div></div>' +
       off('xthick', 'hx_thick', 1, 5) + off('xgap', 'hx_gap', 0, 10) +
       '<div class="fr"><div class="lb">' + esc(T('hx_opaq')) + '</div><div class="ct2"><div class="sl"><input type="range" min="0" max="1" step="1" value="' + (E.xtr ? 0 : 1) + '" data-xop="1"><div class="vv" id="vv_xop">' + (E.xtr ? '60%' : '100%') + '</div></div></div></div>' +
       off('xout', 'hx_outl', 0, 3) +
@@ -1562,7 +1563,7 @@ function drawXhair() {
   g.clearRect(0, 0, w, h);
   var p = String(E.xc).split(' ');
   g.fillStyle = 'rgba(' + p[0] + ',' + p[1] + ',' + p[2] + ',' + (E.xtr ? 0.6 : 1) + ')';
-  var z = w > 300 ? 2 : 1, len = ({ small: 5, medium: 8, large: 11, auto: 11 }[E.xs] || 5) * z, gap = (E.xgap != null ? Number(E.xgap) : 3) * z, t = (Math.max(1, Number(E.xthick) || 1) + 1) * z, type = Number(E.xt);
+  var z = w > 300 ? 2 : 1, len = ({ extra_small: 4, small: 5, medium: 8, large: 11, auto: 11 }[E.xs] || 5) * z, gap = (E.xgap != null ? Number(E.xgap) : 3) * z, t = (Math.max(1, Number(E.xthick) || 1) + 1) * z, type = Number(E.xt);
   if (Number(E.xout) > 0) {                         // kontur: avval qora, har tomondan kattaroq
     var o = Number(E.xout) * z, col = g.fillStyle;
     g.fillStyle = 'rgba(0,0,0,0.85)';
@@ -1782,7 +1783,8 @@ function act(a) {
     openSide('shots', T('sh_title2'), '<div class="shots">' + h + '</div>');
   });
   if (a === 'procfg') {                        // Pro CFG: lag'siz internet, yuqori FPS, aniq sichqoncha
-    E.net = 'fast'; E.fps = 300; E.vsync = 0; E.raw = 1; E.filter = 0; E.fastsw = 1; E.bob = 0; E.interp = 0.01; E.lw = 1; E.lc = 1;
+    E.net = 'fast'; E.fps = 100; E.vsync = 0;   // CS 1.6 100 FPS ga moslangan: otish, otdacha va harakat bir xil bo'ladi
+    E.raw = 1; E.filter = 0; E.fastsw = 1; E.bob = 0; E.interp = 0.01; E.lw = 1; E.lc = 1;
     E.dyn = 0; E.detail = 0; E.hisnd = 1; E.mixa = 0.05; E.xdyn = 0;
     showSetTab('pro'); return toast(T('pr_cfgok'), 5000);
   }
