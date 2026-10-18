@@ -331,6 +331,9 @@ var queue = [], running = 0, MAXQ = 12;
 function srv(ip) { if (!SRV[ip]) SRV[ip] = { ip: ip }; return SRV[ip]; }
 function query(ip, force) {
   if (!ip) return;
+  // serverda o'ynayotganda orqa fonda so'rov yubormaymiz: bitta IP'dan ham o'ynash, ham serverlarni tinmay so'rash
+  // himoyalar (DProto/ReChecker) nazarida "FakePlayers" kabi ko'rinadi. Ulangan serverning o'zini umuman so'ramaymiz.
+  if (CONNECTED && (normIp(ip) === CONNECTED || !(force || (curModal === 'mdServers' && NC && NC.gameUi && NC.gameUi.shown)))) return;
   var s = srv(ip);
   if (!force && s.ts && now() - s.ts < 20000) return;
   if (s.q) return;
@@ -873,7 +876,7 @@ function renderHistStats() {
 }
 var PLAYERS = {};
 function loadPlayers(ip) {
-  if (!NC || !NC.matchmaking || !NC.matchmaking.getPlayersInfo) return;
+  if (!NC || !NC.matchmaking || !NC.matchmaking.getPlayersInfo || (CONNECTED && normIp(ip) === CONNECTED)) return;
   try {
     NC.matchmaking.getPlayersInfo(ip).then(function (list) {
       list = list || [];
