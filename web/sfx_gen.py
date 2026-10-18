@@ -31,8 +31,9 @@ def room(y, mix=0.18):                                                  # yengil
     for d, g in ((0.031, 0.5), (0.047, 0.35), (0.071, 0.22)):
         k = int(SR * d); out[k:] += mix * g * y[:-k]
     return out
+GAIN = 1.9                                                              # umumiy balandlik (o'yinchilar so'rovi bilan oshirildi)
 def save(name, y, peak):
-    y = y / (np.max(np.abs(y)) or 1) * peak
+    y = y / (np.max(np.abs(y)) or 1) * min(0.92, peak * GAIN)
     fade = min(len(y), int(SR * 0.004)); y[-fade:] *= np.linspace(1, 0, fade)
     with wave.open(f'{sys.argv[1]}/{name}.wav', 'wb') as w:
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR)
