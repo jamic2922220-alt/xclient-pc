@@ -268,6 +268,17 @@ function favSync() {
   });
 }
 function favPush() { if (PCID && FAV_SYNCED) api('favs', { d: PCID, set: JSON.stringify(DB.fav.slice(0, 100)) }, function () {}); }
+/* IP nusxalash: o'yin brauzerida (CEF1) clipboard API yo'q - maydonni belgilab execCommand('copy');
+ * bo'lmasa IP belgilangan holda qoladi va "Ctrl+C" deb aytamiz */
+function copyIp(ip, inp) {
+  var ok = false;
+  try {
+    if (!inp) { inp = document.createElement('input'); inp.value = ip; inp.style.cssText = 'position:absolute;left:-999px;top:0'; document.body.appendChild(inp); }
+    inp.focus(); inp.select();
+    ok = document.execCommand && document.execCommand('copy');
+  } catch (e) { ok = false; }
+  toast(ok ? T('ip_copied') + ' ' + ip : T('ip_ctrlc'), 3000);
+}
 function saveOpts(msg) {
   if (!PCID) { toast(T('sy_nolaunch'), 4000); return; }
   api('opts_set', { d: PCID, o: JSON.stringify(OPTS) }, function (r) { toast(r.ok ? (msg || T('sy_next')) : (r.msg || 'Xato'), 3500); });
@@ -977,7 +988,7 @@ function renderInfo() {
   box.innerHTML = '<div class="mp' + (mode === 'zm' ? ' zm' : mode === 'awp' ? ' aw' : '') + '">' +
     (/^[\w\-.]{2,40}$/.test(mapn) ? '<img src="map.php?m=' + encodeURIComponent(mapn.toLowerCase()) + '" alt="" onerror="this.style.display=\'none\'">' : '') +
     '<span>' + esc(mapn || '?') + '</span></div>' +
-    '<h3>' + flagOf(srvSel) + esc(s.name || (h && h.name) || srvSel) + '</h3><div class="ip">' + esc(srvSel) + '</div>' +
+    '<h3>' + flagOf(srvSel) + esc(s.name || (h && h.name) || srvSel) + '</h3><div class="ip"><input class="ipin" readonly value="' + esc(srvSel) + '"><a class="cpy" data-copyip="' + esc(srvSel) + '">' + esc(T('ip_copy')) + '</a></div>' +
     '<div class="ln">' + esc(T('ph_players')) + ' <b>' + (s.ok ? s.pl + '/' + s.max : '-') + '</b><span class="r ' + pc + '">' + (s.ok ? '\u25cf ' + s.ping + ' ms' : esc(T('offline'))) + '</span></div>' +
     histBars(srvSel) +
     '<div class="ph">' + esc(T('ph_players')) + '</div><div class="pls">' + ph + '</div>' +
@@ -2024,7 +2035,7 @@ function showAdminMsgs(list) {
 
 /* ---- menyu ovozlari: o'yin sound/xclient/*.wav ni chaladi (XCLauncher.exe ularni o'yin papkasiga qo'yadi) ---- */
 var SFX_ATTR = ['data-act', 'data-tab', 'data-hsub', 'data-seg', 'data-tg', 'data-otg', 'data-ohud', 'data-dd', 'data-ddv', 'data-xchk', 'data-pack',
-  'data-sort', 'data-flt', 'data-theme', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo'];
+  'data-sort', 'data-flt', 'data-theme', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-copyip'];
 var SFX_QUIET = false, sfxLast = null, sfxT = 0;
 function sfx(n) {
   if (!S || S.uisnd === 0 || !hasApi()) return;
@@ -2097,6 +2108,8 @@ document.onclick = function (e) {
   }
   if ((el = closest(t, 'data-calc'))) { var ci = $('calcIn'); if (ci) CALC_V = ci.value; CALC = el.getAttribute('data-calc'); showSetTab('tools'); return; }
   if ((el = closest(t, 'data-style'))) { applyStyle(el.getAttribute('data-style')); return; }
+  if (t && t.className === 'ipin') { t.select(); return; }
+  if ((el = closest(t, 'data-copyip'))) { copyIp(el.getAttribute('data-copyip'), el.parentNode.querySelector('input')); return; }
   if ((el = closest(t, 'data-demo'))) { closeModal(); cmd('playdemo ' + el.getAttribute('data-demo').replace(/[^\w\-]/g, '')); return; }
   if ((el = closest(t, 'data-hsub'))) { HSUB = el.getAttribute('data-hsub'); showSetTab('hud'); return; }
   if ((el = closest(t, 'data-xchk'))) {
