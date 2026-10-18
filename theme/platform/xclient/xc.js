@@ -50,7 +50,7 @@ var NC = window.nextclient || null;
 (function () {
   var ua = navigator.userAgent || '', m = /Chrome\/(\d+)/.exec(ua);
   var modern = m ? +m[1] >= 50 : /Firefox|Safari|Edge/.test(ua);
-  if (!NC && modern && !/[?#&]menu/.test(location.href)) location.replace('yuklab.html');
+  if (!NC && modern && !/[?#&]menu/.test(location.href)) location.replace('https://cssborka.uz/xclient/index.html');
 })();
 function hasApi() { return !!(NC && typeof NC.exec === 'function'); }
 function hasMM() { return !!(NC && NC.matchmaking && NC.matchmaking.getServerInfo); }
