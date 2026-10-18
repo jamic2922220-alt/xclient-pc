@@ -475,6 +475,7 @@ case 'opts_done':
         if (!is_array($in)) fail('bad', 'bad');
         foreach (array('beta', 'auto', 'start', 'win', 'clean', 'verify', 'prio', 'shots') as $k) if (isset($in[$k])) $o[$k] = $in[$k] ? 1 : 0;
         if (isset($in['packs'])) $o['packs'] = preg_match('/^[a-z0-9_,\-]{0,200}$/', $in['packs']) ? $in['packs'] : '';
+        if (isset($in['hud'])) $o['hud'] = in_array((int)$in['hud'], array(100, 150, 200)) ? (int)$in['hud'] : 100;   // HUD kattaligi, %
         if (isset($in['res'])) $o['res'] = preg_match('/^\d{3,4}x\d{3,4}$/', $in['res']) ? $in['res'] : '';
         wr('dev/' . $d, $o);
     } elseif ($a === 'opts_done') {

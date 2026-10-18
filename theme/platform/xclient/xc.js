@@ -218,7 +218,7 @@ function fxLoop() {
  * xc_api.php ga yoziladi va XClient.exe ularni keyingi ishga tushishda bajaradi. */
 function qparam(k) { var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search || ''); return m ? decodeURIComponent(m[1]) : ''; }
 var PCID = /^[a-z0-9]{8,40}$/.test(qparam('xc')) ? qparam('xc') : '';
-var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '' }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
+var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '', hud: 100 }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
 function loadOpts() {
   // id berilmasa server shu IP dan oxirgi ulangan XClient.exe ni topadi
   api('opts', PCID ? { d: PCID } : {}, function (r) {
@@ -963,7 +963,8 @@ var DEF = {
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1,
   fps: 200, showfps: 0, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 300,
   xp: 'pro', xt: 0, xs: 'small', xc: '255 59 59', xtr: 0, xdyn: 0, xthick: 1, xgap: 3, xout: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
-  rscale: 115, ropac: 100, rnames: 0, rhp: 0,
+  rscale: 115, ropac: 100, rnames: 0, rhp: 0, rmode: 1, rround: 1, rrot: 1, rmap: 0.8,
+  vmx: 0, vmy: 0, vmz: 0, vmshift: 0, bobst: 0, lagst: 0, camint: 0,
   bob: 0.01, picmip: 0, detail: 1, shadows: 1, minm: 0, interp: 0.01, lw: 1, lc: 1, hisnd: 1, mixa: 0.1, loop: 0, saytm: 5, ngpos: 1
 };
 var S = null, E = null;
@@ -971,7 +972,8 @@ var CVARS = { sens: 'sensitivity', zoom: 'zoom_sensitivity_ratio', raw: 'm_rawin
   fps: 'fps_max', showfps: 'cl_showfps', gamma: 'gamma', fov: 'fov_angle', vmfov: 'viewmodel_fov', hor: 'fov_horplus', xt: 'cl_crosshair_type', xs: 'cl_crosshair_size',
   xc: 'cl_crosshair_color', xtr: 'cl_crosshair_translucent', xdyn: 'cl_dynamiccrosshair', hand: 'cl_righthand', fastsw: 'hud_fastswitch', dl: 'cl_allowdownload',
   spray: 'cl_allowupload', mute: 'snd_mute_losefocus', vsync: 'gl_vsync', dyn: 'r_dynamic', cid: 'hud_centerid', radar: 'cl_radartype', dmax: 'hud_deathnotice_max', decals: 'mp_decals',
-  ropac: 'hud_radar_opacity', rnames: 'hud_radar_names', rhp: 'hud_radar_health',
+  ropac: 'hud_radar_opacity', rnames: 'hud_radar_names', rhp: 'hud_radar_health', rmode: 'hud_radar_mode', rround: 'hud_radar_round', rrot: 'hud_radar_rotate', rmap: 'hud_radar_map_scale',
+  vmx: 'viewmodel_offset_x', vmy: 'viewmodel_offset_y', vmz: 'viewmodel_offset_z', vmshift: 'viewmodel_disable_shift', bobst: 'cl_bobstyle', lagst: 'viewmodel_lag_style',
   bob: 'cl_bob', picmip: 'gl_picmip', detail: 'r_detailtextures', shadows: 'cl_shadows', minm: 'cl_minmodels', interp: 'ex_interp', lw: 'cl_lw', lc: 'cl_lc',
   hisnd: 'hisound', mixa: '_snd_mixahead', loop: 'voice_loopback', saytm: 'hud_saytext_time', ngpos: 'net_graphpos' };
 function loadSettings() {
@@ -993,7 +995,8 @@ function seedFromGame() {
   var dv = parseFloat(readCvar('scr_drawversion')); if (!isNaN(dv)) S.nover = dv > 0 ? 0 : 1;
   var rs = parseFloat(readCvar('hud_radar_scale')); if (!isNaN(rs)) S.rscale = Math.round(rs * 100);
   // eski NextClient "extra_small" ni katta (auto) qilib chizadi - eng kichigi "small"
-  if (S.xs !== 'small' && S.xs !== 'medium' && S.xs !== 'large' && S.xs !== 'auto') S.xs = 'small';
+  if (S.xs === 'auto') S.xs = 'large';
+  if (S.xs !== 'small' && S.xs !== 'medium' && S.xs !== 'large') S.xs = 'small';
   S.xc = String(S.xc).replace(/\s+/g, ' ');
   S.xp = presetOf(S);
   var nm = readCvar('name');
@@ -1019,6 +1022,9 @@ function settingsCmds(s) {
     'hud_saytext_time ' + s.saytm, 'net_graphpos ' + s.ngpos);
   c.push('net_graph ' + (s.netg ? 3 : 0), 'hud_deathnotice_old ' + (s.hs ? 0 : 1), 'hud_deathnotice_max ' + s.dmax, 'cl_radartype ' + s.radar, 'hud_centerid ' + s.cid, 'scr_drawversion ' + (s.nover ? 0 : 1));
   c.push('hud_radar_scale ' + (s.rscale / 100), 'hud_radar_opacity ' + s.ropac, 'hud_radar_names ' + s.rnames, 'hud_radar_health ' + s.rhp);
+  c.push('hud_radar_mode ' + s.rmode, 'hud_radar_round ' + s.rround, 'hud_radar_rotate ' + s.rrot, 'hud_radar_map_scale ' + s.rmap);
+  c.push('viewmodel_offset_x ' + s.vmx, 'viewmodel_offset_y ' + s.vmy, 'viewmodel_offset_z ' + s.vmz, 'viewmodel_disable_shift ' + s.vmshift,
+    'cl_bobstyle ' + s.bobst, 'viewmodel_lag_style ' + s.lagst, 'camera_movement_interp ' + (s.camint ? 0.1 : 0));
   if (s.buykeys) each(BUY, function (b) { c.push('bind ' + b[0] + ' ' + q(b[1])); });
   return c;
 }
@@ -1048,14 +1054,14 @@ function verifySettings(s) {
 }
 
 /* pritsel tayyor ko'rinishlari (NextClient: tur 0-3, o'lcham small/medium/large/auto) */
-var XPRE = [['classic', 'x_classic', 0, 'medium'], ['pro', 'x_pro', 0, 'small'], ['dot', 'x_dot', 3, 'small'], ['t', 'x_t', 1, 'small'], ['circle', 'x_circle', 2, 'medium']];
+var XPRE = [['classic', 'x_classic', 0, 'medium'], ['pro', 'x_pro', 0, 'small'], ['dot', 'x_dot', 3, 'small'], ['t', 'x_t', 1, 'small'], ['circle', 'x_circle', 2, 'medium'], ['big', 'x_big', 0, 'large']];
 function presetOf(s) {
   var i;
   for (i = 0; i < XPRE.length; i++) if (Number(s.xt) === XPRE[i][2] && s.xs === XPRE[i][3]) return XPRE[i][0];
   for (i = 0; i < XPRE.length; i++) if (Number(s.xt) === XPRE[i][2]) return XPRE[i][0];
   return 'classic';
 }
-var SZ = ['small', 'medium', 'large', 'auto'];
+var SZ = ['small', 'medium', 'large'];   // NextClient: large eng katta (auto ham shunday); qalinlik doim 1 piksel
 function xcode(s) {
   var hex = '';
   each(String(s.xc).split(' '), function (v) { var h = (Number(v) || 0).toString(16).toUpperCase(); hex += h.length < 2 ? '0' + h : h; });
@@ -1064,7 +1070,7 @@ function xcode(s) {
 function applyCode(code) {
   var m = /^X-([0-3])-([0-3])-([01])-([01])-([0-9A-F]{6})$/i.exec(String(code).replace(/\s+/g, ''));
   if (!m) { toast(T('x_badcode')); return false; }
-  E.xt = Number(m[1]); E.xs = SZ[Number(m[2])]; E.xtr = Number(m[3]); E.xdyn = Number(m[4]);
+  E.xt = Number(m[1]); E.xs = SZ[Number(m[2])] || 'large'; E.xtr = Number(m[3]); E.xdyn = Number(m[4]);
   E.xc = parseInt(m[5].slice(0, 2), 16) + ' ' + parseInt(m[5].slice(2, 4), 16) + ' ' + parseInt(m[5].slice(4, 6), 16);
   E.xp = presetOf(E);
   return true;
@@ -1410,19 +1416,34 @@ var PANES = {
   },
   hud: function () {
     var sub = '';
-    each([['main', 'hx_main'], ['snip', 'hx_snip'], ['misc', 'hx_misc']], function (o) { sub += '<a class="' + (HSUB === o[0] ? 'on' : '') + '" data-hsub="' + o[0] + '">' + esc(T(o[1])) + '</a>'; });
+    each([['main', 'hx_main'], ['snip', 'hx_snip'], ['wpn', 'hx_wpn'], ['misc', 'hx_misc']], function (o) { sub += '<a class="' + (HSUB === o[0] ? 'on' : '') + '" data-hsub="' + o[0] + '">' + esc(T(o[1])) + '</a>'; });
     sub = '<div class="hsub">' + sub + '</div>';
     if (HSUB === 'snip') {
       return sub + '<div class="pane l hp"><div class="ph2">' + esc(T('hx_snip')) + '</div><div id="xPrev" class="big"><canvas id="xScope" width="524" height="220"></canvas></div>' +
         '<div class="hnote">' + esc(T('hx_zoom')) + '</div></div>' +
         '<div class="pane r hp"><div class="ph2">&nbsp;</div>' + sl('zoom', 'mo_zoom', 0.1, 3, 0.05) + sl('sens', 'mo_sens', 0.1, 10, 0.05) + '</div>';
     }
+    if (HSUB === 'wpn') {
+      return sub + '<div class="pane l hp"><div class="ph2">' + esc(T('hw_pos')) + '</div>' +
+        sl('vmx', 'hw_x', -10, 10, 0.5) + sl('vmy', 'hw_y', -10, 10, 0.5) + sl('vmz', 'hw_z', -10, 10, 0.5) + sl('vmfov', 'v_vm', 70, 100, 1) +
+        tg('vmshift', 'hw_shift', 'hw_shift2') + '</div>' +
+        '<div class="pane r hp"><div class="ph2">' + esc(T('hw_anim')) + '</div>' +
+        seg('bobst', 'hw_bob', [[0, 'hw_bob0'], [1, 'hw_bob1'], [2, 'hw_bob2']]) + seg('bob', 'pr_bob', [[0.01, 'pr_bob1'], [0, 'pr_bob0']]) +
+        seg('lagst', 'hw_lag', [[0, 'hw_lag0'], [1, 'hw_lag1'], [2, 'hw_lag2']]) + tg('camint', 'hw_cam', 'hw_cam2') +
+        '<div class="hfoot"><span class="mut">' + esc(T('hw_note')) + '</span><a class="btn" data-act="vmdef">' + esc(T('hx_std')) + '</a></div></div>';
+    }
     if (HSUB === 'misc') {
+      var hz = '';
+      each([[100, '100%'], [150, '150%'], [200, '200%']], function (o) { hz += '<a class="' + ((OPTS.hud || 100) === o[0] ? 'on' : '') + '" data-ohud="' + o[0] + '">' + o[1] + '</a>'; });
       return sub + '<div class="pane l hp"><div class="ph2">' + esc(T('hx_radar')) + '</div>' +
-        sl('rscale', 'h_rscale', 50, 300, 5, null, '%') + sl('ropac', 'h_ropac', 0, 100, 5, null, '%') + tg('rnames', 'h_rnames') +
-        '<div class="ph2 m">' + esc(T('hx_kill')) + '</div>' + sl('dmax', 'h_kills', 3, 10, 1) + tg('hs', 'h_hs') + '</div>' +
-        '<div class="pane r hp"><div class="ph2">' + esc(T('h_title')) + '</div>' +
-        tg('netg', 'h_net') + tg('cid', 'h_cid') + tg('nover', 'h_draw') + '</div>';
+        seg('rmode', 'h_rmode', [[1, 'h_rmode1'], [0, 'h_rmode0']]) +
+        sl('rscale', 'h_rscale', 50, 300, 5, null, '%') + sl('rmap', 'h_rmap', 0.25, 3, 0.05) + sl('ropac', 'h_ropac', 0, 100, 5, null, '%') +
+        tg('rround', 'h_rround') + tg('rrot', 'h_rrot') + tg('rnames', 'h_rnames') + '</div>' +
+        '<div class="pane r hp"><div class="ph2">' + esc(T('h_size')) + '</div>' +
+        '<div class="fr"><div class="lb">' + esc(T('h_size2')) + '</div><div class="ct2 seg">' + hz + '</div></div>' +
+        '<div class="mut" style="margin:-6px 0 10px;font-size:12px">' + esc(PCID ? T('h_size3') : T('sy_nolaunch')) + '</div>' +
+        '<div class="ph2 m">' + esc(T('hx_kill')) + '</div>' + sl('dmax', 'h_kills', 3, 10, 1) + tg('hs', 'h_hs') +
+        '<div class="ph2 m">' + esc(T('h_title')) + '</div>' + tg('netg', 'h_net') + tg('cid', 'h_cid') + tg('nover', 'h_draw') + '</div>';
     }
     var pal = ['255 59 59', '50 250 50', '0 230 255', '255 210 60', '255 80 220', '255 255 255'];
     if (pal.indexOf(E.xc) < 0 && /^\d+ \d+ \d+$/.test(E.xc)) pal.push(E.xc);
@@ -1444,7 +1465,7 @@ var PANES = {
       '<div class="fr cw"><div class="lb">' + esc(T('x_code')) + '</div><div class="ct2 code"><input id="xCode" value="' + esc(xcode(E)) + '"><a class="btn" data-act="xcopy">' + esc(T('x_copy')) + '</a><a class="btn b2" data-act="xcode">' + esc(T('x_apply')) + '</a></div></div></div>' +
       '<div class="pane r hp"><div class="ph2">&nbsp;</div>' +
       '<div class="fr"><div class="lb">' + esc(T('x_size')) + '</div><div class="ct2"><a class="dd xsz" data-dd="xsz"><span>' + esc(ddLabel('xsz')) + '</span><i>▾</i></a>' +
-      '<div class="sl sl2"><input type="range" min="0" max="3" step="1" value="' + si + '" data-xsz="1"><div class="vv" id="vv_xsz">x' + (si + 1) + '</div></div></div></div>' +
+      '<div class="sl sl2"><input type="range" min="0" max="2" step="1" value="' + si + '" data-xsz="1"><div class="vv" id="vv_xsz">x' + (si + 1) + '</div></div></div></div>' +
       off('xthick', 'hx_thick', 1, 5) + off('xgap', 'hx_gap', 0, 10) +
       '<div class="fr"><div class="lb">' + esc(T('hx_opaq')) + '</div><div class="ct2"><div class="sl"><input type="range" min="0" max="1" step="1" value="' + (E.xtr ? 0 : 1) + '" data-xop="1"><div class="vv" id="vv_xop">' + (E.xtr ? '60%' : '100%') + '</div></div></div></div>' +
       off('xout', 'hx_outl', 0, 3) +
@@ -1727,6 +1748,7 @@ function act(a) {
     E.picmip = 1; E.detail = 0; E.shadows = 0; E.minm = 1; E.dyn = 0; E.decals = 50; E.vsync = 0; if (E.fps < 200) E.fps = 200;
     showSetTab('pro'); return toast(T('pr_fpsok'), 5000);
   }
+  if (a === 'vmdef') { each(['vmx', 'vmy', 'vmz', 'vmshift', 'bobst', 'lagst', 'camint', 'vmfov', 'bob'], function (k) { E[k] = DEF[k]; }); return showSetTab('hud'); }
   if (a === 'xdef') { each(['xp', 'xt', 'xs', 'xc', 'xtr', 'xdyn', 'xthick', 'xgap', 'xout'], function (k) { E[k] = DEF[k]; }); return showSetTab('hud'); }
   if (a === 'xpick') return ask(T('hx_colask'), function (v) {
     v = String(v || '').replace(/^\s+|\s+$/g, '');
@@ -1765,6 +1787,7 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-inv'))) { api('invite', { to: el.getAttribute('data-inv'), ip: CONNECTED }, function (r) { toast(r.ok ? T('iv_sent') : (r.msg || 'Xato')); }); return; }
   if ((el = closest(t, 'data-frdel'))) { api('friend_del', { login: el.getAttribute('data-frdel') }, function () { loadFriends(); }); return; }
   if ((el = closest(t, 'data-dbtg'))) { var dk = el.getAttribute('data-dbtg'); var cur = dk === 'autosave' ? !!DB[dk] : DB[dk] !== 0; DB[dk] = cur ? 0 : 1; persist(); if (dk === 'fx') { FX.off = 0; FX.slow = 0; sparks(); } if (dk === 'autosave') $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local')); el.className = 'tg' + (DB[dk] ? ' on' : ''); return; }
+  if ((el = closest(t, 'data-ohud'))) { OPTS.hud = Number(el.getAttribute('data-ohud')); saveOpts(T('h_size4')); showSetTab('hud'); return; }
   if ((el = closest(t, 'data-otg'))) { var ok2 = el.getAttribute('data-otg'); OPTS[ok2] = OPTS[ok2] ? 0 : 1; el.className = 'tg' + (OPTS[ok2] ? ' on' : ''); saveOpts(); return; }
   if ((el = closest(t, 'data-tg'))) { var k = el.getAttribute('data-tg'); E[k] = E[k] ? 0 : 1; el.className = 'tg' + (E[k] ? ' on' : ''); if (setTab === 'hud') { drawXhair(); var cd = $('xCode'); if (cd) cd.value = xcode(E); } return; }
   if ((el = closest(t, 'data-avc'))) { api('avatar', { color: el.getAttribute('data-avc') }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); }); return; }

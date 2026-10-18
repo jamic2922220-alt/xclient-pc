@@ -827,7 +827,7 @@ static char *read_all(const wchar_t *path, long *len)
 /* O'yin ichidagi X CLIENT menyusi (Sozlamalar > Tizim) ularni xc_api.php ga shu kompyuter id'si (g_id)
  * bilan yozadi; XClient.exe har ishga tushganda o'qiydi va bajaradi. */
 static int  o_beta = -1, o_auto = 1, o_start = -1, o_win = 0, o_clean = 0, o_verify = 0;
-static int  o_prio = 0, o_shots = 0, o_spray = 0, o_ok = 0;   /* o_ok: sozlamalar saytdan olindi */
+static int  o_prio = 0, o_shots = 0, o_spray = 0, o_ok = 0, o_hud = 100;   /* o_hud: HUD kattaligi, % */   /* o_ok: sozlamalar saytdan olindi */
 static char o_res[16] = "", o_packs[256] = "";
 
 static int jint(const char *b, const char *k, int def)
@@ -899,7 +899,7 @@ static void fetch_opts(void)
     if (!r || !strstr(r, "\"ok\":true")) { free(r); return; }
     o_beta = jint(r, "beta", -1); o_auto = jint(r, "auto", 1); o_start = jint(r, "start", -1);
     o_win = jint(r, "win", 0); o_clean = jint(r, "clean", 0); o_verify = jint(r, "verify", 0);
-    o_prio = jint(r, "prio", 0); o_shots = jint(r, "shots", 0); o_spray = jint(r, "spray", 0);
+    o_prio = jint(r, "prio", 0); o_hud = jint(r, "hud", 100); o_shots = jint(r, "shots", 0); o_spray = jint(r, "spray", 0);
     jstr(r, "packs", o_packs, sizeof(o_packs));
     o_ok = 1;
     const char *p = strstr(r, "\"res\":\"");
@@ -1234,6 +1234,134 @@ static void write_master_js(void)
 }
 
 static BOOL g_fresh = FALSE;
+/* ---------------------------------------------------------------- HUD kattaligi */
+/* O'yinda HUD'ni kattalashtiradigan sozlama yo'q: CS 1.6 raqamlar, pul, o'q va qurol rasmlarini
+ * sprites\640hud(N).spr dan, joylashuvini sprites\(nom).txt dagi to'rtburchaklardan oladi. Shu rasmlarni
+ * kattalashtirib, to'rtburchaklarni ham shuncha ko'paytirsak - butun HUD kattalashadi.
+ * Asl fayllar xc_backup\hud\<papka>\ ga bir marta saqlanadi va har safar o'shalardan yasaladi. */
+static int sc_i(int v, int pct) { return v >= 0 ? (v * pct + 50) / 100 : -((-v * pct + 50) / 100); }
+
+static BOOL spr_scale(const char *in, long n, int pct, char **out, long *outLen)
+{
+    if (n < 44 || memcmp(in, "IDSP", 4) || *(const int *)(in + 4) != 2) return FALSE;
+    int frames = *(const int *)(in + 28);
+    unsigned short pal = *(const unsigned short *)(in + 40);
+    long off = 42 + pal * 3L;
+    if (frames < 1 || frames > 64 || off > n) return FALSE;
+    long cap = off + 64;
+    /* avval kirishni tekshirib, chiqish hajmini hisoblaymiz */
+    long o = off;
+    for (int f = 0; f < frames; f++) {
+        if (o + 20 > n || *(const int *)(in + o) != 0) return FALSE;   /* guruh kadrlari - tegmaymiz */
+        int w = *(const int *)(in + o + 12), h = *(const int *)(in + o + 16);
+        if (w <= 0 || h <= 0 || w > 1024 || h > 1024 || o + 20 + (long)w * h > n) return FALSE;
+        cap += 20 + (long)sc_i(w, pct) * sc_i(h, pct);
+        o += 20 + (long)w * h;
+    }
+    char *b = (char *)malloc(cap);
+    if (!b) return FALSE;
+    memcpy(b, in, off);
+    *(int *)(b + 20) = sc_i(*(const int *)(in + 20), pct);   /* umumiy kenglik/balandlik */
+    *(int *)(b + 24) = sc_i(*(const int *)(in + 24), pct);
+    long d = off; o = off;
+    for (int f = 0; f < frames; f++) {
+        int w = *(const int *)(in + o + 12), h = *(const int *)(in + o + 16);
+        int w2 = sc_i(w, pct), h2 = sc_i(h, pct);
+        *(int *)(b + d) = 0;
+        *(int *)(b + d + 4) = sc_i(*(const int *)(in + o + 4), pct);
+        *(int *)(b + d + 8) = sc_i(*(const int *)(in + o + 8), pct);
+        *(int *)(b + d + 12) = w2; *(int *)(b + d + 16) = h2;
+        const unsigned char *src = (const unsigned char *)in + o + 20;
+        unsigned char *dst = (unsigned char *)b + d + 20;
+        for (int y = 0; y < h2; y++) {
+            int sy = y * h / h2;
+            for (int x = 0; x < w2; x++) dst[y * w2 + x] = src[sy * w + x * w / w2];
+        }
+        d += 20 + (long)w2 * h2; o += 20 + (long)w * h;
+    }
+    *out = b; *outLen = d;
+    return TRUE;
+}
+
+/* "nom 640 640hudN x y w h" qatorlaridagi x y w h ni ko'paytiradi; boshqa qatorlar o'zgarmaydi */
+static char *txt_scale(const char *in, int pct, BOOL *changed)
+{
+    size_t n = strlen(in);
+    char *b = (char *)malloc(n * 2 + 64), *d = b;
+    if (!b) return NULL;
+    *changed = FALSE;
+    for (const char *p = in; *p; ) {
+        const char *e = strchr(p, '\n');
+        size_t L = e ? (size_t)(e - p + 1) : strlen(p);
+        char line[256], name[64], spr[64]; int res, x, y, w, h;
+        if (L < sizeof(line)) {
+            memcpy(line, p, L); line[L] = 0;
+            if (sscanf(line, "%63s %d %63s %d %d %d %d", name, &res, spr, &x, &y, &w, &h) == 7 && res == 640 && !_strnicmp(spr, "640hud", 6)) {
+                d += sprintf(d, "%s\t%d\t%s\t%d\t%d\t%d\t%d\r\n", name, res, spr, sc_i(x, pct), sc_i(y, pct), sc_i(w, pct), sc_i(h, pct));
+                *changed = TRUE; p += L; continue;
+            }
+        }
+        memcpy(d, p, L); d += L; p += L;
+    }
+    *d = 0;
+    return b;
+}
+
+static void hud_scale_dir(const wchar_t *sub, int pct)
+{
+    wchar_t dir[MAX_PATH], bak[MAX_PATH], st[MAX_PATH], pat[MAX_PATH], tmp[MAX_PATH];
+    path_join(dir, g_dir, sub);
+    _snwprintf(tmp, MAX_PATH, L"xc_backup\\hud\\%s", sub); tmp[MAX_PATH - 1] = 0;
+    path_join(bak, g_dir, tmp);
+    path_join(st, bak, L"_scale.txt");
+    int was = 100;
+    { long l = 0; char *s = read_all(st, &l); if (s) { was = atoi(s); free(s); } }
+    if (was <= 0) was = 100;
+    if (was == pct) return;
+    path_join(pat, dir, L"*.*");
+    WIN32_FIND_DATAW fd;
+    HANDLE hf = FindFirstFileW(pat, &fd);
+    if (hf == INVALID_HANDLE_VALUE) return;
+    mkdirs_for(st);
+    do {
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+        const wchar_t *ext = wcsrchr(fd.cFileName, L'.');
+        BOOL isSpr = ext && !_wcsicmp(ext, L".spr") && !_wcsnicmp(fd.cFileName, L"640hud", 6);
+        BOOL isTxt = ext && !_wcsicmp(ext, L".txt");
+        if (!isSpr && !isTxt) continue;
+        wchar_t cur[MAX_PATH], org[MAX_PATH];
+        path_join(cur, dir, fd.cFileName);
+        path_join(org, bak, fd.cFileName);
+        if (!file_exists(org)) {                              /* asl nusxa hali yo'q: hozirgisi asl (was==100 bo'lsa) */
+            if (was != 100) continue;
+            if (isTxt) { long l = 0; char *t = read_all(cur, &l); BOOL ch = FALSE; char *x = t ? txt_scale(t, 100, &ch) : NULL; free(t); free(x); if (!ch) continue; }
+            CopyFileW(cur, org, TRUE);
+        }
+        if (pct == 100) { CopyFileW(org, cur, FALSE); continue; }
+        long l = 0; char *src = read_all(org, &l), *res = NULL; long rl = 0;
+        if (!src) continue;
+        if (isSpr) { if (!spr_scale(src, l, pct, &res, &rl)) res = NULL; }
+        else { BOOL ch = FALSE; res = txt_scale(src, pct, &ch); rl = res ? (long)strlen(res) : 0; if (!ch) { free(res); res = NULL; } }
+        free(src);
+        if (!res) continue;
+        SetFileAttributesW(cur, FILE_ATTRIBUTE_NORMAL);
+        FILE *f = _wfopen(cur, L"wb");
+        if (f) { fwrite(res, 1, rl, f); fclose(f); }
+        free(res);
+    } while (FindNextFileW(hf, &fd));
+    FindClose(hf);
+    FILE *f = _wfopen(st, L"wb");
+    if (f) { fprintf(f, "%d", pct); fclose(f); }
+}
+static void hud_scale(void)
+{
+    int pct = o_hud == 150 || o_hud == 200 || o_hud == 125 ? o_hud : 100;
+    hud_scale_dir(L"cstrike\\sprites", pct);
+    wchar_t ru[MAX_PATH];
+    path_join(ru, g_dir, L"cstrike_russian\\sprites\\hud.txt");
+    if (file_exists(ru)) hud_scale_dir(L"cstrike_russian\\sprites", pct);
+}
+
 static void run_game(void)
 {
     wchar_t exe[MAX_PATH], cmd[1024];
@@ -1244,6 +1372,7 @@ static void run_game(void)
     setup_main_menu();
     ensure_scheme();
     ensure_launcher_cfg();
+    if (o_ok) hud_scale();
     path_join(exe, g_dir, L"cstrike.exe");
     if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) path_join(exe, g_dir, L"hl.exe");
     if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) {
