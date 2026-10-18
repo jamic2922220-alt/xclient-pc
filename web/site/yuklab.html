@@ -50,6 +50,17 @@ summary { cursor: pointer; font-weight: 600; }
 details p { color: var(--mut); margin: 10px 0 0; }
 .cta { text-align: center; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 40px 20px; }
 footer { color: var(--mut); font-size: 13px; text-align: center; padding: 30px 0 40px; }
+.cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.cols .card b { font-size: 16px; margin-bottom: 8px; }
+.cols ul { margin: 0; padding-left: 18px; color: var(--mut); font-size: 14px; }
+.cols li { margin-bottom: 5px; }
+.perks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.perk { background: linear-gradient(180deg, rgba(255, 59, 59, .10), transparent 70%), var(--panel); border: 1px solid #3a2228; border-radius: 12px; padding: 18px; }
+.perk i { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 9px; background: rgba(255, 59, 59, .15); color: var(--red); font-style: normal; font-size: 18px; margin-bottom: 10px; }
+.perk b { display: block; margin-bottom: 4px; }
+.perk span { color: var(--mut); font-size: 14px; }
+@media (max-width: 900px) { .cols, .perks { grid-template-columns: 1fr; } }
+@media (min-width: 901px) and (max-width: 1100px) { .cols { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 900px) {
   .hero { grid-template-columns: 1fr; text-align: center; padding-top: 10px; }
   .hero p.lead { margin-left: auto; margin-right: auto; }
@@ -96,6 +107,18 @@ footer { color: var(--mut); font-size: 13px; text-align: center; padding: 30px 0
     <div class="card"><i>☁</i><b data-t="f7">Bulutga saqlash</b><span data-t="f7s">Sozlamalar har kompyuterda bir xil.</span></div>
     <div class="card"><i>♪</i><b data-t="f8">Ovozlar va spray</b><span data-t="f8s">Menyu ovozlari, musiqa va X CLIENT spreyi.</span></div>
   </div>
+</div></section>
+
+<section><div class="wrap">
+  <h2 data-t="pk_t">Imtiyozlar</h2>
+  <p class="sub" data-t="pk_s">X CLIENT bilan o'ynaganlar oladigan qulayliklar.</p>
+  <div class="perks" id="perks"></div>
+</div></section>
+
+<section><div class="wrap">
+  <h2 data-t="fl_t">Launcher ichida nimalar bor</h2>
+  <p class="sub" data-t="fl_s">Barcha funksiyalarning to'liq ro'yxati.</p>
+  <div class="cols" id="full"></div>
 </div></section>
 
 <section><div class="wrap">
@@ -153,16 +176,54 @@ footer { color: var(--mut); font-size: 13px; text-align: center; padding: 30px 0
     r_t: 'Требования', r1: 'Windows 7, 8, 10 или 11', r2: 'Интернет (для обновлений)', r3: 'CS 1.6 (если нет — установит сам)',
     q_t: 'Частые вопросы', q1: 'Windows предупреждает о «неизвестной программе»?', q1a: 'У лаунчера нет цифровой подписи, поэтому SmartScreen может предупредить. Нажмите «Подробнее» → «Выполнить в любом случае».',
     q2: 'Не будет бана или кика на серверах?', q2a: 'Нет. X CLIENT — не чит: он управляет только меню, настройками и обновлениями и использует обычные настройки игры.',
+    pk_t: 'Преимущества', pk_s: 'Что получают игроки X CLIENT.', fl_t: 'Что внутри лаунчера', fl_s: 'Полный список возможностей.',
     q3: 'Это платно?', q3a: 'Нет, полностью бесплатно.', c_t: 'Готовы?', c_s: 'Скачайте и играйте через минуту.'
   };
+  var PERKS = {
+    uz: [['★', 'X CLIENT serverlarida VIP', 'X CLIENT orqali kirgan o\'yinchilarga serverlarimizda VIP bepul.'],
+         ['▲', 'Daraja va XP', 'Har o\'ynagan daqiqa va bajarilgan vazifa uchun XP, profilda daraja.'],
+         ['✓', 'Kunlik vazifalar', 'Har kuni 3 ta yangi vazifa - bajaring va qo\'shimcha XP oling.'],
+         ['☁', 'Sozlamalar bulutda', 'Boshqa kompyuterda akkauntga kirsangiz, pritsel va tugmalar o\'zi tiklanadi.'],
+         ['⚡', 'Lag\'siz va tez', 'PRO CFG va internet tekshiruvi sizga eng mos sozlamani tanlaydi.'],
+         ['⟳', 'Doim yangi versiya', 'Yangilanishlar o\'zi keladi - qayta yuklab olish shart emas.']],
+    ru: [['★', 'VIP на серверах X CLIENT', 'Игрокам, зашедшим через X CLIENT, VIP на наших серверах бесплатно.'],
+         ['▲', 'Уровни и XP', 'XP за каждую минуту игры и выполненные задания, уровень в профиле.'],
+         ['✓', 'Ежедневные задания', 'Каждый день 3 новых задания - выполняйте и получайте XP.'],
+         ['☁', 'Настройки в облаке', 'Войдите на другом компьютере - прицел и кнопки восстановятся сами.'],
+         ['⚡', 'Без лагов', 'PRO CFG и проверка интернета подберут лучшие настройки.'],
+         ['⟳', 'Всегда новая версия', 'Обновления приходят сами - перекачивать не нужно.']]
+  };
+  var FULL = {
+    uz: [['Bosh menyu', ['Tezkor o\'yin - eng yaxshi serverga bir bosishda', 'Serverlar: Internet, Sevimlilar, Tarix, Do\'stlar, X TOP', 'TOP / BOOST / VIP guruhlar, ping, bayroq, xarita rasmi', 'Server to\'la bo\'lsa - navbatda turib avtomatik kirish', 'Serverning gavjum soatlari grafigi', 'Menyu ovozlari va CS menyu musiqasi', '6 ta rang mavzusi, o\'zbek, rus, ingliz va boshqa tillar']],
+         ['Pritsel va HUD', ['Pritsel: rang, o\'lcham x1-x4, nuqta, T-shakl, doira', 'Pritsel kodi - do\'stga ulashish', 'HUD kattaligi 100 / 150 / 200%', 'Radar: turi, kattaligi, shaffofligi, Tab\'da to\'liq xarita, izlar', 'Kill feed: qatorlar soni, turish vaqti, headshot belgisi', 'FPS va pingni ekranda ko\'rsatish']],
+         ['Qurol va kamera', ['Qurol joylashuvi: chap/o\'ng, oldinga/orqaga, past/tepa', 'Qurol FOV va "qurol siljimasin"', 'Chayqalish uslubi: Standart, Eski, CS:GO (nozik sozlash)', 'Qurol orqada qolishi: HL2, CS:GO, kuchi va tezligi', 'Kamera og\'ishi, silliq snayper zoomi', 'Silliq qurol almashtirish']],
+         ['O\'yin sozlamalari', ['PRO CFG - bir bosishda pro sozlama (100 FPS, rate 100000)', 'FPS 100 dan yuqori (144 / 200 / 300 / 500)', 'Internet tekshiruvi: ping, tebranish, yo\'qotish va tavsiya', 'Sichqoncha: sezgirlik, raw input, zoom sezgirligi', 'Sezgirlik kalkulyatori (CS2, Valorant va boshqalardan)', 'Tayyor uslublar: Avtomatchi, Snayper, Hujumchi, CS:GO hissi', '4 ta profil, tugmalarni sozlash, F1-F4 tezkor xarid']],
+         ['Akkaunt va do\'stlar', ['Ro\'yxatdan o\'tish, emailga kod bilan parol tiklash', 'Profil rasmi, rang va nom', 'Do\'stlar: kim qaysi serverda, bir bosishda qo\'shilish', 'Do\'stni o\'zingiz o\'ynayotgan serverga taklif qilish', 'Haftaning eng faol o\'yinchilari (TOP hafta)', 'Discord\'da o\'yin holati']],
+         ['Launcher', ['Avtomatik yangilanish (stable / beta)', 'O\'yin yo\'q bo\'lsa - o\'zi o\'rnatadi', 'X CLIENT dizayni va yuklanish ekrani', 'Hammada tiniq X CLIENT spreyi', 'Kesh tozalash va fayllarni tekshirish', 'O\'yinni tezlashtirish (yuqori ustuvorlik), avto-ishga tushish', 'Demo yozish va skrinshotlar galereyasi']]],
+    ru: [['Главное меню', ['Быстрая игра - лучший сервер в один клик', 'Серверы: Интернет, Избранное, История, Друзья, X TOP', 'Группы TOP / BOOST / VIP, пинг, флаги, картинки карт', 'Сервер полный - очередь и автоматический вход', 'График загруженности сервера по часам', 'Звуки меню и музыка CS', '6 цветовых тем, узбекский, русский, английский и другие языки']],
+         ['Прицел и HUD', ['Прицел: цвет, размер x1-x4, точка, T-образный, круг', 'Код прицела - поделиться с другом', 'Размер HUD 100 / 150 / 200%', 'Радар: тип, размер, прозрачность, вся карта по Tab, следы', 'Килл-фид: число строк, время показа, значок хедшота', 'FPS и пинг на экране']],
+         ['Оружие и камера', ['Положение оружия: влево/вправо, вперёд/назад, вниз/вверх', 'FOV оружия и «оружие не смещается»', 'Покачивание: Стандарт, Старый, CS:GO (тонкая настройка)', 'Отставание оружия: HL2, CS:GO, сила и скорость', 'Наклон камеры, плавный снайперский зум', 'Плавная смена оружия']],
+         ['Настройки игры', ['PRO CFG - про-настройки в один клик (100 FPS, rate 100000)', 'FPS выше 100 (144 / 200 / 300 / 500)', 'Проверка интернета: пинг, джиттер, потери и рекомендация', 'Мышь: чувствительность, raw input, зум', 'Калькулятор чувствительности (из CS2, Valorant и др.)', 'Готовые стили: Автоматчик, Снайпер, Штурмовик, Ощущение CS:GO', '4 профиля, назначение кнопок, быстрая закупка F1-F4']],
+         ['Аккаунт и друзья', ['Регистрация, восстановление пароля кодом на email', 'Аватар, цвет и имя', 'Друзья: кто на каком сервере, вход в один клик', 'Приглашение друга на свой сервер', 'Самые активные игроки недели (TOP недели)', 'Статус игры в Discord']],
+         ['Лаунчер', ['Автообновление (stable / beta)', 'Нет игры - установит сам', 'Оформление X CLIENT и экран загрузки', 'Чёткий спрей X CLIENT у всех', 'Очистка кэша и проверка файлов', 'Ускорение игры (высокий приоритет), автозапуск', 'Запись демо и галерея скриншотов']]]
+  };
+  function render(l) {
+    var h = '';
+    PERKS[l].forEach(function (x) { h += '<div class="perk"><i>' + x[0] + '</i><b>' + x[1] + '</b><span>' + x[2] + '</span></div>'; });
+    document.getElementById('perks').innerHTML = h; h = '';
+    FULL[l].forEach(function (g) { h += '<div class="card"><b>' + g[0] + '</b><ul>' + g[1].map(function (t) { return '<li>' + t + '</li>'; }).join('') + '</ul></div>'; });
+    document.getElementById('full').innerHTML = h;
+  }
   var UZ = {};
   var els = document.querySelectorAll('[data-t]');
   for (var i = 0; i < els.length; i++) UZ[els[i].getAttribute('data-t')] = els[i].innerHTML;
   function set(l) {
+    render(l);
     for (var i = 0; i < els.length; i++) { var k = els[i].getAttribute('data-t'), d = l === 'ru' ? RU : UZ; if (d[k]) els[i].innerHTML = d[k]; }
     var ls = document.querySelectorAll('.lang a'); for (var j = 0; j < ls.length; j++) ls[j].className = ls[j].getAttribute('data-l') === l ? 'on' : '';
     document.documentElement.lang = l; try { localStorage.setItem('xc_dl_lang', l); } catch (e) {}
   }
+  render('uz');
   var ls = document.querySelectorAll('.lang a');
   for (var j = 0; j < ls.length; j++) ls[j].onclick = function () { set(this.getAttribute('data-l')); };
   var saved = null; try { saved = localStorage.getItem('xc_dl_lang'); } catch (e) {}
