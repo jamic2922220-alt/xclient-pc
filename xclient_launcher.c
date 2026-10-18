@@ -707,6 +707,7 @@ static void lang_bg(void)
     wchar_t lang[32] = L"russian", w[64];
     HKEY k; DWORD sz = sizeof(w), type = 0;
     lang_bg_dir(L"russian");
+    lang_bg_dir(L"hd");          /* cstrike_hd ham cstrike dan oldin o'qiladi (HD kontent yoqilgan bo'lsa) - nDirect uni ham kuzatmaydi */
     /* boshqa til tanlangan bo'lsa (Steam/NextClient sozlamasi) - o'sha papkaga ham */
     if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Valve\\Steam", 0, KEY_QUERY_VALUE, &k) == ERROR_SUCCESS) {
         if (RegQueryValueExW(k, L"Language", NULL, &type, (BYTE *)w, &sz) == ERROR_SUCCESS && type == REG_SZ) lstrcpynW(lang, w, 32);
