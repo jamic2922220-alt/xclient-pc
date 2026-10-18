@@ -964,7 +964,7 @@ var DEF = {
   name: '', tag: 'X | ', net: 'fast', dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, buykeys: 0, queue: 1, reconn: 1, demo: 0,
   sens: 2.5, zoom: 1.2, raw: 1, filter: 0, inv: 0,
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1,
-  fps: 200, showfps: 0, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 300,
+  fps: 200, showfps: 0, uisnd: 1, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 300,
   xp: 'pro', xt: 0, xs: 'small', xc: '255 59 59', xtr: 0, xdyn: 0, xthick: 1, xgap: 3, xout: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
   rscale: 115, ropac: 100, rnames: 0, rhp: 0, rmode: 1, rround: 1, rrot: 1, rmap: 0.8,
   vmx: 0, vmy: 0, vmz: 0, vmshift: 0, bobst: 0, lagst: 0, camint: 0,
@@ -1378,7 +1378,7 @@ var PANES = {
   },
   sound: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('so_title')) + '</div>' + sl('vol', 'so_vol', 0, 1, 0.05) + sl('mus', 'so_mus', 0, 1, 0.05) + sl('vscale', 'so_vscale', 0, 2, 0.1) + '</div>' +
-      '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('voice', 'so_voice') + tg('loop', 'so_loop') + tg('mute', 'so_mute') +
+      '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('voice', 'so_voice') + tg('loop', 'so_loop') + tg('mute', 'so_mute') + tg('uisnd', 'so_ui', 'so_ui2') +
       '<div class="ph2 m">' + esc(T('so_q')) + '</div>' + tg('hisnd', 'so_hi') + seg('mixa', 'so_mix', [[0.05, 'so_mix1'], [0.1, 'so_mix2']]) + '</div>';
   },
   video: function () {
@@ -1653,8 +1653,9 @@ function finishWait(key) {
 /* ============================================================ oynalar */
 var curModal = '';
 function openModal(id) {
-  closeModal();
+  SFX_QUIET = true; closeModal(); SFX_QUIET = false;
   curModal = id; $(id).className = 'modal on';
+  sfx('open');
 }
 function closeModal() {
   if (DD) ddClose();
@@ -1662,6 +1663,7 @@ function closeModal() {
   if (curModal === 'mdSettings' && XLIVE && S) { XLIVE = false; each(xhairCmds(S), function (x) { cmd(x); }); }   // saqlanmagan pritselni qaytarish
   KEYWAIT = '';
   $(curModal).className = 'modal'; curModal = '';
+  if (!SFX_QUIET) sfx('close');
 }
 var askCb = null;
 function ask(title, cb, two, pw, noin) {
@@ -1816,6 +1818,35 @@ function act(a) {
 }
 
 /* ============================================================ hodisalar */
+/* ---- menyu ovozlari: o'yin sound/xclient/*.wav ni chaladi (XCLauncher.exe ularni o'yin papkasiga qo'yadi) ---- */
+var SFX_ATTR = ['data-act', 'data-tab', 'data-hsub', 'data-seg', 'data-tg', 'data-otg', 'data-ohud', 'data-dd', 'data-ddv', 'data-xchk', 'data-pack',
+  'data-sort', 'data-flt', 'data-theme', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo'];
+var SFX_QUIET = false, sfxLast = null, sfxT = 0;
+function sfx(n) {
+  if (!S || S.uisnd === 0 || !hasApi()) return;
+  var t = now();
+  if (n === 'hover' && t - sfxT < 45) return;
+  sfxT = t; cmd('play xclient/' + n + '.wav');
+}
+function sfxTarget(el) {
+  for (; el && el !== document; el = el.parentNode) {
+    if (!el.getAttribute) continue;
+    for (var i = 0; i < SFX_ATTR.length; i++) if (el.getAttribute(SFX_ATTR[i]) != null) return el;
+    if (/(^| )(mi|btn|sr)( |$)/.test(el.className || '')) return el;
+  }
+  return null;
+}
+document.addEventListener('mouseover', function (e) { var el = sfxTarget(e.target); if (el && el !== sfxLast) sfx('hover'); sfxLast = el; }, true);
+document.addEventListener('mousedown', function (e) {
+  var el = sfxTarget(e.target);
+  if (!el) return;
+  var a = el.getAttribute('data-act');
+  if (a === 'close' || /(^| )mi( |$)/.test(el.className || '')) return;            // oyna ochilish/yopilish ovozi o'zi chalinadi
+  if (el.getAttribute('data-tg') != null || el.getAttribute('data-otg') != null || el.getAttribute('data-xchk') != null || el.getAttribute('data-pack') != null)
+    return sfx(/(^| )on( |$)/.test(el.className || '') ? 'off' : 'on');
+  if (el.getAttribute('data-tab') != null || el.getAttribute('data-hsub') != null) return sfx('tab');
+  sfx(a === 'save' ? 'save' : 'click');
+}, true);
 document.onclick = function (e) {
   var t = e.target || e.srcElement, el;
   if (t && t.id === 'lgRemember' || (t && t.parentNode && t.parentNode.id === 'lgRemember')) { var cb = $('lgRemember'); cb.className = cb.className.indexOf('on') >= 0 ? 'cb' : 'cb on'; return; }

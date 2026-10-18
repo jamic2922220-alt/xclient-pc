@@ -19,7 +19,7 @@ define('XP_PER_LEVEL', 1000);
 
 /* Admin "hamma uchun" deb belgilagan paketlar har bir XClient.exe ga "id~versiya" ko'rinishida qo'shiladi:
  * versiya oshirilsa, eski nusxa olib tashlanib yangisi o'rnatiladi (sborka yangilanishi). */
-define('SPRAY_DEFAULT_VER', 20261025);   // spray_default.wad almashtirilsa - oshiring (hammaga qayta o'rnatiladi)
+define('SPRAY_DEFAULT_VER', 20261026);   // spray_default.wad almashtirilsa - oshiring (hammaga qayta o'rnatiladi)
 function with_forced_packs($o, $d) {
     // spray hammada bir xil - X CLIENT logotipi. sprays: tempdecal.wad hajmi - launcher farq qilsa qayta yozadi
     unset($o['spray'], $o['sprays']);
