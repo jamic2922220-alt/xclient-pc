@@ -1174,7 +1174,7 @@ var DEF = {
   vmx: 0, vmy: 0, vmz: 0, vmshift: 0, bobst: 0, lagst: 0, camint: 0,
   roll: 0, rollspd: 200, bobv: 0.13, bobl: 0.32, boblow: 8, bobcam: 1, lagsc: 1, lagsp: 8, fovlerp: 0, camsc: 1,
   rtracks: 0, rfull: 1, rbg: 0, rallies: 1, rns: 0.8, rhs: 1, dtime: 6, drpc: 1, drpcs: 1, drpcj: 1, mmusic: 1,
-  bob: 0.01, picmip: 0, detail: 1, shadows: 1, minm: 0, interp: 0.01, lw: 1, lc: 1, hisnd: 1, mixa: 0.1, loop: 0, saytm: 5, ngpos: 1
+  bob: 0.01, picmip: 0, detail: 1, shadows: 1, minm: 0, interp: 0.01, lw: 1, lc: 1, hisnd: 1, mixa: 0.1, loop: 0, saytm: 5, ngpos: 1, pro: 0
 };
 var S = null, E = null;
 var CVARS = { sens: 'sensitivity', zoom: 'zoom_sensitivity_ratio', raw: 'm_rawinput', filter: 'm_filter', vol: 'volume', vscale: 'voice_scale', voice: 'voice_enable',
@@ -1236,6 +1236,9 @@ function settingsCmds(s) {
     'ex_interp ' + s.interp, 'cl_lw ' + s.lw, 'cl_lc ' + s.lc, 'hisound ' + s.hisnd, '_snd_mixahead ' + s.mixa, 'voice_loopback ' + s.loop,
     'hud_saytext_time ' + s.saytm, 'net_graphpos ' + s.ngpos);
   c.push('net_graph ' + (s.netg ? 3 : 0), 'hud_deathnotice_old ' + (s.hs ? 0 : 1), 'hud_deathnotice_max ' + s.dmax, 'cl_radartype ' + s.radar, 'hud_centerid ' + s.cid, 'scr_drawversion ' + (s.nover ? 0 : 1));
+  // PRO CFG qo'shimchasi: to'liq yugurish tezligi, eski ovoz tezlatkichlari o'chiq (qotish beradi), keraksiz effektlarsiz - yuqori va barqaror FPS
+  if (s.pro) c.push('cl_forwardspeed 400', 'cl_sidespeed 400', 'cl_backspeed 400', 'cl_upspeed 400', 'cl_pitchup 89', 'cl_pitchdown 89',
+    's_a3d 0', 's_eax 0', 'cl_weather 0', 'cl_himodels 0', 'max_shells 0', 'max_smokepuffs 0', 'gl_monolights 0', 'cl_showevents 0', 'cl_timeout 60');
   c.push('hud_radar_scale ' + (s.rscale / 100), 'hud_radar_opacity ' + s.ropac, 'hud_radar_names ' + s.rnames, 'hud_radar_health ' + s.rhp);
   c.push('hud_radar_mode ' + s.rmode, 'hud_radar_round ' + s.rround, 'hud_radar_rotate ' + s.rrot, 'hud_radar_map_scale ' + s.rmap);
   c.push('viewmodel_offset_x ' + s.vmx, 'viewmodel_offset_y ' + s.vmy, 'viewmodel_offset_z ' + s.vmz, 'viewmodel_disable_shift ' + s.vmshift,
@@ -2039,8 +2042,8 @@ function act(a) {
   if (a === 'procfg') {                        // Pro CFG: lag'siz internet, yuqori FPS, aniq sichqoncha
     E.net = 'fast'; E.fps = 100; E.vsync = 0;   // CS 1.6 100 FPS ga moslangan: otish, otdacha va harakat bir xil bo'ladi
     E.raw = 1; E.filter = 0; E.fastsw = 1; E.bob = 0; E.interp = 0.01; E.lw = 1; E.lc = 1;
-    E.dyn = 0; E.detail = 0; E.hisnd = 1; E.mixa = 0.05; E.xdyn = 0;
-    showSetTab('pro'); return toast(T('pr_cfgok'), 5000);
+    E.dyn = 0; E.detail = 0; E.hisnd = 1; E.mixa = 0.05; E.xdyn = 0; E.shadows = 0; E.pro = 1;
+    toast(T('pr_cfgok'), 5000); a = 'save';     // darhol saqlab qo'llaymiz - "Saqlash" ni bosish esdan chiqib, CFG ishlamay qolardi
   }
   if (a === 'fpsmode') {                       // kuchsiz kompyuter: grafikani pasaytiramiz
     E.detail = 0; E.shadows = 0; E.dyn = 0; E.vsync = 0; if (E.fps < 200) E.fps = 200;
