@@ -1282,7 +1282,10 @@ function settingsCmds(s) {
   c.push('net_graph ' + (s.netg ? 3 : 0), 'hud_deathnotice_old ' + (s.hs ? 0 : 1), 'hud_deathnotice_max ' + s.dmax, 'cl_radartype ' + s.radar, 'hud_centerid ' + s.cid, 'scr_drawversion ' + (s.nover ? 0 : 1));
   // PRO CFG qo'shimchasi: to'liq yugurish tezligi, eski ovoz tezlatkichlari o'chiq (qotish beradi), keraksiz effektlarsiz - yuqori va barqaror FPS
   if (s.pro) c.push('cl_forwardspeed 400', 'cl_sidespeed 400', 'cl_backspeed 400', 'cl_upspeed 400', 'cl_pitchup 89', 'cl_pitchdown 89',
-    's_a3d 0', 's_eax 0', 'cl_weather 0', 'cl_himodels 0', 'max_shells 0', 'max_smokepuffs 0', 'gl_monolights 0', 'cl_showevents 0', 'cl_timeout 60');
+    's_a3d 0', 's_eax 0', 'cl_weather 0', 'cl_showevents 0', 'cl_timeout 60');
+  /* o'q tekkan joydagi tutun/chang va gilzalar - standart: ular o'q qayerga ketayotganini ko'rsatadi (otdachani boshqarish uchun).
+   * 0 qilinganda o'yinchilar "qurol sochilib ketyapti" deyishdi */
+  c.push('max_shells 120', 'max_smokepuffs 120');
   c.push('hud_radar_scale ' + (s.rscale / 100), 'hud_radar_opacity ' + s.ropac, 'hud_radar_names ' + s.rnames, 'hud_radar_health ' + s.rhp);
   c.push('hud_radar_mode ' + s.rmode, 'hud_radar_round ' + s.rround, 'hud_radar_rotate ' + s.rrot, 'hud_radar_map_scale ' + s.rmap);
   c.push('viewmodel_offset_x ' + s.vmx, 'viewmodel_offset_y ' + s.vmy, 'viewmodel_offset_z ' + s.vmz, 'viewmodel_disable_shift ' + s.vmshift,
