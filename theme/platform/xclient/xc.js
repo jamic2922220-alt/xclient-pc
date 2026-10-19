@@ -58,7 +58,14 @@ function canRead() { return !!(NC && typeof NC.getCvarValue === 'function'); }
 function readCvar(n) { if (!canRead()) return null; try { var v = NC.getCvarValue(n); return v == null ? null : String(v); } catch (e) { return null; } }
 function cmd(c) {
   dbg('exec: ' + c);
-  try { if (hasApi()) { NC.exec(c + '\n'); return true; } } catch (e) { dbg('exec xato ' + e); }
+  try {
+    if (hasApi()) {
+      /* serverga ulanishdan OLDIN menyu musiqasini o'chiramiz: xarita yuklanayotganda mp3 chalinsa o'yin qotib,
+       * ovoz takrorlanib qoladi va ba'zan yuklanish tugamaydi ('connect' hodisasi kech yoki manzilsiz kelishi mumkin) */
+      if (/^(connect|retry|reconnect)\b/.test(c)) { NC.exec('mp3 stop\n'); NC.exec('stopsound\n'); MUSIC_ON = false; }
+      NC.exec(c + '\n'); return true;
+    }
+  } catch (e) { dbg('exec xato ' + e); }
   return false;
 }
 function toast(msg, ms) {
@@ -2383,6 +2390,8 @@ step('renderAll();', function () { renderAll(); });
 if (DB.token) api('me', {}, function (r) { if (r.ok) { setMe(r.me); loadFriends(); pingPresence(); } else if (r.err === 'auth') { DB.token = ''; persist(); renderAll(); } });
 
 if (NC) {
+  // o'yin ekrani ochildi (NextClient'ning o'z ro'yxatidan yoki konsoldan kirilsa ham) - menyu musiqasi o'chsin
+  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('hide', function () { if (MUSIC_ON !== false) { cmd('mp3 stop'); MUSIC_ON = false; } }); } catch (e) {}
   try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('show', function () { each(TOP.concat(PINNED).concat(DB.fav), function (ip) { query(ip); }); loadFriends(); loadWeek(); }); } catch (e) {}
   try {
     if (NC.addEventListener) {
