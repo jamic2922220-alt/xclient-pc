@@ -11,6 +11,7 @@ define('XC_DIR', __DIR__ . '/xc_data');
 define('XC_GUARD', "<?php exit; ?>\n");
 define('PACKS_DIR', __DIR__ . '/packs');
 define('NDIRECT', 'http://nextcs.boost-top.com/admin');
+if (!defined('ND_API')) define('ND_API', 'https://nextcs.boost-top.com/api/v1/');
 define('PER_PAGE', 25);
 require_once __DIR__ . '/xclient/release_lib.php';
 
@@ -57,6 +58,30 @@ function all_of($dir) {
 }
 $CFG = rd('config', array());
 function cfg_save() { global $CFG; wr('config', $CFG); }
+/* nDirect API - NextClient'ning rasmiy statistikasi (HWID bo'yicha). Kalit: Sozlamalar → nDirect API.
+ * Limit 30 so'rov/daqiqa, shuning uchun javob xc_data/ndcache da keshlanadi. Xato bo'lsa eski kesh (yoki null) qaytadi */
+$ND_ERR = '';
+function nd_api($path, $q, $ttl) {
+    global $CFG, $ND_ERR;
+    if (empty($CFG['nd_key'])) return null;
+    $ck = 'ndcache/' . md5($path . json_encode($q));
+    $c = rd($ck, null);
+    if ($c && time() - $c['t'] < $ttl) return $c['d'];
+    $ctx = stream_context_create(array('http' => array('method' => 'GET', 'timeout' => 8, 'ignore_errors' => true,
+        'header' => "X-API-Key: " . $CFG['nd_key'] . "\r\nAccept: application/json\r\n")));
+    $raw = @file_get_contents(ND_API . $path . '?' . http_build_query($q), false, $ctx);
+    $code = isset($http_response_header[0]) && preg_match('/\s(\d{3})/', $http_response_header[0], $m) ? (int)$m[1] : 0;
+    $d = json_decode((string)$raw, true);
+    if ($code !== 200 || !is_array($d)) { $ND_ERR = $code ? 'HTTP ' . $code . ($code === 401 || $code === 403 ? ' (kalit noto\'g\'ri)' : ($code === 429 ? ' (limit)' : '')) : 'ulanib bo\'lmadi'; return $c ? $c['d'] : null; }
+    wr($ck, array('t' => time(), 'd' => $d));
+    return $d;
+}
+function nd_days($path, $from) {                       // {Y-m-d: count}
+    $d = nd_api($path, array('from' => $from, 'to' => date('Y-m-d'), 'tz' => 'Asia/Tashkent'), 600);
+    if (!is_array($d)) return null;
+    $m = array(); foreach ($d as $r) if (is_array($r) && isset($r['date'])) $m[$r['date']] = (int)$r['count'];
+    return $m;
+}
 
 /* ---------- API (kalit bilan, sessiyasiz): admin.php?api=stats&key=... ---------- */
 if (isset($_GET['api'])) {
@@ -238,6 +263,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($act === 'api_new') { if (!isset($CFG['api'])) $CFG['api'] = array(); $CFG['api'][] = array('k' => rnd(20), 'name' => mb_substr(pp('name') !== '' ? pp('name') : 'Kalit', 0, 40, 'UTF-8'), 't' => time()); cfg_save(); flash('Yangi API kalit yaratildi'); go('?p=api'); }
     if ($act === 'api_del') { $n = array(); foreach ((array)$CFG['api'] as $k) if ($k['k'] !== pp('k')) $n[] = $k; $CFG['api'] = $n; cfg_save(); flash("Kalit o'chirildi"); go('?p=api'); }
+    if ($act === 'nd_save') {
+        $CFG['nd_key'] = preg_replace('/[^A-Za-z0-9_\-\.|]/', '', pp('key')); cfg_save();
+        foreach ((array)glob(XC_DIR . '/ndcache/*.php') as $f) @unlink($f);
+        if ($CFG['nd_key'] === '') { flash("nDirect kaliti o'chirildi"); go('?p=settings'); }
+        $t = nd_api('unique', array('tz' => 'Asia/Tashkent'), 0);
+        flash(is_array($t) ? 'nDirect ulandi ✓ Infopanel endi NextClient raqamlarini nDirect dan oladi' : 'nDirect javob bermadi: ' . $ND_ERR);
+        go('?p=settings');
+    }
     if ($act === 'pass') {
         if (!password_verify(pp('old'), $adm['pass'])) flash('Eski parol noto\'g\'ri');
         elseif (strlen(pp('new')) < 8) flash('Yangi parol kamida 8 belgi');
@@ -300,7 +333,26 @@ if ($P === 'dash') {
     $range = g('r', 'w'); $days = $range === 'q' ? 90 : ($range === 'm' ? 30 : 7);
     $src = g('s', 'xc') === 'nc' ? 'nc' : 'xc';
     $ser = array();
-    for ($i = max($days, 14) - 1; $i >= 0; $i--) { $ts = strtotime("-$i day"); $x = day(date('Y-m-d', $ts)); $ser[] = array('l' => date('d.m', $ts), 'xc' => cnt($x['d']), 'xn' => cnt($x['n']), 'nc' => cnt($x['m']), 'nn' => cnt($x['mn'])); }
+    for ($i = max($days, 14) - 1; $i >= 0; $i--) { $ts = strtotime("-$i day"); $x = day(date('Y-m-d', $ts)); $ser[] = array('date' => date('Y-m-d', $ts), 'l' => date('d.m', $ts), 'xc' => cnt($x['d']), 'xn' => cnt($x['n']), 'nc' => cnt($x['m']), 'nn' => cnt($x['mn'])); }
+    /* NextClient: kalit bo'lsa - nDirect'ning aniq raqamlari (unikal o'yinchilar va o'rnatishlar), bo'lmasa - menyu sanagani */
+    $ndU = nd_days('unique', $ser[0]['date']); $ndI = $ndU === null ? null : nd_days('installs', $ser[0]['date']);
+    $nd = $ndU !== null;
+    if ($nd) foreach ($ser as $i => $s) { $ser[$i]['nc'] = isset($ndU[$s['date']]) ? $ndU[$s['date']] : 0; $ser[$i]['nn'] = isset($ndI[$s['date']]) ? $ndI[$s['date']] : 0; }
+    $ndOn = null; $ndTop = array();
+    if ($nd) {                                          // bugungi ulanishlar: hozir serverda + eng ko'p kirilgan serverlar
+        $cn = nd_api('connects', array('from' => date('Y-m-d'), 'to' => date('Y-m-d'), 'tz' => 'Asia/Tashkent'), 120);
+        if (is_array($cn)) {
+            $on = array(); $srv = array();
+            foreach ($cn as $day => $rows) foreach ((array)$rows as $r) {
+                if (!is_array($r) || empty($r['uid'])) continue;
+                if (!empty($r['is_connected'])) $on[$r['uid']] = 1;
+                if (!empty($r['server'])) $srv[$r['server']][$r['uid']] = 1;
+            }
+            $ndOn = count($on);
+            foreach ($srv as $k => $u) $ndTop[$k] = count($u);
+            arsort($ndTop); $ndTop = array_slice($ndTop, 0, 8, true);
+        }
+    }
     $t = $ser[count($ser) - 1]; $y = $ser[count($ser) - 2]; $last14 = array_slice($ser, -14);
     $users = all_of('users'); $online = 0; foreach ($users as $u) if (!empty($u['seen']) && time() - $u['seen'] < 150) $online++;
     $card = function ($cls, $val, $title, $prev, $key) use ($last14) {
@@ -311,10 +363,10 @@ if ($P === 'dash') {
     if (empty($CFG['backup_t']) || time() - $CFG['backup_t'] > 7 * 86400) echo '<div class="flash" style="margin-bottom:14px">Zaxira nusxa ' . (empty($CFG['backup_t']) ? 'hali olinmagan' : '7 kundan ko\'p oldin olingan') . ' - <a href="?p=settings">Sozlamalar → Zaxira nusxa</a></div>';
     echo '<h1>Infopanel</h1><div class="cards">'
         . $card('xc', $t['xc'], 'X CLIENT o\'yinchilar bugun', $y['xc'], 'xc')
-        . $card('nc', $t['nc'], 'NextClient o\'yinchilar bugun', $y['nc'], 'nc')
+        . $card('nc', $t['nc'], 'NextClient o\'yinchilar bugun' . ($nd ? ' · nDirect' : ''), $y['nc'], 'nc')
         . $card('xc', $t['xn'], 'X CLIENT o\'rnatishlar bugun', $y['xn'], 'xn')
-        . $card('nc', $t['nn'], 'NextClient yangi o\'yinchilar bugun', $y['nn'], 'nn')
-        . '<div class="card"><span class="ct">Hozir onlayn</span><b>' . $online . '</b><span class="mut">akkaunt bilan, menyu yoki serverda</span></div>'
+        . $card('nc', $t['nn'], $nd ? 'NextClient o\'rnatishlar bugun · nDirect' : 'NextClient yangi o\'yinchilar bugun', $y['nn'], 'nn')
+        . '<div class="card"><span class="ct">Hozir onlayn</span><b>' . $online . '</b><span class="mut">akkaunt bilan, menyu yoki serverda' . ($ndOn !== null ? '<br>NextClient serverlarda: <b style="font-size:inherit;display:inline">' . $ndOn . '</b>' : '') . '</span></div>'
         . '<div class="card"><span class="ct">Jami (hamma vaqt)</span><span class="mut">X CLIENT o\'rnatgan: <b style="font-size:inherit;display:inline">' . $devCount . '</b><br>NextClient o\'yinchi: <b style="font-size:inherit;display:inline">' . $ncCount . '</b><br>Akkauntlar: <b style="font-size:inherit;display:inline">' . $accCount . '</b></span></div></div>';
     $ser = array_slice($ser, -$days);
     // chiziqli grafik: Unikal / Yangi / Eski
@@ -327,6 +379,12 @@ if ($P === 'dash') {
         . line_chart($ser, $lines) . '</div>';
     // ustunli: X CLIENT va NextClient
     echo '<div class="panel"><div class="ph">NextClient va X CLIENT <span class="lg"><i style="background:#3d86df"></i>NextClient <i style="background:#c84bdc"></i>X CLIENT</span></div>' . bar_chart($ser) . '</div>';
+    if ($ndTop) {
+        $mx = max($ndTop); $rows = '';
+        foreach ($ndTop as $k => $v) $rows .= '<div class="kv"><span class="mono">' . h($k) . '</span><b>' . $v . '</b></div><div style="height:4px;margin:-4px 0 8px;border-radius:2px;background:#3d86df;width:' . max(2, round(100 * $v / $mx)) . '%"></div>';
+        echo '<div class="panel"><div class="ph">Bugun eng ko\'p kirilgan serverlar <span class="mut small">NextClient o\'yinchilari, nDirect</span></div>' . $rows . '</div>';
+    }
+    if (!$nd) echo '<div class="panel mut small">NextClient raqamlari hozir menyu orqali taxminiy sanalyapti. Aniq raqamlar uchun <a href="?p=settings">Sozlamalar → nDirect API</a> ga kalitni kiriting.' . ($ND_ERR ? ' Xato: ' . h($ND_ERR) : '') . '</div>';
     // diagrammalar
     $devs = all_of('dev'); $ncs = all_of('nc');
     $agg = function ($list, $fn) { $r = array(); foreach ($list as $o) { $k = $fn($o); if ($k === '' || $k === null) $k = "noma'lum"; $r[$k] = (isset($r[$k]) ? $r[$k] : 0) + 1; } arsort($r); return $r; };
@@ -563,6 +621,9 @@ if ($P === 'settings') {
     echo '<h1>Sozlamalar</h1><div class="grid2"><div class="panel"><div class="ph">Admin parolini almashtirish</div><form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="pass"><input type="password" name="old" placeholder="Eski parol"><input type="password" name="new" placeholder="Yangi parol (8+ belgi)"><button class="btn red">Almashtirish</button></form></div>'
         . '<div class="panel"><div class="ph">Ma\'lumotlar</div><div class="kv"><span>xc_data hajmi</span><b>' . size_h($sz) . ' · ' . $n . ' fayl</b></div><div class="kv"><span>PHP</span><b>' . h(PHP_VERSION) . '</b></div>'
         . '<form method="post" class="frm" style="margin-top:10px">' . csrf_in() . '<input type="hidden" name="act" value="clean_days"><div class="row"><select name="keep"><option value="90">90 kundan eski</option><option value="180">180 kundan eski</option><option value="365" selected>1 yildan eski</option></select><button class="btn">Kunlik statistikani tozalash</button></div></form></div></div>'
+        . '<div class="panel"><div class="ph">nDirect API (NextClient statistikasi)</div><div class="mut small" style="margin-bottom:10px">nextcs.boost-top.com/admin → API ключи → kalitni nusxalab shu yerga qo\'ying. Shunda Infopanel NextClient o\'yinchilari va o\'rnatishlarini nDirect bilan bir xil ko\'rsatadi. Kalit faqat serveringizda saqlanadi.</div>'
+        . '<form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="nd_save"><input type="password" name="key" autocomplete="off" placeholder="' . (empty($CFG['nd_key']) ? 'X-API-Key' : 'saqlangan ✓ (…' . h(substr($CFG['nd_key'], -4)) . ') - almashtirish uchun yangisini yozing, o\'chirish uchun bo\'sh qoldiring') . '">'
+        . '<button class="btn red">Saqlash va tekshirish</button></form></div>'
         . '<div class="panel"><div class="ph">Zaxira nusxa</div><div class="mut small" style="margin-bottom:10px">Akkauntlar, XP, do\'stlar, statistika, e\'lonlar, sozlamalar - hammasi bitta faylga yuklab olinadi. Haftada bir marta olib, kompyuteringizda saqlang. Tiklash: faylni ochib, ichidagi xc_data papkasini FastPanel orqali mmb ga qayta yuklang.</div>'
         . '<form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="backup"><label class="chk"><input type="checkbox" name="shots" value="1"> Skrinshotlarni ham qo\'shish (katta bo\'lishi mumkin)</label>'
         . '<button class="btn red">⬇ Zaxirani yuklab olish</button> <span class="mut small">Oxirgi: ' . (empty($CFG['backup_t']) ? 'hali olinmagan' : dt($CFG['backup_t'])) . '</span></form></div>';
