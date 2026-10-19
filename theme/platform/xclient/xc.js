@@ -422,8 +422,20 @@ function pump() {
       running++;
       var s = srv(ip), t0 = now(), done = false;
       function fin() { if (done) return; done = true; running--; s.q = 0; s.ts = now(); onSrvUpdate(s); renderSoon(); pump(); }
-      var tm = setTimeout(function () { if (!done) { s.ok = false; s.fail = true; fin(); } }, 6000);
-      if (!hasMM()) { clearTimeout(tm); s.fail = true; fin(); return; }
+      /* NextClient javob ololmasa - sayt (srvq.php) orqali qayta so'raymiz: ba'zi serverlar so'rovlarni cheklaydi */
+      function viaSite() {
+        srvq(ip, function (r) {
+          if (done) return;
+          if (r && r.ok) {
+            s.prevPl = s.ok ? s.pl : null; s.ok = true; s.fail = false; s.ping = s.ping || 0;
+            s.name = clean(r.name) || ip; s.map = clean(r.map); s.pl = r.pl || 0; s.max = r.max || 0; s.bots = r.bots || 0;
+            if (r.players) PLAYERS[ip] = r.players.map(function (x) { return { name: x.name, score: x.score, timePlayedSeconds: x.time }; });
+          } else { s.ok = false; s.fail = true; }
+          fin();
+        });
+      }
+      var tm = setTimeout(function () { if (!done) viaSite(); }, 6000);
+      if (!hasMM()) { clearTimeout(tm); viaSite(); return; }
       try {
         NC.matchmaking.getServerInfo(ip).then(function (r) {
           clearTimeout(tm);
@@ -432,8 +444,8 @@ function pump() {
           s.name = clean(r.hostname) || ip; s.map = clean(r.map);
           s.pl = r.playersOnline || 0; s.max = r.playersMax || 0; s.bots = r.botsOnline || 0; s.pass = !!r.isPasswordProtected;
           fin();
-        }, function () { clearTimeout(tm); s.ok = false; s.fail = true; fin(); });
-      } catch (e) { clearTimeout(tm); s.fail = true; fin(); }
+        }, function () { clearTimeout(tm); viaSite(); });
+      } catch (e) { clearTimeout(tm); viaSite(); }
     })(queue.shift());
   }
 }
@@ -971,15 +983,31 @@ function renderHistStats() {
   $('srvExtra').innerHTML = box(0, 'hs_today', fmtDur(tSec)) + box(1, 'hs_kills', String(kills)) + box(2, 'hs_most', bn) + box(3, 'hs_kd', x ? (k / x).toFixed(2) : (k ? k.toFixed(2) : '-'));
 }
 var PLAYERS = {};
+function srvq(ip, cb) {                          // sayt orqali server so'rovi (srvq.php): {ok,name,map,pl,max,bots,players:[{name,score,time}]}
+  try {
+    var x = new XMLHttpRequest(), done = false;
+    x.open('GET', 'srvq.php?ip=' + encodeURIComponent(ip), true);
+    x.onreadystatechange = function () { if (x.readyState !== 4 || done) return; done = true; var r = null; try { r = JSON.parse(x.responseText); } catch (e) {} cb(r); };
+    setTimeout(function () { if (!done) { done = true; try { x.abort(); } catch (e) {} cb(null); } }, 9000);
+    x.send(null);
+  } catch (e) { cb(null); }
+}
+function setPlayers(ip, list) {
+  list = list || [];
+  list.sort(function (a, b) { return (b.score || 0) - (a.score || 0); });
+  PLAYERS[ip] = list; if (ip === srvSel) renderInfo();
+}
 function loadPlayers(ip) {
-  if (!NC || !NC.matchmaking || !NC.matchmaking.getPlayersInfo || (CONNECTED && normIp(ip) === CONNECTED)) return;
+  if (CONNECTED && normIp(ip) === CONNECTED) return;
+  /* NextClient ro'yxat bermasa (yoki server o'yinchi bor desa-yu ro'yxat bo'sh kelsa) - sayt orqali */
+  var site = function () { srvq(ip, function (r) { setPlayers(ip, r && r.ok && r.players ? r.players.map(function (x) { return { name: x.name, score: x.score, timePlayedSeconds: x.time }; }) : []); }); };
+  if (!NC || !NC.matchmaking || !NC.matchmaking.getPlayersInfo) return site();
   try {
     NC.matchmaking.getPlayersInfo(ip).then(function (list) {
-      list = list || [];
-      list.sort(function (a, b) { return (b.score || 0) - (a.score || 0); });
-      PLAYERS[ip] = list; if (ip === srvSel) renderInfo();
-    }, function () { PLAYERS[ip] = []; if (ip === srvSel) renderInfo(); });
-  } catch (e) {}
+      if ((!list || !list.length) && srv(ip).pl > 0) return site();
+      setPlayers(ip, list);
+    }, site);
+  } catch (e) { site(); }
 }
 /* ---- serverning soatlar bo'yicha gavjumligi ---- */
 var SHIST = {};
