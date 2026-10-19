@@ -6,10 +6,18 @@
  * ===================================================================== */
 header('Access-Control-Allow-Origin: *');
 $ip = isset($_GET['ip']) ? trim((string)$_GET['ip']) : '';
+$diag = !empty($_GET['diag']) || $ip === '';
+if ($diag) {                                              // tekshiruv sahifasi: manzil yozadigan maydon
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta name="viewport" content="width=device-width"><title>Server tekshiruvi</title><style>body{font:15px system-ui;background:#111;color:#eee;padding:16px;max-width:900px;margin:auto}td,th{padding:4px 10px;border-bottom:1px solid #333;text-align:left}.ok{color:#5d5}.no{color:#f66}input{font-size:17px;padding:9px 12px;width:260px;background:#222;color:#fff;border:1px solid #555;border-radius:8px}button{font-size:17px;padding:9px 18px;background:#e33;color:#fff;border:0;border-radius:8px;cursor:pointer}</style>'
+        . '<h1>Server tekshiruvi</h1><form><input name="ip" value="' . htmlspecialchars($ip) . '" placeholder="212.47.58.40:27015" autofocus> <input type="hidden" name="diag" value="1"><button>Tekshirish</button></form>';
+    if ($ip === '') exit;
+    if (!preg_match('/^\d{1,3}(?:\.\d{1,3}){3}:\d{2,5}$/', $ip)) { echo '<p class="no">Manzil noto\'g\'ri. Shunday yozing: <b>212.47.58.40:27015</b> (IP, ikki nuqta, port)</p>'; exit; }
+}
 if (!preg_match('/^(\d{1,3}(?:\.\d{1,3}){3}):(\d{2,5})$/', $ip, $m) || preg_match('/^(10|127|0|192\.168|172\.(1[6-9]|2\d|3[01]))\./', $m[1])) {
     header('Content-Type: application/json'); echo '{"ok":false,"err":"bad ip"}'; exit;
 }
-$host = $m[1]; $port = (int)$m[2]; $diag = !empty($_GET['diag']);
+$host = $m[1]; $port = (int)$m[2];
 
 /* bitta UDP so'rov: javob (yoki null) va ms */
 function udp($host, $port, $pkt, $to = 1.5) {
@@ -65,8 +73,6 @@ if (!$diag) {
     echo json_encode($i); exit;
 }
 
-header('Content-Type: text/html; charset=utf-8');
-echo '<!doctype html><meta name="viewport" content="width=device-width"><title>Server tekshiruvi</title><style>body{font:15px system-ui;background:#111;color:#eee;padding:16px;max-width:900px;margin:auto}td,th{padding:4px 10px;border-bottom:1px solid #333;text-align:left}.ok{color:#5d5}.no{color:#f66}</style>';
 echo '<h2>' . htmlspecialchars($ip) . '</h2>';
 $okN = 0;
 for ($k = 1; $k <= 5; $k++) {
