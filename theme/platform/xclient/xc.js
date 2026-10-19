@@ -2383,7 +2383,7 @@ step('renderAll();', function () { renderAll(); });
 if (DB.token) api('me', {}, function (r) { if (r.ok) { setMe(r.me); loadFriends(); pingPresence(); } else if (r.err === 'auth') { DB.token = ''; persist(); renderAll(); } });
 
 if (NC) {
-  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('show', function () { each(TOP.concat(PINNED), function (ip) { query(ip); }); loadFriends(); }); } catch (e) {}
+  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('show', function () { each(TOP.concat(PINNED).concat(DB.fav), function (ip) { query(ip); }); loadFriends(); loadWeek(); }); } catch (e) {}
   try {
     if (NC.addEventListener) {
       NC.addEventListener('connect', function (e) { onConnectEvt(e && e.detail && e.detail.address, false); });
@@ -2400,13 +2400,20 @@ if (NC) {
   } catch (e) {}
 } else dbg('nextclient API yo\'q');
 
+/* O'yin paytida (serverda, menyu yopiq) fonda hech narsa qilmaymiz: serverlarni so'rash o'yin dvigateli orqali ketadi va
+ * har 30 soniyada qisqa qotish berardi. Menyu ochilganda ('show') hammasi darhol yangilanadi */
+function playing() {
+  if (!CONNECTED) return false;
+  try { return !(NC && NC.gameUi && NC.gameUi.shown); } catch (e) { return true; }
+}
 setInterval(function () {
+  if (playing()) return;
   each(TOP.slice(0, 6).concat(PINNED).concat(DB.fav), function (ip) { query(ip); });
   if (curModal === 'mdServers') each(tabIps(), function (ip) { query(ip); });
 }, 30000);
 setInterval(pingPresence, 60000);
-setInterval(function () { loadFriends(); loadWeek(); }, 60000);
-setInterval(loadTop, 10 * 60 * 1000);
+setInterval(function () { loadFriends(); if (!playing()) loadWeek(); }, 60000);   // do'stlar - xabar bildirishnomalari uchun o'yinda ham
+setInterval(function () { if (!playing()) loadTop(); }, 10 * 60 * 1000);
 setInterval(loadAnn, 5 * 60 * 1000);
 setTimeout(sendStats, 90000); setInterval(sendStats, 10 * 60 * 1000);
 })();

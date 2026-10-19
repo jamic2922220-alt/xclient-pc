@@ -1461,7 +1461,7 @@ static void run_game(void)
     PROCESS_INFORMATION pi;
     if (o_ok) compat_flags(exe, o_prio);
     if (CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, g_dir, &si, &pi)) {
-        if (o_prio) SetPriorityClass(pi.hProcess, HIGH_PRIORITY_CLASS);   /* "O'yinni tezlashtirish" */
+        if (o_prio) SetPriorityClass(pi.hProcess, ABOVE_NORMAL_PRIORITY_CLASS);   /* "O'yinni tezlashtirish": HIGH Windows ovoz xizmatini (audiodg) siqib, ovoz qotishi va chirsillashiga sabab bo'lardi */
         CloseHandle(pi.hThread);
         /* guard_theme olib tashlandi: nDirect fayllarini qayta yozish har ochilishda yangilanishga sabab bo'lardi */
         /* O'yin yopilgach skrinshotlarni (F5) darhol galereyaga yuklaymiz - keyingi ishga tushishni kutmasdan.
