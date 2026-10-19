@@ -258,8 +258,11 @@ case 'login':
     out(array('ok' => true, 'token' => new_token($u['login']), 'me' => pub($u, true)));
 
 case 'beat':                                             // menyu ochildi (kuniga bir marta hisoblanadi)
-    $dev = p('device');
-    if (!preg_match('/^[a-z0-9]{8,40}$/', $dev)) fail('bad', 'bad');
+    if (!preg_match('/^[a-z0-9]{8,40}$/', p('device'))) fail('bad', 'bad');
+    /* O'yin brauzeri localStorage ni saqlamaydi - menyuning tasodifiy device id si har ochilishda yangi bo'lib,
+     * bitta kompyuter o'nlab "yangi o'yinchi" bo'lib sanalardi. Shuning uchun id serverda: nik + ekran + IP tarmog'i */
+    $ipn = implode('.', array_slice(explode('.', client_ip()), 0, 2));
+    $dev = 'f' . substr(md5(strtolower(trim(p('nick'))) . '|' . p('res') . '|' . $ipn), 0, 15);
     lock();
     @mkdir(XC_DIR . '/nc', 0755, true);
     $r = rd('nc/' . $dev, array());

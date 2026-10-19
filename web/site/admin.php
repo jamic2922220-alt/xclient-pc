@@ -315,7 +315,7 @@ if ($P === 'dash') {
         . $card('xc', $t['xn'], 'X CLIENT o\'rnatishlar bugun', $y['xn'], 'xn')
         . $card('nc', $t['nn'], 'NextClient yangi o\'yinchilar bugun', $y['nn'], 'nn')
         . '<div class="card"><span class="ct">Hozir onlayn</span><b>' . $online . '</b><span class="mut">akkaunt bilan, menyu yoki serverda</span></div>'
-        . '<div class="card"><span class="ct">Jami</span><b>' . $devCount . '</b><span class="mut">X CLIENT o\'rnatish · ' . $ncCount . ' NextClient · ' . $accCount . ' akkaunt</span></div></div>';
+        . '<div class="card"><span class="ct">Jami (hamma vaqt)</span><span class="mut">X CLIENT o\'rnatgan: <b style="font-size:inherit;display:inline">' . $devCount . '</b><br>NextClient o\'yinchi: <b style="font-size:inherit;display:inline">' . $ncCount . '</b><br>Akkauntlar: <b style="font-size:inherit;display:inline">' . $accCount . '</b></span></div></div>';
     $ser = array_slice($ser, -$days);
     // chiziqli grafik: Unikal / Yangi / Eski
     $ku = $src === 'nc' ? 'nc' : 'xc'; $kn = $src === 'nc' ? 'nn' : 'xn';
