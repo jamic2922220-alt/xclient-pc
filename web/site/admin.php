@@ -379,6 +379,12 @@ if ($P === 'dash') {
         . line_chart($ser, $lines) . '</div>';
     // ustunli: X CLIENT va NextClient
     echo '<div class="panel"><div class="ph">NextClient va X CLIENT <span class="lg"><i style="background:#3d86df"></i>NextClient <i style="background:#c84bdc"></i>X CLIENT</span></div>' . bar_chart($ser) . '</div>';
+    if ($nd) {                                          // X CLIENT o'yini ham NextClient - nDirect ularni ham sanaydi
+        $onlyU = max(0, $t['nc'] - $t['xc']); $onlyI = max(0, $t['nn'] - $t['xn']);
+        echo '<div class="panel small"><b>Eslatma:</b> X CLIENT o\'yini ichida NextClient bor, shuning uchun nDirect X CLIENT o\'yinchilari va o\'rnatishlarini ham NextClient deb sanaydi.'
+            . '<div class="kv" style="margin-top:8px"><span>Bugun o\'yinchilar: NextClient (jami) ' . $t['nc'] . ' − X CLIENT ' . $t['xc'] . '</span><b>faqat NextClient ≈ ' . $onlyU . '</b></div>'
+            . '<div class="kv"><span>Bugun o\'rnatishlar: NextClient (jami) ' . $t['nn'] . ' − X CLIENT ' . $t['xn'] . '</span><b>faqat NextClient ≈ ' . $onlyI . '</b></div></div>';
+    }
     if ($ndTop) {
         $mx = max($ndTop); $rows = '';
         foreach ($ndTop as $k => $v) $rows .= '<div class="kv"><span class="mono">' . h($k) . '</span><b>' . $v . '</b></div><div style="height:4px;margin:-4px 0 8px;border-radius:2px;background:#3d86df;width:' . max(2, round(100 * $v / $mx)) . '%"></div>';
