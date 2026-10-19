@@ -625,7 +625,8 @@ function stopRecord() { clearTimeout(REC_TM); if (REC) { cmd('stop'); REC = ''; 
 function onConnectEvt(addr, inGame) {
   addr = normIp(addr);
   if (!addr) return;
-  if (addr !== CONNECTED) { CONNECTED = addr; startGame(addr); musicSync(); pingPresence(); renderAll(); }
+  if (addr !== CONNECTED) { CONNECTED = addr; MUSIC_ON = null; startGame(addr); musicSync();   // serverda mp3 chalinmasin: o'yin ovozlarini bo'g'adi
+    pingPresence(); renderAll(); }
   if (S.demo) startRecord(inGame ? 1500 : 25000);   // 'connect' dan keyin 'putinserver' kelmasa ham 25 soniyadan so'ng urinamiz
 }
 function onDisconnectEvt() {
@@ -1192,6 +1193,7 @@ var CVARS = { sens: 'sensitivity', zoom: 'zoom_sensitivity_ratio', raw: 'm_rawin
 function loadSettings() {
   S = copy(DEF);
   if (DB.set) for (var k in DB.set) if (DB.set.hasOwnProperty(k) && DEF.hasOwnProperty(k)) S[k] = DB.set[k];
+  if (!(S.mixa >= 0.1)) S.mixa = 0.1;              // 0.05 (eski PRO CFG) - ovoz buferi juda kichik: FPS tushsa ovoz qotib takrorlanadi va uziladi
 }
 function seedFromGame() {
   if (!canRead()) return;
@@ -1602,7 +1604,7 @@ var PANES = {
   sound: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('so_title')) + '</div>' + sl('vol', 'so_vol', 0, 1, 0.05) + sl('mus', 'so_mus', 0, 1, 0.05) + sl('vscale', 'so_vscale', 0, 2, 0.1) + '</div>' +
       '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('voice', 'so_voice') + tg('loop', 'so_loop') + tg('mute', 'so_mute') + tg('uisnd', 'so_ui', 'so_ui2') + tg('mmusic', 'so_music', 'so_music2') +
-      '<div class="ph2 m">' + esc(T('so_q')) + '</div>' + tg('hisnd', 'so_hi') + seg('mixa', 'so_mix', [[0.05, 'so_mix1'], [0.1, 'so_mix2']]) + '</div>';
+      '<div class="ph2 m">' + esc(T('so_q')) + '</div>' + tg('hisnd', 'so_hi') + seg('mixa', 'so_mix', [[0.1, 'so_mix2'], [0.15, 'so_mix3']]) + '</div>';
   },
   video: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('v_title')) + '</div>' +
@@ -2042,7 +2044,7 @@ function act(a) {
   if (a === 'procfg') {                        // Pro CFG: lag'siz internet, yuqori FPS, aniq sichqoncha
     E.net = 'fast'; E.fps = 100; E.vsync = 0;   // CS 1.6 100 FPS ga moslangan: otish, otdacha va harakat bir xil bo'ladi
     E.raw = 1; E.filter = 0; E.fastsw = 1; E.bob = 0; E.interp = 0.01; E.lw = 1; E.lc = 1;
-    E.dyn = 0; E.detail = 0; E.hisnd = 1; E.mixa = 0.05; E.xdyn = 0; E.shadows = 0; E.pro = 1;
+    E.dyn = 0; E.detail = 0; E.hisnd = 1; E.mixa = 0.1; E.xdyn = 0; E.shadows = 0; E.pro = 1;
     toast(T('pr_cfgok'), 5000); a = 'save';     // darhol saqlab qo'llaymiz - "Saqlash" ni bosish esdan chiqib, CFG ishlamay qolardi
   }
   if (a === 'fpsmode') {                       // kuchsiz kompyuter: grafikani pasaytiramiz
@@ -2079,11 +2081,11 @@ function act(a) {
 
 /* ============================================================ hodisalar */
 /* ---- menyu musiqasi: CS ning o'z menyu kuyi (media/gamestartup.mp3), faqat serverda bo'lmaganda ---- */
-var MUSIC_ON = false;
+var MUSIC_ON = null;                             // null - noma'lum: oldingi sahifa (menyu yangilangan) qoldirgan musiqa ham o'chirilsin
 function musicSync() {
   var want = !!(S && S.mmusic && !CONNECTED && hasApi());
   if (want && !MUSIC_ON) { cmd('mp3volume ' + (S.mp3off ? 0 : S.mus)); cmd('mp3 loop media/gamestartup.mp3'); MUSIC_ON = true; }
-  else if (!want && MUSIC_ON) { cmd('mp3 stop'); MUSIC_ON = false; }
+  else if (!want && MUSIC_ON !== false) { cmd('mp3 stop'); MUSIC_ON = false; }
 }
 
 /* ---- internet tekshiruvi: bir nechta serverga 3 martadan so'rov - ping, tebranish, yo'qotish -> mos rate ---- */
