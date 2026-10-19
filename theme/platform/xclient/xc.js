@@ -1000,11 +1000,18 @@ function setPlayers(ip, list) {
 function loadPlayers(ip) {
   if (CONNECTED && normIp(ip) === CONNECTED) return;
   /* NextClient ro'yxat bermasa (yoki server o'yinchi bor desa-yu ro'yxat bo'sh kelsa) - sayt orqali */
-  var site = function () { srvq(ip, function (r) { setPlayers(ip, r && r.ok && r.players ? r.players.map(function (x) { return { name: x.name, score: x.score, timePlayedSeconds: x.time }; }) : []); }); };
+  var site = function () {
+    srvq(ip, function (r) {
+      if (r && r.ok) {                           // NextClient "0" degan bo'lsa ham - sayt ko'rgan sonni qo'yamiz
+        var s = srv(ip); s.ok = true; s.fail = false; s.pl = r.pl || 0; s.max = r.max || s.max; if (r.map) s.map = clean(r.map); renderSoon();
+      }
+      setPlayers(ip, r && r.ok && r.players ? r.players.map(function (x) { return { name: x.name, score: x.score, timePlayedSeconds: x.time }; }) : []);
+    });
+  };
   if (!NC || !NC.matchmaking || !NC.matchmaking.getPlayersInfo) return site();
   try {
     NC.matchmaking.getPlayersInfo(ip).then(function (list) {
-      if ((!list || !list.length) && srv(ip).pl > 0) return site();
+      if (!list || !list.length) return site();   // bo'sh ro'yxat - saytdan tekshiramiz (ba'zi serverlarni NextClient noto'g'ri o'qiydi)
       setPlayers(ip, list);
     }, site);
   } catch (e) { site(); }
