@@ -1827,7 +1827,10 @@ function recolorImages(hue) {
         var c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
         var x = c.getContext('2d'); x.drawImage(src, 0, 0);
         var d = x.getImageData(0, 0, c.width, c.height), px = d.data;
-        for (var i = 0; i < px.length; i += 4) { if (px[i + 3] < 8) continue; var t = themeColor(px[i], px[i + 1], px[i + 2], hue); if (t) { px[i] = t[0]; px[i + 1] = t[1]; px[i + 2] = t[2]; } }
+        for (var i = 0; i < px.length; i += 4) {
+          if (px[i + 3] < 8) continue;
+          if (hue > 0) { var t = themeColor(px[i], px[i + 1], px[i + 2], hue); if (t) { px[i] = t[0]; px[i + 1] = t[1]; px[i + 2] = t[2]; } }
+        }
         x.putImageData(d, 0, 0); IMG_TH[key] = c.toDataURL('image/png');
         each(document.querySelectorAll('img[data-osrc="' + o + '"]'), function (m) { m.src = IMG_TH[key]; });
       } catch (e) {}

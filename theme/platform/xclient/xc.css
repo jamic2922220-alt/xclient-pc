@@ -610,3 +610,9 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 /* kun rejimi: matnlar qalinroq */
 .day #app { font-weight: 600; }
 .day .mut, .day small { font-weight: 600; }
+/* kun rejimi: qorong'i "vinyetka" och fonda oq parda bo'lib logotiplarni xiralashtirardi - o'chiramiz; nur kuchsizroq, yozuvlar to'q */
+.day #vig { display: none; }
+.day #stage .glow { opacity: 0.35; }
+.day #stage .r1, .day #stage .r2, .day #stage .r3 { opacity: 0.6; }
+.day #stage .ttl, .day #logo .xc { color: black; }
+.day #stage .sub2 { opacity: 1; }
