@@ -16,6 +16,7 @@ define('XC_DIR', __DIR__ . '/xc_data');
 define('XC_GUARD', "<?php exit; ?>\n");
 define('XP_PER_MIN', 1);          // har bir o'ynalgan daqiqa uchun XP
 define('XP_PER_LEVEL', 1000);
+define('XP_PER_KILL', 2);         // har kill uchun XP (jang statistikasi orqali)
 
 /* Admin "hamma uchun" deb belgilagan paketlar har bir XClient.exe ga "id~versiya" ko'rinishida qo'shiladi:
  * versiya oshirilsa, eski nusxa olib tashlanib yangisi o'rnatiladi (sborka yangilanishi). */
@@ -135,6 +136,9 @@ function pub($u, $full) {
         'server' => is_online($u) && !empty($u['server']) ? $u['server'] : '', 'map' => is_online($u) && !empty($u['map']) ? $u['map'] : '',
     );
     $st = isset($u['st']) && is_array($u['st']) ? $u['st'] : array();
+    $r['ach'] = isset($u['ach']) ? array_keys($u['ach']) : array();
+    $ch = rd('champ', array()); $r['champ'] = !empty($ch['login']) && $ch['login'] === strtolower($u['login']);
+    if (!empty($u['clan'])) $r['clan'] = $u['clan'];
     $r['st'] = array('k' => (int)@$st['k'], 'd' => (int)@$st['d'], 'g' => (int)@$st['g'], 't' => (int)@$st['t'], 'best' => (int)@$st['best'],
         'wk' => (isset($u['wkkid']) && $u['wkkid'] === week_id()) ? (int)$u['wkk'] : 0);
     if ($full) {
@@ -145,6 +149,8 @@ function pub($u, $full) {
         $r['created'] = $u['created'];
         $r['pwchanged'] = isset($u['pwchanged']) ? $u['pwchanged'] : $u['created'];
         $r['cloud'] = isset($u['cloud']) ? $u['cloud'] : null;
+        $r['refby'] = isset($u['refby']) ? $u['refby'] : '';
+        $r['refs'] = isset($u['refs']) ? count($u['refs']) : 0;
         $r['cloudt'] = isset($u['cloudt']) ? $u['cloudt'] : 0;
         $r['devices'] = isset($u['devices']) ? count($u['devices']) : 0;
         $r['friends'] = isset($u['friends']) ? $u['friends'] : array();
@@ -196,6 +202,79 @@ function missions_today() {
     }
     return $out;
 }
+/* ---------- yutuqlar (achievement): shart bajarilganda bir marta beriladi, profilda nishon ---------- */
+function ach_list() {
+    return array(
+        'k100' => array(100, 'k'), 'k1000' => array(1000, 'k'), 'k5000' => array(5000, 'k'),
+        'best30' => array(30, 'best'), 'g100' => array(100, 'g'), 't10h' => array(36000, 't'), 't50h' => array(180000, 't'),
+        'awp100' => array(100, 'w:awp'), 'ak500' => array(500, 'w:ak47'), 'knife10' => array(10, 'w:knife'), 'deagle100' => array(100, 'w:deagle'),
+        'fr5' => array(5, 'fr'), 'ref3' => array(3, 'ref'), 'champ' => array(1, 'champ'), 'clan' => array(1, 'clan'),
+    );
+}
+function ach_check(&$u) {
+    $st = isset($u['st']) ? $u['st'] : array(); $new = array();
+    if (!isset($u['ach']) || !is_array($u['ach'])) $u['ach'] = array();
+    foreach (ach_list() as $id => $a) {
+        if (isset($u['ach'][$id])) continue;
+        $f = $a[1];
+        if (strpos($f, 'w:') === 0) { $wn = substr($f, 2); $v = isset($st['wpn'][$wn]) ? (int)$st['wpn'][$wn] : 0; }
+        elseif ($f === 'fr') $v = isset($u['friends']) ? count($u['friends']) : 0;
+        elseif ($f === 'ref') $v = isset($u['refs']) ? count($u['refs']) : 0;
+        elseif ($f === 'champ') $v = !empty($u['champs']) ? 1 : 0;
+        elseif ($f === 'clan') $v = !empty($u['clan']) ? 1 : 0;
+        else $v = isset($st[$f]) ? (int)$st[$f] : 0;
+        if ($v >= $a[0]) { $u['ach'][$id] = time(); $new[] = $id; $u['xp'] = (int)$u['xp'] + 100; }   // har yutuq +100 XP
+    }
+    return $new;
+}
+/* hafta chempioni: o'tgan haftaning eng ko'p kill qilgani - toj nishoni (bir hafta) + 500 XP. Hafta almashgach birinchi so'rovda hisoblanadi */
+function champ_update() {
+    $prev = date('o-W', strtotime('-7 day')); $c = rd('champ', array());
+    if (isset($c['wk']) && $c['wk'] === $prev) return $c;
+    $best = null; $bk = 0;
+    foreach (glob(XC_DIR . '/users/*.php') as $f) {
+        $x = rd('users/' . basename($f, '.php'), null); if (!$x) continue;
+        $k = (isset($x['wkkid']) && $x['wkkid'] === $prev) ? (int)$x['wkk'] : ((isset($x['wkkpid']) && $x['wkkpid'] === $prev) ? (int)$x['wkkp'] : 0);
+        if ($k > $bk) { $bk = $k; $best = $x; }
+    }
+    $c = array('wk' => $prev, 'login' => $best ? strtolower($best['login']) : '', 'name' => $best ? $best['name'] : '', 'k' => $bk);
+    wr('champ', $c);
+    if ($best) {
+        $best['champs'] = (isset($best['champs']) ? (int)$best['champs'] : 0) + 1; $best['xp'] = (int)$best['xp'] + 500;
+        ach_check($best);
+        if (!isset($best['msgs'])) $best['msgs'] = array();
+        $best['msgs'][] = array('t' => time(), 'text' => "\xF0\x9F\x91\x91 Tabriklaymiz! Siz o'tgan haftaning chempionisiz ($bk kill). +500 XP va toj nishoni.");
+        save_user($best);
+        tg_notify('daily', "Hafta chempioni: " . $best['name'] . " - $bk kill");
+    }
+    return $c;
+}
+/* Telegram'ga kunlik hisobot: soat 9 dan keyin birinchi so'rovda, kuniga bir marta (cron kerak emas) */
+function daily_report() {
+    @date_default_timezone_set('Asia/Tashkent');
+    if ((int)date('G') < 9) return;
+    $c = xc_cfg(); if (empty($c['tg_token']) || empty($c['tg_ev']['daily'])) return;
+    $today = date('Y-m-d'); $m = rd('dailyrep', array());
+    if (isset($m['d']) && $m['d'] === $today) return;
+    wr('dailyrep', array('d' => $today));                 // avval belgi: parallel so'rovlar ikki marta yubormasin
+    $y = date('Y-m-d', strtotime('-1 day'));
+    $x = rd('daily/' . $y, array('d' => array(), 'n' => array(), 'm' => array(), 'mn' => array()));
+    $cnt = function ($a) { return is_array($a) ? count($a) : 0; };
+    $users = 0; $newu = 0; $top = array(); $wk = week_id();
+    foreach (glob(XC_DIR . '/users/*.php') as $f) {
+        $u = rd('users/' . basename($f, '.php'), null); if (!$u) continue;
+        $users++; if (!empty($u['created']) && date('Y-m-d', $u['created']) === $y) $newu++;
+        if (isset($u['wkkid']) && $u['wkkid'] === $wk && !empty($u['wkk'])) $top[] = array($u['name'], (int)$u['wkk']);
+    }
+    usort($top, function ($a, $b) { return $b[1] - $a[1]; });
+    $t = "X CLIENT - kecha ($y)\n"
+        . "O'yinchilar: " . $cnt($x['d']) . " (yangi o'rnatish: " . $cnt($x['n']) . ")\n"
+        . "NextClient menyu: " . $cnt($x['m']) . "\n"
+        . "Akkauntlar: $users (kecha +$newu)\n"
+        . "Klanlar: " . count((array)glob(XC_DIR . '/clans/*.php'));
+    if ($top) { $t .= "\nHafta qotillari:"; foreach (array_slice($top, 0, 3) as $i => $r) $t .= "\n" . ($i + 1) . ". " . $r[0] . " - " . $r[1] . " kill"; }
+    tg_notify('daily', $t);
+}
 function clean_str($s, $n) { return substr(preg_replace('/[\x00-\x1f<>"\\\\]/u', '', (string)$s), 0, $n); }
 
 /* kunlik statistika (admin.php): xc_data/daily/YYYY-MM-DD.php  {d:{qurilma:1}, n:{yangi:1}, m:{menyu:1}} */
@@ -218,6 +297,7 @@ function touch_device(&$u) {
 
 ensure_dir();
 $a = p('a');
+daily_report();
 
 switch ($a) {
 
@@ -572,11 +652,103 @@ case 'msg_list':
     out(array('ok' => true, 'list' => array_slice($c, -60)));
 
 /* tez-tez (15 soniyada) so'raladigan engil bildirishnoma: yangi xabarlar va do'stlik so'rovlari */
+/* ---------- klanlar: 10 kishigacha jamoa, teg [TAG], taklif kodi bilan qo'shilish, haftalik klan reytingi (a'zolar killari) ---------- */
+case 'clan_create':
+case 'clan_join':
+case 'clan_leave':
+case 'clan_kick':
+case 'clan_info':
+case 'clan_top':
+    @mkdir(XC_DIR . '/clans', 0755, true);
+    if ($a === 'clan_top') {
+        $cache = rd('clantop', null);
+        if ($cache && time() - $cache['t'] < 300) out(array('ok' => true, 'top' => $cache['top']));
+        $top = array(); $wk = week_id();
+        foreach (glob(XC_DIR . '/clans/*.php') as $f) {
+            $c = rd('clans/' . basename($f, '.php'), null); if (!$c) continue;
+            $k = 0; foreach ($c['members'] as $ml) { $m = user($ml); if ($m && isset($m['wkkid']) && $m['wkkid'] === $wk) $k += (int)$m['wkk']; }
+            $top[] = array('name' => $c['name'], 'tag' => $c['tag'], 'n' => count($c['members']), 'k' => $k);
+        }
+        usort($top, function ($x, $y) { return $y['k'] - $x['k']; });
+        $top = array_slice($top, 0, 10); wr('clantop', array('t' => time(), 'top' => $top));
+        out(array('ok' => true, 'top' => $top));
+    }
+    lock();
+    $u = auth(); $me = strtolower($u['login']);
+    $cid = !empty($u['clan']['id']) ? $u['clan']['id'] : '';
+    $c = $cid ? rd('clans/' . $cid, null) : null;
+    if ($a === 'clan_create') {
+        if ($c) fail('bad', 'Siz allaqachon klandasiz');
+        $name = clean_str(p('name'), 24); $tag = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', p('tag')));
+        if (mb_strlen($name, 'UTF-8') < 3) fail('bad', 'Klan nomi kamida 3 harf');
+        if (strlen($tag) < 2 || strlen($tag) > 5) fail('bad', 'Teg 2-5 ta lotin harf yoki raqam');
+        foreach (glob(XC_DIR . '/clans/*.php') as $f) { $x = rd('clans/' . basename($f, '.php'), null); if ($x && $x['tag'] === $tag) fail('bad', 'Bu teg band'); }
+        $cid = strtolower($tag);
+        $c = array('id' => $cid, 'name' => $name, 'tag' => $tag, 'owner' => $me, 'members' => array($me), 'code' => strtoupper(substr(bin2hex(function_exists('random_bytes') ? random_bytes(4) : openssl_random_pseudo_bytes(4)), 0, 6)), 't' => time());
+        wr('clans/' . $cid, $c);
+        $u['clan'] = array('id' => $cid, 'tag' => $tag, 'name' => $name); ach_check($u); save_user($u);
+    } elseif ($a === 'clan_join') {
+        if ($c) fail('bad', 'Avval hozirgi klandan chiqing');
+        $code = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', p('code'))); $found = null;
+        foreach (glob(XC_DIR . '/clans/*.php') as $f) { $x = rd('clans/' . basename($f, '.php'), null); if ($x && $code !== '' && hash_equals($x['code'], $code)) $found = $x; }
+        if (!$found) fail('bad', 'Taklif kodi noto\'g\'ri');
+        if (count($found['members']) >= 10) fail('bad', 'Klan to\'la (10 kishi)');
+        $found['members'][] = $me; wr('clans/' . $found['id'], $found); $c = $found;
+        $u['clan'] = array('id' => $c['id'], 'tag' => $c['tag'], 'name' => $c['name']); ach_check($u); save_user($u);
+    } elseif ($a === 'clan_leave') {
+        if (!$c) fail('bad', 'Siz klanda emassiz');
+        $c['members'] = array_values(array_diff($c['members'], array($me)));
+        if (!$c['members']) @unlink(XC_DIR . '/clans/' . $c['id'] . '.php');
+        else { if ($c['owner'] === $me) $c['owner'] = $c['members'][0]; wr('clans/' . $c['id'], $c); }
+        unset($u['clan']); save_user($u);
+        out(array('ok' => true, 'clan' => null));
+    } elseif ($a === 'clan_kick') {
+        if (!$c || $c['owner'] !== $me) fail('bad', 'Faqat klan boshlig\'i chiqara oladi');
+        $who = strtolower(p('who'));
+        if ($who === $me || !in_array($who, $c['members'])) fail('bad', 'Topilmadi');
+        $c['members'] = array_values(array_diff($c['members'], array($who))); wr('clans/' . $c['id'], $c);
+        $w = user($who); if ($w) { unset($w['clan']); save_user($w); }
+    }
+    if (!$c) out(array('ok' => true, 'clan' => null));
+    $wk = week_id(); $mem = array(); $k = 0;
+    foreach ($c['members'] as $ml) { $m = user($ml); if (!$m) continue; $x = pub($m, false); $x['wk'] = $x['st']['wk']; $k += $x['wk']; $mem[] = $x; }
+    usort($mem, function ($x, $y) { return $y['wk'] - $x['wk']; });
+    out(array('ok' => true, 'clan' => array('id' => $c['id'], 'name' => $c['name'], 'tag' => $c['tag'], 'owner' => $c['owner'], 'boss' => $c['owner'] === $me,
+        'code' => $c['code'], 'members' => $mem, 'wk' => $k)));
+
+/* ---------- taklif kodi: kodi = taklif qilganning logini. Yangi akkaunt 7 kun ichida kiritadi.
+ * Taklif qilgan: +300 XP (3 ta taklifda "Taklifchi" yutug'i), yangi o'yinchi: +100 XP. Bir IP dan kuniga 3 tadan ortiq emas */
+case 'ref_set':
+    lock();
+    $u = auth();
+    if (!empty($u['refby'])) fail('bad', 'Taklif kodi allaqachon kiritilgan');
+    if (time() - (int)$u['created'] > 7 * 86400) fail('bad', 'Taklif kodi faqat ro\'yxatdan o\'tgandan keyin 7 kun ichida kiritiladi');
+    $code = strtolower(preg_replace('/[^A-Za-z0-9_]/', '', p('code')));
+    if ($code === strtolower($u['login'])) fail('bad', 'O\'zingizni taklif qila olmaysiz');
+    $inv = user($code);
+    if (!$inv) fail('bad', 'Bunday taklif kodi yo\'q');
+    if (rl_count('ref' . client_ip(), 86400) >= 3) fail('limit', 'Bugun bu tarmoqdan juda ko\'p taklif kiritildi');
+    if (!empty($inv['devices']) && !empty($u['devices']) && array_intersect(array_keys($inv['devices']), array_keys($u['devices']))) fail('bad', 'Bitta kompyuterdan o\'zingizni taklif qilib bo\'lmaydi');
+    rl_add('ref' . client_ip(), 86400);
+    $u['refby'] = strtolower($inv['login']); $u['xp'] = (int)$u['xp'] + 100;
+    if (!isset($inv['refs'])) $inv['refs'] = array();
+    $inv['refs'][strtolower($u['login'])] = time(); $inv['xp'] = (int)$inv['xp'] + 300;
+    if (!isset($inv['msgs'])) $inv['msgs'] = array();
+    $inv['msgs'][] = array('t' => time(), 'text' => $u['name'] . " sizning taklif kodingiz bilan qo'shildi: +300 XP");
+    ach_check($inv); save_user($inv); save_user($u);
+    out(array('ok' => true, 'me' => pub($u, true)));
+
+case 'promo':                                            // admin panelda qo'yilgan reklama serverlari (muddati o'tmagan)
+    $l = array(); foreach (rd('promo', array()) as $x) if (!empty($x['until']) && $x['until'] > time()) $l[] = array('ip' => $x['ip'], 'title' => $x['title']);
+    out(array('ok' => true, 'list' => $l));
+
 case 'notif':
     $u = auth();
     $un = array(); foreach ((isset($u['unread']) && is_array($u['unread']) ? $u['unread'] : array()) as $k => $n) if ($n > 0) { $f = user($k); $un[] = array('login' => $k, 'name' => $f ? $f['name'] : $k, 'n' => (int)$n); }
     $rq = array(); foreach ((isset($u['freq']) && is_array($u['freq']) ? $u['freq'] : array()) as $k => $tm) { $f = user($k); if ($f) $rq[] = array('login' => $k, 'name' => $f['name'], 't' => $tm); }
-    out(array('ok' => true, 'unread' => $un, 'req' => $rq));
+    $inv = array();                                      // do'st chaqiruvlari: 15 s ichida yetib boradi (ping 1 daqiqa kutmaydi)
+    if (!empty($u['inv'])) { lock(); $u = auth(); foreach ($u['inv'] as $i) if (time() - $i['t'] < 600) $inv[] = $i; $u['inv'] = array(); save_user($u); }
+    out(array('ok' => true, 'unread' => $un, 'req' => $rq, 'inv' => $inv));
 
 /* ---------- jang statistikasi: o'yinchining hamma serverlardagi kill/o'limi akkauntga yig'iladi (Steam statistikasidek) ----------
  * Menyu o'yin davomida (2 daqiqada bir) va chiqishda shu o'yinning JAMI qiymatlarini yuboradi: sid - o'yin boshlangan vaqt (ms).
@@ -611,16 +783,24 @@ case 'stat':
     $st['srv'][$ip] = $sv;
     if (count($st['srv']) > 30) { uasort($st['srv'], function ($a, $b) { return $b['t'] - $a['t']; }); $st['srv'] = array_slice($st['srv'], 0, 30, true); }
     $u['st'] = $st;
-    $wk = week_id(); if (!isset($u['wkkid']) || $u['wkkid'] !== $wk) { $u['wkkid'] = $wk; $u['wkk'] = 0; } $u['wkk'] += $dk;
+    $wk = week_id(); if (!isset($u['wkkid']) || $u['wkkid'] !== $wk) { if (isset($u['wkkid'])) { $u['wkkpid'] = $u['wkkid']; $u['wkkp'] = (int)$u['wkk']; } $u['wkkid'] = $wk; $u['wkk'] = 0; } $u['wkk'] += $dk;
+    if ($dk > 0) {                                        // har kill uchun XP (vaqt XP siga qo'shimcha)
+        $u['xp'] = (int)$u['xp'] + $dk * XP_PER_KILL;
+        if (!isset($u['wk']) || $u['wk'] !== $wk) { $u['wk'] = $wk; $u['wkxp'] = 0; }
+        $u['wkxp'] = (int)$u['wkxp'] + $dk * XP_PER_KILL;
+    }
+    $newach = ach_check($u);
     $ss[$sid] = array('k' => $k, 'd' => $d, 't' => $dur, 'w' => $nw);
     if (count($ss) > 8) { ksort($ss); $ss = array_slice($ss, -8, 8, true); }
     $u['ss'] = $ss;
     save_user($u);
-    out(array('ok' => true, 'st' => pub($u, true)['st']));
+    $pu = pub($u, true);
+    out(array('ok' => true, 'st' => $pu['st'], 'ach' => $pu['ach'], 'newach' => $newach, 'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL));
 
 case 'topk':                                             // haftaning eng ko'p kill qilgan o'yinchilari
+    $ch = champ_update();
     $cache = rd('topkcache', null);
-    if ($cache && time() - $cache['t'] < 120) out(array('ok' => true, 'top' => $cache['top']));
+    if ($cache && time() - $cache['t'] < 120) out(array('ok' => true, 'top' => $cache['top'], 'champ' => $ch));
     $top = array(); $wk = week_id();
     foreach (glob(XC_DIR . '/users/*.php') as $f) {
         $x = rd('users/' . basename($f, '.php'), null);
@@ -631,7 +811,7 @@ case 'topk':                                             // haftaning eng ko'p k
     usort($top, function ($a, $b) { return $b['k'] - $a['k']; });
     $top = array_slice($top, 0, 10);
     wr('topkcache', array('t' => time(), 'top' => $top));
-    out(array('ok' => true, 'top' => $top));
+    out(array('ok' => true, 'top' => $top, 'champ' => $ch));
 
 case 'top':                                              // haftaning eng faol o'yinchilari (o'yin vaqti bo'yicha)
     $cache = rd('topcache', null);

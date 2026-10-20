@@ -371,7 +371,7 @@ function sendStat(g) {
   var key = g.t + ':' + (g.k || 0) + ':' + (g.x || 0) + ':' + Math.floor(dur / 300);
   if (key === STAT_LAST) return;
   STAT_LAST = key;
-  api('stat', { sid: g.t, ip: g.ip, name: g.name || '', k: g.k || 0, d: g.x || 0, dur: dur, w: JSON.stringify(g.w || {}) }, function (r) { if (r.ok && ME) ME.st = r.st; });
+  api('stat', { sid: g.t, ip: g.ip, name: g.name || '', k: g.k || 0, d: g.x || 0, dur: dur, w: JSON.stringify(g.w || {}) }, function (r) { if (r.ok && ME) { ME.st = r.st; ME.ach = r.ach; if (r.xp != null) { ME.xp = r.xp; ME.level = r.level; ME.lvlxp = r.lvlxp; renderBar(); } achToast(r.newach); } });
 }
 function fmtHours(sec) { var h = Math.floor((sec || 0) / 3600), m = Math.floor((sec || 0) % 3600 / 60); return h ? h + T('ks_h') + ' ' + m + T('ks_m') : m + T('ks_m'); }
 function kdOf(st) { return st && st.d ? (st.k / st.d).toFixed(2) : String(st && st.k || 0); }
@@ -387,6 +387,7 @@ function openStats() {
   var h = statBox(st) +
     '<div class="stmore"><div class="kv"><span>' + esc(T('ks_best')) + '</span><b>' + (st.best || 0) + '</b></div><div class="kv"><span>' + esc(T('ks_time')) + '</span><b>' + esc(fmtHours(st.t)) + '</b></div>' +
     '<div class="kv"><span>' + esc(T('ks_week')) + '</span><b>' + (st.wk || 0) + '</b></div></div>' +
+    '<div class="ph2 m">' + esc(T('ac_title')) + ' (' + ((ME && ME.ach) || []).length + '/' + ACH.length + ')</div>' + achBadges(ME && ME.ach, true) +
     '<div class="ph2 m">' + esc(T('ks_wpn')) + '</div>' + (w || '<div class="mut">' + esc(T('ks_none')) + '</div>') +
     '<div class="ph2 m">' + esc(T('ks_srv')) + '</div>' + (sv || '<div class="mut">' + esc(T('ks_none')) + '</div>') +
     '<div class="ph2 m">' + esc(T('ks_top')) + '</div><div id="topkList" class="mut">...</div><small class="mut">' + esc(T('ks_note')) + '</small>';
@@ -398,12 +399,73 @@ function openStats() {
     el.innerHTML = t || esc(T('ks_none')); el.className = '';
   });
 }
+/* ---- do'st bilan solishtirish ---- */
+function openCompare(login) {
+  var f = null; each(FRIENDS, function (x) { if (x.login === login) f = x; });
+  if (!f || !ME) return;
+  var a = ME.st || {}, b = f.st || {};
+  var rows = [['ks_k', a.k || 0, b.k || 0], ['ks_d', a.d || 0, b.d || 0, 1], ['ks_kd', +kdOf(a), +kdOf(b)], ['ks_g', a.g || 0, b.g || 0],
+    ['ks_best', a.best || 0, b.best || 0], ['ks_week', a.wk || 0, b.wk || 0], ['ks_time', a.t || 0, b.t || 0], ['cmp_lvl', ME.level || 1, f.level || 1],
+    ['ac_title', (ME.ach || []).length, (f.ach || []).length]];
+  var me = 0, him = 0, h = '<div class="cmp"><div class="cmh"><b>' + crown(ME) + esc(ME.name) + '</b><span>VS</span><b>' + crown(f) + esc(f.name) + '</b></div>';
+  each(rows, function (r) {
+    var lowWin = r[3], x = r[1], y = r[2], wx = lowWin ? x < y : x > y, wy = lowWin ? y < x : y > x;
+    if (wx) me++; if (wy) him++;
+    var fmt = function (v) { return r[0] === 'ks_time' ? fmtHours(v) : String(v); };
+    h += '<div class="cmr"><span class="' + (wx ? 'w' : '') + '">' + esc(fmt(x)) + '</span><em>' + esc(T(r[0])) + '</em><span class="' + (wy ? 'w' : '') + '">' + esc(fmt(y)) + '</span></div>';
+  });
+  h += '<div class="cmres">' + esc(me > him ? T('cmp_win') : me < him ? T('cmp_lose').replace('{n}', f.name) : T('cmp_draw')) + ' (' + me + ':' + him + ')</div></div>';
+  openSide('cmp', T('cmp_title'), h);
+}
+/* ---- klan ---- */
+var CLAN = null;
+function openClan() {
+  if (!ME) return openLogin();
+  api('clan_info', {}, function (r) { if (r.ok) { CLAN = r.clan; ME.clan = r.clan ? { id: r.clan.id, tag: r.clan.tag, name: r.clan.name } : null; } renderClan(); });
+  renderClan();
+}
+function renderClan() {
+  var h = '';
+  if (!CLAN) {
+    h = '<div class="empty" style="padding:10px 0 16px">' + esc(T('cl_none')) + '</div><a class="btn red" data-act="clancreate">' + esc(T('cl_create')) + '</a> <a class="btn" data-act="clanjoin">' + esc(T('cl_join')) + '</a>';
+  } else {
+    h = '<div class="clh"><b>[' + esc(CLAN.tag) + '] ' + esc(CLAN.name) + '</b><small>' + esc(T('cl_week').replace('{k}', CLAN.wk)) + ' \u00b7 ' + CLAN.members.length + '/10</small></div>' +
+      '<div class="ph2 m">' + esc(T('cl_code')) + '</div><div class="avurl"><input class="ipin" readonly value="' + esc(CLAN.code) + '"><a class="cpy" data-copyip="' + esc(CLAN.code) + '">' + esc(T('ip_copy')) + '</a></div>' +
+      '<div class="ph2 m">' + esc(T('cl_members')) + '</div>';
+    each(CLAN.members, function (m) {
+      h += '<div class="tr" style="cursor:default">' + frAv(m) + '<div class="nm">' + (m.login === CLAN.owner ? '\u2691 ' : '') + crown(m) + esc(m.name) + '</div><div class="mt">' + m.wk + ' kill \u00b7 K/D ' + kdOf(m.st) + '</div>' +
+        (CLAN.boss && m.login !== CLAN.owner ? '<div class="fra"><a data-clkick="' + esc(m.login) + '">' + esc(T('cl_kick')) + '</a></div>' : '') + '</div>';
+    });
+    h += '<a class="btn out" data-act="clanleave" style="margin-top:10px">' + esc(T('cl_leave')) + '</a>';
+  }
+  h += '<div class="ph2 m">' + esc(T('cl_top')) + '</div><div id="clTop" class="mut">...</div>';
+  openSide('clan', T('cl_title'), h);
+  api('clan_top', {}, function (r) {
+    var el = $('clTop'); if (!el) return; var t = '';
+    each((r.ok && r.top) || [], function (c, i) { t += '<div class="kv"><span>' + (i + 1) + '. [' + esc(c.tag) + '] ' + esc(c.name) + ' <small class="mut">' + c.n + '</small></span><b>' + c.k + ' kill</b></div>'; });
+    el.innerHTML = t || esc(T('ks_none')); el.className = '';
+  });
+}
+function clanCall(a, p) { api(a, p || {}, function (r) { if (!r.ok) return toast(r.msg || 'Xato'); CLAN = r.clan; ME.clan = r.clan ? { id: r.clan.id, tag: r.clan.tag, name: r.clan.name } : null; renderClan(); }); }
+/* ---- taklif kodi va ulashiladigan profil kartasi ---- */
+function openRef() {
+  if (!ME) return openLogin();
+  var url = 'mmb.boost-top.com/u.php?u=' + String(ME.login).toLowerCase();
+  var h = '<div class="ph2">' + esc(T('rf_code')) + '</div><div class="avurl"><input class="ipin" readonly value="' + esc(ME.login) + '"><a class="cpy" data-copyip="' + esc(ME.login) + '">' + esc(T('ip_copy')) + '</a></div>' +
+    '<div class="mut small" style="margin:6px 0 14px">' + esc(T('rf_how')) + '</div>' +
+    '<div class="ph2 m">' + esc(T('rf_card')) + '</div><div class="avurl"><input class="ipin" readonly value="' + esc(url) + '"><a class="cpy" data-copyip="' + esc(url) + '">' + esc(T('ip_copy')) + '</a></div>' +
+    '<div class="mut small" style="margin:6px 0 14px">' + esc(T('rf_card2')) + '</div>' +
+    '<div class="kv"><span>' + esc(T('rf_count')) + '</span><b>' + (ME.refs || 0) + '</b></div>';
+  if (!ME.refby && ME.created && now() / 1000 - ME.created < 7 * 86400) h += '<a class="btn red" data-act="refset" style="margin-top:14px">' + esc(T('rf_enter')) + '</a>';
+  else if (ME.refby) h += '<div class="kv"><span>' + esc(T('rf_by')) + '</span><b>' + esc(ME.refby) + '</b></div>';
+  openSide('ref', T('rf_title'), h);
+}
 function histCompact(list, n) {                // tarix: akkauntga oxirgi 50 ta o'yin (boshqa kompyuterda ham chiqadi)
   var h = [];
   each((list || []).slice(0, n), function (x) { if (x && x.ip) h.push({ ip: x.ip, name: x.name, map: x.map, t: x.t, d: x.d, k: x.k, x: x.x }); });
   return h;
 }
-function cloudData() { return { set: DB.set, binds: DB.binds, binds2: DB.binds2, fav: DB.fav, lang: DB.lang, hist: histCompact(DB.hist, 50) }; }
+function cloudData() { return { set: DB.set, binds: DB.binds, binds2: DB.binds2, fav: DB.fav, lang: DB.lang, hist: histCompact(DB.hist, 50), pw: DB.pw || [] }; }
 function mergeHist(add) {                      // ikki kompyuter tarixini birlashtirish: bir xil o'yin (ip + vaqt) bir marta
   var seen = {}, out = [];
   each((DB.hist || []).concat(add || []), function (x) { var k = x.ip + '|' + Math.round((x.t || 0) / 60000); if (!seen[k]) { seen[k] = 1; out.push(x); } });
@@ -429,6 +491,7 @@ function restoreCloud(c, silent) {
   if (c.fav && c.fav.length) each(c.fav, function (ip) { if (DB.fav.indexOf(ip) < 0) DB.fav.push(ip); });
   if (c.lang) { DB.lang = c.lang; setLang(c.lang); }
   if (c.hist && c.hist.length) mergeHist(c.hist);
+  if (c.pw && c.pw.length) DB.pw = c.pw;
   DB.cloudt = ME ? ME.cloudt : 0; persist();
   if (!silent) toast(T('a_restored'));
   renderAll();
@@ -451,7 +514,23 @@ function loadFriends() {
     frBadge();
   });
 }
-function loadWeek() { api('top', {}, function (r) { if (r.ok) { WEEK = r.top || []; renderHome(); } }); }
+/* bosh menyu: "Hafta qotillari" TOP-3 (jang statistikasidan) + o'tgan hafta chempioni */
+var CHAMP = null;
+function loadWeek() { api('topk', {}, function (r) { if (r.ok) { WEEK = r.top || []; CHAMP = r.champ || null; renderHome(); } }); }
+function crown(u) { return (u && (u.champ || (CHAMP && CHAMP.login && u.login && CHAMP.login === String(u.login).toLowerCase()))) ? '<span class="crown" title="' + esc(T('ch_title')) + '">\u265b</span>' : ''; }
+/* ---- yutuqlar ---- */
+var ACH = [['k100', '\u2694'], ['k1000', '\u2694'], ['k5000', '\u2694'], ['best30', '\u2605'], ['g100', '\u25b6'], ['t10h', '\u231a'], ['t50h', '\u231a'],
+  ['awp100', '\u25ce'], ['ak500', '\u25ce'], ['knife10', '\u2020'], ['deagle100', '\u25ce'], ['fr5', '\u263a'], ['ref3', '\u2709'], ['champ', '\u265b'], ['clan', '\u2691']];
+function achBadges(list, all) {
+  var h = '';
+  each(ACH, function (a) {
+    var got = (list || []).indexOf(a[0]) >= 0;
+    if (!got && !all) return;
+    h += '<span class="ach' + (got ? ' on' : '') + '" title="' + esc(T('ac_' + a[0] + '_d')) + '"><i>' + a[1] + '</i>' + esc(T('ac_' + a[0])) + '</span>';
+  });
+  return h ? '<div class="achs">' + h + '</div>' : '';
+}
+function achToast(ids) { each(ids || [], function (id, i) { setTimeout(function () { toast('\u2605 ' + T('ac_new') + ': ' + T('ac_' + id) + ' (+100 XP)', 5000); sfx('save'); }, 600 + i * 5200); }); }
 /* do'stdan taklif: "X sizni serverga chaqiryapti" -> Kirish */
 function showInvite(iv) {
   var ip = normIp(iv.ip); if (!ip || ip === CONNECTED) return;
@@ -594,7 +673,18 @@ function loadList(urls, varName, cb) {
   }
   next();
 }
+/* admin paneldagi "Reklama" serverlari: TOP ro'yxati tepasida ★ bilan, tezkor o'yin ham ularni afzal ko'radi */
+var PROMO = [];
+function loadPromo() {
+  api('promo', {}, function (r) {
+    if (!r.ok) return;
+    PROMO = [];
+    each(r.list || [], function (x) { var ip = itemIp(x); if (!ip) return; PROMO.push(ip); if (x.title) srv(ip).name = srv(ip).name || x.title; if (PINNED.indexOf(ip) < 0) PINNED.push(ip); query(ip); });
+    renderSoon();
+  });
+}
 function loadTop() {
+  loadPromo();
   loadList(['top.php', 'http://boost-top.com/mmb/top.php', 'https://boost-top.com/mmb/top.php'], 'BOOST_TOP', function (l) { setTop(l || []); });
   loadList(['fav.php'], 'BOOST_FAV', function (l) { if (window.BOOST_SVC) setSvc(window.BOOST_SVC); if (l) setPromoFav(l); });
 }
@@ -655,15 +745,26 @@ function setPromoFav(list, already) {
 /* sevimli serverda joy bo'shashi + navbat */
 var QUEUE_IP = '', QUEUE_TM = 0;
 function onSrvUpdate(s) {
-  if (QUEUE_IP === s.ip && s.ok && !isFull(s)) { var ip = QUEUE_IP; stopQueue(); toast(T('queue_free')); doConnect(ip); }
+  if (QUEUE_IP === s.ip && s.ok && !isFull(s)) { var ip = QUEUE_IP; stopQueue(); toast(T('queue_free')); sfx('save'); doConnect(ip); }
+  else if (QUEUE_IP === s.ip) queueBar();
   if (isFavIp(s.ip) && DB.notifyFav !== 0 && s.prevPl != null && s.max && s.prevPl >= s.max && s.pl < s.max && CONNECTED !== s.ip)
     toast(T('fav_free') + s.name, 5000);
 }
 function startQueue(ip) {
   stopQueue(); QUEUE_IP = ip; toast(T('queue'), 6000);
   QUEUE_TM = setInterval(function () { query(QUEUE_IP, true); }, 4000);
+  queueBar();
 }
-function stopQueue() { QUEUE_IP = ''; clearInterval(QUEUE_TM); }
+function stopQueue() { QUEUE_IP = ''; clearInterval(QUEUE_TM); queueBar(); }
+/* navbat ko'rinib tursin: pastda "Navbatda: server - 32/32 - Bekor qilish" */
+function queueBar() {
+  var b = $('qbar');
+  if (!QUEUE_IP) { if (b) b.style.display = 'none'; return; }
+  if (!b) { b = document.createElement('div'); b.id = 'qbar'; (document.getElementById('app') || document.body).appendChild(b); }
+  var s = srv(QUEUE_IP);
+  b.innerHTML = '\u23f3 ' + esc(T('q_wait')) + ' <b>' + esc(s.name || QUEUE_IP) + '</b>' + (s.ok ? ' \u00b7 ' + s.pl + '/' + s.max : '') + ' <a data-act="qstop">' + esc(T('q_stop')) + '</a>';
+  b.style.display = 'block';
+}
 
 /* ============================================================ ulanish, tarix, K/D */
 var CONNECTED = '', CUR = null;                 // CUR: joriy o'yin (tarix yozuvi)
@@ -674,7 +775,17 @@ function connect(ip) {
   stopQueue();
   doConnect(ip);
 }
+/* server parollari (VIP/admin, setinfo _pw): akkauntda saqlanadi, faqat SHU serverga ulanishdan oldin qo'yiladi.
+ * Boshqa serverga ulanganda maydon tozalanadi - parol begona serverlarga yuborilmasin */
+var PW_SET = {};
+function srvPw(ip) { var r = null; each(DB.pw || [], function (x) { if (x.ip === ip) r = x; }); return r; }
+function applyPw(ip) {
+  var p = srvPw(ip);
+  for (var f in PW_SET) if (PW_SET.hasOwnProperty(f) && (!p || p.f !== f)) { cmd('setinfo ' + f + ' ""'); delete PW_SET[f]; }
+  if (p) { cmd('setinfo ' + p.f + ' ' + q(p.pw)); PW_SET[p.f] = 1; }
+}
 function doConnect(ip) {
+  applyPw(ip);
   toast(T('connecting') + (srv(ip).name || ip));
   if (!cmd('connect ' + ip)) toast(T('no_api'));
   else startGame(ip);
@@ -711,7 +822,7 @@ function stopRecord() { clearTimeout(REC_TM); if (REC) { cmd('stop'); REC = ''; 
 function onConnectEvt(addr, inGame) {
   addr = normIp(addr);
   if (!addr) return;
-  if (addr !== CONNECTED) { CONNECTED = addr; MUSIC_ON = null; startGame(addr); musicSync();   // serverda mp3 chalinmasin: o'yin ovozlarini bo'g'adi
+  if (addr !== CONNECTED) { CONNECTED = addr; MUSIC_ON = null; if (!inGame) applyPw(addr); startGame(addr); musicSync();   // serverda mp3 chalinmasin: o'yin ovozlarini bo'g'adi
     pingPresence(); renderAll(); }
   if (S.demo) startRecord(inGame ? 1500 : 25000);   // 'connect' dan keyin 'putinserver' kelmasa ham 25 soniyadan so'ng urinamiz
 }
@@ -760,22 +871,23 @@ function renderHome() {
   var b = CONNECTED ? srv(CONNECTED) : bestServer();
   // turnir kartasi
   // X TOP serverlar
-  var html = '', list = TOP.length ? TOP : PINNED;
+  var html = '', list = PROMO.concat((TOP.length ? TOP : PINNED).filter(function (ip) { return PROMO.indexOf(ip) < 0; }));
   each(list.slice(0, 5), function (ip, i) {
     var s = srv(ip);
     var meta = s.ok ? pbar(s) + s.pl + '/' + s.max + ' \u00b7 ' + esc(s.map) : (s.fail ? T('offline') : esc(ip));
     html += '<div class="tr' + (i === 0 ? ' r1' : '') + '" data-ip="' + esc(ip) + '"><div class="rk">' + (i + 1) + '</div>' +
-      '<div class="nm">' + flagOf(ip) + esc(s.name || ip) + '</div><div class="mt">' + meta + '</div>' +
+      '<div class="nm">' + (PROMO.indexOf(ip) >= 0 ? '<span class="crown">\u2605</span>' : '') + flagOf(ip) + esc(s.name || ip) + '</div><div class="mt">' + meta + '</div>' +
       '<div class="go">' + esc(T('join')) + '</div></div>';
   });
   $('topList').innerHTML = html || '<div class="empty">' + esc(T('no_top')) + '</div>';
   // TOP hafta
   var wk = '';
   each(WEEK.slice(0, 3), function (u, i) {
-    wk += '<div class="tr' + (i === 0 ? ' r1' : '') + '" style="cursor:default"><div class="rk c av2" style="' + avStyle(u) + '">' + avInner(u, u.name || '?') + '</div>' +
-      '<div class="nm one">' + (i + 1) + '. ' + esc(u.name) + (u.vip ? '<span class="vb">VIP</span>' : '') + '</div>' +
-      '<div class="sc">' + Math.round(u.week / 6) / 10 + ' <small>' + esc(T('week_h')) + ' \u00b7 ' + esc(T('lvl').replace('{n}', u.level)) + '</small></div></div>';
+    wk += '<div class="tr' + (i === 0 ? ' r1' : '') + '" data-act="stats"><div class="rk">' + (i + 1) + '</div>' +
+      '<div class="nm one">' + crown(u) + esc(u.name) + '</div>' +
+      '<div class="sc">' + u.k + ' <small>kill \u00b7 K/D ' + u.kd + '</small></div></div>';
   });
+  if (CHAMP && CHAMP.name) wk += '<div class="mut" style="font-size:12px;padding:6px 2px 0">\u265b ' + esc(T('ch_last').replace('{n}', CHAMP.name).replace('{k}', CHAMP.k)) + '</div>';
   $('weekList').innerHTML = wk || '<div class="empty">' + esc(T('no_week')) + '</div>';
   // do'stlar onlayn
   var fr = '', on = 0;
@@ -785,7 +897,7 @@ function renderHome() {
     if (on > 3) return;
     var s = f.server ? srv(f.server) : null;
     fr += '<div class="tr"' + (f.server ? ' data-ip="' + esc(f.server) + '"' : ' style="cursor:default"') + '><div class="rk c av2" style="' + avStyle(f) + '">' + avInner(f, f.name) + '</div>' +
-      '<div class="nm">' + esc(f.name) + '</div><div class="mt"><span class="gm">\u25cf</span> ' + esc(f.server ? ((s && s.name) || f.server) + (f.map ? ' \u00b7 ' + f.map : '') : T('fr_menu')) + '</div>' +
+      '<div class="nm">' + crown(f) + esc(f.name) + '</div><div class="mt"><span class="gm">\u25cf</span> ' + esc(f.server ? ((s && s.name) || f.server) + (f.map ? ' \u00b7 ' + f.map : '') : T('fr_menu')) + '</div>' +
       (f.server ? '<div class="go">' + esc(T('join')) + '</div>' : '') + '</div>';
   });
   $('frList').innerHTML = fr || '<div class="empty">' + (ME ? esc(T('no_fr')) : '<a data-act="login">' + esc(T('no_fr_login')) + '</a>') + '</div>';
@@ -1121,6 +1233,7 @@ function renderInfo() {
     (/^[\w\-.]{2,40}$/.test(mapn) ? '<img src="map.php?m=' + encodeURIComponent(mapn.toLowerCase()) + '" alt="" onerror="this.style.display=\'none\'">' : '') +
     '<span>' + esc(mapn || '?') + '</span></div>' +
     '<h3>' + flagOf(srvSel) + esc(s.name || (h && h.name) || srvSel) + '</h3><div class="ip"><input class="ipin" readonly value="' + esc(srvSel) + '"><a class="cpy" data-copyip="' + esc(srvSel) + '">' + esc(T('ip_copy')) + '</a></div>' +
+      '<a class="pwl" data-act="srvpw">\ud83d\udd11 ' + esc(srvPw(srvSel) ? T('pw_set') : T('pw_add')) + '</a>' +
     '<div class="ln">' + esc(T('ph_players')) + ' <b>' + (s.ok ? s.pl + '/' + s.max : '-') + '</b><span class="r ' + pc + '">' + (s.ok ? '\u25cf ' + s.ping + ' ms' : esc(T('offline'))) + '</span></div>' +
     histBars(srvSel) +
     '<div class="ph">' + esc(T('ph_players')) + '</div><div class="pls">' + ph + '</div>' +
@@ -1148,6 +1261,7 @@ function openFriends() {
   var keep = $('frIn') ? $('frIn').value : FR_Q;
   var h = '<div class="addf"><input class="tx big" id="frIn" type="text" maxlength="20" autocomplete="off" placeholder="' + esc(T('fr_add')) + '" value="' + esc(keep) + '">' +
     '<a class="btn red" data-act="fradd">' + esc(T('fr_addb')) + '</a><div class="frsug" id="frSug"' + (FR_SUG ? '' : ' style="display:none"') + '>' + frSugHtml() + '</div></div>';
+  h += '<div class="frtools"><a class="btn" data-act="clan">\u2691 ' + esc(T('cl_btn')) + (ME.clan ? ' [' + esc(ME.clan.tag) + ']' : '') + '</a><a class="btn" data-act="ref">\ud83c\udf81 ' + esc(T('rf_btn')) + '</a></div>';
   if (FR_REQ.length) {
     h += '<div class="ph2 m">' + esc(T('fr_req_t')) + ' (' + FR_REQ.length + ')</div>';
     each(FR_REQ, function (f) {
@@ -1159,9 +1273,9 @@ function openFriends() {
   each(FRIENDS, function (f) {
     var s = f.server ? srv(f.server) : null, un = f.unread ? '<b class="unb">' + f.unread + '</b>' : '';
     h += '<div class="tr" style="cursor:default">' + frAv(f) +
-      '<div class="nm">' + esc(f.name) + ' <span class="mut" style="font-weight:normal;font-size:12px">' + esc(T('lvl').replace('{n}', f.level)) + '</span></div>' +
+      '<div class="nm">' + crown(f) + (f.clan ? '<span class="ctag">[' + esc(f.clan.tag) + ']</span> ' : '') + esc(f.name) + ' <span class="mut" style="font-weight:normal;font-size:12px">' + esc(T('lvl').replace('{n}', f.level)) + '</span></div>' +
       '<div class="mt">' + (f.online ? '<span class="gm">●</span> ' + esc(f.server ? T('fr_in') + ((s && s.name) || f.server) : T('fr_menu')) : esc(T('fr_off'))) + '</div>' +
-      '<div class="fra"><a class="ch" data-chat="' + esc(f.login) + '" data-chatn="' + esc(f.name) + '">' + esc(T('ch_btn')) + un + '</a>' +
+      '<div class="fra"><a data-frcmp="' + esc(f.login) + '">VS</a><a class="ch" data-chat="' + esc(f.login) + '" data-chatn="' + esc(f.name) + '">' + esc(T('ch_btn')) + un + '</a>' +
       (CONNECTED && f.online && f.server !== CONNECTED ? '<a class="inv" data-inv="' + esc(f.login) + '">' + esc(T('iv_btn')) + '</a>' : '') +
       (f.server ? '<a class="ok" data-ip="' + esc(f.server) + '">' + esc(T('join')) + '</a>' : '<a data-frdel="' + esc(f.login) + '">' + esc(T('fr_del')) + '</a>') + '</div></div>';
   });
@@ -1251,6 +1365,7 @@ function pollNotif() {
     NOTIF_TM = setTimeout(pollNotif, 15000);
     if (!r.ok) return;
     NOTIF = { unread: r.unread || [], req: r.req || [] };
+    if (r.inv && r.inv.length) showInvite(r.inv[r.inv.length - 1]);   // do'st chaqirdi
     var changed = r.req.length !== FR_REQ.length;
     each(NOTIF.req, function (q) { if (!NOTIF_SEEN['r:' + q.login]) { NOTIF_SEEN['r:' + q.login] = 1; toast(T('fr_newreq').replace('{n}', q.name), 6000); changed = true; } });
     each(NOTIF.unread, function (u) {
@@ -1337,7 +1452,7 @@ function seedFromGame() {
   S.xc = String(S.xc).replace(/\s+/g, ' ');
   S.xp = presetOf(S);
   var nm = readCvar('name');
-  if (nm) { MYNAME = nm; S.tag = /^X \| /.test(nm) ? 'X | ' : /^\[UZ\] /.test(nm) ? '[UZ] ' : ''; S.name = nm.slice(S.tag.length); }
+  if (nm) { MYNAME = nm; var tm = /^(X \| |\[[A-Za-z0-9]{2,5}\] )/.exec(nm); S.tag = tm ? tm[1] : ''; S.name = nm.slice(S.tag.length); }
 }
 var NETS = { slow: [25000, 60, 60], mid: [50000, 101, 101], fast: [100000, 101, 105] };
 var BUY = [['F1', 'buy m4a1; buy ak47; buyammo1; buyammo1'], ['F2', 'buy awp; buyammo1; buyammo1'], ['F3', 'buy vesthelm; buy defuser'], ['F4', 'buy hegren; buy flash; buy flash; buy sgren']];
@@ -1705,7 +1820,7 @@ var PANES = {
     });
     return '<div class="pane l"><div class="ph2">' + esc(T('g_player')) + '</div>' +
       '<div class="fr"><div class="lb">' + esc(T('g_name')) + '</div><div class="ct2"><input class="tx" id="fName" maxlength="28" value="' + esc(E.name) + '"></div></div>' +
-      seg('tag', 'g_tag', [['X | ', 'X |'], ['[UZ] ', '[UZ]'], ['', 'g_none']]) +
+      seg('tag', 'g_tag', [['X | ', 'X |'], ['[UZ] ', '[UZ]']].concat(ME && ME.clan ? [['[' + ME.clan.tag + '] ', '[' + ME.clan.tag + ']']] : []).concat([['', 'g_none']])) +
       '<div class="ph2 m">' + esc(T('g_net')) + '</div><div class="big">' + nets + '</div>' +
       '<div class="mut" style="margin:10px 0 14px;font-size:12px">' + esc(T('g_net_note')) + '</div>' + tg('reconn', 'g_reconn') + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('g_server')) + '</div>' +
@@ -1894,7 +2009,7 @@ var PANES = {
       '<a class="btn" data-act="rename" style="margin:0 6px 0 0">' + esc(T('a_rename')) + '</a><a class="btn" data-act="avpick" style="margin:0 6px 0 0">' + esc(T('a_photo')) + '</a>' +
       (ME.av ? '<a class="btn out" data-act="avdel" style="margin:0">' + esc(T('a_photodel')) + '</a>' : '') + '</div>' +
       (ME.vip ? '<div class="vipbox"><b>' + esc(T('a_vip')) + '</b><span>' + esc(T('a_vip2')) + '</span></div>' : '') +
-      statBox(ME.st) + '<a class="btn" data-act="stats" style="margin:4px 0 0">' + esc(T('ks_more')) + '</a></div>' +
+      statBox(ME.st) + achBadges(ME.ach) + '<a class="btn" data-act="stats" style="margin:4px 6px 0 0">' + esc(T('ks_more')) + '</a><a class="btn" data-act="ref" style="margin:4px 0 0">\ud83c\udf81 ' + esc(T('rf_btn')) + '</a></div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('a_sec')) + '</div>' +
       '<div class="rowb"><b>' + esc(T('a_email')) + '</b><small>' + esc(ME.email || '\u2014') + '</small><a class="btn" data-act="email">' + esc(T('a_change')) + '</a></div>' +
       '<div class="rowb"><b>' + esc(T('a_pass')) + '</b><small>' + esc(T('a_pw_ago').replace('{d}', daysAgo(ME.pwchanged))) + '</small><a class="btn" data-act="passwd">' + esc(T('a_change')) + '</a></div>' +
@@ -2099,7 +2214,7 @@ function avUpload(file) {
 
 /* ============================================================ amallar */
 function act(a) {
-  if (LITE && /^(friends|profile|missions|login|weekall|promo)$/.test(a)) return openPromo();
+  if (LITE && /^(friends|profile|missions|login|weekall|promo|stats|clan|ref)$/.test(a)) return openPromo();
   if (a === 'quick' || a === 'play') { closeModal(); return quick(); }
   if (a === 'servers') return openServers('internet');
   if (a === 'friends') return openFriends();
@@ -2204,6 +2319,24 @@ function act(a) {
   if (a === 'avdel') return api('avatar', { img: 'none' }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); });
   if (a === 'cloudsave') return cloudSave(true);
   if (a === 'stats') return ME ? openStats() : openLogin();
+  if (a === 'qstop') { stopQueue(); return toast(T('q_stopped')); }
+  if (a === 'ref') return openRef();
+  if (a === 'refset') return ask(T('rf_ask'), function (c) { api('ref_set', { code: c }, function (r) { if (!r.ok) return toast(r.msg || 'Xato'); ME = r.me; toast(T('rf_ok'), 5000); openRef(); renderBar(); }); });
+  if (a === 'srvpw') {
+    if (!srvSel) return;
+    var ip0 = srvSel, cur = srvPw(ip0);
+    return ask(T('pw_ask').replace('{s}', srv(ip0).name || ip0), function (pw, fld) {
+      fld = String(fld || '').replace(/[^\w]/g, '') || '_pw';
+      DB.pw = (DB.pw || []).filter(function (x) { return x.ip !== ip0; });
+      if (pw) DB.pw.push({ ip: ip0, f: fld, pw: String(pw).replace(/["\\;]/g, '').slice(0, 40) });
+      persist(); cloudSave(); renderInfo(); toast(pw ? T('pw_saved') : T('pw_del'));
+      if (CONNECTED === ip0) applyPw(ip0);
+    }, true, true);
+  }
+  if (a === 'clan') return openClan();
+  if (a === 'clancreate') return ask(T('cl_ask'), function (n, t) { clanCall('clan_create', { name: n, tag: t }); }, true);
+  if (a === 'clanjoin') return ask(T('cl_askcode'), function (c) { clanCall('clan_join', { code: c }); });
+  if (a === 'clanleave') return ask(T('cl_askleave'), function () { clanCall('clan_leave'); }, false, false, true);
   if (a === 'cloudget') return api('me', {}, function (r) { if (!r.ok) return; ME = r.me; restoreCloud(r.me.cloud); if (curModal === 'mdSettings') { seedFromGame(); E = copy(S); showSetTab('account'); } });
   if (a === 'logout') { api('logout', {}); DB.token = ''; ME = null; FRIENDS = []; persist(); closeModal(); return renderAll(); }
   if (a === 'defaults') { var keep = E.name, tag = E.tag; E = copy(DEF); E.name = keep; E.tag = tag; return showSetTab(setTab); }
@@ -2396,6 +2529,8 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-calc'))) { var ci = $('calcIn'); if (ci) CALC_V = ci.value; CALC = el.getAttribute('data-calc'); showSetTab('tools'); return; }
   if ((el = closest(t, 'data-style'))) { applyStyle(el.getAttribute('data-style')); return; }
   if (t && t.className === 'ipin') { t.select(); return; }
+  if ((el = closest(t, 'data-frcmp'))) { openCompare(el.getAttribute('data-frcmp')); return; }
+  if ((el = closest(t, 'data-clkick'))) { clanCall('clan_kick', { who: el.getAttribute('data-clkick') }); return; }
   if ((el = closest(t, 'data-copyip'))) { copyIp(el.getAttribute('data-copyip'), el.parentNode.querySelector('input')); return; }
   if ((el = closest(t, 'data-demo'))) { closeModal(); cmd('playdemo ' + el.getAttribute('data-demo').replace(/[^\w\-]/g, '')); return; }
   if ((el = closest(t, 'data-hsub'))) { HSUB = el.getAttribute('data-hsub'); showSetTab('hud'); return; }
