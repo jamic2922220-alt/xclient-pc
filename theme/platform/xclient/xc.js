@@ -1231,12 +1231,12 @@ var DEF = {
   sens: 2.5, zoom: 1.2, raw: 1, filter: 0, inv: 0,
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1,
   fps: 100, showfps: 0, uisnd: 1, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
-  xp: 'pro', xt: 0, xs: 'small', xc: '255 59 59', xtr: 0, xdyn: 0, xthick: 1, xgap: 3, xout: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
+  xp: 'pro', xt: 0, xs: 'small', xc: '255 59 59', xtr: 0, xdyn: 1, xthick: 1, xgap: 3, xout: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
   rscale: 115, ropac: 100, rnames: 0, rhp: 0, rmode: 1, rround: 1, rrot: 1, rmap: 0.8,
   vmx: 0, vmy: 0, vmz: 0, vmshift: 0, bobst: 0, lagst: 0, camint: 0,
   roll: 0, rollspd: 200, bobv: 0.13, bobl: 0.32, boblow: 8, bobcam: 1, lagsc: 1, lagsp: 8, fovlerp: 0, camsc: 1,
   rtracks: 0, rfull: 1, rbg: 0, rallies: 1, rns: 0.8, rhs: 1, dtime: 6, drpc: 1, drpcs: 1, drpcj: 1, mmusic: 1,
-  bob: 0.01, picmip: 0, detail: 1, shadows: 1, minm: 0, interp: 0.01, lw: 1, lc: 1, hisnd: 1, mixa: 0.1, loop: 0, saytm: 5, ngpos: 1, pro: 0, autogfx: 1, gfxc: ''
+  bob: 0.01, picmip: 0, detail: 1, shadows: 1, minm: 0, interp: 0.01, lw: 1, lc: 1, hisnd: 1, mixa: 0.1, loop: 0, saytm: 5, ngpos: 1, pro: 0, autogfx: 1, gfxc: '', xmig: 0
 };
 var S = null, E = null;
 var CVARS = { sens: 'sensitivity', zoom: 'zoom_sensitivity_ratio', raw: 'm_rawinput', filter: 'm_filter', vol: 'volume', vscale: 'voice_scale', voice: 'voice_enable',
@@ -1255,6 +1255,9 @@ function loadSettings() {
   S = copy(DEF);
   if (DB.set) for (var k in DB.set) if (DB.set.hasOwnProperty(k) && DEF.hasOwnProperty(k)) S[k] = DB.set[k];
   if (!(S.mixa >= 0.1)) S.mixa = 0.1;              // 0.05 (eski PRO CFG) - ovoz buferi juda kichik: FPS tushsa ovoz qotib takrorlanadi va uziladi
+  /* eski PRO CFG pritsel kengayishini o'chirgan edi (cl_dynamiccrosshair 0) - pritsel spreyda kengaymay, o'yinchilar
+   * "razbros o'zgardi" deyishdi. Bir marta qaytaramiz (CS 1.6 standarti - 1); belgi sozlamalarning o'zida (xmig) */
+  if (S.pro && !S.xmig) { S.xdyn = 1; S.xmig = 1; DB.set = S; }
 }
 function seedFromGame() {
   if (!canRead()) return;
@@ -2125,7 +2128,7 @@ function act(a) {
   if (a === 'procfg') {                        // Pro CFG: lag'siz internet, yuqori FPS, aniq sichqoncha
     E.net = 'fast'; E.fps = 100; E.vsync = 0;   // CS 1.6 100 FPS ga moslangan: otish, otdacha va harakat bir xil bo'ladi
     E.raw = 1; E.filter = 0; E.fastsw = 1; E.bob = 0; E.interp = 0.01; E.lw = 1; E.lc = 1;
-    E.dyn = 0; E.detail = 0; E.hisnd = 1; E.mixa = 0.1; E.xdyn = 0; E.shadows = 0; E.pro = 1;
+    E.dyn = 0; E.detail = 0; E.hisnd = 1; E.mixa = 0.1; E.shadows = 0; E.pro = 1; E.xmig = 1;   // pritsel kengayishiga (xdyn) tegmaymiz
     toast(T('pr_cfgok'), 5000); a = 'save';     // darhol saqlab qo'llaymiz - "Saqlash" ni bosish esdan chiqib, CFG ishlamay qolardi
   }
   if (a === 'fpsmode') {                       // kuchsiz kompyuter: grafikani pasaytiramiz
