@@ -1843,7 +1843,8 @@ function isDay() { var m = DB.day || 0; if (m === 2) { var h = new Date().getHou
 function dayColor(c) {
   var x = rgb2hsl(c[0], c[1], c[2]), h = x[0], sa = x[1], l = x[2];
   if (sa > 0.45 && l > 0.28 && l < 0.75) return hsl2rgb(h, sa, Math.min(l, 0.52));      // aksent: biroz to'qroq - och fonda o'qilsin
-  return hsl2rgb(h, sa * 0.55, 0.1 + (1 - l) * 0.86);
+  if (l >= 0.35) return hsl2rgb(h, sa * 0.5, (1 - l) * 0.62);                             // matn: to'q, aniq o'qiladi
+  return hsl2rgb(h, sa * 0.55, 0.1 + (1 - l) * 0.86);                                      // fon va ramkalar: och
 }
 var CSS_SRC = null, LOOK_DAY = false;
 function applyTheme(id) {

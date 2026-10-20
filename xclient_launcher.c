@@ -450,6 +450,57 @@ static void make_shortcut(const wchar_t *target)
     }
 }
 
+/* CS 1.6 (boost-top PRO) o'rnatuvchisi ish stoli va Pusk menyusiga o'z yorliqlarini qo'yadi - o'yinchi "ikkita client
+ * o'rnatildi" deb o'ylaydi. O'yin papkamizdagi fayllarga olib boradigan, X CLIENT ga tegishli bo'lmagan yorliqlarni o'chiramiz
+ * (o'yin fayllari qoladi - X CLIENT ularni ishlatadi). Boshqa sborkalar yorliqlariga tegmaymiz: faqat nishoni g_dir ichida bo'lsa. */
+static BOOL lnk_is_game(const wchar_t *lnk)
+{
+    BOOL r = FALSE;
+    IShellLinkW *sl = NULL;
+    if (FAILED(CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void **)&sl))) return FALSE;
+    IPersistFile *pf = NULL;
+    if (SUCCEEDED(sl->lpVtbl->QueryInterface(sl, &IID_IPersistFile, (void **)&pf))) {
+        wchar_t t[MAX_PATH] = L"";
+        if (SUCCEEDED(pf->lpVtbl->Load(pf, lnk, STGM_READ)) && SUCCEEDED(sl->lpVtbl->GetPath(sl, t, MAX_PATH, NULL, SLGP_RAWPATH)) && t[0]) {
+            size_t n = wcslen(g_dir);
+            const wchar_t *b = wcsrchr(t, L'\\');
+            b = b ? b + 1 : t;
+            r = n > 3 && !_wcsnicmp(t, g_dir, n) && (t[n] == L'\\' || !t[n])
+                && _wcsicmp(b, L"XCLauncher.exe") && _wcsicmp(b, XC_EXE_LEGACY) && _wcsicmp(b, L"XClient-Uninstall.exe");
+        }
+        pf->lpVtbl->Release(pf);
+    }
+    sl->lpVtbl->Release(sl);
+    return r;
+}
+static void clean_links_in(const wchar_t *dir, int depth)
+{
+    wchar_t mask[MAX_PATH], p[MAX_PATH];
+    path_join(mask, dir, L"*");
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(mask, &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        if (!wcscmp(fd.cFileName, L".") || !wcscmp(fd.cFileName, L"..")) continue;
+        path_join(p, dir, fd.cFileName);
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            if (depth > 0 && _wcsicmp(fd.cFileName, L"X CLIENT")) { clean_links_in(p, depth - 1); RemoveDirectoryW(p); }   /* bo'shab qolsa o'chadi */
+            continue;
+        }
+        size_t l = wcslen(fd.cFileName);
+        if (l > 4 && !_wcsicmp(fd.cFileName + l - 4, L".lnk") && lnk_is_game(p)) DeleteFileW(p);
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+}
+static void remove_game_links(void)
+{
+    static const int ids[] = { CSIDL_DESKTOPDIRECTORY, CSIDL_COMMON_DESKTOPDIRECTORY, CSIDL_PROGRAMS, CSIDL_COMMON_PROGRAMS };
+    for (int i = 0; i < 4; i++) {
+        wchar_t d[MAX_PATH];
+        if (SUCCEEDED(SHGetFolderPathW(NULL, ids[i], NULL, 0, d))) clean_links_in(d, i >= 2 ? 1 : 0);
+    }
+}
+
 /* Setup.exe boshqa joydan ishga tushgan bo'lsa -> C:\Games\XClient ga ko'chib o'tamiz */
 static BOOL ensure_installed(BOOL *fresh)
 {
@@ -549,7 +600,7 @@ static BOOL ensure_game(const char *url)
     if (!ok) { DeleteFileW(tmp); return FALSE; }
     status(L"CS 1.6 o‘rnatilmoqda... (ruxsat so‘ralsa \"Ha\" ni bosing)", 100);
     SetWindowPos(g_wnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    _snwprintf(params, 1024, L"/SILENT /SP- /SUPPRESSMSGBOXES /NORESTART /NOICONS /TASKS=\"\" /LANG=uzbek /DIR=\"%s\"", g_dir);
+    _snwprintf(params, 1024, L"/VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /NOICONS /TASKS=\"\" /LANG=uzbek /DIR=\"%s\"", g_dir);
     run_setup(tmp, params);
     if (!has_game()) {
         /* jim rejim ishlamasa - oddiy oynali o'rnatish (papka oldindan tanlangan) */
@@ -1447,6 +1498,7 @@ static void run_game(void)
     fix_override_bg();
     lang_bg();
     setup_main_menu();
+    remove_game_links();
     ensure_scheme();
     ensure_launcher_cfg();
     if (o_ok) hud_scale();

@@ -72,7 +72,7 @@ Section "CS 1.6"
   File "/oname=cs16_setup.exe" "${GAME}"
   SetCompress auto
   DetailPrint "CS 1.6 o'rnatilmoqda / Установка CS 1.6..."
-  ExecWait '"$PLUGINSDIR\cs16_setup.exe" /SILENT /SP- /SUPPRESSMSGBOXES /NORESTART /NOICONS /TASKS="" /LANG=$GLANG /DIR="$INSTDIR"'
+  ExecWait '"$PLUGINSDIR\cs16_setup.exe" /VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /NOICONS /TASKS="" /LANG=$GLANG /DIR="$INSTDIR"'
   Delete "$PLUGINSDIR\cs16_setup.exe"
   game_done:
 SectionEnd
