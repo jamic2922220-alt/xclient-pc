@@ -20,6 +20,11 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+    env:
+      # Raqamli imzo (SmartScreen "isn't commonly downloaded" ogohlantirishini kamaytiradi): GitHub > Settings > Secrets
+      # SIGN_PFX_B64 - kod imzolash sertifikati (.pfx) base64 ko'rinishida, SIGN_PASS - uning paroli. Bo'lmasa - imzosiz yig'iladi.
+      SIGN_PFX_B64: ${{ secrets.SIGN_PFX_B64 }}
+      SIGN_PASS: ${{ secrets.SIGN_PASS }}
     steps:
       # Windows runner git'i matnli fayllarni CRLF ga o'giradi: manifest CRLF bo'yicha hisoblanadi, raw.githubusercontent
       # esa LF beradi - launcher hash mos kelmay yangilanishni hech qachon yakunlamaydi. Baytlar o'zgarmasin.
@@ -56,6 +61,10 @@ jobs:
           rem ikonka (xclient.ico -> xclient.res)
           pushd own && rc /nologo /fo xclient.res xclient.rc && popd
           cl /nologo /O2 /MT /utf-8 /DUNICODE /D_UNICODE own\xclient_launcher.c own\xclient.res /Fe:dist\XCLauncher.exe /link /SUBSYSTEM:WINDOWS wininet.lib comctl32.lib ole32.lib uuid.lib shell32.lib advapi32.lib user32.lib gdi32.lib gdiplus.lib
+          if defined SIGN_PFX_B64 (
+            powershell -NoProfile -Command "[IO.File]::WriteAllBytes('sign.pfx', [Convert]::FromBase64String($env:SIGN_PFX_B64))"
+            signtool sign /f sign.pfx /p "%SIGN_PASS%" /fd sha256 /tr http://timestamp.digicert.com /td sha256 /d "X CLIENT" dist\XCLauncher.exe || exit /b 1
+          ) else ( echo ::notice::Imzo sertifikati yo'q - launcher imzosiz )
           rem eski launcherlar (XClient.exe) o'zini shu nusxadan yangilaydi va XCLauncher.exe ga o'tadi
           copy /Y dist\XCLauncher.exe dist\XClient.exe
 
@@ -99,6 +108,8 @@ jobs:
           curl -fsSL --retry 3 -o game_setup.exe "https://cssborka.uz/uploads/files/1791198609_6ac38591b615c_CS_1_6_boost-top_PRO_2_5_3.exe" || del game_setup.exe
           if exist game_setup.exe ( "%ProgramFiles(x86)%\NSIS\makensis.exe" /V2 /DSRC=full /DVER=%XC_VERSION% /DGAME=game_setup.exe installer.nsi ) else ( echo ::warning::CS 1.6 o'rnatuvchisi yuklanmadi - Setup faqat launcher bilan && "%ProgramFiles(x86)%\NSIS\makensis.exe" /V2 /DSRC=full /DVER=%XC_VERSION% installer.nsi )
           for %%F in (X-Client-Setup.exe) do echo Setup hajmi: %%~zF bayt
+          if defined SIGN_PFX_B64 ( signtool sign /f sign.pfx /p "%SIGN_PASS%" /fd sha256 /tr http://timestamp.digicert.com /td sha256 /d "X CLIENT" X-Client-Setup.exe || exit /b 1 )
+          if exist sign.pfx del /q sign.pfx
 
       - name: Sinov o'rnatuvchisi (beta - GitHub pre-release)
         if: env.CHANNEL == 'beta'

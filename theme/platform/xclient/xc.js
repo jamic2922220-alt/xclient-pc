@@ -352,7 +352,14 @@ function api(a, params, cb) {
   };
   try { x.send(body); } catch (e) { done = true; clearTimeout(tm); if (cb) cb({ ok: false, err: 'net', msg: T('lg_neterr') }); }
 }
-function setMe(me) { var was = !!ME; ME = me; renderAll(); if (me && !was) setTimeout(pollNotif, 3000); }
+function setMe(me) { var was = !!ME; ME = me; renderAll(); if (me && !was) { setTimeout(pollNotif, 3000); setTimeout(statBackfill, 5000); } }
+/* jang statistikasi qo'shilgunga qadar o'ynalgan o'yinlar (shu kompyuter tarixidan) - akkauntga BIR MARTA qo'shiladi */
+function statBackfill() {
+  if (!ME || ME.bf) return;
+  var g = [];
+  each((DB.hist || []).slice(0, 100), function (x) { if (x && x.ip && x.t && x !== CUR && (x.k || x.x)) g.push({ t: x.t, ip: x.ip, n: x.name || '', k: x.k || 0, d: x.x || 0, dur: x.d || 0 }); });
+  api('stat_bf', { g: JSON.stringify(g) }, function (r) { if (r.ok && ME) { ME.bf = 1; ME.st = r.st; ME.ach = r.ach; achToast(r.newach); renderAll(); } });
+}
 function afterLogin(r) {
   DB.token = r.token; DB.guest = 0; persist();
   setMe(r.me);
@@ -1233,7 +1240,7 @@ function renderInfo() {
     (/^[\w\-.]{2,40}$/.test(mapn) ? '<img src="map.php?m=' + encodeURIComponent(mapn.toLowerCase()) + '" alt="" onerror="this.style.display=\'none\'">' : '') +
     '<span>' + esc(mapn || '?') + '</span></div>' +
     '<h3>' + flagOf(srvSel) + esc(s.name || (h && h.name) || srvSel) + '</h3><div class="ip"><input class="ipin" readonly value="' + esc(srvSel) + '"><a class="cpy" data-copyip="' + esc(srvSel) + '">' + esc(T('ip_copy')) + '</a></div>' +
-      '<a class="pwl" data-act="srvpw">\ud83d\udd11 ' + esc(srvPw(srvSel) ? T('pw_set') : T('pw_add')) + '</a>' +
+      '<a class="pwl" data-act="srvpw">' + esc(srvPw(srvSel) ? T('pw_set') : T('pw_add')) + '</a>' +
     '<div class="ln">' + esc(T('ph_players')) + ' <b>' + (s.ok ? s.pl + '/' + s.max : '-') + '</b><span class="r ' + pc + '">' + (s.ok ? '\u25cf ' + s.ping + ' ms' : esc(T('offline'))) + '</span></div>' +
     histBars(srvSel) +
     '<div class="ph">' + esc(T('ph_players')) + '</div><div class="pls">' + ph + '</div>' +
@@ -1261,7 +1268,7 @@ function openFriends() {
   var keep = $('frIn') ? $('frIn').value : FR_Q;
   var h = '<div class="addf"><input class="tx big" id="frIn" type="text" maxlength="20" autocomplete="off" placeholder="' + esc(T('fr_add')) + '" value="' + esc(keep) + '">' +
     '<a class="btn red" data-act="fradd">' + esc(T('fr_addb')) + '</a><div class="frsug" id="frSug"' + (FR_SUG ? '' : ' style="display:none"') + '>' + frSugHtml() + '</div></div>';
-  h += '<div class="frtools"><a class="btn" data-act="clan">\u2691 ' + esc(T('cl_btn')) + (ME.clan ? ' [' + esc(ME.clan.tag) + ']' : '') + '</a><a class="btn" data-act="ref">\ud83c\udf81 ' + esc(T('rf_btn')) + '</a></div>';
+  h += '<div class="frtools"><a class="btn" data-act="clan">\u2691 ' + esc(T('cl_btn')) + (ME.clan ? ' [' + esc(ME.clan.tag) + ']' : '') + '</a><a class="btn" data-act="ref">\u2709 ' + esc(T('rf_btn')) + '</a></div>';
   if (FR_REQ.length) {
     h += '<div class="ph2 m">' + esc(T('fr_req_t')) + ' (' + FR_REQ.length + ')</div>';
     each(FR_REQ, function (f) {
@@ -2009,7 +2016,7 @@ var PANES = {
       '<a class="btn" data-act="rename" style="margin:0 6px 0 0">' + esc(T('a_rename')) + '</a><a class="btn" data-act="avpick" style="margin:0 6px 0 0">' + esc(T('a_photo')) + '</a>' +
       (ME.av ? '<a class="btn out" data-act="avdel" style="margin:0">' + esc(T('a_photodel')) + '</a>' : '') + '</div>' +
       (ME.vip ? '<div class="vipbox"><b>' + esc(T('a_vip')) + '</b><span>' + esc(T('a_vip2')) + '</span></div>' : '') +
-      statBox(ME.st) + achBadges(ME.ach) + '<a class="btn" data-act="stats" style="margin:4px 6px 0 0">' + esc(T('ks_more')) + '</a><a class="btn" data-act="ref" style="margin:4px 0 0">\ud83c\udf81 ' + esc(T('rf_btn')) + '</a></div>' +
+      statBox(ME.st) + achBadges(ME.ach) + '<a class="btn" data-act="stats" style="margin:4px 6px 0 0">' + esc(T('ks_more')) + '</a><a class="btn" data-act="ref" style="margin:4px 0 0">\u2709 ' + esc(T('rf_btn')) + '</a></div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('a_sec')) + '</div>' +
       '<div class="rowb"><b>' + esc(T('a_email')) + '</b><small>' + esc(ME.email || '\u2014') + '</small><a class="btn" data-act="email">' + esc(T('a_change')) + '</a></div>' +
       '<div class="rowb"><b>' + esc(T('a_pass')) + '</b><small>' + esc(T('a_pw_ago').replace('{d}', daysAgo(ME.pwchanged))) + '</small><a class="btn" data-act="passwd">' + esc(T('a_change')) + '</a></div>' +

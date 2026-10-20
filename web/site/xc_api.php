@@ -150,6 +150,7 @@ function pub($u, $full) {
         $r['pwchanged'] = isset($u['pwchanged']) ? $u['pwchanged'] : $u['created'];
         $r['cloud'] = isset($u['cloud']) ? $u['cloud'] : null;
         $r['refby'] = isset($u['refby']) ? $u['refby'] : '';
+        $r['bf'] = !empty($u['bf']) ? 1 : 0;
         $r['refs'] = isset($u['refs']) ? count($u['refs']) : 0;
         $r['cloudt'] = isset($u['cloudt']) ? $u['cloudt'] : 0;
         $r['devices'] = isset($u['devices']) ? count($u['devices']) : 0;
@@ -796,6 +797,32 @@ case 'stat':
     save_user($u);
     $pu = pub($u, true);
     out(array('ok' => true, 'st' => $pu['st'], 'ach' => $pu['ach'], 'newach' => $newach, 'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL));
+
+case 'stat_bf':                                          // eski o'yinlar (menyu tarixidan) - akkauntga bir marta
+    lock();
+    $u = auth();
+    if (empty($u['bf'])) {
+        $st = isset($u['st']) && is_array($u['st']) ? $u['st'] : array('k' => 0, 'd' => 0, 'g' => 0, 't' => 0, 'best' => 0, 'wpn' => array(), 'srv' => array());
+        $ss = isset($u['ss']) ? $u['ss'] : array();
+        $g = json_decode(p('g'), true); $n = 0;
+        if (is_array($g)) foreach (array_slice($g, 0, 100) as $x) {
+            if (!is_array($x) || empty($x['ip']) || !preg_match('/^[a-z0-9.\-]{3,64}:\d{2,5}$/i', $x['ip'])) continue;
+            $sid = preg_replace('/[^0-9]/', '', (string)@$x['t']); if ($sid === '' || isset($ss[$sid])) continue;
+            $dur = max(0, min(6 * 3600, (int)@$x['dur'])); $cap = (int)ceil($dur / 60 * 6) + 5;
+            $k = max(0, min($cap, (int)@$x['k'])); $d = max(0, min($cap, (int)@$x['d']));
+            $st['k'] += $k; $st['d'] += $d; $st['t'] += $dur; $st['g']++; $n++;
+            if ($k > (int)@$st['best']) $st['best'] = $k;
+            $sv = isset($st['srv'][$x['ip']]) ? $st['srv'][$x['ip']] : array('k' => 0, 'd' => 0, 't' => 0, 'n' => '');
+            $sv['k'] += $k; $sv['d'] += $d; $sv['t'] += $dur; if (!empty($x['n'])) $sv['n'] = clean_str($x['n'], 60);
+            $st['srv'][$x['ip']] = $sv;
+        }
+        if (count($st['srv']) > 30) { uasort($st['srv'], function ($a, $b) { return $b['t'] - $a['t']; }); $st['srv'] = array_slice($st['srv'], 0, 30, true); }
+        $u['st'] = $st; $u['bf'] = time();
+        $newach = ach_check($u);
+        save_user($u);
+    } else $newach = array();
+    $pu = pub($u, true);
+    out(array('ok' => true, 'st' => $pu['st'], 'ach' => $pu['ach'], 'newach' => $newach));
 
 case 'topk':                                             // haftaning eng ko'p kill qilgan o'yinchilari
     $ch = champ_update();
