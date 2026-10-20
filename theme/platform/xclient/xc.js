@@ -2283,7 +2283,7 @@ var PANES = {
       (KEYWAIT ? '<div class="kpick">' + esc(T('k_pick')) + ' ' + ['MOUSE3', 'MOUSE4', 'MOUSE5', 'MWHEELUP', 'MWHEELDOWN'].map(function (k) { return '<a data-pickkey="' + k + '">' + esc(T('kp_' + k)) + '</a>'; }).join('') + '<a data-pickkey="">' + esc(T('cancel')) + '</a></div>' : '');
   },
   mouse: function () {
-    return '<div class="pane l"><div class="ph2">' + esc(T('mo_title')) + '</div>' + sl('sens', 'mo_sens', 0.5, 10, 0.1) + sl('zoom', 'mo_zoom', 0.2, 3, 0.05) + '</div>' +
+    return '<div class="pane l"><div class="ph2">' + esc(T('mo_title')) + '</div>' + sl('sens', 'mo_sens', 0.5, 10, 0.1) + sl('zoom', 'mo_zoom', 0.2, 3, 0.05) +
       '<div class="ph2 m">' + esc(T('aw_title')) + '</div>' + sl('awps', 'aw_sens', 0, 10, 0.1) + sl('awpz', 'aw_zoom', 0.2, 3, 0.05) +
       '<div class="mut" style="font-size:12px;line-height:18px">' + esc(T('aw_note')) + '</div></div>' +
       '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('raw', 'mo_raw', 'mo_raw2') + tg('filter', 'mo_filter') + tg('inv', 'mo_inv') + '</div>';

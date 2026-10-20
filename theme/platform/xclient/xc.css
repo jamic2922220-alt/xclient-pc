@@ -656,10 +656,10 @@ a.frp { cursor: pointer; } a.frp:hover { text-decoration: underline; }
 #toast.act { cursor: pointer; border-color: #3ccf4e; }
 #toast.act:hover { background: #1f2a20; }
 /* profil ramkalari */
-.fgold { -webkit-box-shadow: 0 0 0 3px #f5c518, 0 0 14px rgba(245,197,24,.6) !important; }
-.fpurp { -webkit-box-shadow: 0 0 0 3px #9b4dff, 0 0 12px rgba(155,77,255,.5) !important; }
-.fblue { -webkit-box-shadow: 0 0 0 3px #3b8cff, 0 0 10px rgba(59,140,255,.45) !important; }
-.fgreen { -webkit-box-shadow: 0 0 0 2px #3ccf4e !important; }
+.fgold { -webkit-box-shadow: 0 0 0 3px #f5c518, 0 0 14px rgba(245,197,24,.6); }
+.fpurp { -webkit-box-shadow: 0 0 0 3px #9b4dff, 0 0 12px rgba(155,77,255,.5); }
+.fblue { -webkit-box-shadow: 0 0 0 3px #3b8cff, 0 0 10px rgba(59,140,255,.45); }
+.fgreen { -webkit-box-shadow: 0 0 0 2px #3ccf4e; }
 /* profil devori */
 .wladd { overflow: hidden; margin-bottom: 10px; }
 .wladd .tx { float: left; width: 78%; height: 36px; padding: 0 10px; background: #0f0d12; border: 1px solid #3a2e34; color: #eee; font-size: 14px; }
@@ -735,10 +735,10 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .nk-rainbow { -webkit-animation: nkr 3s linear infinite; font-weight: bold; }
 @-webkit-keyframes nkr { 0% { color: #ff4b4b; } 20% { color: #ffd23a; } 40% { color: #3ccf4e; } 60% { color: #2fd3e8; } 80% { color: #b07cff; } 100% { color: #ff4b4b; } }
 /* sandiqdan chiqadigan ramkalar */
-.ffire { -webkit-box-shadow: 0 0 0 3px #ff6a1a, 0 0 16px 3px rgba(255,90,20,.8) !important; }
-.fice { -webkit-box-shadow: 0 0 0 3px #bfe9ff, 0 0 14px 3px rgba(140,210,255,.8) !important; }
-.fneon { -webkit-box-shadow: 0 0 0 3px #39f9ff, 0 0 0 5px #ff4fd8, 0 0 16px rgba(57,249,255,.8) !important; }
-.ftoxic { -webkit-box-shadow: 0 0 0 3px #9dff3a, 0 0 16px 3px rgba(157,255,58,.7) !important; }
+.ffire { -webkit-box-shadow: 0 0 0 3px #ff6a1a, 0 0 16px 3px rgba(255,90,20,.8); }
+.fice { -webkit-box-shadow: 0 0 0 3px #bfe9ff, 0 0 14px 3px rgba(140,210,255,.8); }
+.fneon { -webkit-box-shadow: 0 0 0 3px #39f9ff, 0 0 0 5px #ff4fd8, 0 0 16px rgba(57,249,255,.8); }
+.ftoxic { -webkit-box-shadow: 0 0 0 3px #9dff3a, 0 0 16px 3px rgba(157,255,58,.7); }
 .flegend { -webkit-animation: flg 2s linear infinite; }
 @-webkit-keyframes flg { 0% { -webkit-box-shadow: 0 0 0 3px #ffcf3a, 0 0 18px 4px rgba(255,207,58,.9); } 50% { -webkit-box-shadow: 0 0 0 3px #ff4fb4, 0 0 18px 4px rgba(255,79,180,.9); } 100% { -webkit-box-shadow: 0 0 0 3px #ffcf3a, 0 0 18px 4px rgba(255,207,58,.9); } }
 /* sandiq */
@@ -774,3 +774,25 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .ydg div { float: left; width: 25%; padding: 14px 4px; background: #15111a; border: 1px solid #2a2026; }
 .ydg b { display: block; font-size: 24px; } .ydg span { font-size: 11px; color: #8f8590; text-transform: uppercase; }
 .ydc p { font-size: 16px; }
+
+/* jonli (animatsiyali) profil ramkalari: ikki qavat halqa, ranglar almashib "nafas oladi" */
+@-webkit-keyframes k_avr { 0% { -webkit-box-shadow: 0 0 0 3px #ff3b3b, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #ff9a39, 0 0 14px 4px rgba(255,59,59,.45); } 50% { -webkit-box-shadow: 0 0 0 4px #ff9a39, 0 0 0 7px rgba(14,10,16,.95), 0 0 0 10px #ff3b3b, 0 0 30px 10px rgba(255,59,59,.45); } 100% { -webkit-box-shadow: 0 0 0 3px #ff3b3b, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #ff9a39, 0 0 14px 4px rgba(255,59,59,.45); } }
+@-webkit-keyframes k_fgreen { 0% { -webkit-box-shadow: 0 0 0 3px #3ccf4e, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #b6ff5a, 0 0 14px 4px rgba(60,207,78,.45); } 50% { -webkit-box-shadow: 0 0 0 4px #b6ff5a, 0 0 0 7px rgba(14,10,16,.95), 0 0 0 10px #3ccf4e, 0 0 30px 10px rgba(60,207,78,.45); } 100% { -webkit-box-shadow: 0 0 0 3px #3ccf4e, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #b6ff5a, 0 0 14px 4px rgba(60,207,78,.45); } }
+@-webkit-keyframes k_fblue { 0% { -webkit-box-shadow: 0 0 0 3px #3b8cff, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #5fe0ff, 0 0 14px 4px rgba(59,140,255,.5); } 50% { -webkit-box-shadow: 0 0 0 4px #5fe0ff, 0 0 0 7px rgba(14,10,16,.95), 0 0 0 10px #3b8cff, 0 0 30px 10px rgba(59,140,255,.5); } 100% { -webkit-box-shadow: 0 0 0 3px #3b8cff, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #5fe0ff, 0 0 14px 4px rgba(59,140,255,.5); } }
+@-webkit-keyframes k_fpurp { 0% { -webkit-box-shadow: 0 0 0 3px #9b4dff, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #ff5fd8, 0 0 14px 4px rgba(155,77,255,.5); } 50% { -webkit-box-shadow: 0 0 0 4px #ff5fd8, 0 0 0 7px rgba(14,10,16,.95), 0 0 0 10px #9b4dff, 0 0 30px 10px rgba(155,77,255,.5); } 100% { -webkit-box-shadow: 0 0 0 3px #9b4dff, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #ff5fd8, 0 0 14px 4px rgba(155,77,255,.5); } }
+@-webkit-keyframes k_fgold { 0% { -webkit-box-shadow: 0 0 0 3px #f5c518, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #fff3a0, 0 0 14px 4px rgba(245,197,24,.6); } 50% { -webkit-box-shadow: 0 0 0 4px #fff3a0, 0 0 0 7px rgba(14,10,16,.95), 0 0 0 10px #f5c518, 0 0 30px 10px rgba(245,197,24,.6); } 100% { -webkit-box-shadow: 0 0 0 3px #f5c518, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #fff3a0, 0 0 14px 4px rgba(245,197,24,.6); } }
+@-webkit-keyframes k_ffire { 0% { -webkit-box-shadow: 0 0 0 3px #ff6a1a, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #ffd23a, 0 0 14px 4px rgba(255,90,20,.7); } 50% { -webkit-box-shadow: 0 0 0 4px #ffd23a, 0 0 0 7px rgba(14,10,16,.95), 0 0 0 10px #ff6a1a, 0 0 30px 10px rgba(255,90,20,.7); } 100% { -webkit-box-shadow: 0 0 0 3px #ff6a1a, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #ffd23a, 0 0 14px 4px rgba(255,90,20,.7); } }
+@-webkit-keyframes k_fice { 0% { -webkit-box-shadow: 0 0 0 3px #bfe9ff, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #5fb8ff, 0 0 14px 4px rgba(140,210,255,.7); } 50% { -webkit-box-shadow: 0 0 0 4px #5fb8ff, 0 0 0 7px rgba(14,10,16,.95), 0 0 0 10px #bfe9ff, 0 0 30px 10px rgba(140,210,255,.7); } 100% { -webkit-box-shadow: 0 0 0 3px #bfe9ff, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #5fb8ff, 0 0 14px 4px rgba(140,210,255,.7); } }
+@-webkit-keyframes k_fneon { 0% { -webkit-box-shadow: 0 0 0 3px #39f9ff, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #ff4fd8, 0 0 14px 4px rgba(57,249,255,.65); } 50% { -webkit-box-shadow: 0 0 0 4px #ff4fd8, 0 0 0 7px rgba(14,10,16,.95), 0 0 0 10px #39f9ff, 0 0 30px 10px rgba(57,249,255,.65); } 100% { -webkit-box-shadow: 0 0 0 3px #39f9ff, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #ff4fd8, 0 0 14px 4px rgba(57,249,255,.65); } }
+@-webkit-keyframes k_ftoxic { 0% { -webkit-box-shadow: 0 0 0 3px #9dff3a, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #2fd36a, 0 0 14px 4px rgba(157,255,58,.6); } 50% { -webkit-box-shadow: 0 0 0 4px #2fd36a, 0 0 0 7px rgba(14,10,16,.95), 0 0 0 10px #9dff3a, 0 0 30px 10px rgba(157,255,58,.6); } 100% { -webkit-box-shadow: 0 0 0 3px #9dff3a, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #2fd36a, 0 0 14px 4px rgba(157,255,58,.6); } }
+.bigav, .fpav, #bar .me .av, .frl a i.av { -webkit-animation: k_avr 2.8s ease-in-out infinite; }
+.fgreen, .bigav.fgreen, .fpav.fgreen, #bar .me .av.fgreen, .frl a i.av.fgreen { -webkit-animation: k_fgreen 2.6s ease-in-out infinite !important; }
+.fblue, .bigav.fblue, .fpav.fblue, #bar .me .av.fblue, .frl a i.av.fblue { -webkit-animation: k_fblue 2.6s ease-in-out infinite !important; }
+.fpurp, .bigav.fpurp, .fpav.fpurp, #bar .me .av.fpurp, .frl a i.av.fpurp { -webkit-animation: k_fpurp 2.6s ease-in-out infinite !important; }
+.fgold, .bigav.fgold, .fpav.fgold, #bar .me .av.fgold, .frl a i.av.fgold { -webkit-animation: k_fgold 2.6s ease-in-out infinite !important; }
+.ffire, .bigav.ffire, .fpav.ffire, #bar .me .av.ffire, .frl a i.av.ffire { -webkit-animation: k_ffire 2.6s ease-in-out infinite !important; }
+.fice, .bigav.fice, .fpav.fice, #bar .me .av.fice, .frl a i.av.fice { -webkit-animation: k_fice 2.6s ease-in-out infinite !important; }
+.fneon, .bigav.fneon, .fpav.fneon, #bar .me .av.fneon, .frl a i.av.fneon { -webkit-animation: k_fneon 2.6s ease-in-out infinite !important; }
+.ftoxic, .bigav.ftoxic, .fpav.ftoxic, #bar .me .av.ftoxic, .frl a i.av.ftoxic { -webkit-animation: k_ftoxic 2.6s ease-in-out infinite !important; }
+.flegend, .bigav.flegend, .fpav.flegend, #bar .me .av.flegend, .frl a i.av.flegend { -webkit-animation: flg 2s linear infinite !important; }
+.lowfx .bigav, .lowfx .fpav, .lowfx #bar .me .av, .lowfx .frl a i.av { -webkit-animation: none !important; }
