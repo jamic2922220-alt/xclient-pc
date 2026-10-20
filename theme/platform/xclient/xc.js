@@ -1919,6 +1919,15 @@ function sendFeedback() {
     closeModal(); toast(T('fb_ok'), 5000);
   });
 }
+/* net_graph yoqilgan bo'lsa (o'yin uni ekranning pastki burchagiga chizadi) - pastki chiziqdagi yozuvlar shu burchakdan
+ * chetga suriladi, ustma-ust tushmaydi. net_graphpos: 1 - o'ngda (odatiy), 2 - o'rtada, 3 - chapda */
+function ngFit() {
+  var b = $('bar'); if (!b) return;
+  var ng = Number(readCvar('net_graph')) || 0, pos = Number(readCvar('net_graphpos')) || 1;
+  var c = ng > 0 ? (pos === 3 ? ' ngl' : pos === 2 ? '' : ' ngr') : '';
+  b.className = (b.className || '').replace(/(^|\s)ng[lr](?=\s|$)/g, '') + c;
+}
+setInterval(ngFit, 5000);
 function langMenu() {
   var p = $('lngpop');
   if (p) { p.parentNode.removeChild(p); return; }
@@ -2874,6 +2883,7 @@ step('beat', function () { if (DB.beat !== new Date().toDateString()) api('beat'
 step('loadAnn', function () { loadAnn(); });
 step('music', function () { setTimeout(musicSync, 3000); });
 step('whatsnew', function () { setTimeout(loadWhatsNew, 4000); });
+step('ngFit', function () { ngFit(); });
 step('applyTheme', function () { if ((DB.theme && DB.theme !== 'red') || DB.day) applyTheme(DB.theme || 'red'); else renderTop2(); });
 step('detectLang();', function () { detectLang(); });
 step('loadMaster();', function () { loadMaster(); });
@@ -2889,7 +2899,7 @@ if (DB.token) api('me', {}, function (r) { if (r.ok) { setMe(r.me); loadFriends(
 if (NC) {
   // o'yin ekrani ochildi (NextClient'ning o'z ro'yxatidan yoki konsoldan kirilsa ham) - menyu musiqasi o'chsin
   try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('hide', function () { if (MUSIC_ON !== false) { cmd('mp3 stop'); MUSIC_ON = false; } }); } catch (e) {}
-  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('show', function () { each(TOP.concat(PINNED).concat(DB.fav), function (ip) { query(ip); }); loadFriends(); loadWeek(); }); } catch (e) {}
+  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('show', function () { each(TOP.concat(PINNED).concat(DB.fav), function (ip) { query(ip); }); loadFriends(); loadWeek(); ngFit(); }); } catch (e) {}
   try {
     if (NC.addEventListener) {
       NC.addEventListener('connect', function (e) { onConnectEvt(e && e.detail && e.detail.address, false); });
