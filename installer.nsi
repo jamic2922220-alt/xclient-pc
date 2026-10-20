@@ -105,6 +105,10 @@ Section "Uninstall"
   Delete "$INSTDIR\bt_build.txt"
   Delete "$INSTDIR\xclient_version.txt"
   RMDir /r "$INSTDIR\xc_theme"
+  ; o'yin bosh menyusi manzilini asl holiga qaytaramiz (launcher X CLIENT menyusiga - xc.html ga - o'zgartirgan)
+  IfFileExists "$INSTDIR\platform\mmb_home_page.orig" 0 +3
+    Delete "$INSTDIR\platform\mmb_home_page.html"
+    Rename "$INSTDIR\platform\mmb_home_page.orig" "$INSTDIR\platform\mmb_home_page.html"
   Delete "$INSTDIR\XClient-Uninstall.exe"
   RMDir "$INSTDIR"
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\XClient"

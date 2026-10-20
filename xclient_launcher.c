@@ -1236,19 +1236,29 @@ static void upload_shots(void)
     WritePrivateProfileStringW(L"x", L"shott", w, ini);
 }
 
-/* Bosh menyu manzili oddiy http://mmb.boost-top.com/index.html bo'lib qoladi - o'yin brauzeri
- * "?..." qo'shimchali manzilni ocholmadi (xato sahifasi chiqdi). Oldingi versiyalar yozgan
- * file:/// yoki ?xc= manzilini shu yerda qaytaramiz. Kompyuter id'si menyuga sayt orqali (IP bo'yicha) yetadi. */
+/* X CLIENT menyusi saytda alohida manzilda: http://mmb.boost-top.com/xc.html. index.html - boshqa boost-top sborkalari
+ * uchun (ular ham shu saytni ochadi), shuning uchun X CLIENT menyusi faqat shu launcher o'rnatgan o'yinda chiqadi.
+ * Asl manzil bir marta platform/mmb_home_page.orig ga saqlanadi (o'chirishda qaytariladi). O'yin brauzeri "?..."
+ * qo'shimchali manzilni ocholmaydi - shuning uchun alohida fayl nomi. Kompyuter id'si menyuga sayt orqali (IP) yetadi. */
+#define XC_HOME XC_SITE "xc.html"
 static void setup_main_menu(void)
 {
-    wchar_t home[MAX_PATH];
+    wchar_t home[MAX_PATH], orig[MAX_PATH];
     path_join(home, g_dir, L"platform\\mmb_home_page.html");
+    path_join(orig, g_dir, L"platform\\mmb_home_page.orig");
     long n = 0;
     char *cur = read_all(home, &n);
-    if (cur && (strstr(cur, "?xc=") || (strstr(cur, "file:///") && strstr(cur, "xclient")))) {
+    if (cur && !strstr(cur, XC_HOME)) {
+        if (GetFileAttributesW(orig) == INVALID_FILE_ATTRIBUTES && !strstr(cur, "xclient") && !strstr(cur, "?xc=")) {
+            FILE *o = _wfopen(orig, L"wb");
+            if (o) { fwrite(cur, 1, n, o); fclose(o); }
+        }
+    }
+    if (!cur || !strstr(cur, XC_HOME)) {
+        mkdirs_for(home);
         SetFileAttributesW(home, FILE_ATTRIBUTE_NORMAL);
         FILE *f = _wfopen(home, L"wb");
-        if (f) { fputs(XC_SITE "index.html", f); fclose(f); }
+        if (f) { fputs(XC_HOME, f); fclose(f); }
     }
     free(cur);
 }

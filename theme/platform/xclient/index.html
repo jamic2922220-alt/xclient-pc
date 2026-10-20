@@ -15,14 +15,15 @@
 /* O'yin brauzeri (CEF) index.html ni soatlab xotiradan ochishi mumkin - yangilanish ko'rinmay qoladi.
  * ver.txt har safar yangidan so'raladi; boshqa bo'lsa - yangi index.html ni yuklab, sahifani shu bilan almashtiramiz. */
 (function () {
-  var V = '10192100';
+  var V = '10192300';
   try {
     if (window.name === 'xcfresh' + V) return;
     var x = new XMLHttpRequest(); x.open('GET', 'ver.txt?t=' + new Date().getTime(), false); x.send(null);
     var v = String(x.responseText || '').replace(/\s+/g, '');
     if (x.status !== 200 || !/^\d{6,12}$/.test(v) || v === V || window.name === 'xcfresh' + v) return;
     window.name = 'xcfresh' + v;
-    var y = new XMLHttpRequest(); y.open('GET', 'index.html?t=' + new Date().getTime(), false); y.send(null);
+    var me = (/[^\/]+\.html$/.exec(location.pathname) || ['index.html'])[0];   // xc.html (X CLIENT launcheri) yoki index.html
+    var y = new XMLHttpRequest(); y.open('GET', me + '?t=' + new Date().getTime(), false); y.send(null);
     if (y.status === 200 && y.responseText.indexOf('id="app"') > 0) {
       // eski sahifaning qolgan qismi ishlamasin (plaintext), yuklanib bo'lgach - yangisi bilan almashtiramiz
       var fresh = y.responseText;
@@ -32,7 +33,7 @@
   } catch (e) {}
 })();
 </script>
-<link rel="stylesheet" href="xc.css?v=10192100">
+<link rel="stylesheet" href="xc.css?v=10192300">
 <script>
 /* Xato bo'lsa ekranning tepasida ko'rsatamiz (o'yin brauzerida konsol yo'q) */
 window.XC_ERRS = [];
@@ -45,7 +46,7 @@ window.onerror = function (msg, url, line) {
   return false;
 };
 </script>
-<script src="xc_lang.js?v=10192100"></script>
+<script src="xc_lang.js?v=10192300"></script>
 </head>
 <body>
 <div id="app">
@@ -243,6 +244,6 @@ window.onerror = function (msg, url, line) {
   <div id="dbg"></div>
 </div>
 <script src="master.js"></script>
-<script src="xc.js?v=10192100"></script>
+<script src="xc.js?v=10192300"></script>
 </body>
 </html>
