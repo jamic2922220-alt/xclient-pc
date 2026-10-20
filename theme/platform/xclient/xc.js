@@ -1406,7 +1406,7 @@ var DEF = {
   vmx: 0, vmy: 0, vmz: 0, vmshift: 0, bobst: 0, lagst: 0, camint: 0,
   roll: 0, rollspd: 200, bobv: 0.13, bobl: 0.32, boblow: 8, bobcam: 1, lagsc: 1, lagsp: 8, fovlerp: 0, camsc: 1,
   rtracks: 0, rfull: 1, rbg: 0, rallies: 1, rns: 0.8, rhs: 1, dtime: 6, drpc: 1, drpcs: 1, drpcj: 1, mmusic: 1,
-  bob: 0.01, picmip: 0, detail: 1, shadows: 1, minm: 0, interp: 0.01, lw: 1, lc: 1, hisnd: 1, mixa: 0.1, loop: 0, saytm: 5, ngpos: 1, pro: 0, gfxc: '', xmig: 0, pmig: 0,
+  bob: 0.01, picmip: 0, detail: 0, shadows: 1, minm: 0, interp: 0.01, lw: 1, lc: 1, hisnd: 1, mixa: 0.1, loop: 0, saytm: 5, ngpos: 1, pro: 0, gfxc: '', xmig: 0, pmig: 0, gmig: 0,
   awps: 0, awpz: 1, awpxc: '0 230 255', awpxs: 'small'
 };
 var S = null, E = null;
@@ -1432,6 +1432,12 @@ function loadSettings() {
   /* "Avto grafika" (bekor qilindi) grafikani pasaytirib yuborgan o'yinchilarda - to'liq grafikani qaytaramiz */
   /* eski PRO CFG soya va dinamik yorug'likni o'chirgan edi - bir marta qaytaramiz (yangi PRO CFG grafikaga tegmaydi) */
   if (S.pro && !S.pmig) { S.shadows = 1; S.dyn = 1; S.pmig = 1; S.gfxc = ''; DB.set = S; }
+  /* detal teksturalar (devorlarga naqsh) va baland gamma xaritalarni g'alati va og'ir ko'rsatdi - bir marta CS 1.6 holatiga */
+  if (!S.gmig) {
+    var gm = S.gamma > 2.6;
+    S.detail = 0; if (gm) S.gamma = 2.5; S.gmig = 1; if (DB.set) DB.set = S;
+    cmd('r_detailtextures 0'); if (gm) cmd('gamma 2.5');   // saqlangan sozlamasi yo'q o'yinchida ham o'yinga darhol
+  }
   if (S.gfxc) {
     // CS 1.6 standarti: detal teksturalar o'chiq, soya va yorug'lik yoqiq
     var g = { detail: 0, shadows: 1, dyn: 1 };
@@ -1602,7 +1608,7 @@ function calcOut() { var v = calcVal(); return v ? '= <b>' + v + '</b> CS 1.6' :
 /* Tayyor CFG'lar - 4 guruh: [id, nom, izoh, qiymatlar, guruh]. Har biri to'liq: internet, interp, sezgirlik, pritsel, qurol ko'rinishi.
  * FPS 100 dan past bo'lsa - 100 (CS 1.6 fizikasi); grafika faqat "Kompyuter" guruhida o'zgaradi. */
 var STYLES = [
-  ['pro', 'st_pro', 'st_pro2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, sens: 2, zoom: 1, xt: 0, xs: 'small', xc: '50 250 50', xtr: 0, xdyn: 0, bob: 0, fastsw: 1, vmfov: 90, gamma: 2.8, dmax: 5 }, 'top'],
+  ['pro', 'st_pro', 'st_pro2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, sens: 2, zoom: 1, xt: 0, xs: 'small', xc: '50 250 50', xtr: 0, xdyn: 0, bob: 0, fastsw: 1, vmfov: 90, dmax: 5 }, 'top'],
   ['rifle', 'st_rifle', 'st_rifle2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, sens: 2.2, zoom: 1, xt: 0, xs: 'small', xc: '50 250 50', xtr: 0, xdyn: 0, bob: 0, fastsw: 1 }, 'top'],
   ['awp', 'st_awp', 'st_awp2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, sens: 1.8, zoom: 0.85, xt: 0, xs: 'small', xc: '0 230 255', xtr: 0, xdyn: 0, bob: 0, fastsw: 1, awps: 1.5, awpz: 0.85, awpxs: 'small' }, 'top'],
   ['entry', 'st_entry', 'st_entry2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, sens: 3.2, zoom: 1, xt: 0, xs: 'small', xc: '0 230 255', xtr: 0, xdyn: 0, bob: 0, fastsw: 1 }, 'top'],
@@ -1613,10 +1619,10 @@ var STYLES = [
   ['csgo', 'st_csgo', 'st_csgo2', { bobst: 2, bobv: 0.13, bobl: 0.32, boblow: 8, lagst: 2, lagsc: 1, fovlerp: 0.2, camint: 1, vmx: 1, vmy: 0, vmz: -1, vmfov: 90, xt: 0, xs: 'small', xc: '50 250 50', xdyn: 0 }, 'top'],
   ['new', 'st_new', 'st_new2', { sens: 3, zoom: 1.2, raw: 1, xt: 0, xs: 'medium', xc: '255 210 60', xdyn: 1, bob: 0.01 }, 'top'],
   ['clanwar', 'st_clanwar', 'st_clanwar2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, voice: 1, vscale: 1.2, mp3off: 1, mmusic: 0, saytm: 8, netg: 0, dmax: 6, hs: 1, cid: 1 }, 'sit'],
-  ['zombie', 'st_zombie', 'st_zombie2', { sens: 3.5, xdyn: 1, xs: 'medium', vol: 0.9, gamma: 3, dmax: 8, saytm: 8, decals: 1000 }, 'sit'],
+  ['zombie', 'st_zombie', 'st_zombie2', { sens: 3.5, xdyn: 1, xs: 'medium', vol: 0.9, dmax: 8, saytm: 8, decals: 1000 }, 'sit'],
   ['dmcfg', 'st_dm', 'st_dm2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, dmax: 8, dtime: 4, saytm: 4, hs: 1, cid: 0, decals: 1000, fastsw: 1 }, 'sit'],
-  ['stream', 'st_stream', 'st_stream2', { netg: 0, showfps: 0, nover: 1, dmax: 5, saytm: 6, gamma: 2.8, decals: 2000 }, 'sit'],
-  ['vis', 'st_vis', 'st_vis2', { gamma: 3, dyn: 0, detail: 0, hor: 1, fov: 90, vmfov: 90 }, 'pc'],
+  ['stream', 'st_stream', 'st_stream2', { netg: 0, showfps: 0, nover: 1, dmax: 5, saytm: 6, decals: 2000 }, 'sit'],
+  ['vis', 'st_vis', 'st_vis2', { gamma: 2.7, dyn: 0, detail: 0, hor: 1, fov: 90, vmfov: 90 }, 'pc'],
   ['lowpc', 'st_lowpc', 'st_lowpc2', { detail: 0, shadows: 0, dyn: 0, vsync: 0, decals: 300, fps: 100, hisnd: 1, mixa: 0.15 }, 'pc'],
   ['slownet', 'st_slownet', 'st_slownet2', { net: 'slow', interp: 0.1, lw: 1, lc: 1 }, 'pc'],
   ['midnet', 'st_midnet', 'st_midnet2', { net: 'mid', interp: 0.05, lw: 1, lc: 1 }, 'pc'],
