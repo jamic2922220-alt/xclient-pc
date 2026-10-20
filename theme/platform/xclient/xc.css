@@ -513,3 +513,12 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 .xpcard .acl { display: block; margin: 0 0 12px; }
 .xpcard .acl span { display: block; margin: 4px 0; }
 .lite #bCloud { display: none !important; }
+
+/* jang statistikasi */
+.stbox { display: table; width: 100%; table-layout: fixed; margin: 14px 0 6px; }
+.stbox div { display: table-cell; text-align: center; padding: 8px 2px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); }
+.stbox b { display: block; font-size: 22px; color: #fff; }
+.stbox span { font-size: 12px; color: #c9b7bd; text-transform: uppercase; letter-spacing: .5px; }
+.stmore { margin: 8px 0 4px; }
+#sideBody .kv { overflow: hidden; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+#sideBody .kv b { float: right; color: #fff; }

@@ -362,6 +362,42 @@ function afterLogin(r) {
   else cloudSave(true);
   loadFriends();
 }
+/* ---- jang statistikasi (akkaunt): shu o'yinning jami kill/o'lim/qurollari yuboriladi, sayt farqini qo'shadi ---- */
+var STAT_LAST = '';
+function sendStat(g) {
+  g = g || CUR;
+  if (!ME || !g || !g.t || !g.ip) return;
+  var dur = Math.round(((CONNECTED && g === CUR) ? now() - g.t : (g.d || 0) * 1000) / 1000);
+  var key = g.t + ':' + (g.k || 0) + ':' + (g.x || 0) + ':' + Math.floor(dur / 300);
+  if (key === STAT_LAST) return;
+  STAT_LAST = key;
+  api('stat', { sid: g.t, ip: g.ip, name: g.name || '', k: g.k || 0, d: g.x || 0, dur: dur, w: JSON.stringify(g.w || {}) }, function (r) { if (r.ok && ME) ME.st = r.st; });
+}
+function fmtHours(sec) { var h = Math.floor((sec || 0) / 3600), m = Math.floor((sec || 0) % 3600 / 60); return h ? h + T('ks_h') + ' ' + m + T('ks_m') : m + T('ks_m'); }
+function kdOf(st) { return st && st.d ? (st.k / st.d).toFixed(2) : String(st && st.k || 0); }
+function statBox(st) {
+  st = st || {};
+  var c = function (v, l) { return '<div><b>' + esc(String(v)) + '</b><span>' + esc(T(l)) + '</span></div>'; };
+  return '<div class="stbox">' + c(st.k || 0, 'ks_k') + c(st.d || 0, 'ks_d') + c(kdOf(st), 'ks_kd') + c(st.g || 0, 'ks_g') + '</div>';
+}
+function openStats() {
+  var st = (ME && ME.st) || {}, w = '', sv = '';
+  for (var wn in st.wpn || {}) if (st.wpn.hasOwnProperty(wn)) w += '<div class="kv"><span>' + esc(wn) + '</span><b>' + st.wpn[wn] + '</b></div>';
+  for (var ip in st.srv || {}) if (st.srv.hasOwnProperty(ip)) { var x = st.srv[ip]; sv += '<div class="kv"><span>' + esc(x.n || ip) + '</span><b>' + x.k + ' / ' + x.d + '</b></div>'; }
+  var h = statBox(st) +
+    '<div class="stmore"><div class="kv"><span>' + esc(T('ks_best')) + '</span><b>' + (st.best || 0) + '</b></div><div class="kv"><span>' + esc(T('ks_time')) + '</span><b>' + esc(fmtHours(st.t)) + '</b></div>' +
+    '<div class="kv"><span>' + esc(T('ks_week')) + '</span><b>' + (st.wk || 0) + '</b></div></div>' +
+    '<div class="ph2 m">' + esc(T('ks_wpn')) + '</div>' + (w || '<div class="mut">' + esc(T('ks_none')) + '</div>') +
+    '<div class="ph2 m">' + esc(T('ks_srv')) + '</div>' + (sv || '<div class="mut">' + esc(T('ks_none')) + '</div>') +
+    '<div class="ph2 m">' + esc(T('ks_top')) + '</div><div id="topkList" class="mut">...</div><small class="mut">' + esc(T('ks_note')) + '</small>';
+  openSide('stats', T('ks_title'), h);
+  api('topk', {}, function (r) {
+    var el = $('topkList'); if (!el) return;
+    var t = '';
+    each((r.ok && r.top) || [], function (x, i) { t += '<div class="kv"><span>' + (i + 1) + '. ' + esc(x.name) + (x.vip ? ' <em class="vipb">VIP</em>' : '') + '</span><b>' + x.k + ' kill · K/D ' + x.kd + '</b></div>'; });
+    el.innerHTML = t || esc(T('ks_none')); el.className = '';
+  });
+}
 function histCompact(list, n) {                // tarix: akkauntga oxirgi 50 ta o'yin (boshqa kompyuterda ham chiqadi)
   var h = [];
   each((list || []).slice(0, n), function (x) { if (x && x.ip) h.push({ ip: x.ip, name: x.name, map: x.map, t: x.t, d: x.d, k: x.k, x: x.x }); });
@@ -682,7 +718,7 @@ function onConnectEvt(addr, inGame) {
 function onDisconnectEvt() {
   var was = CONNECTED;
   setTimeout(musicSync, 500);
-  if (CUR) { CUR.d = Math.round((now() - CUR.t) / 1000); persist(); cloudSave(); }
+  if (CUR) { CUR.d = Math.round((now() - CUR.t) / 1000); persist(); cloudSave(); sendStat(CUR); }
   stopRecord();
   CONNECTED = ''; renderAll(); pingPresence();
   // o'yinchi o'zi menyudan chiqmagan bo'lsa (menyu yopiq) - qayta ulanamiz
@@ -702,7 +738,7 @@ function onConsole(txt) {
   if (!CUR || !MYNAME) return;
   var m = /^(.+?) killed (.+?) with ([\w\-]+)/.exec(txt.replace(/^\s+/, ''));
   if (!m) return;
-  if (m[1] === MYNAME && m[2] !== MYNAME) { CUR.k = (CUR.k || 0) + 1; persist(); }
+  if (m[1] === MYNAME && m[2] !== MYNAME) { CUR.k = (CUR.k || 0) + 1; CUR.w = CUR.w || {}; CUR.w[m[3]] = (CUR.w[m[3]] || 0) + 1; persist(); }
   else if (m[2] === MYNAME) { CUR.x = (CUR.x || 0) + 1; persist(); }
 }
 function bestServer() {
@@ -1857,7 +1893,8 @@ var PANES = {
       '<div class="avcols">' + avColors() + '</div>' +
       '<a class="btn" data-act="rename" style="margin:0 6px 0 0">' + esc(T('a_rename')) + '</a><a class="btn" data-act="avpick" style="margin:0 6px 0 0">' + esc(T('a_photo')) + '</a>' +
       (ME.av ? '<a class="btn out" data-act="avdel" style="margin:0">' + esc(T('a_photodel')) + '</a>' : '') + '</div>' +
-      (ME.vip ? '<div class="vipbox"><b>' + esc(T('a_vip')) + '</b><span>' + esc(T('a_vip2')) + '</span></div>' : '') + '</div>' +
+      (ME.vip ? '<div class="vipbox"><b>' + esc(T('a_vip')) + '</b><span>' + esc(T('a_vip2')) + '</span></div>' : '') +
+      statBox(ME.st) + '<a class="btn" data-act="stats" style="margin:4px 0 0">' + esc(T('ks_more')) + '</a></div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('a_sec')) + '</div>' +
       '<div class="rowb"><b>' + esc(T('a_email')) + '</b><small>' + esc(ME.email || '\u2014') + '</small><a class="btn" data-act="email">' + esc(T('a_change')) + '</a></div>' +
       '<div class="rowb"><b>' + esc(T('a_pass')) + '</b><small>' + esc(T('a_pw_ago').replace('{d}', daysAgo(ME.pwchanged))) + '</small><a class="btn" data-act="passwd">' + esc(T('a_change')) + '</a></div>' +
@@ -2166,6 +2203,7 @@ function act(a) {
   if (a === 'avpick') return openAvatars();   // o'yin to'liq ekranda bo'lganda Windows fayl oynasi o'yin ortida ochilib, o'yin "qotib" qolardi
   if (a === 'avdel') return api('avatar', { img: 'none' }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); });
   if (a === 'cloudsave') return cloudSave(true);
+  if (a === 'stats') return ME ? openStats() : openLogin();
   if (a === 'cloudget') return api('me', {}, function (r) { if (!r.ok) return; ME = r.me; restoreCloud(r.me.cloud); if (curModal === 'mdSettings') { seedFromGame(); E = copy(S); showSetTab('account'); } });
   if (a === 'logout') { api('logout', {}); DB.token = ''; ME = null; FRIENDS = []; persist(); closeModal(); return renderAll(); }
   if (a === 'defaults') { var keep = E.name, tag = E.tag; E = copy(DEF); E.name = keep; E.tag = tag; return showSetTab(setTab); }
@@ -2511,6 +2549,7 @@ setInterval(function () {
   if (curModal === 'mdServers') each(tabIps(), function (ip) { query(ip); });
 }, 30000);
 setInterval(pingPresence, 60000);
+setInterval(function () { if (CONNECTED) sendStat(); }, 120000);   // o'yin davomida 2 daqiqada bir (o'yin qulab tushsa ham yo'qolmasin)
 setInterval(function () { loadFriends(); if (!playing()) loadWeek(); }, 60000);   // do'stlar - xabar bildirishnomalari uchun o'yinda ham
 setInterval(function () { if (!playing()) loadTop(); }, 10 * 60 * 1000);
 setInterval(loadAnn, 5 * 60 * 1000);

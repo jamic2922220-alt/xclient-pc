@@ -134,7 +134,12 @@ function pub($u, $full) {
         'av' => !empty($u['avt']) ? 'xc_api.php?a=av&l=' . strtolower($u['login']) . '&t=' . $u['avt'] : '',
         'server' => is_online($u) && !empty($u['server']) ? $u['server'] : '', 'map' => is_online($u) && !empty($u['map']) ? $u['map'] : '',
     );
+    $st = isset($u['st']) && is_array($u['st']) ? $u['st'] : array();
+    $r['st'] = array('k' => (int)@$st['k'], 'd' => (int)@$st['d'], 'g' => (int)@$st['g'], 't' => (int)@$st['t'], 'best' => (int)@$st['best'],
+        'wk' => (isset($u['wkkid']) && $u['wkkid'] === week_id()) ? (int)$u['wkk'] : 0);
     if ($full) {
+        $w = isset($st['wpn']) ? $st['wpn'] : array(); arsort($w); $r['st']['wpn'] = array_slice($w, 0, 6, true);
+        $sv = isset($st['srv']) ? $st['srv'] : array(); uasort($sv, function ($a, $b) { return $b['k'] - $a['k']; }); $r['st']['srv'] = array_slice($sv, 0, 5, true);
         $r['email'] = isset($u['email']) ? preg_replace('/^(.).*(@.*)$/', '$1*****$2', $u['email']) : '';
         $r['tg'] = isset($u['tg']) ? $u['tg'] : '';
         $r['created'] = $u['created'];
@@ -572,6 +577,61 @@ case 'notif':
     $un = array(); foreach ((isset($u['unread']) && is_array($u['unread']) ? $u['unread'] : array()) as $k => $n) if ($n > 0) { $f = user($k); $un[] = array('login' => $k, 'name' => $f ? $f['name'] : $k, 'n' => (int)$n); }
     $rq = array(); foreach ((isset($u['freq']) && is_array($u['freq']) ? $u['freq'] : array()) as $k => $tm) { $f = user($k); if ($f) $rq[] = array('login' => $k, 'name' => $f['name'], 't' => $tm); }
     out(array('ok' => true, 'unread' => $un, 'req' => $rq));
+
+/* ---------- jang statistikasi: o'yinchining hamma serverlardagi kill/o'limi akkauntga yig'iladi (Steam statistikasidek) ----------
+ * Menyu o'yin davomida (2 daqiqada bir) va chiqishda shu o'yinning JAMI qiymatlarini yuboradi: sid - o'yin boshlangan vaqt (ms).
+ * Server oldingi yuborilganidan farqini qo'shadi - qayta yuborish ikki marta sanalmaydi. Konsol yozuvini soxtalashtirib
+ * bo'lmasligi uchun: o'yin vaqtiga nisbatan chegara (daqiqasiga 6 kill + 5). */
+case 'stat':
+    lock();
+    $u = auth();
+    $sid = preg_replace('/[^0-9]/', '', p('sid')); $ip = p('ip');
+    if ($sid === '' || strlen($sid) > 15 || !preg_match('/^[a-z0-9.\-]{3,64}:\d{2,5}$/i', $ip)) fail('bad', 'bad');
+    $dur = max(0, min(6 * 3600, (int)p('dur')));
+    $cap = (int)ceil($dur / 60 * 6) + 5;
+    $k = max(0, min($cap, (int)p('k'))); $d = max(0, min($cap, (int)p('d')));
+    $ss = isset($u['ss']) && is_array($u['ss']) ? $u['ss'] : array();
+    $old = isset($ss[$sid]) ? $ss[$sid] : array('k' => 0, 'd' => 0, 't' => 0, 'w' => array());
+    $dk = max(0, $k - $old['k']); $dd = max(0, $d - $old['d']); $dt = max(0, $dur - $old['t']);
+    $st = isset($u['st']) && is_array($u['st']) ? $u['st'] : array('k' => 0, 'd' => 0, 'g' => 0, 't' => 0, 'best' => 0, 'wpn' => array(), 'srv' => array());
+    if (!isset($ss[$sid])) $st['g'] = (int)@$st['g'] + 1;
+    $st['k'] = (int)@$st['k'] + $dk; $st['d'] = (int)@$st['d'] + $dd; $st['t'] = (int)@$st['t'] + $dt;
+    if ($k > (int)@$st['best']) $st['best'] = $k;
+    $w = json_decode(p('w'), true); $nw = array();
+    if (is_array($w)) foreach ($w as $wn => $wc) {
+        $wn = strtolower(preg_replace('/[^a-z0-9_\-]/i', '', (string)$wn));
+        if ($wn === '' || strlen($wn) > 20) continue;
+        $nw[$wn] = min($k, max(0, (int)$wc));
+        $add = $nw[$wn] - (isset($old['w'][$wn]) ? (int)$old['w'][$wn] : 0);
+        if ($add > 0) { if (!isset($st['wpn'][$wn])) $st['wpn'][$wn] = 0; $st['wpn'][$wn] += $add; }
+    }
+    if (count($st['wpn']) > 40) { arsort($st['wpn']); $st['wpn'] = array_slice($st['wpn'], 0, 40, true); }
+    $sv = isset($st['srv'][$ip]) ? $st['srv'][$ip] : array('k' => 0, 'd' => 0, 't' => 0, 'n' => '');
+    $sv['k'] += $dk; $sv['d'] += $dd; $sv['t'] += $dt; if (p('name') !== '') $sv['n'] = clean_str(p('name'), 60);
+    $st['srv'][$ip] = $sv;
+    if (count($st['srv']) > 30) { uasort($st['srv'], function ($a, $b) { return $b['t'] - $a['t']; }); $st['srv'] = array_slice($st['srv'], 0, 30, true); }
+    $u['st'] = $st;
+    $wk = week_id(); if (!isset($u['wkkid']) || $u['wkkid'] !== $wk) { $u['wkkid'] = $wk; $u['wkk'] = 0; } $u['wkk'] += $dk;
+    $ss[$sid] = array('k' => $k, 'd' => $d, 't' => $dur, 'w' => $nw);
+    if (count($ss) > 8) { ksort($ss); $ss = array_slice($ss, -8, 8, true); }
+    $u['ss'] = $ss;
+    save_user($u);
+    out(array('ok' => true, 'st' => pub($u, true)['st']));
+
+case 'topk':                                             // haftaning eng ko'p kill qilgan o'yinchilari
+    $cache = rd('topkcache', null);
+    if ($cache && time() - $cache['t'] < 120) out(array('ok' => true, 'top' => $cache['top']));
+    $top = array(); $wk = week_id();
+    foreach (glob(XC_DIR . '/users/*.php') as $f) {
+        $x = rd('users/' . basename($f, '.php'), null);
+        if (!$x || !isset($x['wkkid']) || $x['wkkid'] !== $wk || empty($x['wkk'])) continue;
+        $sx = isset($x['st']) ? $x['st'] : array();
+        $top[] = array('name' => $x['name'], 'login' => $x['login'], 'k' => (int)$x['wkk'], 'kd' => !empty($sx['d']) ? round($sx['k'] / $sx['d'], 2) : (float)@$sx['k'], 'vip' => !empty($x['vip']));
+    }
+    usort($top, function ($a, $b) { return $b['k'] - $a['k']; });
+    $top = array_slice($top, 0, 10);
+    wr('topkcache', array('t' => time(), 'top' => $top));
+    out(array('ok' => true, 'top' => $top));
 
 case 'top':                                              // haftaning eng faol o'yinchilari (o'yin vaqti bo'yicha)
     $cache = rd('topcache', null);
