@@ -587,3 +587,12 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 #bar .lng { margin-left: 22px; }
 #fbTx { background: #0f0d12; color: #eee; border: 1px solid #3a2e34; font: 15px Tahoma, Arial, sans-serif; }
 #fbTx:focus { border-color: #e5484d; outline: none; }
+/* kun / tun tugmasi (rang paneli yonida) */
+#thbar { width: 400px; margin-left: -200px; white-space: nowrap; }
+#thbar .sp { display: inline-block; width: 1px; height: 18px; margin: 0 8px; vertical-align: top; background: rgba(255,255,255,.18); }
+#thbar a.dn { width: auto; height: 18px; line-height: 15px; padding: 0 9px; border-radius: 9px; border: 1px solid rgba(255,255,255,.22); color: #f0e8ec; font-size: 13px; vertical-align: top; }
+#thbar a.dn span { font-size: 12px; }
+#thbar a.dn:hover { background: rgba(255,255,255,.12); }
+/* kun rejimi: rangli tugmalar ustidagi matn oq qoladi ("white" so'zi rang o'girishga tushmaydi) */
+.day .btn.red, .day .btn.red *, .day .acbtn, .day #play, .day #play * { color: white; }
+.day .tg.on i { background: white; }

@@ -489,7 +489,7 @@ function histCompact(list, n) {                // tarix: akkauntga oxirgi 50 ta 
   each((list || []).slice(0, n), function (x) { if (x && x.ip) h.push({ ip: x.ip, name: x.name, map: x.map, t: x.t, d: x.d, k: x.k, x: x.x }); });
   return h;
 }
-function cloudData() { return { set: DB.set, binds: DB.binds, binds2: DB.binds2, fav: DB.fav, lang: DB.lang, hist: histCompact(DB.hist, 50), pw: DB.pw || [], theme: DB.theme || '' }; }
+function cloudData() { return { set: DB.set, binds: DB.binds, binds2: DB.binds2, fav: DB.fav, lang: DB.lang, hist: histCompact(DB.hist, 50), pw: DB.pw || [], theme: DB.theme || '', day: DB.day || 0 }; }
 function mergeHist(add) {                      // ikki kompyuter tarixini birlashtirish: bir xil o'yin (ip + vaqt) bir marta
   var seen = {}, out = [];
   each((DB.hist || []).concat(add || []), function (x) { var k = x.ip + '|' + Math.round((x.t || 0) / 60000); if (!seen[k]) { seen[k] = 1; out.push(x); } });
@@ -516,7 +516,7 @@ function restoreCloud(c, silent) {
   if (c.lang) { DB.lang = c.lang; setLang(c.lang); }
   if (c.hist && c.hist.length) mergeHist(c.hist);
   if (c.pw && c.pw.length) DB.pw = c.pw;
-  if (c.theme && c.theme !== DB.theme) { DB.theme = c.theme; applyTheme(c.theme); }
+  if ((c.theme && c.theme !== DB.theme) || (c.day != null && c.day !== (DB.day || 0))) { if (c.theme) DB.theme = c.theme; if (c.day != null) DB.day = c.day; applyTheme(DB.theme || 'red'); }
   DB.cloudt = ME ? ME.cloudt : 0; persist();
   if (!silent) toast(T('a_restored'));
   renderAll();
@@ -1836,32 +1836,62 @@ function recolorImages(hue) {
   });
 }
 function themeHue(id) { var hue = -1; each(THEMES, function (x) { if (x[0] === id) hue = x[1]; }); return hue; }
+/* Kun / tun rejimi: DB.day 0 - tun (qorong'i, asl), 1 - kun (yorug'), 2 - avto (7:00-19:00 kun).
+ * CEF1 da CSS o'zgaruvchilari yo'q - shuning uchun xc.css ning hamma ranglari JS da o'giriladi:
+ * qorong'i fon -> och, och matn -> to'q; yorqin aksent ranglar (qizil tugmalar) o'z joyida qoladi. */
+function isDay() { var m = DB.day || 0; if (m === 2) { var h = new Date().getHours(); return h >= 7 && h < 19; } return m === 1; }
+function dayColor(c) {
+  var x = rgb2hsl(c[0], c[1], c[2]), h = x[0], sa = x[1], l = x[2];
+  if (sa > 0.45 && l > 0.28 && l < 0.75) return hsl2rgb(h, sa, Math.min(l, 0.52));      // aksent: biroz to'qroq - och fonda o'qilsin
+  return hsl2rgb(h, sa * 0.55, 0.1 + (1 - l) * 0.86);
+}
+var CSS_SRC = null, LOOK_DAY = false;
 function applyTheme(id) {
-  var old = $('thcss'); if (old) old.parentNode.removeChild(old);
-  var hue = themeHue(id);
+  var hue = themeHue(id), day = isDay();
+  LOOK_DAY = day;
   recolorImages(hue); renderTop2();
-  if (hue <= 0) return;
-  var x; try { x = new XMLHttpRequest(); x.open('GET', 'xc.css?th=' + now(), true); } catch (e) { return; }
-  x.onreadystatechange = function () {
-    if (x.readyState !== 4 || !x.responseText) return;
-    var css = x.responseText.replace(/#([0-9a-f]{6}|[0-9a-f]{3})\b/gi, function (m, h) {
+  var h0 = document.documentElement; h0.className = (h0.className || '').replace(/(^|\s)day(?=\s|$)/g, '') + (day ? ' day' : '');
+  if (hue <= 0 && !day) { var o0 = $('thcss'); if (o0) o0.parentNode.removeChild(o0); return; }
+  var conv = function (r, g, b) {
+    var c = hue > 0 ? themeColor(r, g, b, hue) : null;
+    if (day) c = dayColor(c || [r, g, b]);
+    return c;
+  };
+  var build = function (src) {
+    var css = src.replace(/#([0-9a-f]{6}|[0-9a-f]{3})\b/gi, function (m, h) {
       if (h.length === 3) h = h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2);
-      var c = themeColor(parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16), hue);
+      var c = conv(parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16));
       return c ? '#' + hex2(c[0]) + hex2(c[1]) + hex2(c[2]) : m;
     }).replace(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(,[^)]*)?\)/gi, function (m, r, g, b, a) {
-      var c = themeColor(+r, +g, +b, hue);
+      var c = conv(+r, +g, +b);
       return c ? (a ? 'rgba(' : 'rgb(') + c.join(',') + (a || '') + ')' : m;
     });
+    if (day) css += '\n* { text-shadow: none !important; }\n';
+    var old = $('thcss'); if (old) old.parentNode.removeChild(old);
     var st = document.createElement('style'); st.id = 'thcss'; st.innerHTML = css;
     document.getElementsByTagName('head')[0].appendChild(st);
   };
+  if (CSS_SRC) return build(CSS_SRC);
+  var x; try { x = new XMLHttpRequest(); x.open('GET', 'xc.css?th=' + now(), true); } catch (e) { return; }
+  x.onreadystatechange = function () {
+    if (x.readyState !== 4 || !x.responseText) return;
+    CSS_SRC = x.responseText; build(CSS_SRC);
+  };
   x.send(null);
 }
+function dayToggle() {
+  DB.day = ((DB.day || 0) + 1) % 3; persist(); cloudSave(); statePush();
+  applyTheme(DB.theme || 'red');
+  toast(T('dn_' + DB.day), 3000);
+}
+setInterval(function () { if ((DB.day || 0) === 2 && isDay() !== LOOK_DAY) applyTheme(DB.theme || 'red'); }, 300000);   // avto: soat 7:00 / 19:00 da o'zi almashadi
 function renderTop2() {
   var b = $('thbar');
   if (!b) { b = document.createElement('div'); b.id = 'thbar'; (document.getElementById('app') || document.body).appendChild(b); }
   var h = '';
   each(THEMES, function (x) { h += '<a class="' + ((DB.theme || 'red') === x[0] ? 'on' : '') + '" data-theme="' + x[0] + '" style="background:hsl(' + x[1] + ',85%,55%)" title="' + esc(T('th_' + x[0])) + '"></a>'; });
+  var dm = DB.day || 0;
+  h += '<i class="sp"></i><a class="dn" data-daymode="1">' + (dm === 1 ? '\u2600' : dm === 2 ? 'A' : '\u263e') + ' <span>' + esc(T('dn_s' + dm)) + '</span></a>';
   b.innerHTML = h;
   var lg = $('bLang');
   if (!lg) { var bar = $('bar'), v = $('bVer'); if (bar) { lg = document.createElement('div'); lg.id = 'bLang'; lg.className = 'lng'; lg.setAttribute('data-act', 'langmenu'); bar.insertBefore(lg, v); } }
@@ -2649,7 +2679,7 @@ function showAdminMsgs(list) {
 
 /* ---- menyu ovozlari: o'yin sound/xclient/*.wav ni chaladi (XCLauncher.exe ularni o'yin papkasiga qo'yadi) ---- */
 var SFX_ATTR = ['data-act', 'data-tab', 'data-hsub', 'data-seg', 'data-tg', 'data-otg', 'data-ohud', 'data-dd', 'data-ddv', 'data-xchk', 'data-pack',
-  'data-sort', 'data-flt', 'data-theme', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec', 'data-avpre'];
+  'data-sort', 'data-flt', 'data-theme', 'data-daymode', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec', 'data-avpre'];
 var SFX_QUIET = false, sfxLast = null, sfxT = 0;
 function sfx(n) {
   if (!S || S.uisnd === 0 || !hasApi()) return;
@@ -2709,6 +2739,7 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-tg'))) { var k = el.getAttribute('data-tg'); E[k] = E[k] ? 0 : 1; el.className = 'tg' + (E[k] ? ' on' : ''); if (setTab === 'hud') { drawXhair(); var cd = $('xCode'); if (cd) cd.value = xcode(E); } return; }
   if ((el = closest(t, 'data-avc'))) { api('avatar', { color: el.getAttribute('data-avc') }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); }); return; }
   if ((el = closest(t, 'data-annx'))) { DB.annHide = (DB.annHide || []).concat([el.getAttribute('data-annx')]).slice(-50); persist(); renderAnn(); return; }
+  if ((el = closest(t, 'data-daymode'))) return dayToggle();
   if ((el = closest(t, 'data-theme'))) { DB.theme = el.getAttribute('data-theme'); persist(); cloudSave(); applyTheme(DB.theme); if (curModal === 'mdSettings') showSetTab('cont'); return; }
   if ((el = closest(t, 'data-pack'))) {
     var pid = el.getAttribute('data-pack'), pl = (OPTS.packs ? OPTS.packs.split(',') : []), pix = pl.indexOf(pid);
@@ -2843,7 +2874,7 @@ step('beat', function () { if (DB.beat !== new Date().toDateString()) api('beat'
 step('loadAnn', function () { loadAnn(); });
 step('music', function () { setTimeout(musicSync, 3000); });
 step('whatsnew', function () { setTimeout(loadWhatsNew, 4000); });
-step('applyTheme', function () { if (DB.theme && DB.theme !== 'red') applyTheme(DB.theme); else renderTop2(); });
+step('applyTheme', function () { if ((DB.theme && DB.theme !== 'red') || DB.day) applyTheme(DB.theme || 'red'); else renderTop2(); });
 step('detectLang();', function () { detectLang(); });
 step('loadMaster();', function () { loadMaster(); });
 step('loadTop();', function () { loadTop(); });
