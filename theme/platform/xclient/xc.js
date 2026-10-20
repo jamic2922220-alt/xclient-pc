@@ -415,6 +415,8 @@ function claimDaily() {
     if (!r.ok || !r.got || !ME) return;
     ME.xp = r.xp; ME.level = r.level; ME.lvlxp = r.lvlxp; renderBar();
     if (r.newach && r.newach.length) { ME.ach = (ME.ach || []).concat(r.newach); setTimeout(function () { achToast(r.newach); }, 7500); }
+    if (r.chests != null) { ME.chests = r.chests; renderBar(); }
+    if (r.yday && !DB.dnd) setTimeout(function () { if (!curModal) showYesterday(r.yday); }, 2500);
     if (!DB.dnd) { toast(T('dl_ok').replace('{n}', r.got).replace('{d}', r.streak), 7000); sfx('save'); }
   });
 }
@@ -463,8 +465,13 @@ function openStats() {
     '<div class="ph2 m">' + esc(T('ks_wpn')) + '</div>' + (w || '<div class="mut">' + esc(T('ks_none')) + '</div>') +
     '<div class="ph2 m">' + esc(T('ks_srv')) + '</div>' + (sv || '<div class="mut">' + esc(T('ks_none')) + '</div>') +
     '<div class="ph2 m">' + esc(T('ks_top')) + '</div><div id="topkList" class="mut">...</div><small class="mut">' + esc(T('ks_note')) + '</small>';
-  h = statBox(st) + wkChart(ME && ME.wkst) + h.slice(statBox(st).length) + myGames();
+  h = rankCard(ME) + statBox(st) + wkChart(ME && ME.wkst) + h.slice(statBox(st).length) + myGames() + '<div class="ph2 m">' + esc(T('rk_top')) + '</div><div id="rpTop" class="mut">...</div>';
   openSide('stats', T('ks_title'), h);
+  api('toprp', {}, function (r) {
+    var el = $('rpTop'); if (!el) return; var t = '';
+    each((r.ok && r.top) || [], function (x, i) { t += '<div class="kv"><span>' + (i + 1) + '. ' + nickHtml(x) + ' ' + rankBadge(x) + '</span><b>' + x.rp + ' RP</b></div>'; });
+    el.innerHTML = t || esc(T('ks_none')); el.className = '';
+  });
   api('topk', {}, function (r) {
     var el = $('topkList'); if (!el) return;
     var t = '';
@@ -614,7 +621,7 @@ function loadFriends() {
 /* bosh menyu: "Hafta qotillari" TOP-3 (jang statistikasidan) + o'tgan hafta chempioni */
 var CHAMP = null;
 function loadWeek() { api('topk', {}, function (r) { if (r.ok) { WEEK = r.top || []; CHAMP = r.champ || null; renderHome(); } }); }
-function crown(u) { return (u && (u.champ || (CHAMP && CHAMP.login && u.login && CHAMP.login === String(u.login).toLowerCase()))) ? '<span class="crown" title="' + esc(T('ch_title')) + '">\u265b</span>' : ''; }
+function crown(u) { return (u && (u.champ || (CHAMP && CHAMP.login && u.login && CHAMP.login === String(u.login).toLowerCase()))) ? '<span class="crown" title="' + esc(T('chp_title')) + '">\u265b</span>' : ''; }
 /* ---- yutuqlar ---- */
 var ACH = [['k100', '\u2694'], ['k1000', '\u2694'], ['k5000', '\u2694'], ['best30', '\u2605'], ['g100', '\u25b6'], ['t10h', '\u231a'], ['t50h', '\u231a'],
   ['awp100', '\u25ce'], ['ak500', '\u25ce'], ['knife10', '\u2020'], ['deagle100', '\u25ce'], ['fr5', '\u263a'], ['ref3', '\u2709'], ['champ', '\u265b'], ['clan', '\u2691'],
@@ -1027,7 +1034,8 @@ function renderBar() {
   for (var ip in SRV) if (SRV[ip].ok) { cnt++; on += SRV[ip].pl || 0; }
   $('bOnline').innerHTML = on; $('bServers').innerHTML = cnt || MASTER.length;
   var nm = ME ? ME.name : ((S && S.name) || T('guest_name'));
-  $('meName').innerHTML = esc(nm);
+  $('meName').innerHTML = ME ? nickHtml(ME, nm) : esc(nm);
+  var mc = $('mChest'); if (mc) { var cn = ME && ME.chests ? ME.chests : 0; mc.innerHTML = cn ? String(cn) : ''; mc.style.display = cn ? 'inline-block' : 'none'; }
   $('meAv').innerHTML = avInner(ME, nm); $('meAv').style.cssText = avStyle(ME); $('meAv').className = 'av' + frameCls(ME);
   $('meLvl').innerHTML = ME ? esc(T('lvl').replace('{n}', ME.level)) : '';
   $('meXp').style.width = ME ? Math.round(ME.lvlxp * 100 / (ME.lvlmax || 1000)) + '%' : '0';
@@ -1355,7 +1363,11 @@ function openSide(mode, title, body) {
 var SUGG = null;
 var FR_REQ = [], FR_SENT = [], FR_Q = '', FR_SUG = null, FR_TM = 0, CHAT = null, CHAT_TM = 0, NOTIF_TM = 0, NOTIF_SEEN = {};
 /* profil ramkasi: chempion - oltin, 20+ daraja - binafsha, 10+ - ko'k, 5+ - yashil */
-function frameCls(u) { if (!u) return ''; if (crown(u)) return ' fgold'; var l = u.level || 1; return l >= 20 ? ' fpurp' : l >= 10 ? ' fblue' : l >= 5 ? ' fgreen' : ''; }
+/* reyting unvoni, rangli nik */
+var RANKS = [['bronze', 0], ['silver', 400], ['gold', 900], ['plat', 1600], ['diamond', 2500], ['legend', 3600]];
+function rankBadge(u) { var r = (u && u.rank) || 'bronze'; return '<span class="rkb rk-' + r + '">' + esc(T('rk_' + r)) + '</span>'; }
+function nickHtml(u, name) { return '<span class="nk' + (u && u.nc ? ' nk-' + u.nc : '') + '">' + esc(name || (u && u.name) || '') + '</span>'; }
+function frameCls(u) { if (!u) return ''; if (u.frame) return ' ' + u.frame; if (crown(u)) return ' fgold'; var l = u.level || 1; return l >= 20 ? ' fpurp' : l >= 10 ? ' fblue' : l >= 5 ? ' fgreen' : ''; }
 function frAv(f) { return '<div class="rk c av2' + frameCls(f) + '" style="' + (f.online ? avStyle(f) : 'background:#4a4048') + '">' + avInner(f, f.name) + '</div>'; }
 function openFriends() {
   if (!ME) { openLogin(); return; }
@@ -1383,10 +1395,10 @@ function openFriends() {
     var s = f.server ? srv(f.server) : null, un = f.unread ? '<b class="unb">' + f.unread + '</b>' : '';
     var offd = f.seen ? Math.floor((now() / 1000 - f.seen) / 86400) : 0;   // necha kundan beri kirmagan
     h += '<div class="tr" style="cursor:default">' + frAv(f) +
-      '<div class="nm"><a class="frp" data-frprof="' + esc(f.login) + '">' + crown(f) + (f.clan ? '<span class="ctag">[' + esc(f.clan.tag) + ']</span> ' : '') + esc(f.name) + '</a> <span class="mut" style="font-weight:normal;font-size:12px">' + esc(T('lvl').replace('{n}', f.level)) + '</span></div>' +
+      '<div class="nm"><a class="frp" data-frprof="' + esc(f.login) + '">' + crown(f) + (f.clan ? '<span class="ctag">[' + esc(f.clan.tag) + ']</span> ' : '') + nickHtml(f) + '</a> ' + rankBadge(f) + ' <span class="mut" style="font-weight:normal;font-size:12px">' + esc(T('lvl').replace('{n}', f.level)) + '</span></div>' +
       '<div class="mt">' + (f.online ? '<span class="gm">●</span> ' + esc(f.server ? T('fr_in') + ((s && s.name) || f.server) : T('fr_menu')) : esc(f.seen ? T('fr_last').replace('{t}', agoText(f.seen)) : T('fr_off'))) + '</div>' +
       '<div class="fra">' + (!f.online && offd >= 3 ? '<a class="inv" data-mcall="' + esc(f.login) + '">' + esc(T('mc_btn')) + '</a>' : '') + '<a data-frcmp="' + esc(f.login) + '">VS</a><a class="ch" data-chat="' + esc(f.login) + '" data-chatn="' + esc(f.name) + '">' + ico('chat') + ' ' + esc(T('ch_btn')) + un + '</a>' +
-      (f.online ? '<a class="ring" data-ring="' + esc(f.login) + '" title="' + esc(T('rg_btn')) + '">' + ico('phone') + '</a>' : '') +
+      (f.online ? '<a class="ring" data-ring="' + esc(f.login) + '" title="' + esc(T('rg_btn')) + '">' + ico('phone') + '</a><a class="duel" data-duelp="' + esc(f.login) + '" data-dueln="' + esc(f.name) + '" title="' + esc(T('du_btn')) + '">\u2694</a>' : '') +
       (CONNECTED && f.online && f.server !== CONNECTED ? '<a class="inv" data-inv="' + esc(f.login) + '">' + esc(T('iv_btn')) + '</a>' : '') +
       (f.server ? '<a class="ok" data-ip="' + esc(f.server) + '">' + esc(T('join')) + '</a>' : '<a data-frdel="' + esc(f.login) + '">' + esc(T('fr_del')) + '</a>') + '</div></div>';
   });
@@ -1479,6 +1491,9 @@ function pollNotif() {
     NOTIF = { unread: r.unread || [], req: r.req || [] };
     if (r.inv && r.inv.length && !DB.dnd) showInvite(r.inv[r.inv.length - 1]);   // do'st chaqirdi
     if (r.ring && !DB.dnd) showRing(r.ring);
+    if (r.dinv && !DB.dnd) showDuelInv(r.dinv);
+    DUEL = r.duel && r.duel.st === 'on' ? r.duel : null; duelBar();
+    if (r.dres) duelResult(r.dres);
     if (r.wallnew && ME) toastAct(T('wl_new').replace('{n}', r.wallnew), 'data-frprof', ME.login, 8000);
     each(r.ringans || [], function (a) {
       toast((a.ok ? T('rg_yes') : T('rg_no')).replace('{n}', a.from), 7000);
@@ -2015,7 +2030,8 @@ function openFrProfile(login) {
     var status = u.online ? '<span class="gm">\u25cf</span> ' + esc(u.server ? T('fr_in') + ((s && s.name) || u.server) + (u.map ? ' \u00b7 ' + u.map : '') : T('fr_menu'))
       : esc(T('fr_last').replace('{t}', agoText(u.seen)));
     var h = '<div class="fpro"><div class="fpav' + frameCls(u) + '" style="' + avStyle(u) + '">' + avInner(u, u.name) + '</div>' +
-      '<div class="fpn">' + crown(u) + (u.clan ? '<span class="ctag">[' + esc(u.clan.tag) + ']</span> ' : '') + esc(u.name) + ' <span class="mut">@' + esc(u.login) + '</span></div>' +
+      '<div class="fpn">' + crown(u) + (u.clan ? '<span class="ctag">[' + esc(u.clan.tag) + ']</span> ' : '') + nickHtml(u) + ' <span class="mut">@' + esc(u.login) + '</span></div>' +
+      '<div class="fprk">' + rankBadge(u) + ' <b>' + (u.rp || 0) + ' RP</b>' + (u.duels ? ' \u00b7 ' + esc(T('du_rec').replace('{w}', u.duels.w).replace('{l}', u.duels.l).replace('{d}', u.duels.d)) : '') + '</div>' +
       '<div class="mut">' + esc(T('lvl').replace('{n}', u.level)) + ' \u00b7 ID ' + esc(u.id) + (u.created ? ' \u00b7 ' + esc(T('fp_since').replace('{d}', new Date(u.created * 1000).toLocaleDateString())) : '') + '</div>' +
       '<div class="fpst">' + status + '</div>' +
       (last && !u.online ? '<div class="mut fpl">' + esc(T('fp_lastsrv')) + ': <b>' + esc((ls && ls.name) || last.s) + '</b>' + (last.m ? ' \u00b7 ' + esc(last.m) : '') + ' \u00b7 ' + esc(agoText(last.t)) + '</div>' : '') +
@@ -2033,7 +2049,7 @@ function openFrProfile(login) {
     });
     if (!(u.wall || []).length) h += '<div class="mut">' + esc(T('wl_none')) + '</div>';
     h += '<div class="fpb">' + (u.isfr ? '<a class="btn" data-chat="' + esc(u.login) + '" data-chatn="' + esc(u.name) + '">' + ico('chat') + ' ' + esc(T('ch_btn')) + '</a>' +
-      (u.online ? '<a class="btn" data-ring="' + esc(u.login) + '">' + ico('phone') + ' ' + esc(T('rg_btn')) + '</a>' : '') + '<a class="btn" data-frcmp="' + esc(u.login) + '">VS</a>' : '') +
+      (u.online ? '<a class="btn" data-ring="' + esc(u.login) + '">' + ico('phone') + ' ' + esc(T('rg_btn')) + '</a><a class="btn" data-duelp="' + esc(u.login) + '" data-dueln="' + esc(u.name) + '">\u2694 ' + esc(T('du_btn')) + '</a>' : '') + '<a class="btn" data-frcmp="' + esc(u.login) + '">VS</a>' : '') +
       (u.server ? '<a class="btn red" data-ip="' + esc(u.server) + '">' + esc(T('join')) + '</a>' : '') + '<a class="btn" data-act="friends">\u2190 ' + esc(T('m_friends')) + '</a></div>';
     openSide('frprof', u.name, h);
   });
@@ -2058,6 +2074,83 @@ function ringAnswer(ok, silent) {
   if (!r) return;
   if (!silent) api('ring_ans', { to: r.login, ok: ok ? '1' : '0' }, function () {});
   if (ok) { if (r.srv && r.srv !== CONNECTED) connect(r.srv); else openChat(r.login, r.from); }
+}
+/* ---- reyting kartasi: unvon, RP, keyingi unvongacha ---- */
+function rankCard(u) {
+  if (!u) return '';
+  var rp = u.rp || 0, i = 0; each(RANKS, function (r, k) { if (rp >= r[1]) i = k; });
+  var nx = RANKS[i + 1], pct = nx ? Math.round(100 * (rp - RANKS[i][1]) / (nx[1] - RANKS[i][1])) : 100;
+  return '<div class="rkcard rk-' + RANKS[i][0] + '"><div class="rkico">' + esc(T('rk_' + RANKS[i][0]).charAt(0)) + '</div><b>' + esc(T('rk_' + RANKS[i][0])) + '</b><span>' + rp + ' RP</span>' +
+    '<div class="xpw"><i style="width:' + pct + '%"></i></div><small class="mut">' + (nx ? esc(T('rk_next').replace('{n}', nx[1] - rp).replace('{r}', T('rk_' + nx[0]))) : esc(T('rk_max'))) + ' \u00b7 ' + esc(T('rk_how')) + '</small></div>';
+}
+/* ---- sandiqlar: har darajada bittadan. Ichida XP, maxsus nik rangi, ramka ---- */
+var NCOLS = ['red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple', 'pink'], NRARE = ['gold', 'neon', 'ice', 'toxic', 'rainbow'], FRARE = ['ffire', 'fice', 'fneon', 'ftoxic', 'flegend'];
+function openChests(keep) {
+  if (!ME) return openLogin();
+  var n = ME.chests || 0, inv = ME.inv || { nc: [], fr: [] };
+  var h = '<div class="chst"><div class="chbox' + (n ? '' : ' empty') + '" id="chBox"><i></i><b>' + n + '</b></div><div id="chRes"></div>' +
+    (n ? '<a class="btn red big" data-act="chestopen">' + esc(T('ch_open')) + '</a>' : '<div class="mut">' + esc(T('ch_none')) + '</div>') + '<div class="mut small">' + esc(T('ch_how')) + '</div></div>';
+  h += '<div class="ph2 m">' + esc(T('ch_nick')) + '</div><div class="ncl"><a class="' + (!ME.nc ? 'on' : '') + '" data-equipnc="">' + esc(T('ch_def')) + '</a>';
+  each(NCOLS, function (c) { var ok = ME.level >= 10; h += '<a class="' + (ME.nc === c ? 'on' : '') + (ok ? '' : ' lock') + '" data-equipnc="' + c + '"><span class="nk nk-' + c + '">' + esc(ME.name) + '</span></a>'; });
+  each(NRARE, function (c) { var ok = (inv.nc || []).indexOf(c) >= 0; h += '<a class="rare' + (ME.nc === c ? ' on' : '') + (ok ? '' : ' lock') + '" data-equipnc="' + (ok ? c : 'x') + '"><span class="nk nk-' + c + '">' + esc(ok ? ME.name : '???') + '</span></a>'; });
+  h += '</div><div class="mut small">' + esc(T('ch_nick2')) + '</div><div class="ph2 m">' + esc(T('ch_frames')) + '</div><div class="frl"><a class="' + (!ME.frame ? 'on' : '') + '" data-equipfr=""><i class="av' + (ME.frame ? '' : frameCls(ME)) + '">' + avInner(ME) + '</i>' + esc(T('ch_def')) + '</a>';
+  each(FRARE, function (f) { var ok = (inv.fr || []).indexOf(f) >= 0; h += '<a class="' + (ME.frame === f ? 'on' : '') + (ok ? '' : ' lock') + '" data-equipfr="' + (ok ? f : 'x') + '"><i class="av ' + f + '">' + (ok ? avInner(ME) : '?') + '</i>' + esc(T('fr_' + f)) + '</a>'; });
+  openSide('chests', T('chs_title'), h + '</div>');
+}
+function chestOpen() {
+  var b = $('chBox'); if (b) b.className = 'chbox shake';
+  api('chest_open', {}, function (r) {
+    if (!r.ok) { if (b) b.className = 'chbox'; return toast(r.msg || 'Xato', 5000); }
+    setTimeout(function () {
+      ME.chests = r.chests; ME.inv = r.inv; ME.xp = r.xp; ME.level = r.level; ME.lvlxp = r.lvlxp; renderBar();
+      openChests(true);
+      var w = r.rw, txt = w.type === 'xp' ? '+' + w.xp + ' XP' : w.type === 'nick' ? T('ch_got_nick') + ': ' + T('nc_' + w.id) : w.type === 'frame' ? T('ch_got_frame') + ': ' + T('fr_' + w.id) : '+1000 XP' + (w.id ? ' + ' + T('fr_' + w.id) : '');
+      var el = $('chRes'); if (el) el.innerHTML = '<div class="chrw rr-' + w.rar + '"><small>' + esc(T('rr_' + w.rar)) + '</small><b>' + esc(txt) + '</b></div>';
+      sfx('save');
+    }, 1300);
+  });
+}
+/* ---- duel: do'stni N daqiqaga chaqirish, kim ko'p kill qilsa ---- */
+var DUEL = null, DUEL_INV = null, DUEL_TM = 0;
+function showDuelInv(d) {
+  if (DUEL_INV && DUEL_INV.id === d.id) return;
+  DUEL_INV = d;
+  var b = $('ringBox');
+  if (!b) { b = document.createElement('div'); b.id = 'ringBox'; (document.getElementById('app') || document.body).appendChild(b); }
+  b.innerHTML = '<div class="rgi du">\u2694</div><b>' + esc(d.from) + '</b><span>' + esc(T('du_in').replace('{m}', d.mins)) + '</span>' +
+    '<div class="rgb"><a class="btn red" data-duelok="1">' + esc(T('du_acc')) + '</a><a class="btn" data-duelok="0">' + esc(T('rg_dec')) + '</a></div>';
+  b.className = 'du'; b.style.display = 'block';
+  cmd('play buttons/bell1.wav');
+}
+function duelAnswer(ok) {
+  var d = DUEL_INV; DUEL_INV = null; var b = $('ringBox'); if (b) { b.style.display = 'none'; b.className = ''; }
+  if (!d) return;
+  api('duel_ans', { id: d.id, ok: ok ? '1' : '0' }, function (r) { if (r.ok && r.duel) { DUEL = r.duel; duelBar(); toast(T('du_go'), 7000); } });
+}
+function duelBar() {
+  var b = $('duelBar');
+  if (!DUEL) { if (b) b.style.display = 'none'; clearInterval(DUEL_TM); DUEL_TM = 0; return; }
+  if (!b) { b = document.createElement('div'); b.id = 'duelBar'; (document.getElementById('app') || document.body).appendChild(b); }
+  var tick = function () {
+    if (!DUEL) return;
+    var left = Math.max(0, DUEL.end - Math.floor(now() / 1000)), f = null;
+    each(FRIENDS, function (x) { if (x.login.toLowerCase() === String(DUEL.op).toLowerCase()) f = x; });
+    b.innerHTML = '\u2694 ' + esc(T('du_bar')) + ' <b>' + DUEL.me_k + '</b> : <b>' + DUEL.op_k + '</b> ' + esc(DUEL.opn) + ' \u00b7 ' + Math.floor(left / 60) + ':' + ('0' + left % 60).slice(-2) +
+      (f && f.server && f.server !== CONNECTED ? ' <a class="btn red" data-ip="' + esc(f.server) + '">' + esc(T('du_join')) + '</a>' : '');
+  };
+  b.style.display = 'block'; tick(); clearInterval(DUEL_TM); DUEL_TM = setInterval(tick, 1000);
+}
+function duelResult(d) {
+  if (d.st === 'no') return toast(T('du_no').replace('{n}', d.opn), 6000);
+  var k = d.win === 'me' ? 'du_win' : d.win === 'op' ? 'du_lose' : 'du_draw';
+  openSide('duelres', T('du_title'), '<div class="dures ' + d.win + '"><b>' + esc(T(k)) + '</b><div class="dusc">' + d.me_k + ' : ' + d.op_k + '</div><span>' + esc(T('du_vs').replace('{n}', d.opn)) + '</span><p>' + esc(T(k + '2')) + '</p></div>');
+  if (d.win === 'me') sfx('save');
+}
+/* ---- "Kechagi o'yiningiz": kun boshida qisqa xulosa ---- */
+function showYesterday(y) {
+  var kd = y.d ? (y.k / y.d).toFixed(2) : String(y.k);
+  openSide('yday', T('yd_title'), '<div class="ydc"><div class="ydg"><div><b>' + esc(fmtHours(y.t)) + '</b><span>' + esc(T('ks_time')) + '</span></div><div><b>' + y.g + '</b><span>' + esc(T('ks_g')) + '</span></div><div><b>' + y.k + '</b><span>' + esc(T('ks_k')) + '</span></div><div><b>' + kd + '</b><span>K/D</span></div></div>' +
+    '<p>' + esc(T('yd_best').replace('{n}', y.best || 0)) + (y.top ? '<br>' + esc(T('yd_srv').replace('{s}', y.top)) : '') + '</p><p class="mut">' + esc(T(y.k >= 30 ? 'yd_great' : 'yd_ok')) + '</p></div>');
 }
 /* menyu musiqasi: ro'yxat admin panelda (Sozlamalar > Menyu musiqasi), fayllar o'yin papkasida (Paketlar orqali) */
 var MUSICS = null;
@@ -2365,7 +2458,7 @@ var PANES = {
       '<a class="btn" data-act="rename" style="margin:0 6px 0 0">' + esc(T('a_rename')) + '</a><a class="btn" data-act="avpick" style="margin:0 6px 0 0">' + esc(T('a_photo')) + '</a>' +
       (ME.av ? '<a class="btn out" data-act="avdel" style="margin:0">' + esc(T('a_photodel')) + '</a>' : '') + '</div>' +
       (ME.vip ? '<div class="vipbox"><b>' + esc(T('a_vip')) + '</b><span>' + esc(T('a_vip2')) + '</span></div>' : '') +
-      statBox(ME.st) + achBadges(ME.ach) + '<a class="btn" data-act="stats" style="margin:4px 6px 0 0">' + esc(T('ks_more')) + '</a><a class="btn" data-act="ref" style="margin:4px 6px 0 0">\u2709 ' + esc(T('rf_btn')) + '</a><a class="btn" data-frprof="' + esc(ME.login) + '" style="margin:4px 0 0">' + ico('user') + ' ' + esc(T('fp_mine')) + '</a></div>' +
+      statBox(ME.st) + achBadges(ME.ach) + '<a class="btn" data-act="stats" style="margin:4px 6px 0 0">' + esc(T('ks_more')) + '</a><a class="btn" data-act="ref" style="margin:4px 6px 0 0">\u2709 ' + esc(T('rf_btn')) + '</a><a class="btn" data-frprof="' + esc(ME.login) + '" style="margin:4px 6px 0 0">' + ico('user') + ' ' + esc(T('fp_mine')) + '</a><a class="btn red" data-act="chests" style="margin:4px 0 0">' + esc(T('ch_btn2').replace('{n}', ME.chests || 0)) + '</a></div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('a_sec')) + '</div>' +
       '<div class="rowb"><b>' + esc(T('a_email')) + '</b><small>' + esc(ME.email || '\u2014') + '</small><a class="btn" data-act="email">' + esc(T('a_change')) + '</a></div>' +
       '<div class="rowb"><b>' + esc(T('a_pass')) + '</b><small>' + esc(T('a_pw_ago').replace('{d}', daysAgo(ME.pwchanged))) + '</small><a class="btn" data-act="passwd">' + esc(T('a_change')) + '</a></div>' +
@@ -2656,6 +2749,8 @@ function act(a) {
   if (a === 'frback') { CHAT = null; return openFriends(); }
   if (a === 'chatsend') return chatSend();
   if (a === 'cfgtop') return openCfgTop();
+  if (a === 'chests') return openChests();
+  if (a === 'chestopen') return chestOpen();
   if (a === 'tglink') return api('tg_code', {}, function (r) {
     if (!r.ok) return toast(r.msg || 'Xato', 5000);
     openSide('tg', 'Telegram', '<div class="tgl2"><p>' + esc(T('tg_how1').replace('{b}', r.bot ? '@' + r.bot : 'bot')) + '</p><div class="tgcode">' + esc(r.code) + '</div><p class="mut">' + esc(T('tg_how2')) + '</p>' +
@@ -2947,6 +3042,12 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-frdec'))) { api('friend_decline', { login: el.getAttribute('data-frdec') }, function () { loadFriends(); }); return; }
   if ((el = closest(t, 'data-chat'))) { openChat(el.getAttribute('data-chat'), el.getAttribute('data-chatn')); return; }
   if ((el = closest(t, 'data-frprof'))) return openFrProfile(el.getAttribute('data-frprof'));
+  if ((el = closest(t, 'data-duelp'))) { var dl = el.getAttribute('data-duelp'), dn = el.getAttribute('data-dueln');
+    openSide('duel', T('du_title'), '<div class="dupick"><p>' + esc(T('du_how').replace('{n}', dn)) + '</p>' + [5, 10, 15].map(function (m) { return '<a class="btn red" data-duelgo="' + esc(dl) + '" data-duelm="' + m + '">' + m + ' ' + esc(T('du_min')) + '</a>'; }).join('') + '</div>'); return; }
+  if ((el = closest(t, 'data-duelgo'))) { api('duel_req', { to: el.getAttribute('data-duelgo'), mins: el.getAttribute('data-duelm') }, function (r) { if (!r.ok) return toast(r.msg || 'Xato', 5000); closeModal(); toast(T('du_sent'), 6000); }); return; }
+  if ((el = closest(t, 'data-duelok'))) { duelAnswer(el.getAttribute('data-duelok') === '1'); return; }
+  if ((el = closest(t, 'data-equipnc'))) { api('equip', { nc: el.getAttribute('data-equipnc') }, function (r) { if (!r.ok) return toast(r.msg || 'Xato', 5000); ME = r.me; renderBar(); openChests(true); }); return; }
+  if ((el = closest(t, 'data-equipfr'))) { api('equip', { frame: el.getAttribute('data-equipfr') }, function (r) { if (!r.ok) return toast(r.msg || 'Xato', 5000); ME = r.me; renderBar(); openChests(true); }); return; }
   if ((el = closest(t, 'data-bgs'))) { DB.bgs = el.getAttribute('data-bgs'); persist(); applyBg(); showSetTab('system'); return; }
   if ((el = closest(t, 'data-ptc'))) { DB.ptc = el.getAttribute('data-ptc'); persist(); applyBg(); showSetTab('system'); return; }
   if ((el = closest(t, 'data-fs'))) { DB.fs = Number(el.getAttribute('data-fs')); persist(); applyTheme(DB.theme || 'red'); showSetTab('system'); return; }

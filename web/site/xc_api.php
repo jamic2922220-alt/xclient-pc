@@ -141,6 +141,10 @@ function pub($u, $full) {
     if (!empty($u['clan'])) $r['clan'] = $u['clan'];
     if (!empty($u['last'])) $r['last'] = $u['last'];
     if (!empty($u['dly']['s'])) $r['streak'] = (int)$u['dly']['s'];
+    $r['rp'] = (int)@$u['rp']; $r['rank'] = rank_of((int)@$u['rp']);
+    if (!empty($u['nc'])) $r['nc'] = $u['nc'];
+    if (!empty($u['frame'])) $r['frame'] = $u['frame'];
+    if (!empty($u['duels'])) $r['duels'] = $u['duels'];
     $r['st'] = array('k' => (int)@$st['k'], 'd' => (int)@$st['d'], 'g' => (int)@$st['g'], 't' => (int)@$st['t'], 'best' => (int)@$st['best'],
         'wk' => (isset($u['wkkid']) && $u['wkkid'] === week_id()) ? (int)$u['wkk'] : 0);
     if ($full) {
@@ -160,6 +164,8 @@ function pub($u, $full) {
         $r['week'] = (isset($u['wk']) && $u['wk'] === week_id()) ? (int)$u['wkxp'] : 0;
         $r['wkst'] = isset($u['wkst']) ? $u['wkst'] : new stdClass();
         $r['tglinked'] = !empty($u['tgid']) ? 1 : 0;
+        $r['chests'] = chests_avail($u);
+        $r['inv'] = inv_of($u);
     }
     return $r;
 }
@@ -189,6 +195,38 @@ function tg_notify($event, $text) {
         'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
         'content' => http_build_query(array('chat_id' => $c['tg_chat'], 'text' => $text, 'disable_web_page_preview' => 1)))));
     @file_get_contents('https://api.telegram.org/bot' . $c['tg_token'] . '/sendMessage', false, $ctx);
+}
+/* ---- reyting (RP): kill +2, o'lim -1.5 (0 dan pastga tushmaydi). Unvon RP bo'yicha ---- */
+function rank_of($rp) { $r = array(array(0, 'bronze'), array(400, 'silver'), array(900, 'gold'), array(1600, 'plat'), array(2500, 'diamond'), array(3600, 'legend')); $o = 'bronze'; foreach ($r as $x) if ($rp >= $x[0]) $o = $x[1]; return $o; }
+/* ---- sandiq: har darajada bittadan + bonuslar (duel g'alabasi, 7 kunlik ketma-ketlik) ---- */
+function inv_of($u) { $i = isset($u['bag']) && is_array($u['bag']) ? $u['bag'] : array(); if (!isset($i['nc']) || !is_array($i['nc'])) $i['nc'] = array(); if (!isset($i['fr']) || !is_array($i['fr'])) $i['fr'] = array(); return $i; }
+function chests_avail($u) { return max(0, level($u['xp']) - 1 + (int)@$u['chb'] - (int)@$u['cho']); }
+function nick_colors() { return array('red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple', 'pink'); }   // 10-darajadan bepul
+function nick_rare() { return array('gold', 'neon', 'ice', 'toxic', 'rainbow'); }                               // faqat sandiqdan
+function frames_rare() { return array('ffire', 'fice', 'fneon', 'ftoxic', 'flegend'); }
+/* ---- duel: 2 do'st N daqiqa ichida kim ko'p kill qilsa (istalgan serverda) ---- */
+function duel_finish($id) {
+    $d = rd('duels/' . $id, null);
+    if (!$d || $d['st'] !== 'on' || time() < $d['end']) return $d;
+    $d['st'] = 'end'; $w = $d['ka'] > $d['kb'] ? 'a' : ($d['kb'] > $d['ka'] ? 'b' : '');
+    $d['win'] = $w; wr('duels/' . $id, $d);
+    foreach (array('a', 'b') as $side) {
+        $x = user($d[$side]); if (!$x) continue;
+        if (!isset($x['duels'])) $x['duels'] = array('w' => 0, 'l' => 0, 'd' => 0);
+        if ($w === '') { $x['duels']['d']++; $x['xp'] = (int)$x['xp'] + 50; }
+        elseif ($w === $side) { $x['duels']['w']++; $x['xp'] = (int)$x['xp'] + 150; $x['chb'] = (int)@$x['chb'] + 1; }
+        else { $x['duels']['l']++; $x['xp'] = (int)$x['xp'] + 30; }
+        $x['dres'] = $id; if (isset($x['duel']) && $x['duel'] === $id) unset($x['duel']);
+        save_user($x);
+    }
+    return $d;
+}
+function duel_pub($d, $me) {
+    if (!$d) return null;
+    $a = strtolower($d['a']) === $me;
+    return array('id' => $d['id'], 'st' => $d['st'], 'mins' => $d['mins'], 'start' => isset($d['start']) ? $d['start'] : 0, 'end' => isset($d['end']) ? $d['end'] : 0,
+        'op' => $a ? $d['b'] : $d['a'], 'opn' => $a ? $d['bn'] : $d['an'], 'me_k' => $a ? $d['ka'] : $d['kb'], 'op_k' => $a ? $d['kb'] : $d['ka'],
+        'win' => isset($d['win']) ? ($d['win'] === '' ? 'draw' : (($d['win'] === 'a') === $a ? 'me' : 'op')) : '');
 }
 function tg_send($chat, $text) {
     $c = xc_cfg(); if (empty($c['tg_token']) || !$chat) return;
@@ -912,6 +950,10 @@ case 'notif':
     if (!empty($u['inv'])) { lock(); $u = auth(); foreach ($u['inv'] as $i) if (time() - $i['t'] < 600) $inv[] = $i; $u['inv'] = array(); save_user($u); }
     $calls = array();                                    // "Sizni sog'indik": uzoq kirmagan paytda do'stlar chaqirgan
     if (!empty($u['calls'])) { lock(); $u = auth(); $calls = $u['calls']; $u['calls'] = array(); save_user($u); }
+    $dinv = null; $duel = null; $dres = null;
+    if (!empty($u['dinv'])) { $x = rd('duels/' . $u['dinv'], null); if ($x && $x['st'] === 'wait' && time() - $x['t'] < 60) $dinv = array('id' => $x['id'], 'from' => $x['an'], 'login' => $x['a'], 'mins' => $x['mins']); }
+    if (!empty($u['duel'])) { lock(); $duel = duel_pub(duel_finish($u['duel']), strtolower($u['login'])); $u = auth(); }
+    if (!empty($u['dres'])) { lock(); $u = auth(); $dres = duel_pub(rd('duels/' . $u['dres'], null), strtolower($u['login'])); unset($u['dres']); save_user($u); }
     $wn = 0; if (!empty($u['wallnew'])) { lock(); $u = auth(); $wn = (int)$u['wallnew']; $u['wallnew'] = 0; save_user($u); }
     $ring = null; $ans = array();                        // qo'ng'iroq: do'st menyuda qo'ng'iroq qilyapti / javob berdi
     if (!empty($u['ring']) || !empty($u['ringans'])) {
@@ -920,7 +962,67 @@ case 'notif':
         if (!empty($u['ringans'])) foreach ($u['ringans'] as $x) if (time() - $x['t'] < 120) $ans[] = $x;
         unset($u['ring']); $u['ringans'] = array(); save_user($u);
     }
-    out(array('ok' => true, 'unread' => $un, 'req' => $rq, 'inv' => $inv, 'calls' => $calls, 'ring' => $ring, 'ringans' => $ans, 'wallnew' => $wn));
+    out(array('ok' => true, 'unread' => $un, 'req' => $rq, 'inv' => $inv, 'calls' => $calls, 'ring' => $ring, 'ringans' => $ans, 'wallnew' => $wn, 'dinv' => $dinv, 'duel' => $duel, 'dres' => $dres));
+
+case 'duel_req':
+    lock();
+    $u = auth();
+    $to = strtolower(p('to')); $mins = (int)p('mins'); if (!in_array($mins, array(5, 10, 15), true)) $mins = 10;
+    if (!preg_match('/^[a-z0-9_]{3,20}$/', $to) || empty($u['friends']) || !in_array($to, array_map('strtolower', $u['friends']))) fail('bad', 'Faqat do\'stni duelga chaqirish mumkin');
+    $t = user($to); if (!$t) fail('bad', 'Topilmadi');
+    if (!is_online($t)) fail('off', 'Do\'stingiz hozir onlayn emas');
+    if (!empty($u['duel'])) { $x = duel_finish($u['duel']); if ($x && $x['st'] === 'on') fail('busy', 'Sizda duel davom etyapti'); }
+    @mkdir(XC_DIR . '/duels', 0755, true); cap_dir(XC_DIR . '/duels', 2000);
+    $id = substr(md5(microtime() . mt_rand()), 0, 10);
+    wr('duels/' . $id, array('id' => $id, 'a' => $u['login'], 'an' => $u['name'], 'b' => $t['login'], 'bn' => $t['name'], 'mins' => $mins, 'st' => 'wait', 't' => time(), 'ka' => 0, 'kb' => 0));
+    $t['dinv'] = $id; save_user($t);
+    out(array('ok' => true, 'id' => $id));
+case 'duel_ans':
+    lock();
+    $u = auth();
+    $id = preg_replace('/[^a-f0-9]/', '', p('id')); $d = rd('duels/' . $id, null);
+    if (!$d || strtolower($d['b']) !== strtolower($u['login']) || $d['st'] !== 'wait') fail('bad', 'Duel topilmadi');
+    unset($u['dinv']);
+    if (p('ok') !== '1') { $d['st'] = 'no'; wr('duels/' . $id, $d); save_user($u); $a = user($d['a']); if ($a) { $a['dres'] = $id; save_user($a); } out(array('ok' => true)); }
+    $d['st'] = 'on'; $d['start'] = time(); $d['end'] = time() + $d['mins'] * 60; wr('duels/' . $id, $d);
+    $u['duel'] = $id; save_user($u);
+    $a = user($d['a']); if ($a) { $a['duel'] = $id; save_user($a); }
+    out(array('ok' => true, 'duel' => duel_pub($d, strtolower($u['login']))));
+
+/* ---------- sandiq ochish ---------- */
+case 'chest_open':
+    lock();
+    $u = auth();
+    if (chests_avail($u) <= 0) fail('none', 'Sandiq yo\'q. Har yangi darajada bittadan beriladi');
+    $u['cho'] = (int)@$u['cho'] + 1;
+    $u['bag'] = inv_of($u);
+    $r = mt_rand(1, 1000); $rw = null;
+    $pick = function ($all, $have) { $left = array_values(array_diff($all, $have)); return $left ? $left[mt_rand(0, count($left) - 1)] : null; };
+    if ($r > 970) { $f = in_array('flegend', $u['bag']['fr']) ? null : 'flegend'; if ($f) $u['bag']['fr'][] = $f; $u['xp'] = (int)$u['xp'] + 1000; $rw = array('type' => 'legend', 'xp' => 1000, 'id' => $f, 'rar' => 'legend'); }
+    elseif ($r > 820) { $f = $pick(array_diff(frames_rare(), array('flegend')), $u['bag']['fr']); if ($f) { $u['bag']['fr'][] = $f; $rw = array('type' => 'frame', 'id' => $f, 'rar' => 'epic'); } }
+    elseif ($r > 570) { $c = $pick(nick_rare(), $u['bag']['nc']); if ($c) { $u['bag']['nc'][] = $c; $rw = array('type' => 'nick', 'id' => $c, 'rar' => 'rare'); } }
+    if (!$rw) { $x = mt_rand(10, 30) * 10; $u['xp'] = (int)$u['xp'] + $x; $rw = array('type' => 'xp', 'xp' => $x, 'rar' => 'common'); }
+    save_user($u);
+    out(array('ok' => true, 'rw' => $rw, 'chests' => chests_avail($u), 'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL, 'inv' => $u['bag']));
+case 'equip':
+    lock();
+    $u = auth();
+    $inv = inv_of($u);
+    if (p('nc', '-') !== '-') { $c = p('nc');
+        if ($c === '') unset($u['nc']);
+        elseif ((in_array($c, nick_colors(), true) && level($u['xp']) >= 10) || in_array($c, $inv['nc'], true)) $u['nc'] = $c;
+        else fail('lock', 'Rangli nik 10-darajadan ochiladi (maxsus ranglar - sandiqdan)'); }
+    if (p('frame', '-') !== '-') { $f = p('frame');
+        if ($f === '') unset($u['frame']); elseif (in_array($f, $inv['fr'], true)) $u['frame'] = $f; else fail('lock', 'Bu ramka sizda yo\'q'); }
+    save_user($u);
+    out(array('ok' => true, 'me' => pub($u, true)));
+
+/* ---------- reyting TOP ---------- */
+case 'toprp':
+    $l = array();
+    foreach ((array)glob(XC_DIR . '/users/*.php') as $f) { $x = user(basename($f, '.php')); if ($x && !empty($x['rp'])) $l[] = array('name' => $x['name'], 'login' => $x['login'], 'rp' => (int)$x['rp'], 'rank' => rank_of((int)$x['rp']), 'nc' => isset($x['nc']) ? $x['nc'] : ''); }
+    usort($l, function ($a, $b) { return $b['rp'] - $a['rp']; });
+    out(array('ok' => true, 'top' => array_slice($l, 0, 20)));
 
 /* ---------- do'st profili: daraja, statistika, yutuqlar, oxirgi faollik ---------- */
 case 'uinfo':
@@ -1022,6 +1124,8 @@ case 'daily':
     $day = date('Y-m-d'); $yd = date('Y-m-d', time() - 86400);
     $dl = isset($u['dly']) && is_array($u['dly']) ? $u['dly'] : array('d' => '', 's' => 0);
     if ($dl['d'] === $day) out(array('ok' => true, 'got' => 0, 'streak' => (int)$dl['s']));
+    $yday = isset($u['dst'][$yd]) && $u['dst'][$yd]['t'] > 0 ? $u['dst'][$yd] : null;
+    if ($yday) { arsort($yday['srv']); $yday['top'] = key($yday['srv']); unset($yday['srv']); }
     $streak = $dl['d'] === $yd ? (int)$dl['s'] + 1 : 1;
     $got = $streak % 7 === 0 ? 200 : 20 + 10 * min(5, ($streak - 1) % 7);
     $u['dly'] = array('d' => $day, 's' => $streak);
@@ -1030,7 +1134,9 @@ case 'daily':
     $u['wkxp'] = (int)$u['wkxp'] + $got;
     $newach = ach_check($u);
     save_user($u);
-    out(array('ok' => true, 'newach' => $newach, 'got' => $got, 'streak' => $streak, 'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL));
+    if ($streak % 7 === 0) $u['chb'] = (int)@$u['chb'] + 1;                    // 7 kun ketma-ket - sandiq
+    save_user($u);
+    out(array('ok' => true, 'yday' => $yday, 'chests' => chests_avail($u), 'newach' => $newach, 'got' => $got, 'streak' => $streak, 'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL));
 
 /* ---------- "Sizni sog'indik": 3+ kun kirmagan do'stni chaqirish (u qaytganda menyuda ko'radi) ---------- */
 case 'miss_call':
@@ -1104,6 +1210,18 @@ case 'stat':
     $ws[$wid]['k'] += $dk; $ws[$wid]['d'] += $dd; $ws[$wid]['t'] += $dt; if (!isset($ss[$sid])) $ws[$wid]['g']++;
     ksort($ws); if (count($ws) > 12) $ws = array_slice($ws, -12, 12, true);
     $u['wkst'] = $ws;
+    $u['rp'] = max(0, (float)@$u['rp'] + 2 * $dk - 1.5 * $dd);                 // reyting
+    @date_default_timezone_set('Asia/Tashkent');
+    $dsa = isset($u['dst']) && is_array($u['dst']) ? $u['dst'] : array(); $td = date('Y-m-d');   // kunlik xulosa ("Kechagi o'yiningiz")
+    if (!isset($dsa[$td])) $dsa[$td] = array('k' => 0, 'd' => 0, 't' => 0, 'g' => 0, 'srv' => array());
+    $dsa[$td]['k'] += $dk; $dsa[$td]['d'] += $dd; $dsa[$td]['t'] += $dt; if (!isset($ss[$sid])) $dsa[$td]['g']++;
+    $sn = p('name') !== '' ? clean_str(p('name'), 60) : $ip; $dsa[$td]['srv'][$sn] = (isset($dsa[$td]['srv'][$sn]) ? $dsa[$td]['srv'][$sn] : 0) + $dt;
+    if ($k > (isset($dsa[$td]['best']) ? $dsa[$td]['best'] : 0)) $dsa[$td]['best'] = $k;
+    ksort($dsa); if (count($dsa) > 3) $dsa = array_slice($dsa, -3, 3, true); $u['dst'] = $dsa;
+    if (!empty($u['duel']) && $dk > 0) {                                       // duel davom etyapti - kill hisobga
+        $dl = rd('duels/' . $u['duel'], null);
+        if ($dl && $dl['st'] === 'on' && time() <= $dl['end']) { $side = strtolower($dl['a']) === strtolower($u['login']) ? 'ka' : 'kb'; $dl[$side] += $dk; wr('duels/' . $u['duel'], $dl); }
+    }
     $wk = week_id(); if (!isset($u['wkkid']) || $u['wkkid'] !== $wk) { if (isset($u['wkkid'])) { $u['wkkpid'] = $u['wkkid']; $u['wkkp'] = (int)$u['wkk']; } $u['wkkid'] = $wk; $u['wkk'] = 0; } $u['wkk'] += $dk;
     if ($dk > 0) {                                        // har kill uchun XP (vaqt XP siga qo'shimcha)
         $u['xp'] = (int)$u['xp'] + $dk * XP_PER_KILL;

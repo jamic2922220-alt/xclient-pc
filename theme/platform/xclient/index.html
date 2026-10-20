@@ -15,7 +15,7 @@
 /* O'yin brauzeri (CEF) index.html ni soatlab xotiradan ochishi mumkin - yangilanish ko'rinmay qoladi.
  * ver.txt har safar yangidan so'raladi; boshqa bo'lsa - yangi index.html ni yuklab, sahifani shu bilan almashtiramiz. */
 (function () {
-  var V = '10195400';
+  var V = '10195500';
   window.XC_V = V;
   try {
     if (window.name === 'xcfresh' + V) return;
@@ -34,7 +34,7 @@
   } catch (e) {}
 })();
 </script>
-<link rel="stylesheet" href="xc.css?v=10195400">
+<link rel="stylesheet" href="xc.css?v=10195500">
 <script>
 /* Xato bo'lsa ekranning tepasida ko'rsatamiz (o'yin brauzerida konsol yo'q) */
 window.XC_ERRS = [];
@@ -51,7 +51,7 @@ window.onerror = function (msg, url, line) {
   return false;
 };
 </script>
-<script src="xc_lang.js?v=10195400"></script>
+<script src="xc_lang.js?v=10195500"></script>
 </head>
 <body>
 <div id="app">
@@ -80,7 +80,7 @@ window.onerror = function (msg, url, line) {
     <div class="mi" data-act="quick"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="7 4 20 12 7 20 7 4"/></svg></i><span data-t="m_quick"></span></div>
     <div class="mi" data-act="servers"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><line x1="7" y1="6.5" x2="7.01" y2="6.5"/><line x1="7" y1="17.5" x2="7.01" y2="17.5"/></svg></i><span data-t="m_servers"></span></div>
     <div class="mi" data-act="friends"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></i><span data-t="m_friends"></span><em id="mFriends" class="gr"></em><em id="mFrNew" class="frn" style="display:none"></em></div>
-    <div class="mi" data-act="profile"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></i><span data-t="m_profile"></span></div>
+    <div class="mi" data-act="profile"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></i><span data-t="m_profile"></span><em id="mChest" class="frn chn" style="display:none" data-act="chests"></em></div>
     <div class="mi" data-act="missions"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/></svg></i><span data-t="m_missions"></span></div>
     <div class="sep"></div>
     <div class="mi" data-act="settings"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></i><span data-t="m_settings"></span></div>
@@ -251,6 +251,6 @@ window.onerror = function (msg, url, line) {
   <div id="dbg"></div>
 </div>
 <script src="master.js"></script>
-<script src="xc.js?v=10195400"></script>
+<script src="xc.js?v=10195500"></script>
 </body>
 </html>

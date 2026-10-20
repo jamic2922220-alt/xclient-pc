@@ -718,3 +718,59 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .tgcode { margin: 14px 0; font-size: 44px; font-weight: bold; letter-spacing: 10px; text-align: center; color: #5fbfff; }
 .sgg .rk.av2 { width: 30px; height: 30px; line-height: 30px; border-radius: 15px; text-align: center; font-weight: bold; color: #fff; overflow: hidden; }
 .sgg .rk.av2 img { width: 30px; height: 30px; border-radius: 15px; }
+/* unvon nishonlari */
+.rkb { display: inline-block; height: 18px; line-height: 16px; padding: 0 7px; font-size: 11px; font-weight: bold; border-radius: 9px; border: 1px solid; vertical-align: 1px; letter-spacing: .5px; }
+.rk-bronze { color: #e0a060; border-color: #8a5a2a; } .rk-silver { color: #d8e0e8; border-color: #707a85; } .rk-gold { color: #f5c518; border-color: #8a7010; }
+.rk-plat { color: #4fd1c5; border-color: #2a7a72; } .rk-diamond { color: #7ab4ff; border-color: #3a62a8; } .rk-legend { color: #ff6ac0; border-color: #a83a7a; }
+.fprk { margin-top: 6px; }
+.rkcard { position: relative; padding: 14px 16px 12px 86px; margin-bottom: 12px; background: #15111a; border: 1px solid #2a2026; min-height: 86px; }
+.rkcard .rkico { position: absolute; left: 14px; top: 14px; width: 58px; height: 58px; line-height: 58px; text-align: center; font-size: 30px; font-weight: 900; border-radius: 12px; border: 2px solid; -webkit-transform: rotate(45deg); }
+.rkcard b { font-size: 22px; } .rkcard span { margin-left: 10px; color: #c9b7bd; }
+.rkcard .xpw { margin: 8px 0 4px; }
+/* rangli nik */
+.nk-red { color: #ff5a5a; } .nk-orange { color: #ff9a39; } .nk-yellow { color: #ffd23a; } .nk-green { color: #3ccf4e; }
+.nk-cyan { color: #2fd3e8; } .nk-blue { color: #5f9bff; } .nk-purple { color: #b07cff; } .nk-pink { color: #ff6ac0; }
+.nk-gold { color: #ffcf3a; text-shadow: 0 0 8px rgba(255,207,58,.8); } .nk-neon { color: #39f9ff; text-shadow: 0 0 8px rgba(57,249,255,.9); }
+.nk-ice { color: #cfefff; text-shadow: 0 0 6px rgba(140,210,255,.9); } .nk-toxic { color: #9dff3a; text-shadow: 0 0 8px rgba(157,255,58,.8); }
+.nk-rainbow { -webkit-animation: nkr 3s linear infinite; font-weight: bold; }
+@-webkit-keyframes nkr { 0% { color: #ff4b4b; } 20% { color: #ffd23a; } 40% { color: #3ccf4e; } 60% { color: #2fd3e8; } 80% { color: #b07cff; } 100% { color: #ff4b4b; } }
+/* sandiqdan chiqadigan ramkalar */
+.ffire { -webkit-box-shadow: 0 0 0 3px #ff6a1a, 0 0 16px 3px rgba(255,90,20,.8) !important; }
+.fice { -webkit-box-shadow: 0 0 0 3px #bfe9ff, 0 0 14px 3px rgba(140,210,255,.8) !important; }
+.fneon { -webkit-box-shadow: 0 0 0 3px #39f9ff, 0 0 0 5px #ff4fd8, 0 0 16px rgba(57,249,255,.8) !important; }
+.ftoxic { -webkit-box-shadow: 0 0 0 3px #9dff3a, 0 0 16px 3px rgba(157,255,58,.7) !important; }
+.flegend { -webkit-animation: flg 2s linear infinite; }
+@-webkit-keyframes flg { 0% { -webkit-box-shadow: 0 0 0 3px #ffcf3a, 0 0 18px 4px rgba(255,207,58,.9); } 50% { -webkit-box-shadow: 0 0 0 3px #ff4fb4, 0 0 18px 4px rgba(255,79,180,.9); } 100% { -webkit-box-shadow: 0 0 0 3px #ffcf3a, 0 0 18px 4px rgba(255,207,58,.9); } }
+/* sandiq */
+#menu .mi em.chn { background: #f5c518; color: #1a1205; cursor: pointer; }
+.chst { text-align: center; padding: 8px 0 4px; }
+.chbox { position: relative; width: 150px; height: 120px; margin: 6px auto 16px; border-radius: 10px; background: -webkit-linear-gradient(top, #8a5a24, #5a3812); border: 3px solid #f5c518; -webkit-box-shadow: 0 0 30px rgba(245,197,24,.45); }
+.chbox i { position: absolute; left: 0; right: 0; top: 46px; height: 6px; background: #f5c518; }
+.chbox b { position: absolute; left: 55px; top: 34px; width: 34px; height: 34px; line-height: 34px; border-radius: 17px; background: #1a1205; color: #f5c518; font-size: 18px; border: 2px solid #f5c518; }
+.chbox.empty { opacity: .4; -webkit-box-shadow: none; }
+.chbox.shake { -webkit-animation: chs .25s linear infinite; }
+@-webkit-keyframes chs { 0% { -webkit-transform: rotate(-6deg) scale(1.05); } 50% { -webkit-transform: rotate(6deg) scale(1.1); } 100% { -webkit-transform: rotate(-6deg) scale(1.05); } }
+.btn.big { height: 46px; line-height: 44px; padding: 0 34px; font-size: 17px; }
+.chrw { margin: 0 auto 14px; width: 340px; padding: 12px; border: 2px solid; border-radius: 10px; }
+.chrw small { display: block; text-transform: uppercase; letter-spacing: 2px; font-size: 11px; } .chrw b { font-size: 20px; }
+.rr-common { border-color: #8f8590; color: #ddd; } .rr-rare { border-color: #3b8cff; color: #8ab8ff; } .rr-epic { border-color: #9b4dff; color: #c9a0ff; } .rr-legend { border-color: #f5c518; color: #ffd84a; -webkit-box-shadow: 0 0 20px rgba(245,197,24,.5); }
+.ncl, .frl { overflow: hidden; }
+.ncl a { float: left; margin: 0 6px 6px 0; padding: 6px 12px; background: #0f0d12; border: 1px solid #3a2e34; cursor: pointer; font-weight: bold; }
+.ncl a.on, .frl a.on { border-color: #e5484d; } .ncl a.lock, .frl a.lock { opacity: .4; } .ncl a.rare { border-style: dashed; }
+.frl a { float: left; width: 96px; margin: 0 8px 8px 0; padding: 10px 4px; text-align: center; background: #0f0d12; border: 1px solid #3a2e34; cursor: pointer; font-size: 12px; }
+.frl a i.av { position: relative; display: block; width: 44px; height: 44px; line-height: 44px; margin: 4px auto 10px; border-radius: 22px; background: #ff3b3b; color: #fff; font-style: normal; font-weight: bold; font-size: 18px; overflow: hidden; }
+.frl a i.av img { width: 44px; height: 44px; border-radius: 22px; }
+/* duel */
+.fra a.duel { color: #ffb84a; border-color: #8a6a2a; font-size: 15px; }
+.dupick { text-align: center; } .dupick p { font-size: 16px; margin-bottom: 16px; } .dupick .btn { margin: 0 6px; height: 46px; line-height: 44px; padding: 0 24px; font-size: 17px; }
+#ringBox.du { border-color: #ffb84a; -webkit-box-shadow: 0 0 40px rgba(255,184,74,.45); }
+#ringBox .rgi.du { background: #ffb84a; font-size: 34px; line-height: 64px; color: #1a1205; }
+#duelBar { display: none; position: absolute; top: 60px; left: 50%; width: 520px; margin-left: -260px; height: 44px; line-height: 42px; text-align: center; font-size: 16px; background: rgba(26,18,8,.95); border: 1px solid #ffb84a; border-radius: 22px; z-index: 30; color: #ffe0a8; }
+#duelBar b { color: #fff; font-size: 20px; } #duelBar .btn { height: 30px; line-height: 28px; margin-left: 10px; vertical-align: 1px; }
+.dures { text-align: center; padding: 20px 0; } .dures b { font-size: 30px; } .dures.me b { color: #3ccf4e; } .dures.op b { color: #ff6a5a; }
+.dusc { font-size: 54px; font-weight: 900; margin: 10px 0; } .dures p { color: #c9b7bd; font-size: 15px; }
+/* kechagi o'yin */
+.ydc { text-align: center; } .ydg { overflow: hidden; margin-bottom: 14px; }
+.ydg div { float: left; width: 25%; padding: 14px 4px; background: #15111a; border: 1px solid #2a2026; }
+.ydg b { display: block; font-size: 24px; } .ydg span { font-size: 11px; color: #8f8590; text-transform: uppercase; }
+.ydc p { font-size: 16px; }
