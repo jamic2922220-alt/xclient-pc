@@ -15,7 +15,7 @@
 /* O'yin brauzeri (CEF) index.html ni soatlab xotiradan ochishi mumkin - yangilanish ko'rinmay qoladi.
  * ver.txt har safar yangidan so'raladi; boshqa bo'lsa - yangi index.html ni yuklab, sahifani shu bilan almashtiramiz. */
 (function () {
-  var V = '10191900';
+  var V = '10192100';
   try {
     if (window.name === 'xcfresh' + V) return;
     var x = new XMLHttpRequest(); x.open('GET', 'ver.txt?t=' + new Date().getTime(), false); x.send(null);
@@ -32,7 +32,7 @@
   } catch (e) {}
 })();
 </script>
-<link rel="stylesheet" href="xc.css?v=10191900">
+<link rel="stylesheet" href="xc.css?v=10192100">
 <script>
 /* Xato bo'lsa ekranning tepasida ko'rsatamiz (o'yin brauzerida konsol yo'q) */
 window.XC_ERRS = [];
@@ -45,7 +45,7 @@ window.onerror = function (msg, url, line) {
   return false;
 };
 </script>
-<script src="xc_lang.js?v=10191900"></script>
+<script src="xc_lang.js?v=10192100"></script>
 </head>
 <body>
 <div id="app">
@@ -84,6 +84,12 @@ window.onerror = function (msg, url, line) {
   <!-- ===== o'ng ustun ===== -->
   <div id="col">
     <div class="card ann" id="ann" style="display:none"></div>
+    <!-- sodda rejim (oddiy launcher): X CLIENT ni yuklab olish kartasi -->
+    <div class="card xpcard" id="xpromo" data-act="promo">
+      <div class="xph"><img src="logo.png" alt=""><div><b data-t="lp_t"></b><small data-t="lp_s"></small></div></div>
+      <div class="acl"><span>&#10003; <b data-t="lp_1"></b></span><span>&#10003; <b data-t="lp_2"></b></span><span>&#10003; <b data-t="lp_3"></b></span></div>
+      <a class="btn red acbtn" data-act="promo">cssborka.uz/xclient &#8594;</a>
+    </div>
     <!-- akkauntga kirmaganlar uchun ko'zga tashlanadigan karta -->
     <div class="card acct" id="acct" data-act="login" style="display:none">
       <div class="acx">X</div>
@@ -237,6 +243,6 @@ window.onerror = function (msg, url, line) {
   <div id="dbg"></div>
 </div>
 <script src="master.js"></script>
-<script src="xc.js?v=10191900"></script>
+<script src="xc.js?v=10192100"></script>
 </body>
 </html>

@@ -243,11 +243,30 @@ function qparam(k) { var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.s
 var PCID = /^[a-z0-9]{8,40}$/.test(qparam('xc')) ? qparam('xc') : '';   // kompyuter id (DB.pcid) va uning maxfiy kaliti (DB.pck) load() dan keyin olinadi
 var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '', hud: 100 }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
 var OPTS_TRY = 0;
+/* To'liq X CLIENT menyusi faqat XCLauncher.exe orqali ochilganda. Menyu saytda turadi va boshqa boost-top sborkalari ham
+ * uni ochadi - ularda "sodda rejim": tezkor o'yin, serverlar, sozlamalar + X CLIENT ni yuklab olish kartasi.
+ * Sayt javobigacha ('gate') akkaunt/do'stlar/vazifalar yashirin turadi; javob kelmasa 8 s dan keyin to'liq menyu ochiladi. */
+var LITE = null;
+function setLite(on) {
+  if (LITE === on) return;
+  LITE = on;
+  var h = document.documentElement;
+  h.className = (h.className || '').replace(/(^|\s)(gate|lite)(?=\s|$)/g, '') + (on ? ' lite' : '');
+  if (on && curModal === 'mdLogin') closeModal();
+}
+document.documentElement.className += ' gate';
+setTimeout(function () { if (LITE === null) setLite(false); }, 8000);
+function openPromo() {
+  var h = '<div class="xpro"><img src="logo_big.png" alt=""><b>' + esc(T('lp_t')) + '</b><p>' + esc(T('lp_s')) + '</p><ul>';
+  each(['lp_1', 'lp_2', 'lp_3', 'lp_4', 'lp_5'], function (k) { h += '<li>' + esc(T(k)) + '</li>'; });
+  openSide('promo', 'X CLIENT', h + '</ul><div class="xurl">cssborka.uz/xclient</div><small class="mut">' + esc(T('lp_how')) + '</small></div>');
+}
 function loadOpts() {
   // id berilmasa server shu IP dan oxirgi ulangan XClient.exe ni topadi
   if (!PCID && DB.pcid && DB.pck) PCID = DB.pcid;
   api('opts', PCID ? { d: PCID } : {}, function (r) {
     if (!r.ok && r.err === 'nolaunch' && PCID) { PCID = ''; DB.pcid = DB.pck = ''; persist(); return loadOpts(); }   // kalit eskirgan
+    if (r.ok) setLite(!r.o);                     // o: null - bu kompyuterda XCLauncher.exe ochilmagan (oddiy boost-top launcheri)
     if (!r.ok || !r.o) return;
     if (r.d) PCID = r.d;
     if (r.k) { DB.pcid = r.d; DB.pck = r.k; persist(); }
@@ -2013,6 +2032,7 @@ function avUpload(file) {
 
 /* ============================================================ amallar */
 function act(a) {
+  if (LITE && /^(friends|profile|missions|login|weekall|promo)$/.test(a)) return openPromo();
   if (a === 'quick' || a === 'play') { closeModal(); return quick(); }
   if (a === 'servers') return openServers('internet');
   if (a === 'friends') return openFriends();

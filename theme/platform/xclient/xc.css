@@ -494,3 +494,22 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 .avurl { position: relative; height: 30px; margin-top: 10px; }
 .avurl .ipin { position: absolute; left: 0; top: 0; width: 300px; height: 30px; padding: 0 8px; border: 1px solid #2f2530; background: #120f14; color: #fff; font-size: 14px; outline: none; -webkit-user-select: text; }
 .avurl .cpy { position: absolute; left: 312px; top: 0; height: 30px; line-height: 28px; padding: 0 12px; border: 1px solid #5a2a30; background: #2a1216; color: #ff8a7a; font-size: 12px; font-weight: bold; cursor: pointer; }
+
+/* sodda rejim (XCLauncher.exe siz): akkaunt, do'stlar, vazifalar yo'q - X CLIENT kartasi */
+.gate #menu [data-act="friends"], .gate #menu [data-act="profile"], .gate #menu [data-act="missions"], .gate #acct, .gate #frCard, .gate #bar .me, .gate #meVip { visibility: hidden; }
+.lite #menu [data-act="friends"], .lite #menu [data-act="profile"], .lite #menu [data-act="missions"], .lite #acct, .lite #frCard, .lite #bar .me, .lite #meVip { display: none !important; }
+#xpromo { display: none; cursor: pointer; border-color: rgba(255, 59, 59, .55); }
+.lite #xpromo { display: block; }
+.xph { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.xph img { width: 54px; height: 54px; }
+.xph b { display: block; font-size: 22px; color: #fff; }
+.xph small { color: #ffb4a0; font-size: 14px; }
+.xpro { text-align: center; }
+.xpro img { width: 150px; margin: 6px auto 10px; display: block; }
+.xpro b { font-size: 26px; color: #fff; display: block; }
+.xpro p { color: #ffb4a0; margin: 6px 0 14px; }
+.xpro ul { text-align: left; margin: 0 auto 16px; padding-left: 22px; max-width: 360px; line-height: 1.9; }
+.xpro .xurl { font-size: 30px; font-weight: 800; color: #fff; background: #e33; border-radius: 12px; padding: 12px 18px; margin: 8px 0 10px; user-select: text; -webkit-user-select: text; }
+.xpcard .acl { display: block; margin: 0 0 12px; }
+.xpcard .acl span { display: block; margin: 4px 0; }
+.lite #bCloud { display: none !important; }
