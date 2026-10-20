@@ -15,7 +15,7 @@
 /* O'yin brauzeri (CEF) index.html ni soatlab xotiradan ochishi mumkin - yangilanish ko'rinmay qoladi.
  * ver.txt har safar yangidan so'raladi; boshqa bo'lsa - yangi index.html ni yuklab, sahifani shu bilan almashtiramiz. */
 (function () {
-  var V = '10192900';
+  var V = '10193100';
   try {
     if (window.name === 'xcfresh' + V) return;
     var x = new XMLHttpRequest(); x.open('GET', 'ver.txt?t=' + new Date().getTime(), false); x.send(null);
@@ -33,7 +33,7 @@
   } catch (e) {}
 })();
 </script>
-<link rel="stylesheet" href="xc.css?v=10192900">
+<link rel="stylesheet" href="xc.css?v=10193100">
 <script>
 /* Xato bo'lsa ekranning tepasida ko'rsatamiz (o'yin brauzerida konsol yo'q) */
 window.XC_ERRS = [];
@@ -46,7 +46,7 @@ window.onerror = function (msg, url, line) {
   return false;
 };
 </script>
-<script src="xc_lang.js?v=10192900"></script>
+<script src="xc_lang.js?v=10193100"></script>
 </head>
 <body>
 <div id="app">
@@ -244,6 +244,6 @@ window.onerror = function (msg, url, line) {
   <div id="dbg"></div>
 </div>
 <script src="master.js"></script>
-<script src="xc.js?v=10192900"></script>
+<script src="xc.js?v=10193100"></script>
 </body>
 </html>

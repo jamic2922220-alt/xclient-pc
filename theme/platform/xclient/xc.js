@@ -1236,7 +1236,7 @@ var DEF = {
   vmx: 0, vmy: 0, vmz: 0, vmshift: 0, bobst: 0, lagst: 0, camint: 0,
   roll: 0, rollspd: 200, bobv: 0.13, bobl: 0.32, boblow: 8, bobcam: 1, lagsc: 1, lagsp: 8, fovlerp: 0, camsc: 1,
   rtracks: 0, rfull: 1, rbg: 0, rallies: 1, rns: 0.8, rhs: 1, dtime: 6, drpc: 1, drpcs: 1, drpcj: 1, mmusic: 1,
-  bob: 0.01, picmip: 0, detail: 1, shadows: 1, minm: 0, interp: 0.01, lw: 1, lc: 1, hisnd: 1, mixa: 0.1, loop: 0, saytm: 5, ngpos: 1, pro: 0, gfxc: '', xmig: 0
+  bob: 0.01, picmip: 0, detail: 1, shadows: 1, minm: 0, interp: 0.01, lw: 1, lc: 1, hisnd: 1, mixa: 0.1, loop: 0, saytm: 5, ngpos: 1, pro: 0, gfxc: '', xmig: 0, pmig: 0
 };
 var S = null, E = null;
 var CVARS = { sens: 'sensitivity', zoom: 'zoom_sensitivity_ratio', raw: 'm_rawinput', filter: 'm_filter', vol: 'volume', vscale: 'voice_scale', voice: 'voice_enable',
@@ -1259,9 +1259,11 @@ function loadSettings() {
    * "razbros o'zgardi" deyishdi. Bir marta qaytaramiz (CS 1.6 standarti - 1); belgi sozlamalarning o'zida (xmig) */
   if (S.pro && !S.xmig) { S.xdyn = 1; S.xmig = 1; DB.set = S; }
   /* "Avto grafika" (bekor qilindi) grafikani pasaytirib yuborgan o'yinchilarda - to'liq grafikani qaytaramiz */
+  /* eski PRO CFG soya va dinamik yorug'likni o'chirgan edi - bir marta qaytaramiz (yangi PRO CFG grafikaga tegmaydi) */
+  if (S.pro && !S.pmig) { S.shadows = 1; S.dyn = 1; S.pmig = 1; S.gfxc = ''; DB.set = S; }
   if (S.gfxc) {
-    // PRO CFG tanlaganlarga - PRO grafikasi; boshqalarga - CS 1.6 standarti (detal teksturalar o'chiq, soya va yorug'lik yoqiq)
-    var g = S.pro ? { detail: 0, shadows: 0, dyn: 0 } : { detail: 0, shadows: 1, dyn: 1 };
+    // CS 1.6 standarti: detal teksturalar o'chiq, soya va yorug'lik yoqiq
+    var g = { detail: 0, shadows: 1, dyn: 1 };
     for (var gk in g) if (g.hasOwnProperty(gk)) S[gk] = g[gk];
     if (S.decals < 1000) S.decals = 1000; S.hisnd = 1; if (S.mixa > 0.1) S.mixa = 0.1;
     S.gfxc = ''; DB.set = S;
@@ -2122,10 +2124,12 @@ function act(a) {
     });
     openSide('shots', T('sh_title2'), '<div class="shots">' + h + '</div>');
   });
-  if (a === 'procfg') {                        // Pro CFG: lag'siz internet, yuqori FPS, aniq sichqoncha
-    E.net = 'fast'; E.fps = 100; E.vsync = 0;   // CS 1.6 100 FPS ga moslangan: otish, otdacha va harakat bir xil bo'ladi
+  if (a === 'procfg') {                        // Pro CFG: lag'siz internet, aniq sichqoncha, toza ovoz
+    /* Grafika va FPS ga tegmaymiz: FPS ni 100 ga qotirish (144 Hz monitorda) va soya/yorug'likni o'chirish o'yinchilarga
+     * "qotish" va xunuk grafika bo'lib tuyuldi. FPS faqat 100 dan past bo'lsa - 100 */
+    E.net = 'fast'; E.vsync = 0; if (!(E.fps >= 100)) E.fps = 100;
     E.raw = 1; E.filter = 0; E.fastsw = 1; E.bob = 0; E.interp = 0.01; E.lw = 1; E.lc = 1;
-    E.dyn = 0; E.detail = 0; E.hisnd = 1; E.mixa = 0.1; E.shadows = 0; E.pro = 1; E.xmig = 1;   // pritsel kengayishiga (xdyn) tegmaymiz
+    E.hisnd = 1; E.mixa = 0.1; E.pro = 1; E.xmig = 1; E.pmig = 1;   // pritsel kengayishiga (xdyn) tegmaymiz
     toast(T('pr_cfgok'), 5000); a = 'save';     // darhol saqlab qo'llaymiz - "Saqlash" ni bosish esdan chiqib, CFG ishlamay qolardi
   }
   if (a === 'fpsmode') {                       // kuchsiz kompyuter: grafikani pasaytiramiz
