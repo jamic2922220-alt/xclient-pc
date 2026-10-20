@@ -98,6 +98,10 @@ SectionEnd
 
 ; O'chirish: faqat launcher va yorliqlar. O'yin fayllari (cstrike va h.k.) va sozlamalar qoladi.
 Section "Uninstall"
+  ; "Nega o'chiryapsiz?" - qisqa so'rovnoma brauzerda ochiladi (javoblar admin panelda ko'rinadi)
+  ReadINIStr $0 "$INSTDIR\xclient.ini" "x" "id"
+  IfSilent +2
+    ExecShell "open" "http://mmb.boost-top.com/bye.php?d=$0"
   Delete "$DESKTOP\X CLIENT.lnk"
   RMDir /r "$SMPROGRAMS\X CLIENT"
   Delete "$INSTDIR\XCLauncher.exe"

@@ -1514,9 +1514,10 @@ static DWORD WINAPI worker(LPVOID unused)
     ini_save();
 
     g_net = InternetOpenA("XClient", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
-    DWORD to = 15000;
+    /* ulanish 6 s: sayt javob bermasa launcher 15 s kutib turmaydi (yuklab olishda o'qish kutishi 15 s qoladi) */
+    DWORD to = 6000, rto = 15000;
     InternetSetOptionA(g_net, INTERNET_OPTION_CONNECT_TIMEOUT, &to, sizeof(to));
-    InternetSetOptionA(g_net, INTERNET_OPTION_RECEIVE_TIMEOUT, &to, sizeof(to));
+    InternetSetOptionA(g_net, INTERNET_OPTION_RECEIVE_TIMEOUT, &rto, sizeof(rto));
 
     if (fresh) { g_fresh = TRUE; status(L"O‘rnatilmoqda...", 1); api_call("install", NULL); }
 
@@ -1527,8 +1528,7 @@ static DWORD WINAPI worker(LPVOID unused)
     if (o_ok) {                                   /* internet bo'lmasa paketlarga tegmaymiz */
         install_spray();
         apply_packs();
-        if (o_shots) upload_shots();
-    }
+    }   /* skrinshotlar o'yin yopilgach yuklanadi (run_game) - o'yin tezroq ochiladi */
 
     status(L"Yangilanish tekshirilmoqda...", 1);
     UpdInfo u;
@@ -1562,7 +1562,7 @@ static DWORD WINAPI worker(LPVOID unused)
     }
     status(L"O‘yin ochilmoqda...", 100);
     if (!g_relaunch) api_call("launch", NULL);   /* yangi launcher o'zi yuboradi */
-    InternetCloseHandle(g_net);
+    /* g_net yopilmaydi: o'yin yopilgach run_game() undan foydalanadi (sozlamalar, skrinshotlar) */
     PostMessageW(g_wnd, WM_XC_DONE, 0, 0);
     return 0;
 }

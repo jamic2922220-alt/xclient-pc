@@ -130,7 +130,7 @@ function pub($u, $full) {
     $r = array(
         'id' => $u['id'], 'login' => $u['login'], 'name' => $u['name'],
         'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL, 'lvlmax' => XP_PER_LEVEL,
-        'vip' => !empty($u['vip']), 'online' => is_online($u),
+        'vip' => !empty($u['vip']), 'online' => is_online($u), 'seen' => isset($u['seen']) ? (int)$u['seen'] : 0,
         'avc' => isset($u['avc']) ? $u['avc'] : '',
         'av' => !empty($u['avt']) ? 'xc_api.php?a=av&l=' . strtolower($u['login']) . '&t=' . $u['avt'] : '',
         'server' => is_online($u) && !empty($u['server']) ? $u['server'] : '', 'map' => is_online($u) && !empty($u['map']) ? $u['map'] : '',
@@ -772,7 +772,59 @@ case 'notif':
     $rq = array(); foreach ((isset($u['freq']) && is_array($u['freq']) ? $u['freq'] : array()) as $k => $tm) { $f = user($k); if ($f) $rq[] = array('login' => $k, 'name' => $f['name'], 't' => $tm); }
     $inv = array();                                      // do'st chaqiruvlari: 15 s ichida yetib boradi (ping 1 daqiqa kutmaydi)
     if (!empty($u['inv'])) { lock(); $u = auth(); foreach ($u['inv'] as $i) if (time() - $i['t'] < 600) $inv[] = $i; $u['inv'] = array(); save_user($u); }
-    out(array('ok' => true, 'unread' => $un, 'req' => $rq, 'inv' => $inv));
+    $calls = array();                                    // "Sizni sog'indik": uzoq kirmagan paytda do'stlar chaqirgan
+    if (!empty($u['calls'])) { lock(); $u = auth(); $calls = $u['calls']; $u['calls'] = array(); save_user($u); }
+    out(array('ok' => true, 'unread' => $un, 'req' => $rq, 'inv' => $inv, 'calls' => $calls));
+
+/* ---------- kunlik kirish mukofoti: har kuni birinchi kirishda XP, ketma-ket kunlar (streak) ko'paytiradi, 7-kuni katta bonus ---------- */
+case 'daily':
+    lock();
+    $u = auth();
+    @date_default_timezone_set('Asia/Tashkent');
+    $day = date('Y-m-d'); $yd = date('Y-m-d', time() - 86400);
+    $dl = isset($u['dly']) && is_array($u['dly']) ? $u['dly'] : array('d' => '', 's' => 0);
+    if ($dl['d'] === $day) out(array('ok' => true, 'got' => 0, 'streak' => (int)$dl['s']));
+    $streak = $dl['d'] === $yd ? (int)$dl['s'] + 1 : 1;
+    $got = $streak % 7 === 0 ? 200 : 20 + 10 * min(5, ($streak - 1) % 7);
+    $u['dly'] = array('d' => $day, 's' => $streak);
+    $u['xp'] = (int)$u['xp'] + $got;
+    if (!isset($u['wk']) || $u['wk'] !== week_id()) { $u['wk'] = week_id(); $u['wkxp'] = 0; }
+    $u['wkxp'] = (int)$u['wkxp'] + $got;
+    save_user($u);
+    out(array('ok' => true, 'got' => $got, 'streak' => $streak, 'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL));
+
+/* ---------- "Sizni sog'indik": 3+ kun kirmagan do'stni chaqirish (u qaytganda menyuda ko'radi) ---------- */
+case 'miss_call':
+    lock();
+    $u = auth();
+    $to = strtolower(p('to'));
+    if (!preg_match('/^[a-z0-9_]{3,20}$/', $to) || empty($u['friends']) || !in_array($to, array_map('strtolower', $u['friends']))) fail('bad', 'Faqat do\'stlarni chaqirish mumkin');
+    $t = user($to);
+    if (!$t) fail('bad', 'Do\'st topilmadi');
+    if (!empty($t['seen']) && time() - $t['seen'] < 3 * 86400) fail('bad', 'Do\'stingiz yaqinda kirgan');
+    if (rl_count('call' . strtolower($u['login']) . '-' . $to, 86400) >= 1) fail('limit', 'Bugun allaqachon chaqirgansiz');
+    rl_add('call' . strtolower($u['login']) . '-' . $to, 86400);
+    if (!isset($t['calls'])) $t['calls'] = array();
+    $t['calls'][] = array('from' => $u['name'], 'login' => $u['login'], 't' => time());
+    $t['calls'] = array_slice($t['calls'], -10);
+    save_user($t);
+    out(array('ok' => true));
+
+/* ---------- menyudagi "Taklif / shikoyat" tugmasi -> admin panel (Fikrlar) + Telegram ---------- */
+case 'feedback':
+    if (rl_count('fb' . client_ip(), 3600) >= 5) fail('limit', 'Bir soatda 5 tadan ko\'p yozib bo\'lmaydi');
+    $txt = trim(clean_str(p('text'), 1500));
+    if (mb_strlen($txt, 'UTF-8') < 3) fail('bad', 'Matn juda qisqa');
+    $kind = in_array(p('kind'), array('idea', 'bug', 'complain'), true) ? p('kind') : 'idea';
+    rl_add('fb' . client_ip(), 3600);
+    $who = ''; $tok = p('token');
+    if (preg_match('/^[a-f0-9]{40}$/', $tok)) { $tks = rd('tokens', array()); if (!empty($tks[$tok])) $who = $tks[$tok]; }
+    @mkdir(XC_DIR . '/feedback', 0755, true);
+    cap_dir(XC_DIR . '/feedback', 1000);
+    wr('feedback/' . date('Ymd-His') . '-' . mt_rand(1000, 9999), array('t' => time(), 'kind' => $kind, 'text' => $txt, 'who' => $who, 'nick' => clean_str(p('nick'), 40), 'ver' => clean_str(p('ver'), 20), 'ip' => client_ip()));
+    $kn = array('idea' => 'Taklif', 'bug' => 'Xatolik', 'complain' => 'Shikoyat');
+    tg_notify('feedback', 'X CLIENT - ' . $kn[$kind] . ' (' . ($who !== '' ? $who : (p('nick') !== '' ? clean_str(p('nick'), 40) : 'mehmon')) . "):\n" . $txt);
+    out(array('ok' => true));
 
 /* ---------- jang statistikasi: o'yinchining hamma serverlardagi kill/o'limi akkauntga yig'iladi (Steam statistikasidek) ----------
  * Menyu o'yin davomida (2 daqiqada bir) va chiqishda shu o'yinning JAMI qiymatlarini yuboradi: sid - o'yin boshlangan vaqt (ms).

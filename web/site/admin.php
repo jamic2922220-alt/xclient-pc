@@ -250,9 +250,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         go('?p=packs&id=' . $id);
     }
+    if ($act === 'fb_del') {                             // fikrni o'chirish (o'qib bo'lingach)
+        foreach ((array)pp('ids', array()) as $id) { $id = preg_replace('/[^0-9\-]/', '', (string)$id); if ($id !== '') @unlink(XC_DIR . '/feedback/' . $id . '.php'); }
+        go('?p=fb');
+    }
     if ($act === 'tg_save') {
         $CFG['tg_token'] = preg_replace('/[^A-Za-z0-9:_\-]/', '', pp('token')); $CFG['tg_chat'] = preg_replace('/[^0-9\-@A-Za-z_]/', '', pp('chat'));
-        $CFG['tg_ev'] = array(); foreach (array('install', 'account', 'report', 'daily') as $e) $CFG['tg_ev'][$e] = pp('ev_' . $e) ? 1 : 0;
+        $CFG['tg_ev'] = array(); foreach (array('install', 'account', 'report', 'daily', 'feedback') as $e) $CFG['tg_ev'][$e] = pp('ev_' . $e) ? 1 : 0;
         cfg_save(); flash('Telegram sozlamalari saqlandi'); go('?p=tg');
     }
     if ($act === 'tg_test') {
@@ -327,9 +331,10 @@ if ($P === 'installs' && g('csv')) {
 
 /* ---------- sahifa ---------- */
 $NAV = array('dash' => array('Infopanel', '⌂'), 'online' => array('Onlayn', '●'), 'players' => array("O'yinchilar", '☺'), 'installs' => array("O'rnatishlar", '↓'), 'accounts' => array('Akkauntlar', '✉'),
-    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'stats' => array('Statistika', '★'), 'promo' => array('Reklama', '$'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
+    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'stats' => array('Statistika', '★'), 'churn' => array('Ketganlar', '↘'), 'fb' => array('Fikrlar', '✎'), 'promo' => array('Reklama', '$'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
 $devCount = count((array)glob(XC_DIR . '/dev/*.php')); $ncCount = count((array)glob(XC_DIR . '/nc/*.php')); $accCount = count((array)glob(XC_DIR . '/users/*.php')); $repCount = count((array)glob(XC_DIR . '/reports/*.php'));
-$badge = array('players' => $devCount + $ncCount, 'installs' => $devCount, 'accounts' => $accCount, 'reports' => $repCount);
+$fbCount = count((array)glob(XC_DIR . '/feedback/*.php'));
+$badge = array('players' => $devCount + $ncCount, 'installs' => $devCount, 'accounts' => $accCount, 'reports' => $repCount, 'fb' => $fbCount);
 head(isset($NAV[$P]) ? $NAV[$P][0] : 'Admin');
 echo '<div class="side"><div class="brand"><span>X</span> CLIENT<small>admin panel</small></div>';
 foreach ($NAV as $k => $n) echo '<a href="?p=' . $k . '" class="' . ($P === $k || ($P === 'player' && $k === 'players') || ($P === 'report' && $k === 'reports') ? 'on' : '') . '"><i>' . $n[1] . '</i>' . h($n[0]) . (!empty($badge[$k]) ? '<em>' . $badge[$k] . '</em>' : '') . '</a>';
@@ -652,13 +657,56 @@ if ($P === 'promo') {
     echo '</table></div>';
 }
 
+/* ===== KETGANLAR: kim qancha vaqtdan beri kirmayapti, haftalar bo'yicha kelgan/ketgan, o'chirish sabablari ===== */
+if ($P === 'churn') {
+    $now = time(); $D = 86400;
+    $grp = function ($list) use ($now, $D) { $r = array(0, 0, 0, 0); foreach ($list as $o) { $s = isset($o['seen']) ? (int)$o['seen'] : (isset($o['first']) ? (int)$o['first'] : 0); $a = $now - $s; $r[$a < 7 * $D ? 0 : ($a < 14 * $D ? 1 : ($a < 30 * $D ? 2 : 3))]++; } return $r; };
+    $devs = all_of('dev'); $ncs = all_of('nc'); $users = all_of('users');
+    $gx = $grp($devs); $gn = $grp($ncs); $gu = $grp($users);
+    $ser = array(); $lnew = array(); $lgone = array(); $lback = array();
+    for ($w = 11; $w >= 0; $w--) {                       // har hafta: yangi kelganlar va o'sha hafta oxirgi marta ko'ringanlar (keyin 7+ kun kirmagan)
+        $a = $now - ($w + 1) * 7 * $D; $b = $now - $w * 7 * $D; $nn = 0; $gg = 0;
+        foreach (array_merge($devs, $ncs) as $o) {
+            $f = isset($o['first']) ? (int)$o['first'] : 0; $s = isset($o['seen']) ? (int)$o['seen'] : $f;
+            if ($f >= $a && $f < $b) $nn++;
+            if ($s >= $a && $s < $b && $now - $s >= 7 * $D) $gg++;
+        }
+        $ser[] = array('l' => date('d.m', $a)); $lnew[] = $nn; $lgone[] = $gg;
+    }
+    $row = function ($t, $g) { $tot = max(1, array_sum($g)); return '<tr><td>' . $t . '</td><td><b>' . $g[0] . '</b></td><td>' . $g[1] . '</td><td>' . $g[2] . '</td><td class="red">' . $g[3] . '</td><td>' . round(100 * ($g[1] + $g[2] + $g[3]) / $tot) . '%</td></tr>'; };
+    echo '<h1>Ketganlar</h1><div class="cards"><div class="card xc"><b>' . ($gx[0] + $gn[0]) . '</b><span class="ct">Faol (7 kun ichida kirgan)</span></div><div class="card"><b>' . ($gx[1] + $gn[1] + $gx[2] + $gn[2]) . '</b><span class="ct">1-4 hafta kirmagan (hali qaytarsa bo\'ladi)</span></div><div class="card"><b>' . ($gx[3] + $gn[3]) . '</b><span class="ct">30+ kun kirmagan (ketgan)</span></div></div>';
+    echo '<div class="panel"><div class="ph">Haftalar bo\'yicha: yangi kelganlar va ketganlar</div>' . line_chart($ser, array(array('Yangi', '#3fbfb0', $lnew), array('Ketgan', '#e5484d', $lgone))) . '<div class="mut small">"Ketgan" - shu haftada oxirgi marta ko\'rinib, keyin 7 kundan ko\'p kirmagan kompyuterlar. Qizil chiziq ko\'tarilsa - o\'sha haftadagi yangilanishni tekshiring.</div></div>';
+    echo '<div class="grid2"><div class="panel"><div class="ph">Oxirgi kirish</div><table class="list"><tr><th></th><th>7 kun ichida</th><th>1-2 hafta</th><th>2-4 hafta</th><th>30+ kun</th><th>Kirmayapti</th></tr>'
+        . $row('X CLIENT kompyuterlar', $gx) . $row('NextClient (menyu)', $gn) . $row('Akkauntlar', $gu) . '</table>'
+        . '<div class="mut small" style="margin-top:8px">Menyudagi "Sizni sog\'indik" tugmasi do\'stlarga 3+ kun kirmaganlarni chaqirishga imkon beradi.</div></div>';
+    $bye = array_reverse(all_of('bye')); $why = array(); $nm = array('lag' => "Qotadi / FPS past", 'bugs' => 'Xatolar', 'menu' => 'Menyu yoqmadi', 'ads' => 'Reklama/xabar ko\'p', 'other' => 'Boshqa sborka', 'reinst' => 'Qayta o\'rnatish', 'nogame' => 'O\'ynamay qo\'ydi');
+    foreach ($bye as $b) { $k = isset($nm[$b['r']]) ? $nm[$b['r']] : 'izohsiz'; $why[$k] = (isset($why[$k]) ? $why[$k] : 0) + 1; } arsort($why);
+    echo '<div class="panel"><div class="ph">Nega o\'chirishdi (' . count($bye) . ' ta javob)</div>' . pie($why) . '</div></div>';
+    echo '<div class="panel"><div class="ph">O\'chirganlarning izohlari</div><table class="list"><tr><th>Sana</th><th>Sabab</th><th>Izoh</th><th>Kompyuter</th></tr>';
+    $n = 0; foreach ($bye as $b) { if ($b['text'] === '' && $n > 30) continue; if (++$n > 60) break; echo '<tr><td>' . dt($b['t']) . '</td><td>' . h(isset($nm[$b['r']]) ? $nm[$b['r']] : '—') . '</td><td>' . h($b['text']) . '</td><td class="mono mut">' . h($b['d']) . '</td></tr>'; }
+    if (!$bye) echo '<tr><td colspan="4" class="mut">Hali yo\'q. X CLIENT o\'chirilganda so\'rovnoma brauzerda ochiladi (yangi X-Client-Setup bilan o\'rnatilganlarda).</td></tr>';
+    echo '</table></div>';
+}
+
+/* ===== FIKRLAR: menyudagi "Taklif / shikoyat" ===== */
+if ($P === 'fb') {
+    $l = array(); foreach ((array)glob(XC_DIR . '/feedback/*.php') as $f) { $id = basename($f, '.php'); $o = rd('feedback/' . $id, null); if ($o) { $o['id'] = $id; $l[] = $o; } }
+    usort($l, function ($a, $b) { return $b['t'] - $a['t']; });
+    $kn = array('idea' => array('Taklif', ''), 'bug' => array('Xatolik', 'red'), 'complain' => array('Shikoyat', 'red'));
+    echo '<h1>Fikrlar</h1><div class="panel"><div class="ph">O\'yinchilarning taklif va shikoyatlari (' . count($l) . ')</div>'
+        . '<form method="post" onsubmit="return confirm(\'Belgilanganlar o\\\'chirilsinmi?\')">' . csrf_in() . '<input type="hidden" name="act" value="fb_del"><table class="list"><tr><th><input type="checkbox" onclick="var c=document.querySelectorAll(\'.ck\');for(var i=0;i<c.length;i++)c[i].checked=this.checked"></th><th>Sana</th><th>Turi</th><th>Kim</th><th>Matn</th></tr>';
+    foreach ($l as $o) { $k = isset($kn[$o['kind']]) ? $kn[$o['kind']] : $kn['idea']; echo '<tr><td><input type="checkbox" class="ck" name="ids[]" value="' . h($o['id']) . '"></td><td>' . dt($o['t']) . '</td><td class="' . $k[1] . '">' . $k[0] . '</td><td>' . ($o['who'] !== '' ? '<b>' . h($o['who']) . '</b>' : h($o['nick'] !== '' ? $o['nick'] : 'mehmon')) . ' <span class="mut small">v' . h($o['ver']) . '</span></td><td style="white-space:pre-wrap">' . h($o['text']) . '</td></tr>'; }
+    if (!$l) echo '<tr><td colspan="5" class="mut">Hali yo\'q. O\'yinchilar menyuning pastidagi ✎ tugmasi orqali yozadi.</td></tr>';
+    echo '</table>' . ($l ? '<button class="btn" style="margin-top:10px">Belgilanganlarni o\'chirish</button>' : '') . '</form></div>';
+}
+
 if ($P === 'tg') {
     $ev = isset($CFG['tg_ev']) ? $CFG['tg_ev'] : array('install' => 1, 'account' => 1, 'report' => 1);
     $ck = function ($k, $t) use ($ev) { return '<label class="chk"><input type="checkbox" name="ev_' . $k . '" value="1"' . (!empty($ev[$k]) ? ' checked' : '') . '> ' . $t . '</label>'; };
     echo '<h1>Telegram xabarnomalar</h1><div class="grid2"><div class="panel"><div class="ph">Sozlash</div><form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="tg_save">'
         . '<label>Bot token</label><input name="token" value="' . h(isset($CFG['tg_token']) ? $CFG['tg_token'] : '') . '" placeholder="123456:ABC-DEF...">'
         . '<label>Chat ID (siz yoki guruh)</label><input name="chat" value="' . h(isset($CFG['tg_chat']) ? $CFG['tg_chat'] : '') . '" placeholder="123456789 yoki -100...">'
-        . $ck('install', 'Yangi X CLIENT o\'rnatish') . $ck('account', 'Yangi akkaunt') . $ck('report', 'Xatolik haqida xabar') . $ck('daily', 'Kunlik hisobot (har kuni 9:00 dan keyin) va hafta chempioni')
+        . $ck('install', 'Yangi X CLIENT o\'rnatish') . $ck('account', 'Yangi akkaunt') . $ck('report', 'Xatolik haqida xabar') . $ck('daily', 'Kunlik hisobot (har kuni 9:00 dan keyin) va hafta chempioni') . $ck('feedback', 'Menyudan taklif / shikoyat')
         . '<button class="btn red">Saqlash</button></form><form method="post" style="margin-top:10px">' . csrf_in() . '<input type="hidden" name="act" value="tg_test"><button class="btn">Sinov xabarini yuborish</button></form></div>'
         . '<div class="panel"><div class="ph">Qanday ulash</div><ol class="help"><li>Telegram\'da <b>@BotFather</b> ga yozing → <b>/newbot</b> → bot nomini bering. U <b>token</b> beradi.</li><li>Yaratilgan botingizga <b>/start</b> yozing.</li><li><b>@userinfobot</b> ga yozing - u sizning <b>Chat ID</b> raqamingizni beradi.</li><li>Ikkalasini shu yerga yozib, Saqlash va "Sinov xabari"ni bosing.</li></ol></div></div>';
 }

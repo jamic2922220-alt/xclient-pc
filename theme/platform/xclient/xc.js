@@ -112,6 +112,7 @@ function fmtTime(ts) {
 }
 function applyLang() {
   each(document.querySelectorAll('[data-t]'), function (el) { el.innerHTML = esc(T(el.getAttribute('data-t'))); });
+  if (typeof renderTop2 === 'function') renderTop2();
   $('srvSearch').setAttribute('placeholder', T('search'));
   renderLoginForm();
   renderAll();
@@ -177,7 +178,7 @@ function intro() {
   var r = document.querySelector('#stage .r1'), g = document.querySelector('#stage .glow'), x = document.querySelector('#stage .xl2'), t = document.querySelector('#stage .ttl');
   if (!r || !g || !x || !t) return;
   clearInterval(INTRO_TM);
-  var f = 0, N = 16;                                    // ~1.2 soniya, keyin to'xtaydi
+  var f = 0, N = lowFx() ? 1 : 16;                      // ~1.2 soniya, keyin to'xtaydi (yengil menyuda - darhol)
   INTRO_TM = setInterval(function () {
     f++;
     var p = f / N, e = 1 - Math.pow(1 - p, 3);          // ease-out
@@ -193,6 +194,9 @@ function intro() {
  * O'yin paytida (menyu yopiq), oyna ochiq bo'lsa yoki Tizim'da o'chirilsa - hech narsa qilmaydi.
  * Kompyuter sekin bo'lsa (taymer kechiksa) o'zi o'chadi. */
 var FX = { tm: 0, p: [], last: 0, slow: 0, off: 0, n: 0 };
+/* Yengil menyu: effektlar (uchqun, porlash, halqa, soyalar) o'chiq - ESC bosilganda o'yin FPS'i tushmasin */
+function lowFx() { return DB.fx === 0 || !!FX.off; }
+function fxClass() { var h = document.documentElement; h.className = (h.className || '').replace(/(^|\s)lowfx(?=\s|$)/g, '') + (lowFx() ? ' lowfx' : ''); }
 function fxVisible() {
   if (curModal || document.webkitHidden) return false;
   try { if (NC && NC.gameUi && NC.gameUi.shown === false) return false; } catch (e) {}
@@ -213,6 +217,7 @@ function sparks() {
   }
   clearInterval(FX.tm);
   var on = DB.fx !== 0 && !FX.off;
+  fxClass();
   each(FX.p, function (q) { q.el.style.display = on ? '' : 'none'; });
   if (!on) return;
   FX.last = +new Date();
@@ -229,7 +234,7 @@ function sparkTick() {
     s.left = Math.round(p.x) + 'px'; s.top = Math.round(p.y) + 'px'; s.opacity = (p.life / p.max).toFixed(2);
   });
   // kirmaganlarga akkaunt kartasi sekin "nafas oladi"
-  if (!ME && ++FX.n % 11 === 0) { var a = $('acct'); if (a) a.className = 'card acct' + (FX.n % 22 ? ' hi' : ''); }
+  if (!ME && !DB.acx && !DB.dnd && ++FX.n % 11 === 0) { var a = $('acct'); if (a) a.className = 'card acct' + (FX.n % 22 ? ' hi' : ''); }
 }
 function fxLoop() {
   intro(); sparks();
@@ -273,7 +278,7 @@ function loadOpts() {
     for (var k in r.o) if (r.o.hasOwnProperty(k) && OPTS.hasOwnProperty(k)) OPTS[k] = r.o[k];
     if (r.o.ver && !qparam('v')) { VERSION = r.o.ver; renderBar(); }
     if (r.o.cachemb != null && !qparam('c')) CACHE_MB = r.o.cachemb;
-    if (r.o.hw) HW = r.o.hw;
+    if (r.o.hw) { HW = r.o.hw; if (DB.fx == null && hwClass() === 'weak') { DB.fx = 0; persist(); sparks(); } }   // kuchsiz kompyuter - yengil menyu
     if (!DB.lang && /^(ru|uz|en)$/.test(r.o.ilang || '')) { DB.lang = r.o.ilang; setLang(DB.lang); persist(); }   // o'rnatishda tanlangan til
     stateSync();
     if (curModal === 'mdSettings' && (setTab === 'pro' || setTab === 'cont')) showSetTab(setTab);
@@ -286,7 +291,7 @@ var STATE_SYNCED = false, STATE_TM = 0;
 function stateData() {
   var h = [];
   each((DB.hist || []).slice(0, 50), function (x) { h.push({ ip: x.ip, name: x.name, map: x.map, t: x.t, d: x.d, k: x.k, x: x.x }); });
-  return { token: DB.forget ? '' : (DB.token || ''), fav: DB.fav.slice(0, 100), hist: h, binds: DB.binds || null, binds2: DB.binds2 || null, lang: DB.lang || '', wnSeen: DB.wnSeen || '' };
+  return { token: DB.forget ? '' : (DB.token || ''), fav: DB.fav.slice(0, 100), hist: h, binds: DB.binds || null, binds2: DB.binds2 || null, lang: DB.lang || '', wnSeen: DB.wnSeen || '', dnd: DB.dnd ? 1 : 0, acx: DB.acx ? 1 : 0, pxx: DB.pxx || 0 };
 }
 function statePush() {
   if (!PCID || !STATE_SYNCED) return;
@@ -303,6 +308,9 @@ function stateSync() {
     if (!DB.binds && st.binds) { DB.binds = st.binds; DB.binds2 = st.binds2 || null; loadBinds(); applyBinds(); ch = true; }
     if (!DB.lang && st.lang) { DB.lang = st.lang; setLang(st.lang); ch = true; }
     if (!DB.wnSeen && st.wnSeen) { DB.wnSeen = st.wnSeen; ch = true; }
+    if (DB.dnd == null && st.dnd) { DB.dnd = 1; ch = true; }
+    if (!DB.acx && st.acx) { DB.acx = 1; ch = true; }
+    if (!DB.pxx && st.pxx) { DB.pxx = st.pxx; ch = true; }
     STATE_SYNCED = true;
     if (!DB.token && st.token) {
       DB.token = st.token;
@@ -352,7 +360,16 @@ function api(a, params, cb) {
   };
   try { x.send(body); } catch (e) { done = true; clearTimeout(tm); if (cb) cb({ ok: false, err: 'net', msg: T('lg_neterr') }); }
 }
-function setMe(me) { var was = !!ME; ME = me; renderAll(); if (me && !was) { setTimeout(pollNotif, 3000); setTimeout(statBackfill, 5000); } }
+function setMe(me) { var was = !!ME; ME = me; renderAll(); if (me && !was) { setTimeout(pollNotif, 3000); setTimeout(statBackfill, 5000); setTimeout(claimDaily, 6000); } }
+/* kunlik kirish mukofoti: har kuni birinchi kirishda o'zi olinadi (ketma-ket kunlar - ko'proq XP, 7-kuni +200) */
+function claimDaily() {
+  if (!ME || LITE) return;
+  api('daily', {}, function (r) {
+    if (!r.ok || !r.got || !ME) return;
+    ME.xp = r.xp; ME.level = r.level; ME.lvlxp = r.lvlxp; renderBar();
+    if (!DB.dnd) { toast(T('dl_ok').replace('{n}', r.got).replace('{d}', r.streak), 7000); sfx('save'); }
+  });
+}
 /* jang statistikasi qo'shilgunga qadar o'ynalgan o'yinlar (shu kompyuter tarixidan) - akkauntga BIR MARTA qo'shiladi */
 function statBackfill() {
   if (!ME || ME.bf) return;
@@ -472,7 +489,7 @@ function histCompact(list, n) {                // tarix: akkauntga oxirgi 50 ta 
   each((list || []).slice(0, n), function (x) { if (x && x.ip) h.push({ ip: x.ip, name: x.name, map: x.map, t: x.t, d: x.d, k: x.k, x: x.x }); });
   return h;
 }
-function cloudData() { return { set: DB.set, binds: DB.binds, binds2: DB.binds2, fav: DB.fav, lang: DB.lang, hist: histCompact(DB.hist, 50), pw: DB.pw || [] }; }
+function cloudData() { return { set: DB.set, binds: DB.binds, binds2: DB.binds2, fav: DB.fav, lang: DB.lang, hist: histCompact(DB.hist, 50), pw: DB.pw || [], theme: DB.theme || '' }; }
 function mergeHist(add) {                      // ikki kompyuter tarixini birlashtirish: bir xil o'yin (ip + vaqt) bir marta
   var seen = {}, out = [];
   each((DB.hist || []).concat(add || []), function (x) { var k = x.ip + '|' + Math.round((x.t || 0) / 60000); if (!seen[k]) { seen[k] = 1; out.push(x); } });
@@ -499,6 +516,7 @@ function restoreCloud(c, silent) {
   if (c.lang) { DB.lang = c.lang; setLang(c.lang); }
   if (c.hist && c.hist.length) mergeHist(c.hist);
   if (c.pw && c.pw.length) DB.pw = c.pw;
+  if (c.theme && c.theme !== DB.theme) { DB.theme = c.theme; applyTheme(c.theme); }
   DB.cloudt = ME ? ME.cloudt : 0; persist();
   if (!silent) toast(T('a_restored'));
   renderAll();
@@ -549,7 +567,7 @@ function pingPresence() {
   var s = CONNECTED ? srv(CONNECTED) : null;
   api('ping', { server: CONNECTED || '', map: (s && s.map) || '' }, function (r) {
     if (r.ok && ME) { ME.xp = r.xp; ME.level = r.level; ME.lvlxp = r.lvlxp; renderBar(); }
-    if (r.ok && r.inv && r.inv.length) showInvite(r.inv[r.inv.length - 1]);
+    if (r.ok && r.inv && r.inv.length && !DB.dnd) showInvite(r.inv[r.inv.length - 1]);
     if (r.ok && r.msgs && r.msgs.length) showAdminMsgs(r.msgs);
   });
 }
@@ -908,7 +926,7 @@ function renderHome() {
       (f.server ? '<div class="go">' + esc(T('join')) + '</div>' : '') + '</div>';
   });
   $('frList').innerHTML = fr || '<div class="empty">' + (ME ? esc(T('no_fr')) : '<a data-act="login">' + esc(T('no_fr_login')) + '</a>') + '</div>';
-  $('acct').style.display = ME ? 'none' : ''; $('frCard').style.display = ME ? '' : 'none';
+  $('acct').style.display = ME || DB.acx ? 'none' : ''; var xp = $('xpromo'); if (xp) xp.style.display = DB.pxx && now() - DB.pxx < 7 * 864e5 ? 'none' : ''; $('frCard').style.display = ME ? '' : 'none';
   $('frCnt').innerHTML = on ? on : '';
   $('mFriends').innerHTML = on ? esc(T('fr_on').replace('{n}', on)) : '';
   renderBar();
@@ -1279,10 +1297,11 @@ function openFriends() {
   }
   each(FRIENDS, function (f) {
     var s = f.server ? srv(f.server) : null, un = f.unread ? '<b class="unb">' + f.unread + '</b>' : '';
+    var offd = f.seen ? Math.floor((now() / 1000 - f.seen) / 86400) : 0;   // necha kundan beri kirmagan
     h += '<div class="tr" style="cursor:default">' + frAv(f) +
       '<div class="nm">' + crown(f) + (f.clan ? '<span class="ctag">[' + esc(f.clan.tag) + ']</span> ' : '') + esc(f.name) + ' <span class="mut" style="font-weight:normal;font-size:12px">' + esc(T('lvl').replace('{n}', f.level)) + '</span></div>' +
-      '<div class="mt">' + (f.online ? '<span class="gm">●</span> ' + esc(f.server ? T('fr_in') + ((s && s.name) || f.server) : T('fr_menu')) : esc(T('fr_off'))) + '</div>' +
-      '<div class="fra"><a data-frcmp="' + esc(f.login) + '">VS</a><a class="ch" data-chat="' + esc(f.login) + '" data-chatn="' + esc(f.name) + '">' + esc(T('ch_btn')) + un + '</a>' +
+      '<div class="mt">' + (f.online ? '<span class="gm">●</span> ' + esc(f.server ? T('fr_in') + ((s && s.name) || f.server) : T('fr_menu')) : esc(offd >= 1 ? T('fr_offd').replace('{n}', offd) : T('fr_off'))) + '</div>' +
+      '<div class="fra">' + (!f.online && offd >= 3 ? '<a class="inv" data-mcall="' + esc(f.login) + '">' + esc(T('mc_btn')) + '</a>' : '') + '<a data-frcmp="' + esc(f.login) + '">VS</a><a class="ch" data-chat="' + esc(f.login) + '" data-chatn="' + esc(f.name) + '">' + esc(T('ch_btn')) + un + '</a>' +
       (CONNECTED && f.online && f.server !== CONNECTED ? '<a class="inv" data-inv="' + esc(f.login) + '">' + esc(T('iv_btn')) + '</a>' : '') +
       (f.server ? '<a class="ok" data-ip="' + esc(f.server) + '">' + esc(T('join')) + '</a>' : '<a data-frdel="' + esc(f.login) + '">' + esc(T('fr_del')) + '</a>') + '</div></div>';
   });
@@ -1372,12 +1391,16 @@ function pollNotif() {
     NOTIF_TM = setTimeout(pollNotif, 15000);
     if (!r.ok) return;
     NOTIF = { unread: r.unread || [], req: r.req || [] };
-    if (r.inv && r.inv.length) showInvite(r.inv[r.inv.length - 1]);   // do'st chaqirdi
+    if (r.inv && r.inv.length && !DB.dnd) showInvite(r.inv[r.inv.length - 1]);   // do'st chaqirdi
+    if (r.calls && r.calls.length) {                                   // "Sizni sog'indik" - uzoq kirmaganda do'stlar chaqirgan
+      var nm = []; each(r.calls, function (c) { if (nm.indexOf(c.from) < 0) nm.push(c.from); });
+      toast(T('mc_got').replace('{n}', nm.slice(0, 3).join(', ')), 9000);
+    }
     var changed = r.req.length !== FR_REQ.length;
-    each(NOTIF.req, function (q) { if (!NOTIF_SEEN['r:' + q.login]) { NOTIF_SEEN['r:' + q.login] = 1; toast(T('fr_newreq').replace('{n}', q.name), 6000); changed = true; } });
+    each(NOTIF.req, function (q) { if (!NOTIF_SEEN['r:' + q.login]) { NOTIF_SEEN['r:' + q.login] = 1; if (!DB.dnd) toast(T('fr_newreq').replace('{n}', q.name), 6000); changed = true; } });
     each(NOTIF.unread, function (u) {
       var k = 'm:' + u.login, inChat = CHAT && sideMode === 'chat' && curModal === 'mdSide' && CHAT.login.toLowerCase() === u.login;
-      if (!inChat && (NOTIF_SEEN[k] || 0) < u.n) { toast(T('fr_newmsg').replace('{n}', u.name).replace('{c}', u.n), 6000); changed = true; }
+      if (!inChat && (NOTIF_SEEN[k] || 0) < u.n) { if (!DB.dnd) toast(T('fr_newmsg').replace('{n}', u.name).replace('{c}', u.n), 6000); changed = true; }
       NOTIF_SEEN[k] = u.n;
     });
     if (changed) loadFriends(); else frBadge();
@@ -1767,7 +1790,7 @@ function sprayFrom(src) {
   im.src = src;
 }
 /* ---- mavzular: xc.css dagi qizil ranglarni boshqa rangga almashtiramiz ---- */
-var THEMES = [['red', 0], ['blue', 212], ['cyan', 188], ['green', 135], ['purple', 272], ['orange', 30]];
+var THEMES = [['red', 0], ['orange', 30], ['gold', 48], ['green', 135], ['cyan', 188], ['blue', 212], ['purple', 272], ['pink', 325]];
 function hsl2rgb(h, s, l) {
   function f(n) { var k = (n + h / 30) % 12, a = s * Math.min(l, 1 - l); return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); }
   return [f(0), f(8), f(4)];
@@ -1784,13 +1807,39 @@ function rgb2hsl(r, g, b) {
 }
 function themeColor(r, g, b, hue) {
   var c = rgb2hsl(r, g, b);
-  if (c[1] < 0.3 || c[2] < 0.08 || c[2] > 0.94 || (c[0] > 22 && c[0] < 338)) return null;   // faqat qizil tuslar
+  if (c[1] < (c[2] < 0.4 ? 0.12 : 0.3) || c[2] < 0.06 || c[2] > 0.94 || (c[0] > 22 && c[0] < 338)) return null;   // faqat qizil tuslar (to'q ramkalar ham)
   return hsl2rgb(hue, c[1], c[2]);
 }
 function hex2(n) { var h = n.toString(16); return h.length < 2 ? '0' + h : h; }
+/* rasmlar (logotiplar) ham tanlangan rangga bo'yaladi: canvas'da qizil piksellar tusini almashtiramiz */
+var IMG_TH = {};
+function recolorImages(hue) {
+  each(document.querySelectorAll('img'), function (im) {
+    var o = im.getAttribute('data-osrc') || im.getAttribute('src') || '';
+    if (!/(^|\/)(logo|logo_big|spray_logo)\.png$/.test(o)) return;
+    im.setAttribute('data-osrc', o);
+    if (hue <= 0) { if (im.getAttribute('src') !== o) im.src = o; return; }
+    var key = o + '|' + hue;
+    if (IMG_TH[key]) { im.src = IMG_TH[key]; return; }
+    var src = new Image();
+    src.onload = function () {
+      try {
+        var c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
+        var x = c.getContext('2d'); x.drawImage(src, 0, 0);
+        var d = x.getImageData(0, 0, c.width, c.height), px = d.data;
+        for (var i = 0; i < px.length; i += 4) { if (px[i + 3] < 8) continue; var t = themeColor(px[i], px[i + 1], px[i + 2], hue); if (t) { px[i] = t[0]; px[i + 1] = t[1]; px[i + 2] = t[2]; } }
+        x.putImageData(d, 0, 0); IMG_TH[key] = c.toDataURL('image/png');
+        each(document.querySelectorAll('img[data-osrc="' + o + '"]'), function (m) { m.src = IMG_TH[key]; });
+      } catch (e) {}
+    };
+    src.src = o;
+  });
+}
+function themeHue(id) { var hue = -1; each(THEMES, function (x) { if (x[0] === id) hue = x[1]; }); return hue; }
 function applyTheme(id) {
   var old = $('thcss'); if (old) old.parentNode.removeChild(old);
-  var hue = -1; each(THEMES, function (x) { if (x[0] === id) hue = x[1]; });
+  var hue = themeHue(id);
+  recolorImages(hue); renderTop2();
   if (hue <= 0) return;
   var x; try { x = new XMLHttpRequest(); x.open('GET', 'xc.css?th=' + now(), true); } catch (e) { return; }
   x.onreadystatechange = function () {
@@ -1807,6 +1856,46 @@ function applyTheme(id) {
     document.getElementsByTagName('head')[0].appendChild(st);
   };
   x.send(null);
+}
+function renderTop2() {
+  var b = $('thbar');
+  if (!b) { b = document.createElement('div'); b.id = 'thbar'; (document.getElementById('app') || document.body).appendChild(b); }
+  var h = '';
+  each(THEMES, function (x) { h += '<a class="' + ((DB.theme || 'red') === x[0] ? 'on' : '') + '" data-theme="' + x[0] + '" style="background:hsl(' + x[1] + ',85%,55%)" title="' + esc(T('th_' + x[0])) + '"></a>'; });
+  b.innerHTML = h;
+  var lg = $('bLang');
+  if (!lg) { var bar = $('bar'), v = $('bVer'); if (bar) { lg = document.createElement('div'); lg.id = 'bLang'; lg.className = 'lng'; lg.setAttribute('data-act', 'langmenu'); bar.insertBefore(lg, v); } }
+  var fb = $('bFb');
+  if (!fb) { var bar2 = $('bar'); if (bar2 && lg) { fb = document.createElement('div'); fb.id = 'bFb'; fb.className = 'lng fb'; fb.setAttribute('data-act', 'feedback'); bar2.insertBefore(fb, lg); } }
+  if (fb) fb.innerHTML = '\u270e ' + esc(T('fb_btn'));
+  if (lg) { var cur = null; each(LANGS, function (o) { if (o[0] === CUR_LANG) cur = o; }); lg.innerHTML = '<b style="background:' + (cur ? cur[3] : '#555') + '">' + esc(cur ? cur[1] : CUR_LANG.toUpperCase()) + '</b>' + esc(cur ? cur[2] : '') + ' \u25b4'; }
+}
+/* "Taklif / shikoyat": matn admin panelga (Fikrlar) va Telegram'ga boradi */
+var FBK = 'idea';
+function openFeedback() {
+  FBK = 'idea';
+  var h = '<div class="mut" style="margin-bottom:10px">' + esc(T('fb_sub')) + '</div><div class="seg">';
+  each(['idea', 'bug', 'complain'], function (k) { h += '<a class="' + (k === FBK ? 'on' : '') + '" data-fbk="' + k + '">' + esc(T('fb_' + k)) + '</a>'; });
+  h += '</div><textarea id="fbTx" maxlength="1500" style="width:100%;height:150px;margin:8px 0 12px;padding:10px;box-sizing:border-box;resize:none" placeholder="' + esc(T('fb_ph')) + '"></textarea>' +
+    '<a class="btn red" data-act="fbsend">' + esc(T('fb_send')) + '</a>';
+  openSide('feedback', T('fb_title'), h);
+  setTimeout(function () { try { $('fbTx').focus(); } catch (e) {} }, 50);
+}
+function sendFeedback() {
+  var x = $('fbTx'), v = x ? clean(x.value) : '';
+  if (v.length < 3) return toast(T('fb_short'));
+  api('feedback', { text: v, kind: FBK, nick: MYNAME || (S && S.name) || '', ver: VERSION }, function (r) {
+    if (!r.ok) return toast(r.msg || 'Xato');
+    closeModal(); toast(T('fb_ok'), 5000);
+  });
+}
+function langMenu() {
+  var p = $('lngpop');
+  if (p) { p.parentNode.removeChild(p); return; }
+  p = document.createElement('div'); p.id = 'lngpop';
+  var h = '';
+  each(LANGS, function (o) { h += '<a class="' + (CUR_LANG === o[0] ? 'on' : '') + '" data-lang="' + o[0] + '"><b style="background:' + o[3] + '">' + o[1] + '</b>' + esc(o[2]) + '</a>'; });
+  p.innerHTML = h; (document.getElementById('app') || document.body).appendChild(p);
 }
 function openSettings(tab) {
   detectXext();
@@ -2079,6 +2168,7 @@ var PANES = {
       '<div class="pane r"><div class="ph2">' + esc(T('sy_start')) + '</div>' +
       otg('start', 'sy_win') + otg('win', 'sy_windowed') +
       '<div class="fr w"><div class="lb">' + esc(T('sy_fx')) + '<small>' + esc(T('sy_fx2')) + '</small></div><div class="tg' + (DB.fx !== 0 && !FX.off ? ' on' : '') + '" data-dbtg="fx"><i></i></div></div>' +
+      '<div class="fr w"><div class="lb">' + esc(T('sy_dnd')) + '<small>' + esc(T('sy_dnd2')) + '</small></div><div class="tg' + (DB.dnd ? ' on' : '') + '" data-dbtg="dnd"><i></i></div></div>' +
       '<div class="ph2 m">' + esc(T('sy_srv')) + '</div>' +
       '<div class="rowb"><b>' + esc(T('sy_cache')) + '</b><small>' + esc(T('sy_cache2').replace('{n}', CACHE_MB)) + (OPTS.clean ? ' \u00b7 ' + esc(T('sy_pending')) : '') + '</small><a class="btn" data-act="cache">' + esc(T('sy_cacheb')) + '</a></div>' +
       '<div class="rowb"><b>' + esc(T('sy_files')) + '</b><small>' + esc(T('sy_files2')) + (OPTS.verify ? ' \u00b7 ' + esc(T('sy_pending')) : '') + '</small><a class="btn" data-act="verify">' + esc(T('sy_filesb')) + '</a></div>' +
@@ -2304,6 +2394,10 @@ function act(a) {
   if (a === 'weekall') return openServers('history');
   if (a === 'profile') return ME ? openSettings('account') : openLogin();
   if (a === 'login') return openLogin();
+  if (a === 'acctx') { DB.acx = 1; persist(); statePush(); renderAll(); return toast(T('ac_x'), 5000); }   // akkaunt kartasi bir marta yopiladi
+  if (a === 'promox') { DB.pxx = now(); persist(); statePush(); renderAll(); return; }
+  if (a === 'feedback') return openFeedback();
+  if (a === 'fbsend') return sendFeedback();
   if (a === 'settings') return openSettings();
   if (a === 'quit') return cmd('quit');
   if (a === 'close') return closeModal();
@@ -2422,6 +2516,7 @@ function act(a) {
   if (a === 'avdel') return api('avatar', { img: 'none' }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); });
   if (a === 'cloudsave') return cloudSave(true);
   if (a === 'stats') return ME ? openStats() : openLogin();
+  if (a === 'langmenu') return langMenu();
   if (a === 'qstop') { stopQueue(); return toast(T('q_stopped')); }
   if (a === 'ref') return openRef();
   if (a === 'refset') return ask(T('rf_ask'), function (c) { api('ref_set', { code: c }, function (r) { if (!r.ok) return toast(r.msg || 'Xato'); ME = r.me; toast(T('rf_ok'), 5000); openRef(); renderBar(); }); });
@@ -2497,6 +2592,7 @@ function netTest() {
 function loadWhatsNew() {
   api('whatsnew', {}, function (r) {
     if (!r.ok || !r.w || !r.w.id || DB.wnSeen === r.w.id || !r.w.items || !r.w.items.length) return;
+    if (DB.dnd) { DB.wnSeen = r.w.id; persist(); return; }               // "Bezovta qilmaslik"
     if (curModal) return setTimeout(loadWhatsNew, 30000);              // boshqa oyna ochiq - keyinroq
     var h = '<div class="wn">' + (r.w.ver ? '<div class="mut">' + esc(r.w.ver) + '</div>' : '') + '<ul>';
     each(r.w.items, function (x) { h += '<li>' + esc(x) + '</li>'; });
@@ -2558,7 +2654,7 @@ var SFX_QUIET = false, sfxLast = null, sfxT = 0;
 function sfx(n) {
   if (!S || S.uisnd === 0 || !hasApi()) return;
   var t = now();
-  if (n === 'hover' && t - sfxT < 45) return;
+  if (n === 'hover' && (DB.dnd || t - sfxT < 45)) return;
   sfxT = t; cmd('play xclient/' + n + '.wav');
 }
 function sfxTarget(el) {
@@ -2595,8 +2691,10 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-fracc'))) { frAdd(el.getAttribute('data-fracc')); return; }
   if ((el = closest(t, 'data-frdec'))) { api('friend_decline', { login: el.getAttribute('data-frdec') }, function () { loadFriends(); }); return; }
   if ((el = closest(t, 'data-chat'))) { openChat(el.getAttribute('data-chat'), el.getAttribute('data-chatn')); return; }
+  if ((el = closest(t, 'data-mcall'))) { var mc = el; api('miss_call', { to: el.getAttribute('data-mcall') }, function (r) { toast(r.ok ? T('mc_ok') : (r.msg || 'Xato'), 5000); if (r.ok && mc.parentNode) mc.parentNode.removeChild(mc); }); return; }
+  if ((el = closest(t, 'data-fbk'))) { FBK = el.getAttribute('data-fbk'); var sib = el.parentNode.childNodes; for (var fi = 0; fi < sib.length; fi++) sib[fi].className = sib[fi] === el ? 'on' : ''; return; }
   if ((el = closest(t, 'data-frdel'))) { api('friend_del', { login: el.getAttribute('data-frdel') }, function () { loadFriends(); }); return; }
-  if ((el = closest(t, 'data-dbtg'))) { var dk = el.getAttribute('data-dbtg'); var cur = dk === 'autosave' ? !!DB[dk] : DB[dk] !== 0; DB[dk] = cur ? 0 : 1; persist(); if (dk === 'fx') { FX.off = 0; FX.slow = 0; sparks(); } if (dk === 'autosave') $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local')); el.className = 'tg' + (DB[dk] ? ' on' : ''); return; }
+  if ((el = closest(t, 'data-dbtg'))) { var dk = el.getAttribute('data-dbtg'); var cur = dk === 'autosave' || dk === 'dnd' ? !!DB[dk] : DB[dk] !== 0; DB[dk] = cur ? 0 : 1; persist(); if (dk === 'fx') { FX.off = 0; FX.slow = 0; sparks(); } if (dk === 'autosave') $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local')); el.className = 'tg' + (DB[dk] ? ' on' : ''); return; }
   if ((el = closest(t, 'data-misclaim'))) {
     var mid = el.getAttribute('data-misclaim');
     api('mission_claim', { id: mid }, function (r) {
@@ -2611,7 +2709,7 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-tg'))) { var k = el.getAttribute('data-tg'); E[k] = E[k] ? 0 : 1; el.className = 'tg' + (E[k] ? ' on' : ''); if (setTab === 'hud') { drawXhair(); var cd = $('xCode'); if (cd) cd.value = xcode(E); } return; }
   if ((el = closest(t, 'data-avc'))) { api('avatar', { color: el.getAttribute('data-avc') }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); }); return; }
   if ((el = closest(t, 'data-annx'))) { DB.annHide = (DB.annHide || []).concat([el.getAttribute('data-annx')]).slice(-50); persist(); renderAnn(); return; }
-  if ((el = closest(t, 'data-theme'))) { DB.theme = el.getAttribute('data-theme'); persist(); cloudSave(); applyTheme(DB.theme); showSetTab('cont'); return; }
+  if ((el = closest(t, 'data-theme'))) { DB.theme = el.getAttribute('data-theme'); persist(); cloudSave(); applyTheme(DB.theme); if (curModal === 'mdSettings') showSetTab('cont'); return; }
   if ((el = closest(t, 'data-pack'))) {
     var pid = el.getAttribute('data-pack'), pl = (OPTS.packs ? OPTS.packs.split(',') : []), pix = pl.indexOf(pid);
     if (pix >= 0) pl.splice(pix, 1); else pl.push(pid);
@@ -2654,7 +2752,7 @@ document.onclick = function (e) {
     if (key === 'xs') E.xp = presetOf(E);
     showSetTab(setTab); return;
   }
-  if ((el = closest(t, 'data-lang'))) { DB.lang = el.getAttribute('data-lang'); persist(); cloudSave(); setLang(DB.lang); showSetTab('system'); return; }
+  if ((el = closest(t, 'data-lang'))) { DB.lang = el.getAttribute('data-lang'); persist(); cloudSave(); setLang(DB.lang); var lp = $('lngpop'); if (lp) lp.parentNode.removeChild(lp); if (curModal === 'mdSettings') showSetTab('system'); return; }
   if ((el = closest(t, 'data-tab'))) { if (curModal === 'mdServers') setSrvTab(el.getAttribute('data-tab')); else showSetTab(el.getAttribute('data-tab')); return; }
   if ((el = closest(t, 'data-flt'))) { var f = el.getAttribute('data-flt'); FLT[f] = !FLT[f]; renderServers(); return; }
   if ((el = closest(t, 'data-sort'))) { var so = el.getAttribute('data-sort'); if (SORT_USER && srvSort === so) srvDesc = !srvDesc; else { srvSort = so; srvDesc = so === 'pl'; } SORT_USER = true; renderServers(); return; }
@@ -2745,7 +2843,7 @@ step('beat', function () { if (DB.beat !== new Date().toDateString()) api('beat'
 step('loadAnn', function () { loadAnn(); });
 step('music', function () { setTimeout(musicSync, 3000); });
 step('whatsnew', function () { setTimeout(loadWhatsNew, 4000); });
-step('applyTheme', function () { if (DB.theme && DB.theme !== 'red') applyTheme(DB.theme); });
+step('applyTheme', function () { if (DB.theme && DB.theme !== 'red') applyTheme(DB.theme); else renderTop2(); });
 step('detectLang();', function () { detectLang(); });
 step('loadMaster();', function () { loadMaster(); });
 step('loadTop();', function () { loadTop(); });

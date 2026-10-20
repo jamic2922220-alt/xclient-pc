@@ -562,3 +562,28 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 #mdSettings .pane.r { overflow-y: auto; }
 .stg { margin: 12px 0 6px; font-size: 12px; font-weight: bold; letter-spacing: 1px; color: #ff9a39; text-transform: uppercase; }
 .rowb.sty small { display: block; padding-right: 120px; line-height: 17px; }
+
+/* tepada: rang (mavzu) tanlash */
+#thbar { position: absolute; top: 18px; left: 50%; width: 296px; margin-left: -148px; height: 30px; padding: 6px 10px; text-align: center; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.08); border-radius: 18px; z-index: 20; }
+#thbar a { display: inline-block; width: 18px; height: 18px; margin: 0 4px; border-radius: 9px; cursor: pointer; border: 2px solid rgba(0,0,0,.4); }
+#thbar a.on { border-color: #fff; }
+/* pastda: til */
+#bar .lng { float: right; margin-right: 22px; cursor: pointer; color: #e6dde2; }
+#bar .lng b { display: inline-block; margin-right: 6px; padding: 0 5px; line-height: 16px; font-size: 11px; color: #fff; border-radius: 3px; }
+#lngpop { position: absolute; right: 140px; bottom: 56px; width: 210px; padding: 6px; background: #1b1418; border: 1px solid rgba(255,255,255,.12); border-radius: 8px; z-index: 60; }
+#lngpop a { display: block; padding: 6px 10px; color: #e6dde2; cursor: pointer; border-radius: 4px; }
+#lngpop a:hover, #lngpop a.on { background: rgba(255,59,59,.18); }
+#lngpop a b { display: inline-block; width: 26px; margin-right: 8px; text-align: center; font-size: 11px; color: #fff; border-radius: 3px; }
+
+/* yengil menyu */
+.lowfx * { box-shadow: none !important; -webkit-box-shadow: none !important; text-shadow: none !important; }
+.lowfx #stage .glow, .lowfx #stage .ring, .lowfx #stage .shine, .lowfx .spk { display: none !important; }
+/* yopiladigan kartalar (akkaunt taklifi, X CLIENT reklamasi) */
+#acct .cx, #xpromo .cx { position: absolute; right: 8px; top: 6px; width: 26px; height: 26px; line-height: 24px; text-align: center; font-size: 20px; color: #bba; border-radius: 13px; cursor: pointer; z-index: 2; }
+#acct .cx:hover, #xpromo .cx:hover { color: #fff; background: rgba(255,255,255,.12); }
+#xpromo { position: relative; }
+#bar .lng.fb { color: #c9b7bd; }
+#bar .lng.fb:hover { color: #fff; }
+#bar .lng { margin-left: 22px; }
+#fbTx { background: #0f0d12; color: #eee; border: 1px solid #3a2e34; font: 15px Tahoma, Arial, sans-serif; }
+#fbTx:focus { border-color: #e5484d; outline: none; }
