@@ -233,6 +233,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash($l . ' ga xabar yuborildi - menyuni ochganda (1 daqiqa ichida) ko\'radi'); }
         go(pp('back') === 'online' ? '?p=online' : '?p=accounts&q=' . urlencode(g('q')));
     }
+    if ($act === 'gift') {                                // sovg'a: XP + xabar (bitta o'yinchiga yoki hammaga)
+        $xp = max(0, min(100000, (int)pp('xp'))); $txt = mb_substr(trim(pp('text')), 0, 300, 'UTF-8'); $who = strtolower($safeId(pp('login'))); $n = 0;
+        $msg = 'Sovg\'a: +' . $xp . ' XP' . ($txt !== '' ? ' - ' . $txt : '');
+        $list = pp('all') === '1' ? array_map(function ($f) { return basename($f, '.php'); }, (array)glob(XC_DIR . '/users/*.php')) : array($who);
+        foreach ($list as $l) { $u = rd('users/' . $l, null); if (!$u || $xp <= 0) continue;
+            $u['xp'] = (int)$u['xp'] + $xp; if (empty($u['msgs'])) $u['msgs'] = array(); $u['msgs'][] = array('t' => time(), 'text' => $msg); $u['msgs'] = array_slice($u['msgs'], -10); wr('users/' . $l, $u); $n++; }
+        flash($n . ' ta o\'yinchiga +' . $xp . ' XP sovg\'a yuborildi'); go(pp('all') === '1' ? '?p=ann' : '?p=accounts&q=' . urlencode(g('q')));
+    }
+    if ($act === 'music_save') { $CFG['music'] = mb_substr((string)pp('music'), 0, 3000, 'UTF-8'); cfg_save(); flash('Menyu musiqalari saqlandi'); go('?p=settings'); }
+    if ($act === 'jserr_clear') { wr('jserr', array()); go('?p=reports'); }
     if ($act === 'wn_save') {
         $items = array(); foreach (preg_split('/\r?\n/', (string)pp('items')) as $x) { $x = trim($x); if ($x !== '') $items[] = mb_substr($x, 0, 300, 'UTF-8'); }
         wr('whatsnew', $items ? array('id' => substr(rnd(4), 0, 8), 'title' => mb_substr(pp('title'), 0, 80, 'UTF-8'), 'ver' => mb_substr(pp('ver'), 0, 40, 'UTF-8'), 'items' => array_slice($items, 0, 20), 't' => time()) : null);
@@ -257,6 +267,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($act === 'tg_save') {
         $CFG['tg_token'] = preg_replace('/[^A-Za-z0-9:_\-]/', '', pp('token')); $CFG['tg_chat'] = preg_replace('/[^0-9\-@A-Za-z_]/', '', pp('chat'));
         $CFG['tg_ev'] = array(); foreach (array('install', 'account', 'report', 'daily', 'feedback') as $e) $CFG['tg_ev'][$e] = pp('ev_' . $e) ? 1 : 0;
+        $CFG['tg_bot'] = pp('tg_bot') ? 1 : 0;
+        if ($CFG['tg_bot'] && $CFG['tg_token']) { $me = json_decode((string)@file_get_contents('https://api.telegram.org/bot' . $CFG['tg_token'] . '/getMe', false, stream_context_create(array('http' => array('timeout' => 5)))), true);
+            if (!empty($me['result']['username'])) $CFG['tg_botname'] = $me['result']['username'];
+            @file_get_contents('https://api.telegram.org/bot' . $CFG['tg_token'] . '/deleteWebhook', false, stream_context_create(array('http' => array('timeout' => 5)))); }
         cfg_save(); flash('Telegram sozlamalari saqlandi'); go('?p=tg');
     }
     if ($act === 'tg_test') {
@@ -331,7 +345,7 @@ if ($P === 'installs' && g('csv')) {
 
 /* ---------- sahifa ---------- */
 $NAV = array('dash' => array('Infopanel', '⌂'), 'online' => array('Onlayn', '●'), 'players' => array("O'yinchilar", '☺'), 'installs' => array("O'rnatishlar", '↓'), 'accounts' => array('Akkauntlar', '✉'),
-    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'stats' => array('Statistika', '★'), 'churn' => array('Ketganlar', '↘'), 'fb' => array('Fikrlar', '✎'), 'promo' => array('Reklama', '$'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
+    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'stats' => array('Statistika', '★'), 'churn' => array('Ketganlar', '↘'), 'fb' => array('Fikrlar', '✎'), 'clicks' => array('Tugmalar', '⊙'), 'promo' => array('Reklama', '$'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
 $devCount = count((array)glob(XC_DIR . '/dev/*.php')); $ncCount = count((array)glob(XC_DIR . '/nc/*.php')); $accCount = count((array)glob(XC_DIR . '/users/*.php')); $repCount = count((array)glob(XC_DIR . '/reports/*.php'));
 $fbCount = count((array)glob(XC_DIR . '/feedback/*.php'));
 $badge = array('players' => $devCount + $ncCount, 'installs' => $devCount, 'accounts' => $accCount, 'reports' => $repCount, 'fb' => $fbCount);
@@ -522,7 +536,9 @@ if ($P === 'online') {
 
 /* ===== E'LONLAR ===== */
 if ($P === 'ann') {
-    echo '<h1>E\'lonlar</h1><div class="panel"><div class="ph">Yangi e\'lon</div><form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="ann_add">'
+    echo '<h1>E\'lonlar</h1><div class="panel"><div class="ph">Hammaga sovg\'a (XP)</div><form method="post" class="frm" onsubmit="return confirm(\'Barcha akkauntlarga yuborilsinmi?\')">' . csrf_in() . '<input type="hidden" name="act" value="gift"><input type="hidden" name="all" value="1">'
+        . '<div class="row"><input name="xp" type="number" min="1" max="100000" value="500" placeholder="XP"><input name="text" maxlength="300" placeholder="Izoh: masalan, Navro\'z bayrami bilan!"></div><button class="btn red">Hammaga yuborish</button> <span class="mut small">Har o\'yinchi menyuni ochganda "Sovg\'a: +500 XP" xabarini ko\'radi</span></form></div>'
+        . '<div class="panel"><div class="ph">Yangi e\'lon</div><form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="ann_add">'
         . '<textarea name="text" maxlength="400" placeholder="Masalan: Bugun 20:00 da UZB ARENA serverida turnir! Sovrin - 1 oy VIP"></textarea>'
         . '<div class="row"><select name="type"><option value="info">Ma\'lumot (ko\'k)</option><option value="promo">Aksiya (qizil)</option><option value="warn">Ogohlantirish (sariq)</option></select>'
         . '<select name="days"><option value="1">1 kun</option><option value="3">3 kun</option><option value="7" selected>7 kun</option><option value="30">30 kun</option><option value="0">Muddatsiz</option></select><button class="btn red">E\'lon qilish</button></div>'
@@ -541,7 +557,12 @@ if ($P === 'reports' || $P === 'report') {
         if ($r) echo '<h1>Xatolik haqida xabar</h1><div class="panel"><div class="kv"><span>Kimdan</span><b>' . h($r['who']) . '</b></div><div class="kv"><span>Versiya</span><b>' . h($r['ver']) . '</b></div><div class="kv"><span>Sana</span><b>' . dt($r['t']) . '</b></div></div><div class="panel"><div class="ph">Konsol logi</div><pre>' . h($r['log']) . '</pre></div>';
     } else {
         $files = (array)glob(XC_DIR . '/reports/*.php'); rsort($files);
-        echo '<h1>Xatolar</h1><div class="panel"><table class="list"><tr><th>Sana</th><th>Kimdan</th><th>Versiya</th><th>Hajm</th><th></th></tr>';
+        $je = rd('jserr', array()); uasort($je, function ($a, $b) { return $b['last'] - $a['last']; });
+        echo '<h1>Xatolar</h1><div class="panel"><div class="ph">Menyu xatolari (avtomatik yig\'iladi) <form method="post" class="inl r">' . csrf_in() . '<input type="hidden" name="act" value="jserr_clear"><button class="lnk">Tozalash</button></form></div><table class="list"><tr><th>Xato</th><th>Joyi</th><th>Necha marta</th><th>Versiya</th><th>Oxirgi</th></tr>';
+        foreach (array_slice($je, 0, 50, true) as $e) echo '<tr><td>' . h($e['msg']) . '</td><td class="mono mut">' . h($e['src']) . ':' . (int)$e['line'] . '</td><td><b>' . (int)$e['n'] . '</b></td><td>' . h($e['ver']) . '</td><td>' . ago($e['last']) . '</td></tr>';
+        if (!$je) echo '<tr><td colspan="5" class="mut">Xato yo\'q ✓</td></tr>';
+        echo '</table></div>';
+        echo '<div class="panel"><div class="ph">O\'yinchilar yuborgan konsol loglari</div><table class="list"><tr><th>Sana</th><th>Kimdan</th><th>Versiya</th><th>Hajm</th><th></th></tr>';
         foreach (array_slice($files, 0, 200) as $f) { $id = basename($f, '.php'); $r = rd('reports/' . $id, array());
             echo '<tr><td>' . dt(isset($r['t']) ? $r['t'] : 0) . '</td><td>' . h(isset($r['who']) ? $r['who'] : '') . '</td><td>' . h(isset($r['ver']) ? $r['ver'] : '') . '</td><td>' . size_h(filesize($f)) . '</td>'
                 . '<td class="r"><a class="lnk" href="?p=report&id=' . urlencode($id) . '">◉ Ko\'rish</a> <form method="post" class="inl">' . csrf_in() . '<input type="hidden" name="act" value="rep_del"><input type="hidden" name="id" value="' . h($id) . '"><button class="lnk red">O\'chirish</button></form></td></tr>'; }
@@ -688,6 +709,18 @@ if ($P === 'churn') {
     echo '</table></div>';
 }
 
+/* ===== TUGMALAR: menyuda nima ko'p bosiladi (7 kun) ===== */
+if ($P === 'clicks') {
+    $days = max(1, min(30, (int)g('d', '7'))); $sum = array();
+    for ($i = 0; $i < $days; $i++) foreach (rd('clicks/' . date('Y-m-d', strtotime("-$i day")), array()) as $k => $n) $sum[$k] = (isset($sum[$k]) ? $sum[$k] : 0) + $n;
+    arsort($sum); $max = max(1, $sum ? max($sum) : 1);
+    $nm = array('quick' => "Tezkor o'yin", 'servers' => 'Serverlar', 'friends' => "Do'stlar", 'profile' => 'Profil', 'missions' => 'Vazifalar', 'settings' => 'Sozlamalar', 'quit' => 'Chiqish', 'stats' => 'Statistika', 'clan' => 'Klan', 'feedback' => 'Taklif/shikoyat', 'langmenu' => 'Til', 'promo' => 'X CLIENT reklama', 'login' => 'Kirish', 'weekall' => 'Hafta qotillari', 'connect' => 'Serverga kirish');
+    echo '<h1>Tugmalar</h1><div class="panel"><div class="ph">Oxirgi ' . $days . ' kunda nima necha marta bosildi <span class="seg r"><a href="?p=clicks&d=1"' . ($days === 1 ? ' class="on"' : '') . '>Bugun</a><a href="?p=clicks&d=7"' . ($days === 7 ? ' class="on"' : '') . '>7 kun</a><a href="?p=clicks&d=30"' . ($days === 30 ? ' class="on"' : '') . '>30 kun</a></span></div><table class="list">';
+    foreach ($sum as $k => $n) { $p2 = explode(':', $k, 2); $kk = isset($p2[1]) ? $p2[1] : $p2[0]; $lab = isset($nm[$kk]) ? $nm[$kk] : $kk; echo '<tr><td style="width:260px">' . h($lab) . ' <span class="mut small mono">' . h($k) . '</span></td><td><div style="height:14px;width:' . round(100 * $n / $max) . '%;background:#c84bdc;border-radius:3px"></div></td><td class="r"><b>' . $n . '</b></td></tr>'; }
+    if (!$sum) echo '<tr><td class="mut">Hali ma\'lumot yo\'q - yangi menyu o\'yinchilarda ochilgach yig\'iladi</td></tr>';
+    echo '</table><div class="mut small" style="margin-top:8px">Pastdagilar kam bosiladi - ularni ko\'zga ko\'rinarliroq qilish yoki olib tashlash mumkin.</div></div>';
+}
+
 /* ===== FIKRLAR: menyudagi "Taklif / shikoyat" ===== */
 if ($P === 'fb') {
     $l = array(); foreach ((array)glob(XC_DIR . '/feedback/*.php') as $f) { $id = basename($f, '.php'); $o = rd('feedback/' . $id, null); if ($o) { $o['id'] = $id; $l[] = $o; } }
@@ -707,6 +740,7 @@ if ($P === 'tg') {
         . '<label>Bot token</label><input name="token" value="' . h(isset($CFG['tg_token']) ? $CFG['tg_token'] : '') . '" placeholder="123456:ABC-DEF...">'
         . '<label>Chat ID (siz yoki guruh)</label><input name="chat" value="' . h(isset($CFG['tg_chat']) ? $CFG['tg_chat'] : '') . '" placeholder="123456789 yoki -100...">'
         . $ck('install', 'Yangi X CLIENT o\'rnatish') . $ck('account', 'Yangi akkaunt') . $ck('report', 'Xatolik haqida xabar') . $ck('daily', 'Kunlik hisobot (har kuni 9:00 dan keyin) va hafta chempioni') . $ck('feedback', 'Menyudan taklif / shikoyat')
+        . '<div class="ph" style="margin-top:14px">O\'yinchilar uchun bot</div><label class="chk"><input type="checkbox" name="tg_bot" value="1"' . (!empty($CFG['tg_bot']) ? ' checked' : '') . '> O\'yinchilar shu botga akkauntini ulaydi: /me, /friends, /top, /online' . (!empty($CFG['tg_botname']) ? ' (@' . h($CFG['tg_botname']) . ')' : '') . '</label>'
         . '<button class="btn red">Saqlash</button></form><form method="post" style="margin-top:10px">' . csrf_in() . '<input type="hidden" name="act" value="tg_test"><button class="btn">Sinov xabarini yuborish</button></form></div>'
         . '<div class="panel"><div class="ph">Qanday ulash</div><ol class="help"><li>Telegram\'da <b>@BotFather</b> ga yozing → <b>/newbot</b> → bot nomini bering. U <b>token</b> beradi.</li><li>Yaratilgan botingizga <b>/start</b> yozing.</li><li><b>@userinfobot</b> ga yozing - u sizning <b>Chat ID</b> raqamingizni beradi.</li><li>Ikkalasini shu yerga yozib, Saqlash va "Sinov xabari"ni bosing.</li></ol></div></div>';
 }
@@ -730,6 +764,8 @@ if ($P === 'settings') {
         . '<div class="panel"><div class="ph">nDirect API (NextClient statistikasi)</div><div class="mut small" style="margin-bottom:10px">nextcs.boost-top.com/admin → API ключи → kalitni nusxalab shu yerga qo\'ying. Shunda Infopanel NextClient o\'yinchilari va o\'rnatishlarini nDirect bilan bir xil ko\'rsatadi. Kalit faqat serveringizda saqlanadi.</div>'
         . '<form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="nd_save"><input type="password" name="key" autocomplete="off" placeholder="' . (empty($CFG['nd_key']) ? 'X-API-Key' : 'saqlangan ✓ (…' . h(substr($CFG['nd_key'], -4)) . ') - almashtirish uchun yangisini yozing, o\'chirish uchun bo\'sh qoldiring') . '">'
         . '<button class="btn red">Saqlash va tekshirish</button></form></div>'
+        . '<div class="panel"><div class="ph">Menyu musiqalari</div><div class="mut small" style="margin-bottom:8px">O\'yinchilar Sozlamalar > Ovoz bo\'limida shulardan birini tanlaydi. Har qatorga: <b>Nomi | media/fayl.mp3</b>. MP3 fayllarni "Paketlar" orqali o\'yin papkasiga (cstrike/media/...) yuboring. "Asl musiqa" har doim bor.</div>'
+        . '<form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="music_save"><textarea name="music" rows="5" placeholder="Jangovar | media/xc_battle.mp3&#10;Sokin | media/xc_calm.mp3">' . h(isset($CFG['music']) ? $CFG['music'] : '') . '</textarea><button class="btn red">Saqlash</button></form></div>'
         . '<div class="panel"><div class="ph">Zaxira nusxa</div><div class="mut small" style="margin-bottom:10px">Akkauntlar, XP, do\'stlar, statistika, e\'lonlar, sozlamalar - hammasi bitta faylga yuklab olinadi. Haftada bir marta olib, kompyuteringizda saqlang. Tiklash: faylni ochib, ichidagi xc_data papkasini FastPanel orqali mmb ga qayta yuklang.</div>'
         . '<form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="backup"><label class="chk"><input type="checkbox" name="shots" value="1"> Skrinshotlarni ham qo\'shish (katta bo\'lishi mumkin)</label>'
         . '<button class="btn red">⬇ Zaxirani yuklab olish</button> <span class="mut small">Oxirgi: ' . (empty($CFG['backup_t']) ? 'hali olinmagan' : dt($CFG['backup_t'])) . '</span></form></div>';
@@ -740,7 +776,9 @@ foot();
 /* ===================================================================== yordamchi chizish funksiyalari */
 function msg_form($login, $back) {
     return '<form method="post" class="inl msgf" onsubmit="var t=prompt(\'' . h($login) . ' ga xabar (menyusida chiqadi):\');if(!t)return false;this.text.value=t;">' . csrf_in()
-        . '<input type="hidden" name="act" value="acc_msg"><input type="hidden" name="login" value="' . h($login) . '"><input type="hidden" name="back" value="' . $back . '"><input type="hidden" name="text" value=""><button class="lnk">✉ Xabar</button></form>';
+        . '<input type="hidden" name="act" value="acc_msg"><input type="hidden" name="login" value="' . h($login) . '"><input type="hidden" name="back" value="' . $back . '"><input type="hidden" name="text" value=""><button class="lnk">✉ Xabar</button></form>'
+        . '<form method="post" class="inl msgf" onsubmit="var x=prompt(\'' . h($login) . ' ga necha XP sovg\\\'a qilasiz?\',\'500\');if(!x)return false;this.xp.value=x;this.text.value=prompt(\'Izoh (ixtiyoriy):\')||\'\';">' . csrf_in()
+        . '<input type="hidden" name="act" value="gift"><input type="hidden" name="login" value="' . h($login) . '"><input type="hidden" name="xp" value=""><input type="hidden" name="text" value=""><button class="lnk">★ Sovg\'a</button></form>';
 }
 function pager($total) {
     $pages = max(1, (int)ceil($total / PER_PAGE)); $cur = max(1, min($pages, (int)g('pg', 1)));

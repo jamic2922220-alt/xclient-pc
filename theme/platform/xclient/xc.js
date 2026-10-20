@@ -69,9 +69,11 @@ function cmd(c) {
   return false;
 }
 function toast(msg, ms) {
-  var t = $('toast'); t.innerHTML = esc(msg); t.style.display = 'block';
+  var t = $('toast'); t.innerHTML = esc(msg); t.style.display = 'block'; t.removeAttribute('data-ip'); t.removeAttribute('data-frprof'); t.className = '';
   clearTimeout(toast.tm); toast.tm = setTimeout(function () { t.style.display = 'none'; }, ms || 2800);
 }
+/* bosiladigan xabar: do'st serverga kirdi -> bosilsa o'sha serverga ulanadi */
+function toastAct(msg, attr, val, ms) { toast(msg, ms || 8000); var t = $('toast'); t.setAttribute(attr, val); t.className = 'act'; }
 function normIp(ip) {
   ip = String(ip || '').replace(/\s+/g, '');
   if (!/^[\w.\-]+(:\d{1,5})?$/.test(ip)) return '';
@@ -220,7 +222,33 @@ function fxVisible() {
   try { if (NC && NC.gameUi && NC.gameUi.shown === false) return false; } catch (e) {}
   return true;
 }
+/* menyu foni (rang) va zarrachalar: uchqun / qor / yo'q. Bayramlarda o'zi bezanadi (Yangi yil - qor, Navro'z, Mustaqillik) */
+var BGS = { def: '', blue: '#0d2a4a 0%, #0b1526 30%, #080c16 60%, #05070c 100%', purple: '#3a0d4a 0%, #1f0b2a 30%, #110a18 60%, #08060c 100%',
+  green: '#0d3a1e 0%, #0b1f12 30%, #0a120d 60%, #060a07 100%', dark: '#1a1a1f 0%, #111114 30%, #0b0b0d 60%, #060607 100%', sand: '#4a3410 0%, #2a1e0b 30%, #16100a 60%, #0a0806 100%' };
+function holiday() {
+  if (DB.hol === 0) return null;
+  var d = new Date(), md = (d.getMonth() + 1) * 100 + d.getDate();
+  if (md >= 1220 || md <= 107) return { id: 'ny', ptc: 'snow' };
+  if (md >= 318 && md <= 325) return { id: 'nav', ptc: 'nav' };
+  if (md >= 828 && md <= 903) return { id: 'ind', ptc: 'ind' };
+  return null;
+}
+function ptcMode() { var h = holiday(); return DB.ptc === 'none' ? 'none' : (h && DB.ptc !== 'spark' ? h.ptc : (DB.ptc || 'spark')); }
+function applyBg() {
+  var b = $('bg'); if (!b) return;
+  var g = BGS[DB.bgs || 'def'];
+  b.style.background = g && !isDay() ? '-webkit-radial-gradient(55% 45%, circle cover, ' + g + ')' : '';
+  var hb = $('holBar'), h = holiday();
+  if (h) { if (!hb) { hb = document.createElement('div'); hb.id = 'holBar'; (document.getElementById('app') || document.body).appendChild(hb); } hb.className = 'hol ' + h.id; hb.innerHTML = esc(T('hd_' + h.id)); hb.style.display = ''; }
+  else if (hb) hb.style.display = 'none';
+  var m = ptcMode(), st = $('stage'); if (st) st.className = 'pt-' + m;
+  if (FX.mode !== m) { FX.mode = m; each(FX.p, function (p) { sparkReset(p, true); }); sparks(); }
+}
 function sparkReset(p, first) {
+  if (FX.mode === 'snow') {
+    p.x = Math.random() * 600; p.y = first ? Math.random() * 600 : -10; p.vx = (Math.random() - 0.5) * 0.6; p.vy = 1 + Math.random() * 1.6;
+    p.max = 400; p.life = 400; return;
+  }
   p.x = 150 + Math.random() * 300; p.y = first ? 200 + Math.random() * 380 : 470 + Math.random() * 110;
   p.vx = (Math.random() - 0.5) * 2.4; p.vy = -(1.6 + Math.random() * 3.2);
   p.max = 22 + Math.floor(Math.random() * 26); p.life = first ? Math.floor(Math.random() * p.max) : p.max;
@@ -234,7 +262,7 @@ function sparks() {
     }
   }
   clearInterval(FX.tm);
-  var on = DB.fx !== 0 && !FX.off;
+  var on = DB.fx !== 0 && !FX.off && ptcMode() !== 'none';
   fxClass();
   each(FX.p, function (q) { q.el.style.display = on ? '' : 'none'; });
   if (!on) return;
@@ -247,9 +275,10 @@ function sparkTick() {
   if (dt > 260 && dt < 3000) { if (++FX.slow >= 12) { FX.off = 1; sparks(); return; } } else if (FX.slow > 0 && dt < 140) FX.slow -= 0.25;
   each(FX.p, function (p) {
     p.life--; if (p.life <= 0) sparkReset(p);
-    p.x += p.vx; p.y += p.vy; p.vx += (Math.random() - 0.5) * 0.4;
+    p.x += p.vx; p.y += p.vy; p.vx += (Math.random() - 0.5) * (FX.mode === 'snow' ? 0.1 : 0.4);
+    if (FX.mode === 'snow' && p.y > 620) sparkReset(p);
     var s = p.el.style;
-    s.left = Math.round(p.x) + 'px'; s.top = Math.round(p.y) + 'px'; s.opacity = (p.life / p.max).toFixed(2);
+    s.left = Math.round(p.x) + 'px'; s.top = Math.round(p.y) + 'px'; s.opacity = FX.mode === 'snow' ? '0.85' : (p.life / p.max).toFixed(2);
   });
   // kirmaganlarga akkaunt kartasi sekin "nafas oladi"
   if (!ME && !DB.acx && !DB.dnd && ++FX.n % 11 === 0) { var a = $('acct'); if (a) a.className = 'card acct' + (FX.n % 22 ? ' hi' : ''); }
@@ -385,6 +414,7 @@ function claimDaily() {
   api('daily', {}, function (r) {
     if (!r.ok || !r.got || !ME) return;
     ME.xp = r.xp; ME.level = r.level; ME.lvlxp = r.lvlxp; renderBar();
+    if (r.newach && r.newach.length) { ME.ach = (ME.ach || []).concat(r.newach); setTimeout(function () { achToast(r.newach); }, 7500); }
     if (!DB.dnd) { toast(T('dl_ok').replace('{n}', r.got).replace('{d}', r.streak), 7000); sfx('save'); }
   });
 }
@@ -433,6 +463,7 @@ function openStats() {
     '<div class="ph2 m">' + esc(T('ks_wpn')) + '</div>' + (w || '<div class="mut">' + esc(T('ks_none')) + '</div>') +
     '<div class="ph2 m">' + esc(T('ks_srv')) + '</div>' + (sv || '<div class="mut">' + esc(T('ks_none')) + '</div>') +
     '<div class="ph2 m">' + esc(T('ks_top')) + '</div><div id="topkList" class="mut">...</div><small class="mut">' + esc(T('ks_note')) + '</small>';
+  h = statBox(st) + wkChart(ME && ME.wkst) + h.slice(statBox(st).length) + myGames();
   openSide('stats', T('ks_title'), h);
   api('topk', {}, function (r) {
     var el = $('topkList'); if (!el) return;
@@ -440,6 +471,28 @@ function openStats() {
     each((r.ok && r.top) || [], function (x, i) { t += '<div class="kv"><span>' + (i + 1) + '. ' + esc(x.name) + (x.vip ? ' <em class="vipb">VIP</em>' : '') + '</span><b>' + x.k + ' kill · K/D ' + x.kd + '</b></div>'; });
     el.innerHTML = t || esc(T('ks_none')); el.className = '';
   });
+}
+/* haftalar bo'yicha grafik: ustun - kill, ostida K/D (oxirgi 12 hafta) */
+function wkChart(ws) {
+  var keys = []; for (var k in ws || {}) if (ws.hasOwnProperty(k)) keys.push(k);
+  keys.sort(); if (!keys.length) return '';
+  var mx = 1; each(keys, function (k) { mx = Math.max(mx, ws[k].k); });
+  var h = '<div class="ph2 m">' + esc(T('wk_title')) + '</div><div class="wkc">';
+  each(keys, function (k, i) {
+    var x = ws[k], kd = x.d ? (x.k / x.d).toFixed(2) : String(x.k), prev = i ? ws[keys[i - 1]] : null, pk = prev ? (prev.d ? prev.k / prev.d : prev.k) : null, ck = x.d ? x.k / x.d : x.k;
+    h += '<div class="wkb"><em>' + x.k + '</em><i style="height:' + Math.max(3, Math.round(110 * x.k / mx)) + 'px"></i><b class="' + (pk === null ? '' : ck >= pk ? 'up' : 'dn') + '">' + kd + '</b><small>' + esc(k.replace(/^\d{4}-/, '')) + '-' + esc(T('wk_w')) + '</small></div>';
+  });
+  return h + '</div><small class="mut">' + esc(T('wk_note')) + '</small>';
+}
+/* oxirgi o'yinlar: har o'yin - sana, server, xarita, vaqt, kill/o'lim */
+function myGames() {
+  var l = (DB.hist || []).slice(0, 30); if (!l.length) return '';
+  var h = '<div class="ph2 m">' + esc(T('mg_title')) + '</div><table class="mgt"><tr><th>' + esc(T('mg_date')) + '</th><th>' + esc(T('mg_srv')) + '</th><th>' + esc(T('mg_map')) + '</th><th>' + esc(T('mg_time')) + '</th><th>K</th><th>D</th><th>K/D</th></tr>';
+  each(l, function (x) {
+    var k = x.k || 0, d = x.x || 0;
+    h += '<tr><td>' + esc(fmtTime(x.t)) + '</td><td data-ip="' + esc(x.ip) + '" class="lnk">' + esc(x.name || x.ip) + '</td><td>' + esc(x.map || '\u2014') + '</td><td>' + esc(fmtHours(x.d || 0)) + '</td><td><b>' + k + '</b></td><td>' + d + '</td><td class="' + (d && k / d >= 1 ? 'gr' : '') + '">' + (d ? (k / d).toFixed(2) : k) + '</td></tr>';
+  });
+  return h + '</table>';
 }
 /* ---- do'st bilan solishtirish ---- */
 function openCompare(login) {
@@ -507,7 +560,7 @@ function histCompact(list, n) {                // tarix: akkauntga oxirgi 50 ta 
   each((list || []).slice(0, n), function (x) { if (x && x.ip) h.push({ ip: x.ip, name: x.name, map: x.map, t: x.t, d: x.d, k: x.k, x: x.x }); });
   return h;
 }
-function cloudData() { return { set: DB.set, binds: DB.binds, binds2: DB.binds2, fav: DB.fav, lang: DB.lang, hist: histCompact(DB.hist, 50), pw: DB.pw || [], theme: DB.theme || '', day: DB.day || 0 }; }
+function cloudData() { return { set: DB.set, binds: DB.binds, binds2: DB.binds2, fav: DB.fav, lang: DB.lang, hist: histCompact(DB.hist, 50), pw: DB.pw || [], theme: DB.theme || '', day: DB.day || 0, look: { bgs: DB.bgs || '', ptc: DB.ptc || '', fs: DB.fs || 1, hol: DB.hol === 0 ? 0 : 1, mtrack: DB.mtrack || '' } }; }
 function mergeHist(add) {                      // ikki kompyuter tarixini birlashtirish: bir xil o'yin (ip + vaqt) bir marta
   var seen = {}, out = [];
   each((DB.hist || []).concat(add || []), function (x) { var k = x.ip + '|' + Math.round((x.t || 0) / 60000); if (!seen[k]) { seen[k] = 1; out.push(x); } });
@@ -534,6 +587,7 @@ function restoreCloud(c, silent) {
   if (c.lang) { DB.lang = c.lang; setLang(c.lang); }
   if (c.hist && c.hist.length) mergeHist(c.hist);
   if (c.pw && c.pw.length) DB.pw = c.pw;
+  if (c.look) { DB.bgs = c.look.bgs; DB.ptc = c.look.ptc; DB.fs = c.look.fs || 1; DB.hol = c.look.hol; DB.mtrack = c.look.mtrack; applyBg(); }
   if ((c.theme && c.theme !== DB.theme) || (c.day != null && c.day !== (DB.day || 0))) { if (c.theme) DB.theme = c.theme; if (c.day != null) DB.day = c.day; applyTheme(DB.theme || 'red'); }
   DB.cloudt = ME ? ME.cloudt : 0; persist();
   if (!silent) toast(T('a_restored'));
@@ -547,8 +601,8 @@ function loadFriends() {
     each(FRIENDS, function (f) { before[f.login] = f.server; });
     FRIENDS = r.friends || []; FR_REQ = r.req || []; FR_SENT = r.sent || [];
     each(FRIENDS, function (f) {                                   // do'st sevimli serverga kirdi
-      if (f.server && before[f.login] !== undefined && before[f.login] !== f.server && isFavIp(f.server) && DB.notifyFr !== 0)
-        toast(f.name + T('fr_joined') + (srv(f.server).name || f.server), 5000);
+      if (f.server && before[f.login] !== undefined && before[f.login] !== f.server && f.server !== CONNECTED && DB.notifyFr !== 0 && !DB.dnd)
+        toastAct(f.name + T('fr_joined') + (srv(f.server).name || f.server) + ' \u2014 ' + T('fr_joinq'), 'data-ip', f.server, 9000);
       if (f.server) query(f.server);
     });
     renderHome();
@@ -563,7 +617,8 @@ function loadWeek() { api('topk', {}, function (r) { if (r.ok) { WEEK = r.top ||
 function crown(u) { return (u && (u.champ || (CHAMP && CHAMP.login && u.login && CHAMP.login === String(u.login).toLowerCase()))) ? '<span class="crown" title="' + esc(T('ch_title')) + '">\u265b</span>' : ''; }
 /* ---- yutuqlar ---- */
 var ACH = [['k100', '\u2694'], ['k1000', '\u2694'], ['k5000', '\u2694'], ['best30', '\u2605'], ['g100', '\u25b6'], ['t10h', '\u231a'], ['t50h', '\u231a'],
-  ['awp100', '\u25ce'], ['ak500', '\u25ce'], ['knife10', '\u2020'], ['deagle100', '\u25ce'], ['fr5', '\u263a'], ['ref3', '\u2709'], ['champ', '\u265b'], ['clan', '\u2691']];
+  ['awp100', '\u25ce'], ['ak500', '\u25ce'], ['knife10', '\u2020'], ['deagle100', '\u25ce'], ['fr5', '\u263a'], ['ref3', '\u2709'], ['champ', '\u265b'], ['clan', '\u2691'],
+  ['k10000', '\u2694'], ['best50', '\u2605'], ['g500', '\u25b6'], ['t100h', '\u231a'], ['fr20', '\u263a'], ['streak7', '\u2600'], ['srv10', '\u25ce'], ['wall10', '\u270e']];
 function achBadges(list, all) {
   var h = '';
   each(ACH, function (a) {
@@ -973,7 +1028,7 @@ function renderBar() {
   $('bOnline').innerHTML = on; $('bServers').innerHTML = cnt || MASTER.length;
   var nm = ME ? ME.name : ((S && S.name) || T('guest_name'));
   $('meName').innerHTML = esc(nm);
-  $('meAv').innerHTML = avInner(ME, nm); $('meAv').style.cssText = avStyle(ME);
+  $('meAv').innerHTML = avInner(ME, nm); $('meAv').style.cssText = avStyle(ME); $('meAv').className = 'av' + frameCls(ME);
   $('meLvl').innerHTML = ME ? esc(T('lvl').replace('{n}', ME.level)) : '';
   $('meXp').style.width = ME ? Math.round(ME.lvlxp * 100 / (ME.lvlmax || 1000)) + '%' : '0';
   $('meVip').style.display = ME && ME.vip ? '' : 'none';
@@ -1297,14 +1352,25 @@ function openSide(mode, title, body) {
   if (curModal !== 'mdSide') openModal('mdSide');
   $('sideTitle').innerHTML = esc(title); $('sideBody').innerHTML = body;
 }
+var SUGG = null;
 var FR_REQ = [], FR_SENT = [], FR_Q = '', FR_SUG = null, FR_TM = 0, CHAT = null, CHAT_TM = 0, NOTIF_TM = 0, NOTIF_SEEN = {};
-function frAv(f) { return '<div class="rk c av2" style="' + (f.online ? avStyle(f) : 'background:#4a4048') + '">' + avInner(f, f.name) + '</div>'; }
+/* profil ramkasi: chempion - oltin, 20+ daraja - binafsha, 10+ - ko'k, 5+ - yashil */
+function frameCls(u) { if (!u) return ''; if (crown(u)) return ' fgold'; var l = u.level || 1; return l >= 20 ? ' fpurp' : l >= 10 ? ' fblue' : l >= 5 ? ' fgreen' : ''; }
+function frAv(f) { return '<div class="rk c av2' + frameCls(f) + '" style="' + (f.online ? avStyle(f) : 'background:#4a4048') + '">' + avInner(f, f.name) + '</div>'; }
 function openFriends() {
   if (!ME) { openLogin(); return; }
   var keep = $('frIn') ? $('frIn').value : FR_Q;
   var h = '<div class="addf"><input class="tx big" id="frIn" type="text" maxlength="20" autocomplete="off" placeholder="' + esc(T('fr_add')) + '" value="' + esc(keep) + '">' +
     '<a class="btn red" data-act="fradd">' + esc(T('fr_addb')) + '</a><div class="frsug" id="frSug"' + (FR_SUG ? '' : ' style="display:none"') + '>' + frSugHtml() + '</div></div>';
   h += '<div class="frtools"><a class="btn" data-act="clan">' + ico('flag') + ' ' + esc(T('cl_btn')) + (ME.clan ? ' [' + esc(ME.clan.tag) + ']' : '') + '</a><a class="btn" data-act="ref">\u2709 ' + esc(T('rf_btn')) + '</a></div>';
+  if (SUGG && SUGG.list.length && !FR_Q) {
+    h += '<div class="ph2 m">' + esc(T('sg_title')) + '</div><div class="sggl">';
+    each(SUGG.list, function (x) {
+      h += '<div class="sgg">' + frAv(x) + '<b data-frprof="' + esc(x.login) + '">' + esc(x.name) + '</b><small class="mut">' + esc(T('sg_with').replace('{s}', x.common)) + '</small><a class="btn" data-fradd2="' + esc(x.login) + '">' + esc(T('fr_add2')) + '</a></div>';
+    });
+    h += '</div>';
+  }
+  if (!SUGG || now() - SUGG.t > 600000) { SUGG = { t: now(), list: SUGG ? SUGG.list : [] }; api('suggest', {}, function (r) { if (r.ok) { SUGG.list = r.list || []; if (curModal === 'mdSide' && sideMode === 'friends' && SUGG.list.length) openFriends(); } }); }
   if (FR_REQ.length) {
     h += '<div class="ph2 m">' + esc(T('fr_req_t')) + ' (' + FR_REQ.length + ')</div>';
     each(FR_REQ, function (f) {
@@ -1398,7 +1464,7 @@ function chatSend() {
   api('msg_send', { login: CHAT.login, text: v }, function (r) { if (!r.ok) toast(r.msg); chatLoad(); });
 }
 /* bildirishnoma: 15 soniyada bir - yangi xabarlar va do'stlik so'rovlari */
-var NOTIF = { unread: [], req: [] };
+var NOTIF = { unread: [], req: [] }, NOTIF_N = 0;
 function frBadge() {
   var n = FR_REQ.length; each(NOTIF.unread, function (u) { if (!(CHAT && sideMode === 'chat' && curModal === 'mdSide' && CHAT.login.toLowerCase() === u.login)) n += u.n; });
   var e = $('mFrNew'); if (e) { e.innerHTML = n ? String(n) : ''; e.style.display = n ? 'inline-block' : 'none'; }
@@ -1406,12 +1472,14 @@ function frBadge() {
 function pollNotif() {
   clearTimeout(NOTIF_TM);
   if (!ME) return;
+  if (++NOTIF_N % 4 === 0 && !playing()) loadFriends();             // daqiqada bir: do'stlar qaysi serverga kirdi
   api('notif', {}, function (r) {
     NOTIF_TM = setTimeout(pollNotif, 15000);
     if (!r.ok) return;
     NOTIF = { unread: r.unread || [], req: r.req || [] };
     if (r.inv && r.inv.length && !DB.dnd) showInvite(r.inv[r.inv.length - 1]);   // do'st chaqirdi
     if (r.ring && !DB.dnd) showRing(r.ring);
+    if (r.wallnew && ME) toastAct(T('wl_new').replace('{n}', r.wallnew), 'data-frprof', ME.login, 8000);
     each(r.ringans || [], function (a) {
       toast((a.ok ? T('rg_yes') : T('rg_no')).replace('{n}', a.from), 7000);
       if (a.ok) openChat(a.login, a.from);
@@ -1585,6 +1653,14 @@ function presetOf(s) {
   for (i = 0; i < XPRE.length; i++) if (Number(s.xt) === XPRE[i][2] && s.xs === XPRE[i][3]) return XPRE[i][0];
   for (i = 0; i < XPRE.length; i++) if (Number(s.xt) === XPRE[i][2]) return XPRE[i][0];
   return 'classic';
+}
+/* pritsel galereyasi: tayyor pritsellar, bir bosishda qo'yiladi */
+var XGAL = [['xg_green', 'X-0-2-0-0-00FF00'], ['xg_pro', 'X-0-1-0-0-32FF32'], ['xg_cyandot', 'X-3-1-0-0-00FFFF'], ['xg_redt', 'X-1-1-0-0-FF2020'], ['xg_ycirc', 'X-2-2-0-0-FFFF00'],
+  ['xg_white', 'X-0-0-0-0-FFFFFF'], ['xg_pink', 'X-0-1-0-0-FF00FF'], ['xg_awp', 'X-3-0-0-0-FF3030'], ['xg_dyn', 'X-0-2-0-1-00FF00'], ['xg_glass', 'X-0-1-1-0-00BFFF'], ['xg_big', 'X-0-3-0-0-00FF00'], ['xg_bluet', 'X-1-2-0-0-3B6CFF']];
+function xGallery() {
+  var h = '<div class="ph2 m">' + esc(T('xg_title')) + '</div><div class="xgal">';
+  each(XGAL, function (g) { var c = g[1].slice(-6); h += '<a data-xgal="' + g[1] + '"><i style="background:#' + c + '"></i>' + esc(T(g[0])) + '</a>'; });
+  return h + '</div>';
 }
 var SZ = ['extra_small', 'small', 'medium', 'large'];   // NextClient: large eng katta (auto ham shunday); qalinlik doim 1 piksel
 function xcode(s) {
@@ -1879,7 +1955,9 @@ function applyTheme(id) {
   LOOK_DAY = day;
   recolorImages(hue); renderTop2();
   var h0 = document.documentElement; h0.className = (h0.className || '').replace(/(^|\s)day(?=\s|$)/g, '') + (day ? ' day' : '');
-  if (hue <= 0 && !day) { var o0 = $('thcss'); if (o0) o0.parentNode.removeChild(o0); return; }
+  var fs = DB.fs || 1;
+  applyBg();
+  if (hue <= 0 && !day && fs === 1) { var o0 = $('thcss'); if (o0) o0.parentNode.removeChild(o0); return; }
   var conv = function (r, g, b) {
     var c = hue > 0 ? themeColor(r, g, b, hue) : null;
     if (day) c = dayColor(c || [r, g, b]);
@@ -1894,6 +1972,7 @@ function applyTheme(id) {
       var c = conv(+r, +g, +b);
       return c ? (a ? 'rgba(' : 'rgb(') + c.join(',') + (a || '') + ')' : m;
     });
+    if (fs !== 1) css = css.replace(/font-size:\s*(\d+(?:\.\d+)?)px/g, function (m, n) { return 'font-size: ' + Math.round(n * fs) + 'px'; });   // kattaroq yozuvlar
     if (day) css += '\n* { text-shadow: none !important; }\n';
     var old = $('thcss'); if (old) old.parentNode.removeChild(old);
     var st = document.createElement('style'); st.id = 'thcss'; st.innerHTML = css;
@@ -1935,7 +2014,7 @@ function openFrProfile(login) {
     var u = r.u, st = u.st || {}, s = u.server ? srv(u.server) : null, last = u.last || null, ls = last ? srv(last.s) : null;
     var status = u.online ? '<span class="gm">\u25cf</span> ' + esc(u.server ? T('fr_in') + ((s && s.name) || u.server) + (u.map ? ' \u00b7 ' + u.map : '') : T('fr_menu'))
       : esc(T('fr_last').replace('{t}', agoText(u.seen)));
-    var h = '<div class="fpro"><div class="fpav" style="' + avStyle(u) + '">' + avInner(u, u.name) + '</div>' +
+    var h = '<div class="fpro"><div class="fpav' + frameCls(u) + '" style="' + avStyle(u) + '">' + avInner(u, u.name) + '</div>' +
       '<div class="fpn">' + crown(u) + (u.clan ? '<span class="ctag">[' + esc(u.clan.tag) + ']</span> ' : '') + esc(u.name) + ' <span class="mut">@' + esc(u.login) + '</span></div>' +
       '<div class="mut">' + esc(T('lvl').replace('{n}', u.level)) + ' \u00b7 ID ' + esc(u.id) + (u.created ? ' \u00b7 ' + esc(T('fp_since').replace('{d}', new Date(u.created * 1000).toLocaleDateString())) : '') + '</div>' +
       '<div class="fpst">' + status + '</div>' +
@@ -1945,6 +2024,14 @@ function openFrProfile(login) {
     var wp = ''; for (var w in (u.wpn || {})) if (u.wpn.hasOwnProperty(w)) wp += '<span class="wpt">' + esc(w) + ' <b>' + u.wpn[w] + '</b></span>';
     if (wp) h += '<div class="ph2 m">' + esc(T('fp_wpn')) + '</div><div>' + wp + '</div>';
     h += '<div class="ph2 m">' + esc(T('ac_title')) + ' (' + (u.ach || []).length + ')</div>' + achBadges(u.ach || []);
+    var mine = ME && ME.login.toLowerCase() === u.login.toLowerCase();
+    h += '<div class="ph2 m">' + esc(T('wl_title')) + '</div>';
+    if (u.isfr || mine) h += '<div class="wladd"><input id="wlIn" class="tx" maxlength="200" placeholder="' + esc(T(mine ? 'wl_ph_me' : 'wl_ph')) + '"><a class="btn red" data-wallsend="' + esc(u.login) + '">' + esc(T('wl_send')) + '</a></div>';
+    each(u.wall || [], function (w) {
+      var can = mine || (ME && w.from.toLowerCase() === ME.login.toLowerCase());
+      h += '<div class="wlr"><b data-frprof="' + esc(w.from) + '">' + esc(w.name) + '</b><small class="mut">' + esc(agoText(w.t)) + '</small>' + (can ? '<a class="wld" data-walldel="' + esc(w.id) + '" data-wallto="' + esc(u.login) + '">\u00d7</a>' : '') + '<div>' + esc(w.text) + '</div></div>';
+    });
+    if (!(u.wall || []).length) h += '<div class="mut">' + esc(T('wl_none')) + '</div>';
     h += '<div class="fpb">' + (u.isfr ? '<a class="btn" data-chat="' + esc(u.login) + '" data-chatn="' + esc(u.name) + '">' + ico('chat') + ' ' + esc(T('ch_btn')) + '</a>' +
       (u.online ? '<a class="btn" data-ring="' + esc(u.login) + '">' + ico('phone') + ' ' + esc(T('rg_btn')) + '</a>' : '') + '<a class="btn" data-frcmp="' + esc(u.login) + '">VS</a>' : '') +
       (u.server ? '<a class="btn red" data-ip="' + esc(u.server) + '">' + esc(T('join')) + '</a>' : '') + '<a class="btn" data-act="friends">\u2190 ' + esc(T('m_friends')) + '</a></div>';
@@ -1971,6 +2058,36 @@ function ringAnswer(ok, silent) {
   if (!r) return;
   if (!silent) api('ring_ans', { to: r.login, ok: ok ? '1' : '0' }, function () {});
   if (ok) { if (r.srv && r.srv !== CONNECTED) connect(r.srv); else openChat(r.login, r.from); }
+}
+/* menyu musiqasi: ro'yxat admin panelda (Sozlamalar > Menyu musiqasi), fayllar o'yin papkasida (Paketlar orqali) */
+var MUSICS = null;
+function musicPick() {
+  if (MUSICS === null) { MUSICS = []; api('music', {}, function (r) { MUSICS = (r.ok && r.list) || []; if (curModal === 'mdSettings' && setTab === 'sound' && MUSICS.length) showSetTab('sound'); }); }
+  var cur = DB.mtrack || 'media/gamestartup.mp3', h = '<div class="ph2 m">' + esc(T('mu_title')) + '</div><div class="mul">';
+  each([[T('mu_def'), 'media/gamestartup.mp3']].concat(MUSICS), function (m) { h += '<a class="sgo' + (cur === m[1] ? ' on' : '') + '" data-mtrack="' + esc(m[1]) + '">\u266b ' + esc(m[0]) + '</a>'; });
+  return h + '</div>';
+}
+/* CFG kodini qo'yish (kod yozilganda yoki "Mashhur CFGlar" dan) */
+function cfgUse(code) {
+  api('cfg_get', { code: code }, function (r) {
+    if (!r.ok || !r.cfg) return toast(r.msg || T('cf_bad'));
+    if (curModal !== 'mdSettings') openSettings('tools');
+    var c2 = r.cfg; for (var k in c2.s || {}) if (c2.s.hasOwnProperty(k) && DEF.hasOwnProperty(k) && k !== 'name' && k !== 'tag') E[k] = c2.s[k];
+    if (c2.b) { DB.binds = c2.b; DB.binds2 = c2.b2 || {}; loadBinds(); applyBinds(); persist(); }
+    E.xp = presetOf(E); toast(T('cf_loaded'), 6000); showSetTab('tools');
+  });
+}
+function openCfgTop() {
+  api('cfg_top', {}, function (r) {
+    if (!r.ok) return toast(r.msg || 'Xato');
+    var h = '<div class="mut" style="margin-bottom:10px">' + esc(T('ct_sub')) + '</div>';
+    each(r.list || [], function (x, i) {
+      h += '<div class="ctr"><span class="rk c">' + (i + 1) + '</span><b>' + esc(x.title) + '</b><small class="mut">' + (x.who ? '@' + esc(x.who) + ' \u00b7 ' : '') + esc(T('ct_uses').replace('{n}', x.uses)) + ' \u00b7 ' + esc(x.code) + '</small>' +
+        '<a class="btn" data-cfglike="' + esc(x.code) + '">\u2665 ' + x.likes + '</a><a class="btn red" data-cfguse="' + esc(x.code) + '">' + esc(T('ct_use')) + '</a></div>';
+    });
+    if (!(r.list || []).length) h += '<div class="empty">' + esc(T('ct_none')) + '</div>';
+    openSide('cfgtop', T('ct_title'), h);
+  });
 }
 /* "Taklif / shikoyat": matn admin panelga (Fikrlar) va Telegram'ga boradi */
 var FBK = 'idea';
@@ -2081,7 +2198,7 @@ var PANES = {
   sound: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('so_title')) + '</div>' + sl('vol', 'so_vol', 0, 1, 0.05) + sl('mus', 'so_mus', 0, 1, 0.05) + sl('vscale', 'so_vscale', 0, 2, 0.1) + '</div>' +
       '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('voice', 'so_voice') + tg('loop', 'so_loop') + tg('mute', 'so_mute') + tg('uisnd', 'so_ui', 'so_ui2') + tg('mmusic', 'so_music', 'so_music2') +
-      '<div class="ph2 m">' + esc(T('so_q')) + '</div>' + tg('hisnd', 'so_hi') + seg('mixa', 'so_mix', [[0.1, 'so_mix2'], [0.15, 'so_mix3']]) + '</div>';
+      '<div class="ph2 m">' + esc(T('so_q')) + '</div>' + tg('hisnd', 'so_hi') + seg('mixa', 'so_mix', [[0.1, 'so_mix2'], [0.15, 'so_mix3']]) + musicPick() + '</div>';
   },
   video: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('v_title')) + '</div>' +
@@ -2116,7 +2233,7 @@ var PANES = {
       '<div class="fr"><div class="lb">' + esc(T('cc_in')) + '</div><div class="ct2 code"><input id="calcIn" value="' + esc(CALC_V) + '"><span class="ccres" id="calcOut">' + calcOut() + '</span>' +
       '<a class="btn b2" data-act="calcapply">' + esc(T('x_apply')) + '</a></div></div>' +
       '<div class="ph2 m">' + esc(T('cf_title')) + '</div><div class="mut" style="font-size:12px;margin-bottom:8px">' + esc(T('cf_note')) + '</div>' +
-      '<a class="btn" data-act="cfgshare" style="margin:0 8px 0 0">' + esc(T('cf_get')) + '</a><a class="btn" data-act="cfgload">' + esc(T('cf_load')) + '</a>' +
+      '<a class="btn" data-act="cfgshare" style="margin:0 8px 0 0">' + esc(T('cf_get')) + '</a><a class="btn" data-act="cfgload" style="margin:0 8px 0 0">' + esc(T('cf_load')) + '</a><a class="btn red" data-act="cfgtop">\u2605 ' + esc(T('ct_title')) + '</a>' +
       '<div id="cfgOut"></div></div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('st_title')) + '</div>' + st +
       '<div class="ph2 m">' + esc(T('dm_title')) + '</div>' +
@@ -2225,7 +2342,7 @@ var PANES = {
       '<div id="xPrev" class="big"><canvas id="xCan" width="524" height="220"></canvas></div>' +
       '<div class="fr" style="margin-top:14px"><div class="lb">' + esc(T('hx_style')) + '</div><div class="ct2"><a class="dd wide" data-dd="xpre"><span>' + esc(ddLabel('xpre')) + '</span><i>▾</i></a></div></div>' +
       '<div class="fr"><div class="lb">' + esc(T('x_color')) + '</div><div class="ct2 sw">' + cols + '<a class="btn pick" data-act="xpick">' + esc(T('hx_pick')) + '</a></div></div>' +
-      '<div class="fr cw"><div class="lb">' + esc(T('x_code')) + '</div><div class="ct2 code"><input id="xCode" value="' + esc(xcode(E)) + '"><a class="btn" data-act="xcopy">' + esc(T('x_copy')) + '</a><a class="btn b2" data-act="xcode">' + esc(T('x_apply')) + '</a></div></div></div>' +
+      '<div class="fr cw"><div class="lb">' + esc(T('x_code')) + '</div><div class="ct2 code"><input id="xCode" value="' + esc(xcode(E)) + '"><a class="btn" data-act="xcopy">' + esc(T('x_copy')) + '</a><a class="btn b2" data-act="xcode">' + esc(T('x_apply')) + '</a></div></div>' + xGallery() + '</div>' +
       '<div class="pane r hp"><div class="ph2">&nbsp;</div>' +
       '<div class="fr"><div class="lb">' + esc(T('x_size')) + '</div><div class="ct2"><a class="dd xsz" data-dd="xsz"><span>' + esc(ddLabel('xsz')) + '</span><i>▾</i></a>' +
       '<div class="sl sl2"><input type="range" min="0" max="3" step="1" value="' + si + '" data-xsz="1"><div class="vv" id="vv_xsz">x' + (si + 1) + '</div></div></div></div>' +
@@ -2241,17 +2358,18 @@ var PANES = {
         '<div class="id" style="margin:10px 0 24px">' + esc(T('a_none2')) + '</div><a class="btn red" style="height:44px;line-height:42px;padding:0 30px" data-act="login">' + esc(T('a_login')) + '</a></div></div>';
     }
     var last = ME.cloudt ? (now() / 1000 - ME.cloudt < 120 ? T('a_now') : fmtTime(ME.cloudt * 1000)) : T('a_never');
-    return '<div class="pane l"><div class="ph2">' + esc(T('a_profile')) + '</div><div class="prof"><div class="bigav" style="' + avStyle(ME) + '">' + avInner(ME) + '<a class="avcam" data-act="avpick">' + esc(T('a_photo')) + '</a></div>' +
+    return '<div class="pane l"><div class="ph2">' + esc(T('a_profile')) + '</div><div class="prof"><div class="bigav' + frameCls(ME) + '" style="' + avStyle(ME) + '">' + avInner(ME) + '<a class="avcam" data-act="avpick">' + esc(T('a_photo')) + '</a></div>' +
       '<h2>' + esc(ME.name) + '</h2><div class="id">ID: ' + esc(ME.id) + ' \u00b7 ' + esc(T('lvl').replace('{n}', ME.level)) + '</div>' +
       '<div class="xpw"><i style="width:' + Math.round(ME.lvlxp * 100 / ME.lvlmax) + '%"></i></div><div class="xpt">' + ME.lvlxp + ' / ' + ME.lvlmax + ' XP</div>' +
       '<div class="avcols">' + avColors() + '</div>' +
       '<a class="btn" data-act="rename" style="margin:0 6px 0 0">' + esc(T('a_rename')) + '</a><a class="btn" data-act="avpick" style="margin:0 6px 0 0">' + esc(T('a_photo')) + '</a>' +
       (ME.av ? '<a class="btn out" data-act="avdel" style="margin:0">' + esc(T('a_photodel')) + '</a>' : '') + '</div>' +
       (ME.vip ? '<div class="vipbox"><b>' + esc(T('a_vip')) + '</b><span>' + esc(T('a_vip2')) + '</span></div>' : '') +
-      statBox(ME.st) + achBadges(ME.ach) + '<a class="btn" data-act="stats" style="margin:4px 6px 0 0">' + esc(T('ks_more')) + '</a><a class="btn" data-act="ref" style="margin:4px 0 0">\u2709 ' + esc(T('rf_btn')) + '</a></div>' +
+      statBox(ME.st) + achBadges(ME.ach) + '<a class="btn" data-act="stats" style="margin:4px 6px 0 0">' + esc(T('ks_more')) + '</a><a class="btn" data-act="ref" style="margin:4px 6px 0 0">\u2709 ' + esc(T('rf_btn')) + '</a><a class="btn" data-frprof="' + esc(ME.login) + '" style="margin:4px 0 0">' + ico('user') + ' ' + esc(T('fp_mine')) + '</a></div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('a_sec')) + '</div>' +
       '<div class="rowb"><b>' + esc(T('a_email')) + '</b><small>' + esc(ME.email || '\u2014') + '</small><a class="btn" data-act="email">' + esc(T('a_change')) + '</a></div>' +
       '<div class="rowb"><b>' + esc(T('a_pass')) + '</b><small>' + esc(T('a_pw_ago').replace('{d}', daysAgo(ME.pwchanged))) + '</small><a class="btn" data-act="passwd">' + esc(T('a_change')) + '</a></div>' +
+      '<div class="rowb"><b>Telegram</b><small>' + esc(T(ME.tglinked ? 'tg_on' : 'tg_off')) + '</small><a class="btn" data-act="tglink">' + esc(T(ME.tglinked ? 'tg_re' : 'tg_link')) + '</a></div>' +
       '<div class="ph2 m">' + esc(T('a_cloud')) + '</div>' +
       '<div class="fr w"><div class="lb">' + esc(T('a_auto')) + '<small>' + esc(T('a_auto2')) + '</small></div><div class="tg' + (DB.autosave ? ' on' : '') + '" data-dbtg="autosave"><i></i></div></div>' +
       '<div style="margin:6px 0 12px;font-size:14px">' + esc(T('a_last')) + '<span class="gr">' + esc(last) + (ME.cloudt ? ' \u2713' : '') + '</span> \u00b7 ' + esc(T('a_pcs').replace('{n}', ME.devices || 1)) + '</div>' +
@@ -2280,6 +2398,11 @@ var PANES = {
       otg('start', 'sy_win') + otg('win', 'sy_windowed') +
       '<div class="fr w"><div class="lb">' + esc(T('sy_fx')) + '<small>' + esc(T('sy_fx2')) + '</small></div><div class="tg' + (DB.fx !== 0 && !FX.off ? ' on' : '') + '" data-dbtg="fx"><i></i></div></div>' +
       '<div class="fr w"><div class="lb">' + esc(T('sy_dnd')) + '<small>' + esc(T('sy_dnd2')) + '</small></div><div class="tg' + (DB.dnd ? ' on' : '') + '" data-dbtg="dnd"><i></i></div></div>' +
+      '<div class="ph2 m">' + esc(T('lk_title')) + '</div>' +
+      '<div class="lkr"><span>' + esc(T('lk_bg')) + '</span>' + (function () { var x = ''; for (var k in BGS) if (BGS.hasOwnProperty(k)) x += '<a class="bgc' + ((DB.bgs || 'def') === k ? ' on' : '') + '" data-bgs="' + k + '" style="background:' + (BGS[k] ? '-webkit-radial-gradient(center, circle cover, ' + BGS[k] + ')' : '-webkit-radial-gradient(center, circle cover, #3a0d14 0%, #1c0b10 30%, #0f0a0e 60%, #09070a 100%)') + '" title="' + esc(T('bg_' + k)) + '"></a>'; return x; })() + '</div>' +
+      '<div class="lkr"><span>' + esc(T('lk_ptc')) + '</span>' + (function () { var x = ''; each(['spark', 'snow', 'none'], function (k) { x += '<a class="sgo' + ((DB.ptc || 'spark') === k ? ' on' : '') + '" data-ptc="' + k + '">' + esc(T('pt_' + k)) + '</a>'; }); return x; })() + '</div>' +
+      '<div class="lkr"><span>' + esc(T('lk_fs')) + '</span>' + (function () { var x = ''; each([[1, '100%'], [1.1, '110%'], [1.2, '120%']], function (k) { x += '<a class="sgo' + ((DB.fs || 1) === k[0] ? ' on' : '') + '" data-fs="' + k[0] + '">' + k[1] + '</a>'; }); return x; })() + '</div>' +
+      '<div class="fr w"><div class="lb">' + esc(T('lk_hol')) + '<small>' + esc(T('lk_hol2')) + '</small></div><div class="tg' + (DB.hol !== 0 ? ' on' : '') + '" data-dbtg="hol"><i></i></div></div>' +
       '<div class="ph2 m">' + esc(T('sy_srv')) + '</div>' +
       '<div class="rowb"><b>' + esc(T('sy_cache')) + '</b><small>' + esc(T('sy_cache2').replace('{n}', CACHE_MB)) + (OPTS.clean ? ' \u00b7 ' + esc(T('sy_pending')) : '') + '</small><a class="btn" data-act="cache">' + esc(T('sy_cacheb')) + '</a></div>' +
       '<div class="rowb"><b>' + esc(T('sy_files')) + '</b><small>' + esc(T('sy_files2')) + (OPTS.verify ? ' \u00b7 ' + esc(T('sy_pending')) : '') + '</small><a class="btn" data-act="verify">' + esc(T('sy_filesb')) + '</a></div>' +
@@ -2532,15 +2655,25 @@ function act(a) {
   if (a === 'avdel') return api('avatar', { img: 'none' }, function (r) { if (r.ok) { setMe(r.me); toast(T('saved')); openAvatars(); } });
   if (a === 'frback') { CHAT = null; return openFriends(); }
   if (a === 'chatsend') return chatSend();
-  if (a === 'cfgshare') {
+  if (a === 'cfgtop') return openCfgTop();
+  if (a === 'tglink') return api('tg_code', {}, function (r) {
+    if (!r.ok) return toast(r.msg || 'Xato', 5000);
+    openSide('tg', 'Telegram', '<div class="tgl2"><p>' + esc(T('tg_how1').replace('{b}', r.bot ? '@' + r.bot : 'bot')) + '</p><div class="tgcode">' + esc(r.code) + '</div><p class="mut">' + esc(T('tg_how2')) + '</p>' +
+      (r.bot ? '<div class="avurl"><input class="ipin" readonly value="t.me/' + esc(r.bot) + '"><a class="cpy" data-copyip="t.me/' + esc(r.bot) + '">' + esc(T('ip_copy')) + '</a></div>' : '') +
+      '<p class="mut">/me \u00b7 /friends \u00b7 /top \u00b7 /online</p>' + (r.linked ? '<a class="btn" data-act="tgunlink">' + esc(T('tg_unlink')) + '</a>' : '') + '</div>');
+  });
+  if (a === 'tgunlink') return api('tg_unlink', {}, function () { if (ME) ME.tglinked = 0; closeModal(); toast(T('tg_unl_ok')); });
+  if (a === 'cfgshare') return ask(T('cf_name'), function (title) {
     var cs = copy(E); delete cs.name; delete cs.tag;
-    return api('cfg_share', { cfg: JSON.stringify({ s: cs, b: BINDS, b2: BINDS2 }) }, function (r) {
+    title = clean(title).slice(0, 40);
+    api('cfg_share', { cfg: JSON.stringify({ s: cs, b: BINDS, b2: BINDS2 }), title: title, pub: title ? '1' : '0' }, function (r) {
       if (!r.ok) return toast(r.msg || 'Xato');
       var o = $('cfgOut'); if (o) o.innerHTML = '<div class="avurl" style="margin-top:10px"><input class="ipin" readonly value="' + esc(r.code) + '"><a class="cpy" data-copyip="' + esc(r.code) + '">' + esc(T('ip_copy')) + '</a></div>';
       toast(T('cf_ok').replace('{c}', r.code), 6000);
     });
-  }
-  if (a === 'cfgload') return ask(T('cf_ask'), function (c) {
+  });
+  if (a === 'cfgload') return ask(T('cf_ask'), function (c) { cfgUse(c); });
+  if (a === 'cfgload_old') return ask(T('cf_ask'), function (c) {
     api('cfg_get', { code: c }, function (r) {
       if (!r.ok || !r.cfg) return toast(r.msg || T('cf_bad'));
       var c2 = r.cfg; for (var k in c2.s || {}) if (c2.s.hasOwnProperty(k) && DEF.hasOwnProperty(k) && k !== 'name' && k !== 'tag') E[k] = c2.s[k];
@@ -2661,7 +2794,7 @@ function act(a) {
 var MUSIC_ON = null;                             // null - noma'lum: oldingi sahifa (menyu yangilangan) qoldirgan musiqa ham o'chirilsin
 function musicSync() {
   var want = !!(S && S.mmusic && !CONNECTED && hasApi());
-  if (want && !MUSIC_ON) { cmd('mp3volume ' + (S.mp3off ? 0 : S.mus)); cmd('mp3 loop media/gamestartup.mp3'); MUSIC_ON = true; }
+  if (want && !MUSIC_ON) { cmd('mp3volume ' + (S.mp3off ? 0 : S.mus)); cmd('mp3 loop ' + (/^[\w\/.\-]+\.mp3$/.test(DB.mtrack || '') ? DB.mtrack : 'media/gamestartup.mp3')); MUSIC_ON = true; }
   else if (!want && MUSIC_ON !== false) { cmd('mp3 stop'); MUSIC_ON = false; }
 }
 
@@ -2758,6 +2891,17 @@ function showAdminMsgs(list) {
   openSide('amsg', T('am_title'), h);
 }
 
+/* ---- qaysi tugmalar bosiladi (admin panel > Tugmalar): 2 daqiqada bir yuboriladi ---- */
+var CLK = {}, CLK_N = 0;
+document.addEventListener('mousedown', function (e) {
+  for (var el = e.target; el && el !== document; el = el.parentNode) {
+    if (!el.getAttribute) continue;
+    var a = el.getAttribute('data-act') || (el.getAttribute('data-tab') ? 'tab:' + el.getAttribute('data-tab') : '') || (el.getAttribute('data-ip') ? 'connect' : '') || (el.getAttribute('data-ring') ? 'ring' : '') || (el.getAttribute('data-frprof') ? 'frprof' : '');
+    if (a) { CLK[a] = (CLK[a] || 0) + 1; CLK_N++; return; }
+  }
+}, true);
+setInterval(function () { if (!CLK_N) return; var c = CLK; CLK = {}; CLK_N = 0; api('clicks', { c: JSON.stringify(c) }, function () {}); }, 120000);
+
 /* ---- menyu ovozlari: o'yin sound/xclient/*.wav ni chaladi (XCLauncher.exe ularni o'yin papkasiga qo'yadi) ---- */
 var SFX_ATTR = ['data-act', 'data-tab', 'data-hsub', 'data-seg', 'data-tg', 'data-otg', 'data-ohud', 'data-dd', 'data-ddv', 'data-xchk', 'data-pack',
   'data-sort', 'data-flt', 'data-theme', 'data-daymode', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec', 'data-avpre'];
@@ -2803,12 +2947,21 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-frdec'))) { api('friend_decline', { login: el.getAttribute('data-frdec') }, function () { loadFriends(); }); return; }
   if ((el = closest(t, 'data-chat'))) { openChat(el.getAttribute('data-chat'), el.getAttribute('data-chatn')); return; }
   if ((el = closest(t, 'data-frprof'))) return openFrProfile(el.getAttribute('data-frprof'));
+  if ((el = closest(t, 'data-bgs'))) { DB.bgs = el.getAttribute('data-bgs'); persist(); applyBg(); showSetTab('system'); return; }
+  if ((el = closest(t, 'data-ptc'))) { DB.ptc = el.getAttribute('data-ptc'); persist(); applyBg(); showSetTab('system'); return; }
+  if ((el = closest(t, 'data-fs'))) { DB.fs = Number(el.getAttribute('data-fs')); persist(); applyTheme(DB.theme || 'red'); showSetTab('system'); return; }
+  if ((el = closest(t, 'data-mtrack'))) { DB.mtrack = el.getAttribute('data-mtrack'); persist(); MUSIC_ON = null; cmd('mp3 stop'); musicSync(); showSetTab('sound'); return; }
+  if ((el = closest(t, 'data-wallsend'))) { var wto = el.getAttribute('data-wallsend'), wv = clean($('wlIn') ? $('wlIn').value : ''); if (!wv) return; api('wall_add', { to: wto, text: wv }, function (r) { if (!r.ok) return toast(r.msg || 'Xato'); openFrProfile(wto); }); return; }
+  if ((el = closest(t, 'data-walldel'))) { var wt2 = el.getAttribute('data-wallto'); api('wall_del', { to: wt2, id: el.getAttribute('data-walldel') }, function () { openFrProfile(wt2); }); return; }
+  if ((el = closest(t, 'data-xgal'))) { if (applyCode(el.getAttribute('data-xgal'))) { if (typeof xLive === 'function') xLive(); showSetTab('hud'); toast(T('xg_ok'), 3000); } return; }
+  if ((el = closest(t, 'data-cfguse'))) { cfgUse(el.getAttribute('data-cfguse')); return; }
+  if ((el = closest(t, 'data-cfglike'))) { var lk = el; api('cfg_like', { code: el.getAttribute('data-cfglike') }, function (r) { if (!r.ok) return toast(r.msg || 'Xato'); lk.innerHTML = '\u2665 ' + r.likes; lk.className = 'btn on'; }); return; }
   if ((el = closest(t, 'data-ring'))) { var rl = el.getAttribute('data-ring'); api('ring', { to: rl, srv: CONNECTED || '' }, function (r) { toast(r.ok ? T('rg_calling') : (r.msg || 'Xato'), 6000); }); return; }
   if ((el = closest(t, 'data-ringok'))) { ringAnswer(el.getAttribute('data-ringok') === '1'); return; }
   if ((el = closest(t, 'data-mcall'))) { var mc = el; api('miss_call', { to: el.getAttribute('data-mcall') }, function (r) { toast(r.ok ? T('mc_ok') : (r.msg || 'Xato'), 5000); if (r.ok && mc.parentNode) mc.parentNode.removeChild(mc); }); return; }
   if ((el = closest(t, 'data-fbk'))) { FBK = el.getAttribute('data-fbk'); var sib = el.parentNode.childNodes; for (var fi = 0; fi < sib.length; fi++) sib[fi].className = sib[fi] === el ? 'on' : ''; return; }
   if ((el = closest(t, 'data-frdel'))) { api('friend_del', { login: el.getAttribute('data-frdel') }, function () { loadFriends(); }); return; }
-  if ((el = closest(t, 'data-dbtg'))) { var dk = el.getAttribute('data-dbtg'); var cur = dk === 'autosave' || dk === 'dnd' ? !!DB[dk] : DB[dk] !== 0; DB[dk] = cur ? 0 : 1; persist(); if (dk === 'fx') { FX.off = 0; FX.slow = 0; sparks(); } if (dk === 'autosave') $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local')); el.className = 'tg' + (DB[dk] ? ' on' : ''); return; }
+  if ((el = closest(t, 'data-dbtg'))) { var dk = el.getAttribute('data-dbtg'); var cur = dk === 'autosave' || dk === 'dnd' ? !!DB[dk] : DB[dk] !== 0; DB[dk] = cur ? 0 : 1; persist(); if (dk === 'fx') { FX.off = 0; FX.slow = 0; sparks(); } if (dk === 'hol') applyBg(); if (dk === 'autosave') $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local')); el.className = 'tg' + (DB[dk] ? ' on' : ''); return; }
   if ((el = closest(t, 'data-misclaim'))) {
     var mid = el.getAttribute('data-misclaim');
     api('mission_claim', { id: mid }, function (r) {
@@ -2959,7 +3112,7 @@ step('loadAnn', function () { loadAnn(); });
 step('music', function () { setTimeout(musicSync, 3000); });
 step('whatsnew', function () { setTimeout(loadWhatsNew, 4000); });
 step('ngFit', function () { ngFit(); });
-step('applyTheme', function () { if ((DB.theme && DB.theme !== 'red') || DB.day) applyTheme(DB.theme || 'red'); else renderTop2(); });
+step('applyTheme', function () { if ((DB.theme && DB.theme !== 'red') || DB.day || (DB.fs && DB.fs !== 1)) applyTheme(DB.theme || 'red'); else { renderTop2(); applyBg(); } });
 step('detectLang();', function () { detectLang(); });
 step('loadMaster();', function () { loadMaster(); });
 step('loadTop();', function () { loadTop(); });

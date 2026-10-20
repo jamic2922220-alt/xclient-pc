@@ -652,3 +652,69 @@ a.frp { cursor: pointer; } a.frp:hover { text-decoration: underline; }
 #ringBox .rgb { margin-top: 18px; }
 #ringBox .rgb .btn { margin: 0 6px; }
 @-webkit-keyframes rgp { 0% { -webkit-box-shadow: 0 0 0 0 rgba(60,207,78,.7); } 100% { -webkit-box-shadow: 0 0 0 18px rgba(60,207,78,0); } }
+/* bosiladigan xabar (do'st serverga kirdi) */
+#toast.act { cursor: pointer; border-color: #3ccf4e; }
+#toast.act:hover { background: #1f2a20; }
+/* profil ramkalari */
+.fgold { -webkit-box-shadow: 0 0 0 3px #f5c518, 0 0 14px rgba(245,197,24,.6) !important; }
+.fpurp { -webkit-box-shadow: 0 0 0 3px #9b4dff, 0 0 12px rgba(155,77,255,.5) !important; }
+.fblue { -webkit-box-shadow: 0 0 0 3px #3b8cff, 0 0 10px rgba(59,140,255,.45) !important; }
+.fgreen { -webkit-box-shadow: 0 0 0 2px #3ccf4e !important; }
+/* profil devori */
+.wladd { overflow: hidden; margin-bottom: 10px; }
+.wladd .tx { float: left; width: 78%; height: 36px; padding: 0 10px; background: #0f0d12; border: 1px solid #3a2e34; color: #eee; font-size: 14px; }
+.wladd .btn { float: right; margin: 0; }
+.wlr { position: relative; padding: 8px 30px 8px 10px; margin-bottom: 6px; background: #15111a; border-left: 3px solid #e5484d; }
+.wlr b { cursor: pointer; margin-right: 8px; } .wlr div { margin-top: 3px; color: #ddd; }
+.wlr .wld { position: absolute; right: 8px; top: 6px; font-size: 18px; color: #8f8590; cursor: pointer; }
+/* do'st tavsiyalari */
+.sggl { overflow: hidden; margin-bottom: 6px; }
+.sgg { position: relative; float: left; width: 49%; margin: 0 1% 8px 0; height: 54px; padding: 8px 8px 0 46px; background: #15111a; border: 1px solid #2a2026; }
+.sgg .rk { position: absolute; left: 8px; top: 12px; }
+.sgg b { display: block; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 92px; }
+.sgg small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 92px; }
+.sgg .btn { position: absolute; right: 8px; top: 9px; margin: 0; height: 32px; line-height: 30px; padding: 0 10px; font-size: 13px; }
+/* haftalik grafik */
+.wkc { height: 172px; white-space: nowrap; padding-top: 4px; }
+.wkb { display: inline-block; width: 52px; margin-right: 6px; text-align: center; vertical-align: bottom; }
+.wkb em { display: block; font-style: normal; font-size: 11px; color: #c9b7bd; }
+.wkb i { display: block; width: 30px; margin: 2px auto 4px; background: #e5484d; }
+.wkb b { display: block; font-size: 12px; } .wkb b.up { color: #7ee35a; } .wkb b.dn { color: #ff6a5a; }
+.wkb small { display: block; font-size: 10px; color: #8f8590; }
+/* o'yinlarim jadvali */
+table.mgt { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.mgt th { text-align: left; color: #8f8590; font-weight: normal; padding: 4px 6px; border-bottom: 1px solid #2a2026; }
+table.mgt td { padding: 5px 6px; border-bottom: 1px solid #1e1820; white-space: nowrap; max-width: 210px; overflow: hidden; text-overflow: ellipsis; }
+table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
+/* pritsel galereyasi */
+.xgal { overflow: hidden; }
+.xgal a { float: left; width: 31.5%; margin: 0 1.8% 6px 0; height: 32px; line-height: 30px; padding-left: 8px; background: #0f0d12; border: 1px solid #3a2e34; font-size: 12px; cursor: pointer; white-space: nowrap; overflow: hidden; }
+.xgal a:hover { border-color: #e5484d; }
+.xgal a i { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; border-radius: 6px; }
+/* mashhur CFGlar */
+.ctr { position: relative; height: 54px; padding: 8px 210px 0 44px; margin-bottom: 6px; background: #15111a; border: 1px solid #2a2026; }
+.ctr .rk { position: absolute; left: 8px; top: 13px; }
+.ctr b { display: block; } .ctr small { display: block; }
+.ctr .btn { position: absolute; top: 10px; margin: 0; height: 32px; line-height: 30px; }
+.ctr .btn.red { right: 8px; } .ctr .btn[data-cfglike] { right: 104px; }
+.ctr .btn.on { color: #ff6a8a; border-color: #ff6a8a; }
+/* ko'rinish sozlamalari */
+.lkr { height: 40px; line-height: 40px; }
+.lkr span { display: inline-block; width: 150px; }
+.lkr a.bgc { display: inline-block; width: 28px; height: 28px; margin-right: 6px; vertical-align: middle; border-radius: 6px; border: 2px solid #3a2e34; cursor: pointer; }
+.lkr a.bgc.on { border-color: white; }
+.lkr a.sgo, .mul a.sgo { display: inline-block; height: 28px; line-height: 26px; padding: 0 10px; margin-right: 6px; font-size: 13px; border: 1px solid #3a2e34; background: #0f0d12; cursor: pointer; }
+.lkr a.sgo.on, .mul a.sgo.on { border-color: #e5484d; color: #ff6a6a; }
+.mul a.sgo { margin-bottom: 6px; }
+/* zarrachalar: qor, Navro'z, Mustaqillik */
+#stage.pt-snow .spk { width: 4px; height: 4px; border-radius: 2px; background: white; }
+#stage.pt-nav .spk { background: #3ccf4e; } #stage.pt-nav .spk.s2 { background: #ff7ab8; }
+#stage.pt-ind .spk { background: #1eb3e6; } #stage.pt-ind .spk.s2 { background: #3ccf4e; }
+/* bayram yozuvi */
+#holBar { position: absolute; top: 60px; left: 50%; width: 400px; margin-left: -200px; text-align: center; font-size: 15px; font-weight: bold; letter-spacing: 1px; z-index: 19; }
+#holBar.ny { color: #9fd8ff; } #holBar.nav { color: #7ee35a; } #holBar.ind { color: #5fd0ff; }
+/* Telegram ulash */
+.tgl2 p { font-size: 15px; }
+.tgcode { margin: 14px 0; font-size: 44px; font-weight: bold; letter-spacing: 10px; text-align: center; color: #5fbfff; }
+.sgg .rk.av2 { width: 30px; height: 30px; line-height: 30px; border-radius: 15px; text-align: center; font-weight: bold; color: #fff; overflow: hidden; }
+.sgg .rk.av2 img { width: 30px; height: 30px; border-radius: 15px; }

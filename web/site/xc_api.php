@@ -140,6 +140,7 @@ function pub($u, $full) {
     $ch = rd('champ', array()); $r['champ'] = !empty($ch['login']) && $ch['login'] === strtolower($u['login']);
     if (!empty($u['clan'])) $r['clan'] = $u['clan'];
     if (!empty($u['last'])) $r['last'] = $u['last'];
+    if (!empty($u['dly']['s'])) $r['streak'] = (int)$u['dly']['s'];
     $r['st'] = array('k' => (int)@$st['k'], 'd' => (int)@$st['d'], 'g' => (int)@$st['g'], 't' => (int)@$st['t'], 'best' => (int)@$st['best'],
         'wk' => (isset($u['wkkid']) && $u['wkkid'] === week_id()) ? (int)$u['wkk'] : 0);
     if ($full) {
@@ -157,6 +158,8 @@ function pub($u, $full) {
         $r['devices'] = isset($u['devices']) ? count($u['devices']) : 0;
         $r['friends'] = isset($u['friends']) ? $u['friends'] : array();
         $r['week'] = (isset($u['wk']) && $u['wk'] === week_id()) ? (int)$u['wkxp'] : 0;
+        $r['wkst'] = isset($u['wkst']) ? $u['wkst'] : new stdClass();
+        $r['tglinked'] = !empty($u['tgid']) ? 1 : 0;
     }
     return $r;
 }
@@ -187,6 +190,65 @@ function tg_notify($event, $text) {
         'content' => http_build_query(array('chat_id' => $c['tg_chat'], 'text' => $text, 'disable_web_page_preview' => 1)))));
     @file_get_contents('https://api.telegram.org/bot' . $c['tg_token'] . '/sendMessage', false, $ctx);
 }
+function tg_send($chat, $text) {
+    $c = xc_cfg(); if (empty($c['tg_token']) || !$chat) return;
+    $ctx = stream_context_create(array('http' => array('method' => 'POST', 'timeout' => 3, 'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
+        'content' => http_build_query(array('chat_id' => $chat, 'text' => $text, 'disable_web_page_preview' => 1)))));
+    @file_get_contents('https://api.telegram.org/bot' . $c['tg_token'] . '/sendMessage', false, $ctx);
+}
+/* O'yinchilar uchun bot: HTTPS webhook shart emas - menyu so'rovlari kelganda 10 soniyada bir getUpdates bilan yangi xabarlarni olamiz */
+function tg_bot_poll() {
+    $c = xc_cfg();
+    if (empty($c['tg_bot']) || empty($c['tg_token'])) return;
+    $f = XC_DIR . '/tgpoll.lock';
+    if (is_file($f) && time() - filemtime($f) < 10) return;
+    $h = @fopen($f, 'c'); if (!$h || !flock($h, LOCK_EX | LOCK_NB)) return;
+    touch($f);
+    $st = rd('tgbot', array('off' => 0));
+    $ctx = stream_context_create(array('http' => array('timeout' => 3)));
+    $r = json_decode((string)@file_get_contents('https://api.telegram.org/bot' . $c['tg_token'] . '/getUpdates?timeout=0&limit=30&offset=' . ((int)$st['off'] + 1), false, $ctx), true);
+    if (!empty($r['result'])) foreach ($r['result'] as $up) {
+        $st['off'] = max((int)$st['off'], (int)$up['update_id']);
+        if (empty($up['message']['text']) || empty($up['message']['chat']['id']) || $up['message']['chat']['type'] !== 'private') continue;
+        $chat = $up['message']['chat']['id']; $txt = trim($up['message']['text']);
+        tg_send($chat, tg_bot_answer($chat, $txt));
+    }
+    wr('tgbot', $st);
+    flock($h, LOCK_UN); fclose($h);
+}
+function tg_bot_answer($chat, $txt) {
+    $me = null;
+    foreach ((array)glob(XC_DIR . '/users/*.php') as $f) { $x = user(basename($f, '.php')); if ($x && !empty($x['tgid']) && (string)$x['tgid'] === (string)$chat) { $me = $x; break; } }
+    if (preg_match('/^(?:\/link\s*)?(\d{6})$/', $txt, $m)) {
+        $codes = rd('tglink', array());
+        if (empty($codes[$m[1]]) || time() - $codes[$m[1]]['t'] > 900) return "Kod topilmadi yoki eskirgan. X CLIENT menyusida: Sozlamalar > Akkaunt > Telegram'ni ulash.";
+        $u = user($codes[$m[1]]['l']); if (!$u) return 'Akkaunt topilmadi.';
+        $u['tgid'] = $chat; save_user($u); unset($codes[$m[1]]); wr('tglink', $codes);
+        return "Ulandi! Salom, " . $u['name'] . ".\n/me - statistikam\n/friends - onlayn do'stlar\n/top - hafta qotillari\n/online - hozir o'ynayotganlar";
+    }
+    if (!$me) return "Salom! Bu X CLIENT boti.\nAkkauntingizni ulash: X CLIENT menyusida Sozlamalar > Akkaunt > \"Telegram'ni ulash\" ni bosing va chiqqan 6 xonali kodni shu yerga yozing.";
+    $cmd = strtolower(preg_replace('/@.*$/', '', $txt));
+    if ($cmd === '/me' || $cmd === '/stats') {
+        $st = isset($me['st']) ? $me['st'] : array(); $k = (int)@$st['k']; $d = (int)@$st['d'];
+        return $me['name'] . " - " . level($me['xp']) . "-daraja (" . ((int)$me['xp'] % XP_PER_LEVEL) . "/" . XP_PER_LEVEL . " XP)\nKill: $k · O'lim: $d · K/D: " . ($d ? round($k / $d, 2) : $k) . "\nO'yinlar: " . (int)@$st['g'] . " · Soat: " . round((int)@$st['t'] / 3600, 1) . "\nEng zo'r o'yin: " . (int)@$st['best'] . " kill\nYutuqlar: " . (isset($me['ach']) ? count($me['ach']) : 0);
+    }
+    if ($cmd === '/friends') {
+        $on = array(); foreach ((isset($me['friends']) ? $me['friends'] : array()) as $fl) { $f = user($fl); if ($f && is_online($f)) $on[] = $f['name'] . (!empty($f['server']) ? ' - ' . $f['server'] . (!empty($f['map']) ? ' (' . $f['map'] . ')' : '') : ' - menyuda'); }
+        return $on ? "Onlayn do'stlar:\n" . implode("\n", $on) : "Hozir onlayn do'st yo'q.";
+    }
+    if ($cmd === '/top') {
+        $l = array(); $wk = week_id();
+        foreach ((array)glob(XC_DIR . '/users/*.php') as $f) { $x = user(basename($f, '.php')); if ($x && isset($x['wkkid']) && $x['wkkid'] === $wk && !empty($x['wkk'])) $l[] = array($x['name'], (int)$x['wkk']); }
+        usort($l, function ($a, $b) { return $b[1] - $a[1]; });
+        $o = "Hafta qotillari:"; foreach (array_slice($l, 0, 10) as $i => $x) $o .= "\n" . ($i + 1) . ". " . $x[0] . " - " . $x[1] . " kill";
+        return $l ? $o : "Bu hafta hali hech kim kill qilmadi.";
+    }
+    if ($cmd === '/online') {
+        $n = 0; $srv = 0; foreach ((array)glob(XC_DIR . '/users/*.php') as $f) { $x = user(basename($f, '.php')); if ($x && is_online($x)) { $n++; if (!empty($x['server'])) $srv++; } }
+        return "Hozir X CLIENT da: $n kishi ($srv tasi serverda o'ynayapti).";
+    }
+    return "/me - statistikam\n/friends - onlayn do'stlar\n/top - hafta qotillari\n/online - hozir o'ynayotganlar";
+}
 /* Kunlik vazifalar: sana bo'yicha hammaga bir xil 3 ta vazifa. Bajarilishini menyu o'yin tarixidan hisoblaydi,
  * mukofot (XP) bu yerda kuniga bir marta beriladi. */
 function missions_today() {
@@ -211,6 +273,8 @@ function ach_list() {
         'best30' => array(30, 'best'), 'g100' => array(100, 'g'), 't10h' => array(36000, 't'), 't50h' => array(180000, 't'),
         'awp100' => array(100, 'w:awp'), 'ak500' => array(500, 'w:ak47'), 'knife10' => array(10, 'w:knife'), 'deagle100' => array(100, 'w:deagle'),
         'fr5' => array(5, 'fr'), 'ref3' => array(3, 'ref'), 'champ' => array(1, 'champ'), 'clan' => array(1, 'clan'),
+        'k10000' => array(10000, 'k'), 'best50' => array(50, 'best'), 'g500' => array(500, 'g'), 't100h' => array(360000, 't'),
+        'fr20' => array(20, 'fr'), 'streak7' => array(7, 'streak'), 'srv10' => array(10, 'srvn'), 'wall10' => array(10, 'wall'),
     );
 }
 function ach_check(&$u) {
@@ -224,6 +288,9 @@ function ach_check(&$u) {
         elseif ($f === 'ref') $v = isset($u['refs']) ? count($u['refs']) : 0;
         elseif ($f === 'champ') $v = !empty($u['champs']) ? 1 : 0;
         elseif ($f === 'clan') $v = !empty($u['clan']) ? 1 : 0;
+        elseif ($f === 'streak') $v = isset($u['dly']['s']) ? (int)$u['dly']['s'] : 0;
+        elseif ($f === 'srvn') $v = isset($st['srv']) ? count($st['srv']) : 0;
+        elseif ($f === 'wall') $v = isset($u['walln']) ? (int)$u['walln'] : 0;
         else $v = isset($st[$f]) ? (int)$st[$f] : 0;
         if ($v >= $a[0]) { $u['ach'][$id] = time(); $new[] = $id; $u['xp'] = (int)$u['xp'] + 100; }   // har yutuq +100 XP
     }
@@ -300,6 +367,7 @@ function touch_device(&$u) {
 ensure_dir();
 $a = p('a');
 daily_report();
+tg_bot_poll();
 
 switch ($a) {
 
@@ -753,16 +821,84 @@ case 'cfg_share':
     $abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     do { $code = ''; for ($i = 0; $i < 6; $i++) $code .= $abc[mt_rand(0, strlen($abc) - 1)]; } while (is_file(XC_DIR . '/cfgs/' . $code . '.php'));
     unset($c['s']['name'], $c['s']['tag']);
-    wr('cfgs/' . $code, array('t' => time(), 'c' => $c));
+    $title = trim(clean_str(p('title'), 40)); $who = '';
+    $tok = p('token'); if (preg_match('/^[a-f0-9]{40}$/', $tok)) { $tks = rd('tokens', array()); if (!empty($tks[$tok])) $who = $tks[$tok]; }
+    wr('cfgs/' . $code, array('t' => time(), 'c' => $c, 'title' => $title, 'who' => $who, 'lk' => array(), 'uses' => 0));
     cap_dir(XC_DIR . '/cfgs', 5000);
+    if ($title !== '' && p('pub') === '1') {               // "Mashhur CFGlar" ro'yxatiga
+        lock(); $ix = rd('cfgpub', array());
+        $ix[$code] = array('code' => $code, 'title' => $title, 'who' => $who, 't' => time(), 'likes' => 0, 'uses' => 0);
+        if (count($ix) > 300) { uasort($ix, function ($a, $b) { return ($b['likes'] * 5 + $b['uses']) - ($a['likes'] * 5 + $a['uses']); }); $ix = array_slice($ix, 0, 300, true); }
+        wr('cfgpub', $ix);
+    }
     out(array('ok' => true, 'code' => $code));
+
+case 'music':                                            // menyu musiqalari ro'yxati (admin panel > Sozlamalar)
+    $c = xc_cfg(); $l = array();
+    foreach (preg_split('/\r?\n/', isset($c['music']) ? $c['music'] : '') as $ln) { $x = array_map('trim', explode('|', $ln)); if (count($x) === 2 && $x[0] !== '' && preg_match('/^[\w\/.\-]+\.mp3$/', $x[1])) $l[] = array($x[0], $x[1]); }
+    out(array('ok' => true, 'list' => $l));
+case 'cfg_top':
+    $ix = array_values(rd('cfgpub', array()));
+    usort($ix, function ($a, $b) { return ($b['likes'] * 5 + $b['uses']) - ($a['likes'] * 5 + $a['uses']); });
+    out(array('ok' => true, 'list' => array_slice($ix, 0, 50)));
+case 'cfg_like':
+    lock();
+    $u = auth();
+    $code = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', p('code')));
+    $x = rd('cfgs/' . $code, null); if (!$x) fail('bad', 'Kod topilmadi');
+    $me = strtolower($u['login']);
+    if (!isset($x['lk'])) $x['lk'] = array();
+    if (isset($x['lk'][$me])) fail('done', 'Allaqachon yoqtirgansiz');
+    $x['lk'][$me] = 1; wr('cfgs/' . $code, $x);
+    $ix = rd('cfgpub', array()); if (isset($ix[$code])) { $ix[$code]['likes'] = count($x['lk']); wr('cfgpub', $ix); }
+    out(array('ok' => true, 'likes' => count($x['lk'])));
 
 case 'cfg_get':
     $code = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', p('code')));
     if (strlen($code) !== 6) fail('bad', 'Kod 6 belgidan iborat');
     $x = rd('cfgs/' . $code, null);
     if (!$x) fail('bad', 'Kod topilmadi');
+    $ix = rd('cfgpub', array());
+    if (isset($ix[$code]) && rl_count('cfgu' . $code . client_ip(), 86400) < 1) { rl_add('cfgu' . $code . client_ip(), 86400); lock(); $ix = rd('cfgpub', array()); $ix[$code]['uses']++; wr('cfgpub', $ix); }
     out(array('ok' => true, 'cfg' => $x['c']));
+
+/* ---------- Telegram bot: o'yinchi akkauntini ulaydi -> /me, /friends, /top, /online ---------- */
+case 'tg_code':
+    lock();
+    $u = auth();
+    $c = xc_cfg();
+    if (empty($c['tg_bot']) || empty($c['tg_token'])) fail('off', 'Telegram bot hali yoqilmagan');
+    $codes = rd('tglink', array()); foreach ($codes as $k => $v) if (time() - $v['t'] > 900) unset($codes[$k]);
+    do { $code = (string)mt_rand(100000, 999999); } while (isset($codes[$code]));
+    $codes[$code] = array('l' => strtolower($u['login']), 't' => time()); wr('tglink', $codes);
+    out(array('ok' => true, 'code' => $code, 'bot' => isset($c['tg_botname']) ? $c['tg_botname'] : '', 'linked' => !empty($u['tgid'])));
+case 'tg_unlink':
+    lock(); $u = auth(); unset($u['tgid']); save_user($u); out(array('ok' => true));
+
+/* ---------- menyu xatolari (avtomatik): bir xil xato bir yozuvga yig'iladi, admin panel > Xatolar ---------- */
+case 'jserr':
+    if (rl_count('je' . client_ip(), 3600) >= 20) out(array('ok' => true));
+    rl_add('je' . client_ip(), 3600);
+    $msg = clean_str(p('msg'), 300); if ($msg === '') out(array('ok' => true));
+    $src = clean_str(p('src'), 60); $line = (int)p('line'); $k = substr(md5($msg . '|' . $src . '|' . $line), 0, 12);
+    lock(); $all = rd('jserr', array()); $new = !isset($all[$k]);
+    if ($new) $all[$k] = array('msg' => $msg, 'src' => $src, 'line' => $line, 'ver' => clean_str(p('ver'), 20), 'n' => 0, 'first' => time(), 'last' => 0, 'ua' => clean_str(isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '', 120));
+    $all[$k]['n']++; $all[$k]['last'] = time(); $all[$k]['ver'] = clean_str(p('ver'), 20);
+    if (count($all) > 200) { uasort($all, function ($a, $b) { return $b['last'] - $a['last']; }); $all = array_slice($all, 0, 200, true); }
+    wr('jserr', $all);
+    if ($new) tg_notify('report', "X CLIENT menyusida yangi xato: " . $msg . " (" . $src . ":" . $line . ")");
+    out(array('ok' => true));
+
+/* ---------- qaysi tugmalar bosiladi (admin panel > Tugmalar): menyu 2 daqiqada bir yig'ib yuboradi ---------- */
+case 'clicks':
+    if (rl_count('ck' . client_ip(), 3600) >= 40) out(array('ok' => true));
+    rl_add('ck' . client_ip(), 3600);
+    $c = json_decode(p('c'), true); if (!is_array($c)) out(array('ok' => true));
+    @mkdir(XC_DIR . '/clicks', 0755, true); @date_default_timezone_set('Asia/Tashkent');
+    lock(); $k = 'clicks/' . date('Y-m-d'); $x = rd($k, array());
+    foreach (array_slice($c, 0, 60, true) as $a => $n) { $a = (string)$a; if (!preg_match('/^[a-z0-9_:\-]{1,40}$/i', $a)) continue; $x[$a] = (isset($x[$a]) ? $x[$a] : 0) + max(0, min(200, (int)$n)); }
+    wr($k, $x);
+    out(array('ok' => true));
 
 case 'promo':                                            // admin panelda qo'yilgan reklama serverlari (muddati o'tmagan)
     $l = array(); foreach (rd('promo', array()) as $x) if (!empty($x['until']) && $x['until'] > time()) $l[] = array('ip' => $x['ip'], 'title' => $x['title']);
@@ -776,6 +912,7 @@ case 'notif':
     if (!empty($u['inv'])) { lock(); $u = auth(); foreach ($u['inv'] as $i) if (time() - $i['t'] < 600) $inv[] = $i; $u['inv'] = array(); save_user($u); }
     $calls = array();                                    // "Sizni sog'indik": uzoq kirmagan paytda do'stlar chaqirgan
     if (!empty($u['calls'])) { lock(); $u = auth(); $calls = $u['calls']; $u['calls'] = array(); save_user($u); }
+    $wn = 0; if (!empty($u['wallnew'])) { lock(); $u = auth(); $wn = (int)$u['wallnew']; $u['wallnew'] = 0; save_user($u); }
     $ring = null; $ans = array();                        // qo'ng'iroq: do'st menyuda qo'ng'iroq qilyapti / javob berdi
     if (!empty($u['ring']) || !empty($u['ringans'])) {
         lock(); $u = auth();
@@ -783,7 +920,7 @@ case 'notif':
         if (!empty($u['ringans'])) foreach ($u['ringans'] as $x) if (time() - $x['t'] < 120) $ans[] = $x;
         unset($u['ring']); $u['ringans'] = array(); save_user($u);
     }
-    out(array('ok' => true, 'unread' => $un, 'req' => $rq, 'inv' => $inv, 'calls' => $calls, 'ring' => $ring, 'ringans' => $ans));
+    out(array('ok' => true, 'unread' => $un, 'req' => $rq, 'inv' => $inv, 'calls' => $calls, 'ring' => $ring, 'ringans' => $ans, 'wallnew' => $wn));
 
 /* ---------- do'st profili: daraja, statistika, yutuqlar, oxirgi faollik ---------- */
 case 'uinfo':
@@ -796,7 +933,59 @@ case 'uinfo':
     $r['created'] = isset($t['created']) ? (int)$t['created'] : 0;
     $r['nfr'] = isset($t['friends']) ? count($t['friends']) : 0;
     $r['isfr'] = !empty($u['friends']) && in_array(strtolower($t['login']), array_map('strtolower', $u['friends']));
+    $r['wall'] = array_reverse(isset($t['wall']) ? array_slice($t['wall'], -20) : array());
     out(array('ok' => true, 'u' => $r));
+
+/* ---------- profil devori: do'stlar profilingizga izoh qoldiradi (Steam'dagidek) ---------- */
+case 'wall_add':
+    lock();
+    $u = auth();
+    $to = strtolower(p('to')); $txt = trim(clean_str(p('text'), 200));
+    if (mb_strlen($txt, 'UTF-8') < 1) fail('bad', 'Matn bo\'sh');
+    $t = preg_match('/^[a-z0-9_]{3,20}$/', $to) ? user($to) : null;
+    if (!$t) fail('bad', 'Topilmadi');
+    $mine = strtolower($u['login']) === $to;
+    if (!$mine && (empty($u['friends']) || !in_array($to, array_map('strtolower', $u['friends'])))) fail('bad', 'Faqat do\'stlar profiliga yozish mumkin');
+    if (rl_count('wall' . strtolower($u['login']), 3600) >= 20) fail('limit', 'Juda ko\'p. Keyinroq yozing');
+    rl_add('wall' . strtolower($u['login']), 3600);
+    if (!isset($t['wall'])) $t['wall'] = array();
+    $t['wall'][] = array('id' => substr(md5(microtime() . mt_rand()), 0, 8), 'from' => $u['login'], 'name' => $u['name'], 'text' => $txt, 't' => time());
+    $t['wall'] = array_slice($t['wall'], -30);
+    if (!$mine) $t['wallnew'] = (isset($t['wallnew']) ? (int)$t['wallnew'] : 0) + 1;
+    if (!$mine) { $t['walln'] = (isset($t['walln']) ? (int)$t['walln'] : 0) + 1; ach_check($t); }
+    save_user($t);
+    out(array('ok' => true));
+case 'wall_del':
+    lock();
+    $u = auth();
+    $to = strtolower(p('to')); $id = preg_replace('/[^a-f0-9]/', '', p('id'));
+    $t = preg_match('/^[a-z0-9_]{3,20}$/', $to) ? user($to) : null;
+    if (!$t || empty($t['wall'])) fail('bad', 'Topilmadi');
+    $me = strtolower($u['login']); $n = array();
+    foreach ($t['wall'] as $w) { if ($w['id'] === $id && ($me === $to || strtolower($w['from']) === $me)) continue; $n[] = $w; }
+    $t['wall'] = $n; save_user($t);
+    out(array('ok' => true));
+
+/* ---------- "Bilasizmi?": siz bilan bir serverlarda o'ynagan, lekin do'stingiz bo'lmagan o'yinchilar ---------- */
+case 'suggest':
+    $u = auth();
+    $me = strtolower($u['login']);
+    $mys = isset($u['st']['srv']) ? $u['st']['srv'] : array(); uasort($mys, function ($a, $b) { return $b['t'] - $a['t']; });
+    $mys = array_slice($mys, 0, 15, true);
+    if (!$mys) out(array('ok' => true, 'list' => array()));
+    $skip = array($me => 1); foreach ((isset($u['friends']) ? $u['friends'] : array()) as $f) $skip[strtolower($f)] = 1;
+    foreach ((isset($u['freq']) ? $u['freq'] : array()) as $f => $x) $skip[strtolower($f)] = 1;
+    $cand = array();
+    foreach ((array)glob(XC_DIR . '/users/*.php') as $f) {
+        $l = basename($f, '.php'); if (isset($skip[$l])) continue;
+        $x = user($l); if (!$x || empty($x['seen']) || time() - $x['seen'] > 14 * 86400) continue;
+        $sc = 0; $common = '';
+        foreach ((isset($x['st']['srv']) ? $x['st']['srv'] : array()) as $ip => $sv) if (isset($mys[$ip])) { $sc += 1 + min($sv['t'], $mys[$ip]['t']) / 3600; if ($common === '') $common = $sv['n'] !== '' ? $sv['n'] : $ip; }
+        if ($sc > 0) { $pp = pub($x, false); $cand[] = array('s' => $sc, 'u' => array('login' => $pp['login'], 'name' => $pp['name'], 'level' => $pp['level'], 'av' => $pp['av'], 'avc' => $pp['avc'], 'online' => $pp['online'], 'common' => $common)); }
+    }
+    usort($cand, function ($a, $b) { return $b['s'] < $a['s'] ? -1 : 1; });
+    $out = array(); foreach (array_slice($cand, 0, 6) as $c) $out[] = $c['u'];
+    out(array('ok' => true, 'list' => $out));
 
 /* ---------- qo'ng'iroq: onlayn do'stning menyusida qo'ng'iroq oynasi chiqadi (ovoz bilan) ---------- */
 case 'ring':
@@ -839,8 +1028,9 @@ case 'daily':
     $u['xp'] = (int)$u['xp'] + $got;
     if (!isset($u['wk']) || $u['wk'] !== week_id()) { $u['wk'] = week_id(); $u['wkxp'] = 0; }
     $u['wkxp'] = (int)$u['wkxp'] + $got;
+    $newach = ach_check($u);
     save_user($u);
-    out(array('ok' => true, 'got' => $got, 'streak' => $streak, 'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL));
+    out(array('ok' => true, 'newach' => $newach, 'got' => $got, 'streak' => $streak, 'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL));
 
 /* ---------- "Sizni sog'indik": 3+ kun kirmagan do'stni chaqirish (u qaytganda menyuda ko'radi) ---------- */
 case 'miss_call':
@@ -857,6 +1047,7 @@ case 'miss_call':
     $t['calls'][] = array('from' => $u['name'], 'login' => $u['login'], 't' => time());
     $t['calls'] = array_slice($t['calls'], -10);
     save_user($t);
+    if (!empty($t['tgid'])) tg_send($t['tgid'], $u['name'] . " sizni sog'inibdi! X CLIENT ga kiring - birga o'ynaymiz.");
     out(array('ok' => true));
 
 /* ---------- menyudagi "Taklif / shikoyat" tugmasi -> admin panel (Fikrlar) + Telegram ---------- */
@@ -908,6 +1099,11 @@ case 'stat':
     $st['srv'][$ip] = $sv;
     if (count($st['srv']) > 30) { uasort($st['srv'], function ($a, $b) { return $b['t'] - $a['t']; }); $st['srv'] = array_slice($st['srv'], 0, 30, true); }
     $u['st'] = $st;
+    $ws = isset($u['wkst']) && is_array($u['wkst']) ? $u['wkst'] : array();   // haftalar bo'yicha (statistika grafigi uchun, 12 hafta)
+    $wid = week_id(); if (!isset($ws[$wid])) $ws[$wid] = array('k' => 0, 'd' => 0, 't' => 0, 'g' => 0);
+    $ws[$wid]['k'] += $dk; $ws[$wid]['d'] += $dd; $ws[$wid]['t'] += $dt; if (!isset($ss[$sid])) $ws[$wid]['g']++;
+    ksort($ws); if (count($ws) > 12) $ws = array_slice($ws, -12, 12, true);
+    $u['wkst'] = $ws;
     $wk = week_id(); if (!isset($u['wkkid']) || $u['wkkid'] !== $wk) { if (isset($u['wkkid'])) { $u['wkkpid'] = $u['wkkid']; $u['wkkp'] = (int)$u['wkk']; } $u['wkkid'] = $wk; $u['wkk'] = 0; } $u['wkk'] += $dk;
     if ($dk > 0) {                                        // har kill uchun XP (vaqt XP siga qo'shimcha)
         $u['xp'] = (int)$u['xp'] + $dk * XP_PER_KILL;
