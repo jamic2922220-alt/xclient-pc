@@ -1599,23 +1599,32 @@ function calcVal() {
 }
 function calcOut() { var v = calcVal(); return v ? '= <b>' + v + '</b> CS 1.6' : ''; }
 /* ---- tayyor uslublar (o'yin uslubi bo'yicha, haqiqiy o'yinchilar emas) ---- */
+/* Tayyor CFG'lar - 4 guruh: [id, nom, izoh, qiymatlar, guruh]. Har biri to'liq: internet, interp, sezgirlik, pritsel, qurol ko'rinishi.
+ * FPS 100 dan past bo'lsa - 100 (CS 1.6 fizikasi); grafika faqat "Kompyuter" guruhida o'zgaradi. */
 var STYLES = [
-  ['clanwar', 'st_clanwar', 'st_clanwar2', { net: 'fast', interp: 0.01, voice: 1, vscale: 1.2, mp3off: 1, mmusic: 0, saytm: 8, netg: 0, dmax: 6, hs: 1, cid: 1 }],
-  ['stream', 'st_stream', 'st_stream2', { netg: 0, showfps: 0, nover: 1, dmax: 5, saytm: 6, gamma: 2.8, decals: 2000 }],
-  ['lowpc', 'st_lowpc', 'st_lowpc2', { detail: 0, shadows: 0, dyn: 0, vsync: 0, decals: 300, fps: 100, hisnd: 1, mixa: 0.15 }],
-  ['zombie', 'st_zombie', 'st_zombie2', { vol: 0.9, gamma: 3, dmax: 8, saytm: 8, decals: 1000 }],
-  ['dmcfg', 'st_dm', 'st_dm2', { dmax: 8, dtime: 4, saytm: 4, hs: 1, cid: 0, decals: 1000 }],
-  ['csdef', 'st_csdef', 'st_csdef2', { sens: 3, zoom: 1.2, raw: 1, filter: 0, xt: 0, xs: 'medium', xc: '50 250 50', xtr: 0, xdyn: 1, fps: 100, interp: 0.1, net: 'slow', bob: 0.01, gamma: 2.5, fov: 90, vmfov: 90 }],
-  ['rifle', 'st_rifle', 'st_rifle2', { sens: 2.2, zoom: 1, raw: 1, xt: 0, xs: 'small', xc: '50 250 50', xdyn: 0, interp: 0.01, lw: 1, lc: 1, bob: 0 }],
-  ['awp', 'st_awp', 'st_awp2', { sens: 1.8, zoom: 0.85, raw: 1, xt: 3, xs: 'small', xc: '0 230 255', xdyn: 0, interp: 0.01, lw: 1, lc: 1, bob: 0 }],
-  ['classic', 'st_classic', 'st_classic2', { sens: 2.5, zoom: 1.2, raw: 1, xt: 0, xs: 'medium', xc: '50 250 50', xdyn: 1, bob: 0.01 }],
-  ['new', 'st_new', 'st_new2', { sens: 3, zoom: 1.2, raw: 1, xt: 0, xs: 'medium', xc: '255 210 60', xdyn: 1, bob: 0.01 }],
-  ['entry', 'st_entry', 'st_entry2', { sens: 3.2, zoom: 1, raw: 1, filter: 0, xt: 0, xs: 'small', xc: '0 230 255', xdyn: 0, interp: 0.01, lw: 1, lc: 1, bob: 0, fastsw: 1 }],
-  ['low', 'st_low', 'st_low2', { sens: 1.4, zoom: 0.9, raw: 1, filter: 0, xt: 0, xs: 'extra_small', xc: '255 255 255', xdyn: 0, interp: 0.01, lw: 1, lc: 1, bob: 0 }],
-  ['csgo', 'st_csgo', 'st_csgo2', { bobst: 2, bobv: 0.13, bobl: 0.32, boblow: 8, lagst: 2, lagsc: 1, fovlerp: 0.2, camint: 1, vmx: 1, vmy: 0, vmz: -1, vmfov: 90, xt: 0, xs: 'small', xc: '50 250 50', xdyn: 0 }]
+  ['pro', 'st_pro', 'st_pro2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, sens: 2, zoom: 1, xt: 0, xs: 'small', xc: '50 250 50', xtr: 0, xdyn: 0, bob: 0, fastsw: 1, vmfov: 90, gamma: 2.8, dmax: 5 }, 'top'],
+  ['rifle', 'st_rifle', 'st_rifle2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, sens: 2.2, zoom: 1, xt: 0, xs: 'small', xc: '50 250 50', xtr: 0, xdyn: 0, bob: 0, fastsw: 1 }, 'top'],
+  ['awp', 'st_awp', 'st_awp2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, sens: 1.8, zoom: 0.85, xt: 0, xs: 'small', xc: '0 230 255', xtr: 0, xdyn: 0, bob: 0, fastsw: 1, awps: 1.5, awpz: 0.85, awpxs: 'small' }, 'top'],
+  ['entry', 'st_entry', 'st_entry2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, sens: 3.2, zoom: 1, xt: 0, xs: 'small', xc: '0 230 255', xtr: 0, xdyn: 0, bob: 0, fastsw: 1 }, 'top'],
+  ['pistol', 'st_pistol', 'st_pistol2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, sens: 2.4, zoom: 1, xt: 0, xs: 'small', xc: '255 255 255', xtr: 0, xdyn: 0, bob: 0, fastsw: 1 }, 'top'],
+  ['low', 'st_low', 'st_low2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, sens: 1.4, zoom: 0.9, xt: 0, xs: 'extra_small', xc: '255 255 255', xtr: 0, xdyn: 0, bob: 0 }, 'top'],
+  ['high', 'st_high', 'st_high2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, sens: 4.5, zoom: 1.2, xt: 0, xs: 'medium', xc: '255 210 60', xtr: 0, xdyn: 1, bob: 0 }, 'top'],
+  ['classic', 'st_classic', 'st_classic2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, sens: 2.5, zoom: 1.2, xt: 0, xs: 'medium', xc: '50 250 50', xtr: 0, xdyn: 1, bob: 0.01 }, 'top'],
+  ['csgo', 'st_csgo', 'st_csgo2', { bobst: 2, bobv: 0.13, bobl: 0.32, boblow: 8, lagst: 2, lagsc: 1, fovlerp: 0.2, camint: 1, vmx: 1, vmy: 0, vmz: -1, vmfov: 90, xt: 0, xs: 'small', xc: '50 250 50', xdyn: 0 }, 'top'],
+  ['new', 'st_new', 'st_new2', { sens: 3, zoom: 1.2, raw: 1, xt: 0, xs: 'medium', xc: '255 210 60', xdyn: 1, bob: 0.01 }, 'top'],
+  ['clanwar', 'st_clanwar', 'st_clanwar2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, voice: 1, vscale: 1.2, mp3off: 1, mmusic: 0, saytm: 8, netg: 0, dmax: 6, hs: 1, cid: 1 }, 'sit'],
+  ['zombie', 'st_zombie', 'st_zombie2', { sens: 3.5, xdyn: 1, xs: 'medium', vol: 0.9, gamma: 3, dmax: 8, saytm: 8, decals: 1000 }, 'sit'],
+  ['dmcfg', 'st_dm', 'st_dm2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, dmax: 8, dtime: 4, saytm: 4, hs: 1, cid: 0, decals: 1000, fastsw: 1 }, 'sit'],
+  ['stream', 'st_stream', 'st_stream2', { netg: 0, showfps: 0, nover: 1, dmax: 5, saytm: 6, gamma: 2.8, decals: 2000 }, 'sit'],
+  ['vis', 'st_vis', 'st_vis2', { gamma: 3, dyn: 0, detail: 0, hor: 1, fov: 90, vmfov: 90 }, 'pc'],
+  ['lowpc', 'st_lowpc', 'st_lowpc2', { detail: 0, shadows: 0, dyn: 0, vsync: 0, decals: 300, fps: 100, hisnd: 1, mixa: 0.15 }, 'pc'],
+  ['slownet', 'st_slownet', 'st_slownet2', { net: 'slow', interp: 0.1, lw: 1, lc: 1 }, 'pc'],
+  ['midnet', 'st_midnet', 'st_midnet2', { net: 'mid', interp: 0.05, lw: 1, lc: 1 }, 'pc'],
+  ['csdef', 'st_csdef', 'st_csdef2', { sens: 3, zoom: 1.2, raw: 1, filter: 0, xt: 0, xs: 'medium', xc: '50 250 50', xtr: 0, xdyn: 1, fps: 100, interp: 0.1, net: 'slow', bob: 0.01, gamma: 2.5, fov: 90, vmfov: 90 }, 'def']
 ];
 function applyStyle(id) {
   each(STYLES, function (x) { if (x[0] === id) for (var k in x[3]) if (x[3].hasOwnProperty(k)) E[k] = x[3][k]; });
+  if (!(E.fps >= 100)) E.fps = 100;
   E.xp = presetOf(E); showSetTab('tools'); toast(T('st_ok'), 4000);
 }
 /* ---- kompyuter quvvati (XClient.exe aniqlaydi) ---- */
@@ -1886,7 +1895,11 @@ var PANES = {
     var games = '';
     each(CALC_G, function (g) { games += '<a class="' + (CALC === g[0] ? 'on' : '') + '" data-calc="' + g[0] + '">' + g[1] + '</a>'; });
     var st = '';
-    each(STYLES, function (x) { st += '<div class="rowb"><b>' + esc(T(x[1])) + '</b><small>' + esc(T(x[2])) + '</small><a class="btn" data-style="' + x[0] + '">' + esc(T('st_apply')) + '</a></div>'; });
+    var lastG = '';
+    each(STYLES, function (x) {
+      if (x[4] !== lastG) { lastG = x[4]; st += '<div class="stg">' + esc(T('sg_' + lastG)) + '</div>'; }
+      st += '<div class="rowb sty"><b>' + esc(T(x[1])) + '</b><small>' + esc(T(x[2])) + '</small><a class="btn" data-style="' + x[0] + '">' + esc(T('st_apply')) + '</a></div>';
+    });
     var dm = '';
     each(DB.demos || [], function (d) {
       dm += '<div class="dmr"><b>' + esc(d.s) + '</b><small>' + esc(fmtTime(d.t) + (d.m ? ' · ' + d.m : '') + ' · ' + d.n) + '</small><a class="btn" data-demo="' + esc(d.n) + '">▶ ' + esc(T('dm_play')) + '</a></div>';

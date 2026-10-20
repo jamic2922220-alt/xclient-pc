@@ -560,3 +560,5 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 .kpick a { display: inline-block; margin: 0 6px; padding: 6px 12px; background: #2b1c22; border: 1px solid rgba(255,255,255,.15); border-radius: 6px; color: #ffd0c4; cursor: pointer; }
 .kpick a:hover { border-color: #ff3b3b; }
 #mdSettings .pane.r { overflow-y: auto; }
+.stg { margin: 12px 0 6px; font-size: 12px; font-weight: bold; letter-spacing: 1px; color: #ff9a39; text-transform: uppercase; }
+.rowb.sty small { display: block; padding-right: 120px; line-height: 17px; }
