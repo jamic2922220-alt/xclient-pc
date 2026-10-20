@@ -612,7 +612,7 @@ case 'ping':                                             // har daqiqada: onlayn
     } else { $u['server'] = ''; $u['map'] = ''; }
     $u['seen'] = $now;
     $inv = array();                                      // do'stlardan kelgan takliflar (bir marta beriladi)
-    if (!empty($u['inv'])) { foreach ($u['inv'] as $i) if ($now - $i['t'] < 600) $inv[] = $i; $u['inv'] = array(); }
+    if (!empty($u['inv'])) { foreach ((array)$u['inv'] as $i) if (is_array($i) && isset($i['t']) && $now - $i['t'] < 600) $inv[] = $i; $u['inv'] = array(); }
     $msgs = !empty($u['msgs']) ? $u['msgs'] : array(); $u['msgs'] = array();   // admin yuborgan shaxsiy xabarlar (bir marta)
     save_user($u);
     out(array('ok' => true, 'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL, 'inv' => $inv, 'msgs' => $msgs));
@@ -947,7 +947,7 @@ case 'notif':
     $un = array(); foreach ((isset($u['unread']) && is_array($u['unread']) ? $u['unread'] : array()) as $k => $n) if ($n > 0) { $f = user($k); $un[] = array('login' => $k, 'name' => $f ? $f['name'] : $k, 'n' => (int)$n); }
     $rq = array(); foreach ((isset($u['freq']) && is_array($u['freq']) ? $u['freq'] : array()) as $k => $tm) { $f = user($k); if ($f) $rq[] = array('login' => $k, 'name' => $f['name'], 't' => $tm); }
     $inv = array();                                      // do'st chaqiruvlari: 15 s ichida yetib boradi (ping 1 daqiqa kutmaydi)
-    if (!empty($u['inv'])) { lock(); $u = auth(); foreach ($u['inv'] as $i) if (time() - $i['t'] < 600) $inv[] = $i; $u['inv'] = array(); save_user($u); }
+    if (!empty($u['inv'])) { lock(); $u = auth(); foreach ((array)$u['inv'] as $i) if (is_array($i) && isset($i['t']) && time() - $i['t'] < 600) $inv[] = $i; $u['inv'] = array(); save_user($u); }
     $calls = array();                                    // "Sizni sog'indik": uzoq kirmagan paytda do'stlar chaqirgan
     if (!empty($u['calls'])) { lock(); $u = auth(); $calls = $u['calls']; $u['calls'] = array(); save_user($u); }
     $dinv = null; $duel = null; $dres = null;

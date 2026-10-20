@@ -744,11 +744,11 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 /* sandiq */
 #menu .mi em.chn { background: #f5c518; color: #1a1205; cursor: pointer; }
 .chst { text-align: center; padding: 8px 0 4px; }
-.chbox { position: relative; width: 150px; height: 120px; margin: 6px auto 16px; border-radius: 10px; background: -webkit-linear-gradient(top, #8a5a24, #5a3812); border: 3px solid #f5c518; -webkit-box-shadow: 0 0 30px rgba(245,197,24,.45); }
-.chbox i { position: absolute; left: 0; right: 0; top: 46px; height: 6px; background: #f5c518; }
-.chbox b { position: absolute; left: 55px; top: 34px; width: 34px; height: 34px; line-height: 34px; border-radius: 17px; background: #1a1205; color: #f5c518; font-size: 18px; border: 2px solid #f5c518; }
-.chbox.empty { opacity: .4; -webkit-box-shadow: none; }
-.chbox.shake { -webkit-animation: chs .25s linear infinite; }
+.chestbox { position: relative; width: 150px; height: 120px; margin: 6px auto 16px; border-radius: 10px; background: -webkit-linear-gradient(top, #8a5a24, #5a3812); border: 3px solid #f5c518; -webkit-box-shadow: 0 0 30px rgba(245,197,24,.45); }
+.chestbox i { position: absolute; left: 0; right: 0; top: 46px; height: 6px; background: #f5c518; }
+.chestbox b { position: absolute; left: 55px; top: 34px; width: 34px; height: 34px; line-height: 34px; border-radius: 17px; background: #1a1205; color: #f5c518; font-size: 18px; border: 2px solid #f5c518; }
+.chestbox.empty { opacity: .4; -webkit-box-shadow: none; }
+.chestbox.shake { -webkit-animation: chs .25s linear infinite; }
 @-webkit-keyframes chs { 0% { -webkit-transform: rotate(-6deg) scale(1.05); } 50% { -webkit-transform: rotate(6deg) scale(1.1); } 100% { -webkit-transform: rotate(-6deg) scale(1.05); } }
 .btn.big { height: 46px; line-height: 44px; padding: 0 34px; font-size: 17px; }
 .chrw { margin: 0 auto 14px; width: 340px; padding: 12px; border: 2px solid; border-radius: 10px; }

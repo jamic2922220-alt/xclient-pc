@@ -2088,7 +2088,7 @@ var NCOLS = ['red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple', 'pink
 function openChests(keep) {
   if (!ME) return openLogin();
   var n = ME.chests || 0, inv = ME.inv || { nc: [], fr: [] };
-  var h = '<div class="chst"><div class="chbox' + (n ? '' : ' empty') + '" id="chBox"><i></i><b>' + n + '</b></div><div id="chRes"></div>' +
+  var h = '<div class="chst"><div class="chestbox' + (n ? '' : ' empty') + '" id="chBox"><i></i><b>' + n + '</b></div><div id="chRes"></div>' +
     (n ? '<a class="btn red big" data-act="chestopen">' + esc(T('ch_open')) + '</a>' : '<div class="mut">' + esc(T('ch_none')) + '</div>') + '<div class="mut small">' + esc(T('ch_how')) + '</div></div>';
   h += '<div class="ph2 m">' + esc(T('ch_nick')) + '</div><div class="ncl"><a class="' + (!ME.nc ? 'on' : '') + '" data-equipnc="">' + esc(T('ch_def')) + '</a>';
   each(NCOLS, function (c) { var ok = ME.level >= 10; h += '<a class="' + (ME.nc === c ? 'on' : '') + (ok ? '' : ' lock') + '" data-equipnc="' + c + '"><span class="nk nk-' + c + '">' + esc(ME.name) + '</span></a>'; });
@@ -2098,9 +2098,9 @@ function openChests(keep) {
   openSide('chests', T('chs_title'), h + '</div>');
 }
 function chestOpen() {
-  var b = $('chBox'); if (b) b.className = 'chbox shake';
+  var b = $('chBox'); if (b) b.className = 'chestbox shake';
   api('chest_open', {}, function (r) {
-    if (!r.ok) { if (b) b.className = 'chbox'; return toast(r.msg || 'Xato', 5000); }
+    if (!r.ok) { if (b) b.className = 'chestbox'; return toast(r.msg || 'Xato', 5000); }
     setTimeout(function () {
       ME.chests = r.chests; ME.inv = r.inv; ME.xp = r.xp; ME.level = r.level; ME.lvlxp = r.lvlxp; renderBar();
       openChests(true);
@@ -2209,7 +2209,7 @@ function ngFit() {
   var c = ng > 0 ? (pos === 3 ? ' ngl' : pos === 2 ? '' : ' ngr') : '';
   b.className = (b.className || '').replace(/(^|\s)ng[lr](?=\s|$)/g, '') + c;
 }
-setInterval(ngFit, 5000);
+setInterval(function () { if (!playing()) ngFit(); }, 5000);   // o'yin paytida tekshirmaymiz
 function langMenu() {
   var p = $('lngpop');
   if (p) { p.parentNode.removeChild(p); return; }
