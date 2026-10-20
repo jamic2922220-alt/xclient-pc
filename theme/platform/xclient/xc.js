@@ -273,7 +273,7 @@ function loadOpts() {
     for (var k in r.o) if (r.o.hasOwnProperty(k) && OPTS.hasOwnProperty(k)) OPTS[k] = r.o[k];
     if (r.o.ver && !qparam('v')) { VERSION = r.o.ver; renderBar(); }
     if (r.o.cachemb != null && !qparam('c')) CACHE_MB = r.o.cachemb;
-    if (r.o.hw) HW = r.o.hw;
+    if (r.o.hw) { HW = r.o.hw; setTimeout(autoGfx, 1500); }
     if (!DB.lang && /^(ru|uz|en)$/.test(r.o.ilang || '')) { DB.lang = r.o.ilang; setLang(DB.lang); persist(); }   // o'rnatishda tanlangan til
     stateSync();
     if (curModal === 'mdSettings' && (setTab === 'pro' || setTab === 'cont')) showSetTab(setTab);
@@ -1236,7 +1236,7 @@ var DEF = {
   vmx: 0, vmy: 0, vmz: 0, vmshift: 0, bobst: 0, lagst: 0, camint: 0,
   roll: 0, rollspd: 200, bobv: 0.13, bobl: 0.32, boblow: 8, bobcam: 1, lagsc: 1, lagsp: 8, fovlerp: 0, camsc: 1,
   rtracks: 0, rfull: 1, rbg: 0, rallies: 1, rns: 0.8, rhs: 1, dtime: 6, drpc: 1, drpcs: 1, drpcj: 1, mmusic: 1,
-  bob: 0.01, picmip: 0, detail: 1, shadows: 1, minm: 0, interp: 0.01, lw: 1, lc: 1, hisnd: 1, mixa: 0.1, loop: 0, saytm: 5, ngpos: 1, pro: 0
+  bob: 0.01, picmip: 0, detail: 1, shadows: 1, minm: 0, interp: 0.01, lw: 1, lc: 1, hisnd: 1, mixa: 0.1, loop: 0, saytm: 5, ngpos: 1, pro: 0, autogfx: 1, gfxc: ''
 };
 var S = null, E = null;
 var CVARS = { sens: 'sensitivity', zoom: 'zoom_sensitivity_ratio', raw: 'm_rawinput', filter: 'm_filter', vol: 'volume', vscale: 'voice_scale', voice: 'voice_enable',
@@ -1440,12 +1440,27 @@ function hwText() {
   if (!HW) return T('hw_none');
   return Math.round(HW.ram / 1024) + ' GB RAM · ' + HW.cpu + ' ' + T('hw_cores') + (HW.gpu ? ' · ' + HW.gpu : '');
 }
+/* kompyuter quvvatiga mos grafika: FPS 100 da barqaror tursin (FPS tushganda o'yin qotadi).
+ * 100 dan baland FPS faqat kuchli kompyuterda qoladi; kuchsizda ovoz ham yengilroq (hisound 0, bufer 0.15) */
+function gfxPreset(c, s) {
+  if (c === 'weak') return { detail: 0, shadows: 0, dyn: 0, vsync: 0, decals: 300, fps: 100, hisnd: 0, mixa: 0.15 };
+  if (c === 'mid') return { detail: 0, shadows: 1, dyn: 0, vsync: 0, decals: Math.min(s.decals || 1000, 1000), fps: Math.min(s.fps || 100, 144) };
+  return { detail: 1, shadows: 1, dyn: 1, vsync: 0 };
+}
 function hwAuto() {
-  var c = hwClass(), v = c === 'weak' ? { detail: 0, shadows: 0, dyn: 0, vsync: 0 }
-    : c === 'mid' ? { detail: 0, shadows: 1, dyn: 0, vsync: 0 }
-    : { detail: 1, shadows: 1, dyn: 1, vsync: 0 };
+  var c = hwClass(), v = gfxPreset(c, E);
   for (var k in v) if (v.hasOwnProperty(k)) E[k] = v[k];
   showSetTab('pro'); toast(T('hw_done').replace('{c}', T('hw_' + c)), 5000);
+}
+/* "Avto grafika" yoqiq bo'lsa - kompyuter quvvati ma'lum bo'lgach bir marta (yoki quvvat sinfi o'zgarsa) o'zi qo'llanadi */
+function autoGfx() {
+  if (!S || !S.autogfx || !HW) return;
+  var c = hwClass();
+  if (S.gfxc === c) return;
+  var v = gfxPreset(c, S);
+  for (var k in v) if (v.hasOwnProperty(k)) S[k] = v[k];
+  S.gfxc = c; DB.set = S; persist(); applySettings(S); cloudSave();
+  toast(T('gf_done').replace('{c}', T('hw_' + c)), 6000);
 }
 /* ---- kontent paketlari (saytdagi mmb/packs) ---- */
 var PACKS = null;
@@ -1676,6 +1691,7 @@ var PANES = {
       '<div class="mut" style="margin:-6px 0 8px;font-size:12px">' + esc(T('v_fps2')) + '</div>' +
       sl('gamma', 'v_bright', 1.8, 3, 0.1) + sl('fov', 'v_fov', 70, 100, 1, 'v_fov2') + sl('vmfov', 'v_vm', 70, 100, 1) + sl('decals', 'v_dec', 300, 4000, 100) + '</div>' +
       '<div class="pane r"><div class="ph2">&nbsp;</div>' +
+      tg('autogfx', 'gf_auto', HW ? T('gf_auto2').replace('{c}', T('hw_' + hwClass())) : T('hw_none')) +
       '<div class="fr"><div class="lb">' + esc(T('sy_screen')) + '</div><div class="ct2"><a class="dd wide" data-dd="res"><span>' + esc(ddLabel('res')) + '</span><i>\u25be</i></a></div></div>' +
       tg('hor', 'v_hor') + tg('vsync', 'v_vsync') + tg('showfps', 'v_showfps') + tg('dyn', 'v_dyn') + '</div>';
   },
@@ -2138,8 +2154,9 @@ function act(a) {
   if (a === 'logout') { api('logout', {}); DB.token = ''; ME = null; FRIENDS = []; persist(); closeModal(); return renderAll(); }
   if (a === 'defaults') { var keep = E.name, tag = E.tag; E = copy(DEF); E.name = keep; E.tag = tag; return showSetTab(setTab); }
   if (a === 'save') {
+    if (E.autogfx && !S.autogfx) E.gfxc = '';     // "Avto grafika" qayta yoqildi - quvvatga mos sozlama yana qo'llansin
     var nm = $('fName'); if (nm) E.name = nm.value.replace(/["\\;]/g, '').slice(0, 28);
-    S = copy(E); DB.set = S; persist(); applySettings(S); closeModal(); renderBar(); cloudSave(); setTimeout(musicSync, 300);
+    S = copy(E); DB.set = S; persist(); applySettings(S); closeModal(); renderBar(); cloudSave(); setTimeout(musicSync, 300); setTimeout(autoGfx, 400);
     setTimeout(function () { verifySettings(S); }, 700);
   }
 }
