@@ -139,6 +139,7 @@ function pub($u, $full) {
     $r['ach'] = isset($u['ach']) ? array_keys($u['ach']) : array();
     $ch = rd('champ', array()); $r['champ'] = !empty($ch['login']) && $ch['login'] === strtolower($u['login']);
     if (!empty($u['clan'])) $r['clan'] = $u['clan'];
+    if (!empty($u['last'])) $r['last'] = $u['last'];
     $r['st'] = array('k' => (int)@$st['k'], 'd' => (int)@$st['d'], 'g' => (int)@$st['g'], 't' => (int)@$st['t'], 'best' => (int)@$st['best'],
         'wk' => (isset($u['wkkid']) && $u['wkkid'] === week_id()) ? (int)$u['wkk'] : 0);
     if ($full) {
@@ -501,6 +502,7 @@ case 'ping':                                             // har daqiqada: onlayn
             $u['wkxp'] = (int)$u['wkxp'] + XP_PER_MIN;
         }
         $u['server'] = $srv; $u['map'] = substr(preg_replace('/[^\w\-]/', '', $map), 0, 40);
+        $u['last'] = array('s' => $srv, 'm' => $u['map'], 't' => $now);   // oxirgi o'ynagan serveri (do'stlar profilida)
     } else { $u['server'] = ''; $u['map'] = ''; }
     $u['seen'] = $now;
     $inv = array();                                      // do'stlardan kelgan takliflar (bir marta beriladi)
@@ -774,7 +776,54 @@ case 'notif':
     if (!empty($u['inv'])) { lock(); $u = auth(); foreach ($u['inv'] as $i) if (time() - $i['t'] < 600) $inv[] = $i; $u['inv'] = array(); save_user($u); }
     $calls = array();                                    // "Sizni sog'indik": uzoq kirmagan paytda do'stlar chaqirgan
     if (!empty($u['calls'])) { lock(); $u = auth(); $calls = $u['calls']; $u['calls'] = array(); save_user($u); }
-    out(array('ok' => true, 'unread' => $un, 'req' => $rq, 'inv' => $inv, 'calls' => $calls));
+    $ring = null; $ans = array();                        // qo'ng'iroq: do'st menyuda qo'ng'iroq qilyapti / javob berdi
+    if (!empty($u['ring']) || !empty($u['ringans'])) {
+        lock(); $u = auth();
+        if (!empty($u['ring']) && time() - $u['ring']['t'] < 45) $ring = $u['ring'];
+        if (!empty($u['ringans'])) foreach ($u['ringans'] as $x) if (time() - $x['t'] < 120) $ans[] = $x;
+        unset($u['ring']); $u['ringans'] = array(); save_user($u);
+    }
+    out(array('ok' => true, 'unread' => $un, 'req' => $rq, 'inv' => $inv, 'calls' => $calls, 'ring' => $ring, 'ringans' => $ans));
+
+/* ---------- do'st profili: daraja, statistika, yutuqlar, oxirgi faollik ---------- */
+case 'uinfo':
+    $u = auth();
+    $t = user(strtolower(p('login')));
+    if (!$t) fail('bad', 'Topilmadi');
+    $r = pub($t, false);
+    $st = isset($t['st']) ? $t['st'] : array(); $w = isset($st['wpn']) ? $st['wpn'] : array(); arsort($w);
+    $r['wpn'] = array_slice($w, 0, 3, true);
+    $r['created'] = isset($t['created']) ? (int)$t['created'] : 0;
+    $r['nfr'] = isset($t['friends']) ? count($t['friends']) : 0;
+    $r['isfr'] = !empty($u['friends']) && in_array(strtolower($t['login']), array_map('strtolower', $u['friends']));
+    out(array('ok' => true, 'u' => $r));
+
+/* ---------- qo'ng'iroq: onlayn do'stning menyusida qo'ng'iroq oynasi chiqadi (ovoz bilan) ---------- */
+case 'ring':
+    lock();
+    $u = auth();
+    $to = strtolower(p('to'));
+    if (!preg_match('/^[a-z0-9_]{3,20}$/', $to) || empty($u['friends']) || !in_array($to, array_map('strtolower', $u['friends']))) fail('bad', 'Faqat do\'stlarga qo\'ng\'iroq qilish mumkin');
+    $t = user($to);
+    if (!$t) fail('bad', 'Do\'st topilmadi');
+    if (!is_online($t)) fail('off', 'Do\'stingiz hozir onlayn emas');
+    if (rl_count('ring' . strtolower($u['login']) . '-' . $to, 60) >= 2) fail('limit', 'Biroz kuting');
+    rl_add('ring' . strtolower($u['login']) . '-' . $to, 60);
+    $srv = p('srv'); if (!preg_match('/^[\w.\-]+:\d+$/', $srv)) $srv = '';
+    $t['ring'] = array('from' => $u['name'], 'login' => $u['login'], 't' => time(), 'srv' => $srv);
+    save_user($t);
+    out(array('ok' => true));
+case 'ring_ans':
+    lock();
+    $u = auth();
+    $to = strtolower(p('to'));
+    $t = preg_match('/^[a-z0-9_]{3,20}$/', $to) ? user($to) : null;
+    if (!$t) fail('bad', 'Topilmadi');
+    if (!isset($t['ringans'])) $t['ringans'] = array();
+    $t['ringans'][] = array('from' => $u['name'], 'login' => $u['login'], 'ok' => p('ok') === '1' ? 1 : 0, 't' => time());
+    $t['ringans'] = array_slice($t['ringans'], -5);
+    save_user($t);
+    out(array('ok' => true));
 
 /* ---------- kunlik kirish mukofoti: har kuni birinchi kirishda XP, ketma-ket kunlar (streak) ko'paytiradi, 7-kuni katta bonus ---------- */
 case 'daily':

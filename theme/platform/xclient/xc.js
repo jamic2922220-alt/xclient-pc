@@ -120,6 +120,24 @@ function applyLang() {
 var LANGS = [['uz', 'UZ', "O'zbekcha", '#1eb53a'], ['ru', 'RU', '\u0420\u0443\u0441\u0441\u043a\u0438\u0439', '#0039a6'], ['en', 'EN', 'English', '#012169'],
   ['ua', 'UA', '\u0423\u043a\u0440\u0430\u0457\u043d\u0441\u044c\u043a\u0430', '#0057b7'], ['tr', 'TR', 'T\u00fcrk\u00e7e', '#e30a17'], ['kz', 'KZ', '\u049a\u0430\u0437\u0430\u049b\u0448\u0430', '#00afca'],
   ['kg', 'KG', '\u041a\u044b\u0440\u0433\u044b\u0437\u0447\u0430', '#e8112d'], ['tj', 'TJ', '\u0422\u043e\u04b7\u0438\u043a\u04e3', '#006600'], ['az', 'AZ', 'Az\u0259rbaycanca', '#0092bc'], ['tm', 'TM', 'T\u00fcrkmen\u00e7e', '#28ae66']];
+/* bayroqlar (ichki SVG - internet kerak emas, har o'lchamda tiniq) */
+var FLAGS = {"uz": "<rect width=\"30\" height=\"20\" fill=\"#1eb53a\"/><rect width=\"30\" height=\"13.6\" fill=\"#ce1126\"/><rect width=\"30\" height=\"13.2\" fill=\"#fff\"/><rect width=\"30\" height=\"6.8\" fill=\"#ce1126\"/><rect width=\"30\" height=\"6.4\" fill=\"#0099b5\"/><circle cx=\"5\" cy=\"3.2\" r=\"2.2\" fill=\"#fff\"/><circle cx=\"5.9\" cy=\"3.2\" r=\"1.9\" fill=\"#0099b5\"/>", "ru": "<rect width=\"30\" height=\"20\" fill=\"#d52b1e\"/><rect width=\"30\" height=\"13.3\" fill=\"#0039a6\"/><rect width=\"30\" height=\"6.7\" fill=\"#fff\"/>", "en": "<rect width=\"30\" height=\"20\" fill=\"#012169\"/><path d=\"M0 0L30 20M30 0L0 20\" stroke=\"#fff\" stroke-width=\"4\"/><path d=\"M0 0L30 20M30 0L0 20\" stroke=\"#c8102e\" stroke-width=\"1.4\"/><rect x=\"12\" width=\"6\" height=\"20\" fill=\"#fff\"/><rect y=\"7\" width=\"30\" height=\"6\" fill=\"#fff\"/><rect x=\"13.3\" width=\"3.4\" height=\"20\" fill=\"#c8102e\"/><rect y=\"8.3\" width=\"30\" height=\"3.4\" fill=\"#c8102e\"/>", "ua": "<rect width=\"30\" height=\"20\" fill=\"#ffd700\"/><rect width=\"30\" height=\"10\" fill=\"#0057b7\"/>", "tr": "<rect width=\"30\" height=\"20\" fill=\"#e30a17\"/><circle cx=\"11\" cy=\"10\" r=\"5\" fill=\"#fff\"/><circle cx=\"12.3\" cy=\"10\" r=\"4\" fill=\"#e30a17\"/><polygon points=\"19.6,10 17.3,10.8 17.9,13.1 16.4,11.2 14.1,11.9 15.5,10 14.1,8.1 16.4,8.8 17.9,6.9 17.3,9.2\" fill=\"#fff\"/>", "kz": "<rect width=\"30\" height=\"20\" fill=\"#00afca\"/><circle cx=\"16\" cy=\"9\" r=\"3.4\" fill=\"#fec50c\"/><rect x=\"2\" width=\"1.6\" height=\"20\" fill=\"#fec50c\"/>", "kg": "<rect width=\"30\" height=\"20\" fill=\"#e8112d\"/><circle cx=\"15\" cy=\"10\" r=\"5\" fill=\"#ffef00\"/><circle cx=\"15\" cy=\"10\" r=\"2.6\" fill=\"#e8112d\"/>", "tj": "<rect width=\"30\" height=\"20\" fill=\"#006600\"/><rect width=\"30\" height=\"14.3\" fill=\"#fff\"/><rect width=\"30\" height=\"5.7\" fill=\"#cc0000\"/><circle cx=\"15\" cy=\"10\" r=\"1.7\" fill=\"#f8c300\"/>", "az": "<rect width=\"30\" height=\"20\" fill=\"#509e2f\"/><rect width=\"30\" height=\"13.3\" fill=\"#ef3340\"/><rect width=\"30\" height=\"6.7\" fill=\"#00b5e2\"/><circle cx=\"14\" cy=\"10\" r=\"2.6\" fill=\"#fff\"/><circle cx=\"14.8\" cy=\"10\" r=\"2.1\" fill=\"#ef3340\"/><circle cx=\"17.6\" cy=\"10\" r=\"0.9\" fill=\"#fff\"/>", "tm": "<rect width=\"30\" height=\"20\" fill=\"#00843d\"/><rect x=\"4\" width=\"5\" height=\"20\" fill=\"#d22630\"/><circle cx=\"21\" cy=\"5\" r=\"2.6\" fill=\"#fff\"/><circle cx=\"22.1\" cy=\"4.5\" r=\"2.3\" fill=\"#00843d\"/>"};
+function langFlag(c) { return FLAGS[c] ? '<svg viewBox="0 0 30 20" width="30" height="20" preserveAspectRatio="none">' + FLAGS[c] + '</svg>' : ''; }
+function langBox(o) { return '<b class="flb" style="background:' + o[3] + '">' + (FLAGS[o[0]] ? langFlag(o[0]) : o[1]) + '</b>'; }
+/* kichik ikonkalar: emoji o'yin brauzerida (CEF) kvadrat bo'lib chiqadi - SVG ishlatamiz */
+function ico(n) {
+  var P = { chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>', phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',
+    flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>', user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' };
+  return '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' + (P[n] || '') + '</svg>';
+}
+function agoText(ts) {
+  if (!ts) return T('ago_long');
+  var d = Math.max(0, Math.floor(now() / 1000) - ts);
+  if (d < 120) return T('ago_now');
+  if (d < 3600) return T('ago_m').replace('{n}', Math.floor(d / 60));
+  if (d < 86400) return T('ago_h').replace('{n}', Math.floor(d / 3600));
+  return T('ago_d').replace('{n}', Math.floor(d / 86400));
+}
 function setLang(code) {
   var map = { uzbek: 'uz', russian: 'ru', ukrainian: 'ua', english: 'en', turkish: 'tr', kazakh: 'kz', kyrgyz: 'kg', tajik: 'tj', azerbaijani: 'az', turkmen: 'tm' };
   code = String(code || '').toLowerCase();
@@ -1286,7 +1304,7 @@ function openFriends() {
   var keep = $('frIn') ? $('frIn').value : FR_Q;
   var h = '<div class="addf"><input class="tx big" id="frIn" type="text" maxlength="20" autocomplete="off" placeholder="' + esc(T('fr_add')) + '" value="' + esc(keep) + '">' +
     '<a class="btn red" data-act="fradd">' + esc(T('fr_addb')) + '</a><div class="frsug" id="frSug"' + (FR_SUG ? '' : ' style="display:none"') + '>' + frSugHtml() + '</div></div>';
-  h += '<div class="frtools"><a class="btn" data-act="clan">\u2691 ' + esc(T('cl_btn')) + (ME.clan ? ' [' + esc(ME.clan.tag) + ']' : '') + '</a><a class="btn" data-act="ref">\u2709 ' + esc(T('rf_btn')) + '</a></div>';
+  h += '<div class="frtools"><a class="btn" data-act="clan">' + ico('flag') + ' ' + esc(T('cl_btn')) + (ME.clan ? ' [' + esc(ME.clan.tag) + ']' : '') + '</a><a class="btn" data-act="ref">\u2709 ' + esc(T('rf_btn')) + '</a></div>';
   if (FR_REQ.length) {
     h += '<div class="ph2 m">' + esc(T('fr_req_t')) + ' (' + FR_REQ.length + ')</div>';
     each(FR_REQ, function (f) {
@@ -1299,9 +1317,10 @@ function openFriends() {
     var s = f.server ? srv(f.server) : null, un = f.unread ? '<b class="unb">' + f.unread + '</b>' : '';
     var offd = f.seen ? Math.floor((now() / 1000 - f.seen) / 86400) : 0;   // necha kundan beri kirmagan
     h += '<div class="tr" style="cursor:default">' + frAv(f) +
-      '<div class="nm">' + crown(f) + (f.clan ? '<span class="ctag">[' + esc(f.clan.tag) + ']</span> ' : '') + esc(f.name) + ' <span class="mut" style="font-weight:normal;font-size:12px">' + esc(T('lvl').replace('{n}', f.level)) + '</span></div>' +
-      '<div class="mt">' + (f.online ? '<span class="gm">●</span> ' + esc(f.server ? T('fr_in') + ((s && s.name) || f.server) : T('fr_menu')) : esc(offd >= 1 ? T('fr_offd').replace('{n}', offd) : T('fr_off'))) + '</div>' +
-      '<div class="fra">' + (!f.online && offd >= 3 ? '<a class="inv" data-mcall="' + esc(f.login) + '">' + esc(T('mc_btn')) + '</a>' : '') + '<a data-frcmp="' + esc(f.login) + '">VS</a><a class="ch" data-chat="' + esc(f.login) + '" data-chatn="' + esc(f.name) + '">' + esc(T('ch_btn')) + un + '</a>' +
+      '<div class="nm"><a class="frp" data-frprof="' + esc(f.login) + '">' + crown(f) + (f.clan ? '<span class="ctag">[' + esc(f.clan.tag) + ']</span> ' : '') + esc(f.name) + '</a> <span class="mut" style="font-weight:normal;font-size:12px">' + esc(T('lvl').replace('{n}', f.level)) + '</span></div>' +
+      '<div class="mt">' + (f.online ? '<span class="gm">●</span> ' + esc(f.server ? T('fr_in') + ((s && s.name) || f.server) : T('fr_menu')) : esc(f.seen ? T('fr_last').replace('{t}', agoText(f.seen)) : T('fr_off'))) + '</div>' +
+      '<div class="fra">' + (!f.online && offd >= 3 ? '<a class="inv" data-mcall="' + esc(f.login) + '">' + esc(T('mc_btn')) + '</a>' : '') + '<a data-frcmp="' + esc(f.login) + '">VS</a><a class="ch" data-chat="' + esc(f.login) + '" data-chatn="' + esc(f.name) + '">' + ico('chat') + ' ' + esc(T('ch_btn')) + un + '</a>' +
+      (f.online ? '<a class="ring" data-ring="' + esc(f.login) + '" title="' + esc(T('rg_btn')) + '">' + ico('phone') + '</a>' : '') +
       (CONNECTED && f.online && f.server !== CONNECTED ? '<a class="inv" data-inv="' + esc(f.login) + '">' + esc(T('iv_btn')) + '</a>' : '') +
       (f.server ? '<a class="ok" data-ip="' + esc(f.server) + '">' + esc(T('join')) + '</a>' : '<a data-frdel="' + esc(f.login) + '">' + esc(T('fr_del')) + '</a>') + '</div></div>';
   });
@@ -1392,6 +1411,11 @@ function pollNotif() {
     if (!r.ok) return;
     NOTIF = { unread: r.unread || [], req: r.req || [] };
     if (r.inv && r.inv.length && !DB.dnd) showInvite(r.inv[r.inv.length - 1]);   // do'st chaqirdi
+    if (r.ring && !DB.dnd) showRing(r.ring);
+    each(r.ringans || [], function (a) {
+      toast((a.ok ? T('rg_yes') : T('rg_no')).replace('{n}', a.from), 7000);
+      if (a.ok) openChat(a.login, a.from);
+    });
     if (r.calls && r.calls.length) {                                   // "Sizni sog'indik" - uzoq kirmaganda do'stlar chaqirgan
       var nm = []; each(r.calls, function (c) { if (nm.indexOf(c.from) < 0) nm.push(c.from); });
       toast(T('mc_got').replace('{n}', nm.slice(0, 3).join(', ')), 9000);
@@ -1902,7 +1926,51 @@ function renderTop2() {
   var fb = $('bFb');
   if (!fb) { var bar2 = $('bar'); if (bar2 && lg) { fb = document.createElement('div'); fb.id = 'bFb'; fb.className = 'lng fb'; fb.setAttribute('data-act', 'feedback'); bar2.insertBefore(fb, lg); } }
   if (fb) fb.innerHTML = '\u270e ' + esc(T('fb_btn'));
-  if (lg) { var cur = null; each(LANGS, function (o) { if (o[0] === CUR_LANG) cur = o; }); lg.innerHTML = '<b style="background:' + (cur ? cur[3] : '#555') + '">' + esc(cur ? cur[1] : CUR_LANG.toUpperCase()) + '</b>' + esc(cur ? cur[2] : '') + ' \u25b4'; }
+  if (lg) { var cur = null; each(LANGS, function (o) { if (o[0] === CUR_LANG) cur = o; }); lg.innerHTML = (cur ? langBox(cur) : '') + esc(cur ? cur[2] : '') + ' \u25b4'; }
+}
+/* ---- do'st profili: daraja, statistika, yutuqlar, oxirgi faollik ---- */
+function openFrProfile(login) {
+  api('uinfo', { login: login }, function (r) {
+    if (!r.ok) return toast(r.msg || 'Xato');
+    var u = r.u, st = u.st || {}, s = u.server ? srv(u.server) : null, last = u.last || null, ls = last ? srv(last.s) : null;
+    var status = u.online ? '<span class="gm">\u25cf</span> ' + esc(u.server ? T('fr_in') + ((s && s.name) || u.server) + (u.map ? ' \u00b7 ' + u.map : '') : T('fr_menu'))
+      : esc(T('fr_last').replace('{t}', agoText(u.seen)));
+    var h = '<div class="fpro"><div class="fpav" style="' + avStyle(u) + '">' + avInner(u, u.name) + '</div>' +
+      '<div class="fpn">' + crown(u) + (u.clan ? '<span class="ctag">[' + esc(u.clan.tag) + ']</span> ' : '') + esc(u.name) + ' <span class="mut">@' + esc(u.login) + '</span></div>' +
+      '<div class="mut">' + esc(T('lvl').replace('{n}', u.level)) + ' \u00b7 ID ' + esc(u.id) + (u.created ? ' \u00b7 ' + esc(T('fp_since').replace('{d}', new Date(u.created * 1000).toLocaleDateString())) : '') + '</div>' +
+      '<div class="fpst">' + status + '</div>' +
+      (last && !u.online ? '<div class="mut fpl">' + esc(T('fp_lastsrv')) + ': <b>' + esc((ls && ls.name) || last.s) + '</b>' + (last.m ? ' \u00b7 ' + esc(last.m) : '') + ' \u00b7 ' + esc(agoText(last.t)) + '</div>' : '') +
+      '</div>' + statBox(st) +
+      '<div class="fpg"><div><b>' + esc(fmtHours(st.t || 0)) + '</b><span>' + esc(T('ks_time')) + '</span></div><div><b>' + (st.best || 0) + '</b><span>' + esc(T('ks_best')) + '</span></div><div><b>' + (st.wk || 0) + '</b><span>' + esc(T('ks_week')) + '</span></div><div><b>' + (u.nfr || 0) + '</b><span>' + esc(T('m_friends')) + '</span></div></div>';
+    var wp = ''; for (var w in (u.wpn || {})) if (u.wpn.hasOwnProperty(w)) wp += '<span class="wpt">' + esc(w) + ' <b>' + u.wpn[w] + '</b></span>';
+    if (wp) h += '<div class="ph2 m">' + esc(T('fp_wpn')) + '</div><div>' + wp + '</div>';
+    h += '<div class="ph2 m">' + esc(T('ac_title')) + ' (' + (u.ach || []).length + ')</div>' + achBadges(u.ach || []);
+    h += '<div class="fpb">' + (u.isfr ? '<a class="btn" data-chat="' + esc(u.login) + '" data-chatn="' + esc(u.name) + '">' + ico('chat') + ' ' + esc(T('ch_btn')) + '</a>' +
+      (u.online ? '<a class="btn" data-ring="' + esc(u.login) + '">' + ico('phone') + ' ' + esc(T('rg_btn')) + '</a>' : '') + '<a class="btn" data-frcmp="' + esc(u.login) + '">VS</a>' : '') +
+      (u.server ? '<a class="btn red" data-ip="' + esc(u.server) + '">' + esc(T('join')) + '</a>' : '') + '<a class="btn" data-act="friends">\u2190 ' + esc(T('m_friends')) + '</a></div>';
+    openSide('frprof', u.name, h);
+  });
+}
+/* ---- qo'ng'iroq: do'st chaqirsa - ekranda katta oyna va qo'ng'iroq ovozi (30 soniya) ---- */
+var RING = null, RING_TM = 0;
+function showRing(r) {
+  if (RING && RING.login === r.login) return;
+  RING = r;
+  var b = $('ringBox');
+  if (!b) { b = document.createElement('div'); b.id = 'ringBox'; (document.getElementById('app') || document.body).appendChild(b); }
+  b.innerHTML = '<div class="rgi">' + ico('phone') + '</div><b>' + esc(r.from) + '</b><span>' + esc(T('rg_in')) + '</span>' +
+    '<div class="rgb"><a class="btn red" data-ringok="1">' + esc(T('rg_ans')) + '</a><a class="btn" data-ringok="0">' + esc(T('rg_dec')) + '</a></div>';
+  b.style.display = 'block';
+  var n = 0; clearInterval(RING_TM);
+  var beep = function () { if (++n > 15 || !RING) { clearInterval(RING_TM); if (RING && n > 15) ringAnswer(false, true); return; } cmd('play buttons/bell1.wav'); };
+  beep(); RING_TM = setInterval(beep, 2000);
+}
+function ringAnswer(ok, silent) {
+  var r = RING; RING = null; clearInterval(RING_TM);
+  var b = $('ringBox'); if (b) b.style.display = 'none';
+  if (!r) return;
+  if (!silent) api('ring_ans', { to: r.login, ok: ok ? '1' : '0' }, function () {});
+  if (ok) { if (r.srv && r.srv !== CONNECTED) connect(r.srv); else openChat(r.login, r.from); }
 }
 /* "Taklif / shikoyat": matn admin panelga (Fikrlar) va Telegram'ga boradi */
 var FBK = 'idea';
@@ -1937,7 +2005,7 @@ function langMenu() {
   if (p) { p.parentNode.removeChild(p); return; }
   p = document.createElement('div'); p.id = 'lngpop';
   var h = '';
-  each(LANGS, function (o) { h += '<a class="' + (CUR_LANG === o[0] ? 'on' : '') + '" data-lang="' + o[0] + '"><b style="background:' + o[3] + '">' + o[1] + '</b>' + esc(o[2]) + '</a>'; });
+  each(LANGS, function (o) { h += '<a class="' + (CUR_LANG === o[0] ? 'on' : '') + '" data-lang="' + o[0] + '">' + langBox(o) + esc(o[2]) + '</a>'; });
   p.innerHTML = h; (document.getElementById('app') || document.body).appendChild(p);
 }
 function openSettings(tab) {
@@ -2193,7 +2261,7 @@ var PANES = {
   system: function () {
     var langs = '';
     each(LANGS, function (o) {
-      langs += '<a class="' + (CUR_LANG === o[0] ? 'on' : '') + '" data-lang="' + o[0] + '"><b style="background:' + o[3] + '">' + o[1] + '</b>' + esc(o[2]) + (CUR_LANG === o[0] ? '<i>\u2713</i>' : '') + '</a>';
+      langs += '<a class="' + (CUR_LANG === o[0] ? 'on' : '') + '" data-lang="' + o[0] + '">' + langBox(o) + esc(o[2]) + (CUR_LANG === o[0] ? '<i>\u2713</i>' : '') + '</a>';
     });
     var chk = '';
     if (LAST_CHECK) {
@@ -2734,6 +2802,9 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-fracc'))) { frAdd(el.getAttribute('data-fracc')); return; }
   if ((el = closest(t, 'data-frdec'))) { api('friend_decline', { login: el.getAttribute('data-frdec') }, function () { loadFriends(); }); return; }
   if ((el = closest(t, 'data-chat'))) { openChat(el.getAttribute('data-chat'), el.getAttribute('data-chatn')); return; }
+  if ((el = closest(t, 'data-frprof'))) return openFrProfile(el.getAttribute('data-frprof'));
+  if ((el = closest(t, 'data-ring'))) { var rl = el.getAttribute('data-ring'); api('ring', { to: rl, srv: CONNECTED || '' }, function (r) { toast(r.ok ? T('rg_calling') : (r.msg || 'Xato'), 6000); }); return; }
+  if ((el = closest(t, 'data-ringok'))) { ringAnswer(el.getAttribute('data-ringok') === '1'); return; }
   if ((el = closest(t, 'data-mcall'))) { var mc = el; api('miss_call', { to: el.getAttribute('data-mcall') }, function (r) { toast(r.ok ? T('mc_ok') : (r.msg || 'Xato'), 5000); if (r.ok && mc.parentNode) mc.parentNode.removeChild(mc); }); return; }
   if ((el = closest(t, 'data-fbk'))) { FBK = el.getAttribute('data-fbk'); var sib = el.parentNode.childNodes; for (var fi = 0; fi < sib.length; fi++) sib[fi].className = sib[fi] === el ? 'on' : ''; return; }
   if ((el = closest(t, 'data-frdel'))) { api('friend_del', { login: el.getAttribute('data-frdel') }, function () { loadFriends(); }); return; }

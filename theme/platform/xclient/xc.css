@@ -616,3 +616,39 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 .day #stage .r1, .day #stage .r2, .day #stage .r3 { opacity: 0.6; }
 .day #stage .ttl, .day #logo .xc { color: black; }
 .day #stage .sub2 { opacity: 1; }
+/* til bayroqlari */
+b.flb { position: relative; display: inline-block; width: 30px; height: 20px; padding: 0 !important; overflow: hidden; vertical-align: middle; border-radius: 3px; font-size: 10px; line-height: 20px; text-align: center; color: white; }
+b.flb svg { position: absolute; left: 0; top: 0; width: 30px; height: 20px; }
+#bar .lng b.flb { width: 24px; height: 16px; margin-top: -3px; }
+#bar .lng b.flb svg { width: 24px; height: 16px; }
+#lngpop a { line-height: 22px; }
+#lngpop a b.flb { margin-right: 10px; }
+/* kichik SVG ikonkalar */
+svg.ico { vertical-align: -2px; }
+.fra a.ring { color: #5fd16a; border-color: #3d8a45; }
+.fra a.ring:hover { background: #2f7a38; color: white; }
+a.frp { cursor: pointer; } a.frp:hover { text-decoration: underline; }
+/* do'st profili */
+.fpro { text-align: center; margin-bottom: 14px; }
+.fpav { width: 96px; height: 96px; line-height: 96px; margin: 0 auto 10px; border-radius: 48px; overflow: hidden; font-size: 40px; font-weight: bold; color: #fff; background: #ff3b3b; }
+.fpav img { width: 100%; height: 100%; border-radius: 50%; }
+.fpn { font-size: 22px; font-weight: bold; }
+.fpn .mut { font-size: 14px; font-weight: normal; }
+.fpst { margin-top: 8px; font-size: 15px; }
+.fpl { margin-top: 4px; }
+.fpg { margin-top: 8px; overflow: hidden; }
+.fpg div { float: left; width: 25%; padding: 10px 4px; text-align: center; background: #15111a; border: 1px solid #2a2026; }
+.fpg b { display: block; font-size: 18px; }
+.fpg span { font-size: 11px; color: #8f8590; text-transform: uppercase; }
+.wpt { display: inline-block; margin: 0 6px 6px 0; padding: 4px 10px; background: #1d181f; border: 1px solid #3a2e34; font-size: 13px; }
+.fpb { margin-top: 16px; }
+.fpb .btn { margin: 0 8px 8px 0; }
+/* qo'ng'iroq oynasi */
+#ringBox { display: none; position: absolute; left: 50%; top: 180px; width: 380px; margin-left: -190px; padding: 26px 20px 20px; text-align: center; background: #1b1418; border: 2px solid #3ccf4e; border-radius: 14px; z-index: 200; -webkit-box-shadow: 0 0 40px rgba(60,207,78,.45); }
+#ringBox .rgi { width: 64px; height: 64px; margin: 0 auto 12px; border-radius: 32px; background: #3ccf4e; color: white; -webkit-animation: rgp 1s infinite; }
+#ringBox .rgi svg { width: 32px; height: 32px; margin-top: 16px; }
+#ringBox b { display: block; font-size: 24px; }
+#ringBox span { color: #c9b7bd; }
+#ringBox .rgb { margin-top: 18px; }
+#ringBox .rgb .btn { margin: 0 6px; }
+@-webkit-keyframes rgp { 0% { -webkit-box-shadow: 0 0 0 0 rgba(60,207,78,.7); } 100% { -webkit-box-shadow: 0 0 0 18px rgba(60,207,78,0); } }
