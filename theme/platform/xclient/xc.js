@@ -1406,7 +1406,8 @@ var DEF = {
   vmx: 0, vmy: 0, vmz: 0, vmshift: 0, bobst: 0, lagst: 0, camint: 0,
   roll: 0, rollspd: 200, bobv: 0.13, bobl: 0.32, boblow: 8, bobcam: 1, lagsc: 1, lagsp: 8, fovlerp: 0, camsc: 1,
   rtracks: 0, rfull: 1, rbg: 0, rallies: 1, rns: 0.8, rhs: 1, dtime: 6, drpc: 1, drpcs: 1, drpcj: 1, mmusic: 1,
-  bob: 0.01, picmip: 0, detail: 1, shadows: 1, minm: 0, interp: 0.01, lw: 1, lc: 1, hisnd: 1, mixa: 0.1, loop: 0, saytm: 5, ngpos: 1, pro: 0, gfxc: '', xmig: 0, pmig: 0
+  bob: 0.01, picmip: 0, detail: 1, shadows: 1, minm: 0, interp: 0.01, lw: 1, lc: 1, hisnd: 1, mixa: 0.1, loop: 0, saytm: 5, ngpos: 1, pro: 0, gfxc: '', xmig: 0, pmig: 0,
+  awps: 0, awpz: 1, awpxc: '0 230 255', awpxs: 'small'
 };
 var S = null, E = null;
 var CVARS = { sens: 'sensitivity', zoom: 'zoom_sensitivity_ratio', raw: 'm_rawinput', filter: 'm_filter', vol: 'volume', vscale: 'voice_scale', voice: 'voice_enable',
@@ -1499,7 +1500,7 @@ function settingsCmds(s) {
   if (s.buykeys) each(BUY, function (b) { c.push('bind ' + b[0] + ' ' + q(b[1])); });
   return c;
 }
-function applySettings(s) { each(settingsCmds(s), function (c) { cmd(c); }); if (s.name) MYNAME = fullName(s); }
+function applySettings(s) { each(settingsCmds(s), function (c) { cmd(c); }); if (s.name) MYNAME = fullName(s); if (s === S) binAliases(); }
 
 /* saqlashdan keyin o'yindan qayta o'qib tekshirish */
 var LAST_CHECK = null;
@@ -1599,6 +1600,12 @@ function calcVal() {
 function calcOut() { var v = calcVal(); return v ? '= <b>' + v + '</b> CS 1.6' : ''; }
 /* ---- tayyor uslublar (o'yin uslubi bo'yicha, haqiqiy o'yinchilar emas) ---- */
 var STYLES = [
+  ['clanwar', 'st_clanwar', 'st_clanwar2', { net: 'fast', interp: 0.01, voice: 1, vscale: 1.2, mp3off: 1, mmusic: 0, saytm: 8, netg: 0, dmax: 6, hs: 1, cid: 1 }],
+  ['stream', 'st_stream', 'st_stream2', { netg: 0, showfps: 0, nover: 1, dmax: 5, saytm: 6, gamma: 2.8, decals: 2000 }],
+  ['lowpc', 'st_lowpc', 'st_lowpc2', { detail: 0, shadows: 0, dyn: 0, vsync: 0, decals: 300, fps: 100, hisnd: 1, mixa: 0.15 }],
+  ['zombie', 'st_zombie', 'st_zombie2', { vol: 0.9, gamma: 3, dmax: 8, saytm: 8, decals: 1000 }],
+  ['dmcfg', 'st_dm', 'st_dm2', { dmax: 8, dtime: 4, saytm: 4, hs: 1, cid: 0, decals: 1000 }],
+  ['csdef', 'st_csdef', 'st_csdef2', { sens: 3, zoom: 1.2, raw: 1, filter: 0, xt: 0, xs: 'medium', xc: '50 250 50', xtr: 0, xdyn: 1, fps: 100, interp: 0.1, net: 'slow', bob: 0.01, gamma: 2.5, fov: 90, vmfov: 90 }],
   ['rifle', 'st_rifle', 'st_rifle2', { sens: 2.2, zoom: 1, raw: 1, xt: 0, xs: 'small', xc: '50 250 50', xdyn: 0, interp: 0.01, lw: 1, lc: 1, bob: 0 }],
   ['awp', 'st_awp', 'st_awp2', { sens: 1.8, zoom: 0.85, raw: 1, xt: 3, xs: 'small', xc: '0 230 255', xdyn: 0, interp: 0.01, lw: 1, lc: 1, bob: 0 }],
   ['classic', 'st_classic', 'st_classic2', { sens: 2.5, zoom: 1.2, raw: 1, xt: 0, xs: 'medium', xc: '50 250 50', xdyn: 1, bob: 0.01 }],
@@ -1847,10 +1854,13 @@ var PANES = {
       '<div class="kcols">' + rows + '</div>' +
       '<div class="ph2 m">' + esc(T('k_buy')) + '</div>' + tg('buykeys', 'k_buy2') +
       '<div class="mut" style="font-size:12px;line-height:20px">F1: M4A1/AK-47 \u00b7 F2: AWP \u00b7 F3: Kevlar+Helmet, Defuse kit \u00b7 F4: HE + 2\u00d7Flash + Smoke</div>' +
-      '<a class="btn" style="margin:14px 0 0" data-act="keysdef">' + esc(T('k_def')) + '</a></div>';
+      '<a class="btn" style="margin:14px 8px 0 0" data-act="keysdef">' + esc(T('k_def')) + '</a><a class="btn out" style="margin:14px 0 0" data-act="keysfactory">' + esc(T('k_factory')) + '</a></div>' +
+      (KEYWAIT ? '<div class="kpick">' + esc(T('k_pick')) + ' ' + ['MOUSE3', 'MOUSE4', 'MOUSE5', 'MWHEELUP', 'MWHEELDOWN'].map(function (k) { return '<a data-pickkey="' + k + '">' + esc(T('kp_' + k)) + '</a>'; }).join('') + '<a data-pickkey="">' + esc(T('cancel')) + '</a></div>' : '');
   },
   mouse: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('mo_title')) + '</div>' + sl('sens', 'mo_sens', 0.5, 10, 0.1) + sl('zoom', 'mo_zoom', 0.2, 3, 0.05) + '</div>' +
+      '<div class="ph2 m">' + esc(T('aw_title')) + '</div>' + sl('awps', 'aw_sens', 0, 10, 0.1) + sl('awpz', 'aw_zoom', 0.2, 3, 0.05) +
+      '<div class="mut" style="font-size:12px;line-height:18px">' + esc(T('aw_note')) + '</div></div>' +
       '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('raw', 'mo_raw', 'mo_raw2') + tg('filter', 'mo_filter') + tg('inv', 'mo_inv') + '</div>';
   },
   sound: function () {
@@ -1885,7 +1895,10 @@ var PANES = {
       '<div class="ph2 m">' + esc(T('cc_title')) + '</div>' +
       '<div class="fr"><div class="lb">' + esc(T('cc_game')) + '</div><div class="ct2 seg">' + games + '</div></div>' +
       '<div class="fr"><div class="lb">' + esc(T('cc_in')) + '</div><div class="ct2 code"><input id="calcIn" value="' + esc(CALC_V) + '"><span class="ccres" id="calcOut">' + calcOut() + '</span>' +
-      '<a class="btn b2" data-act="calcapply">' + esc(T('x_apply')) + '</a></div></div></div>' +
+      '<a class="btn b2" data-act="calcapply">' + esc(T('x_apply')) + '</a></div></div>' +
+      '<div class="ph2 m">' + esc(T('cf_title')) + '</div><div class="mut" style="font-size:12px;margin-bottom:8px">' + esc(T('cf_note')) + '</div>' +
+      '<a class="btn" data-act="cfgshare" style="margin:0 8px 0 0">' + esc(T('cf_get')) + '</a><a class="btn" data-act="cfgload">' + esc(T('cf_load')) + '</a>' +
+      '<div id="cfgOut"></div></div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('st_title')) + '</div>' + st +
       '<div class="ph2 m">' + esc(T('dm_title')) + '</div>' +
       (S && S.demo ? '' : '<div class="mut" style="font-size:12px;margin-bottom:6px">' + esc(T('dm_off')) + '</div>') +
@@ -2107,6 +2120,28 @@ var ACTIONS = [
   ['radio2', 'Radio 2', '\u0420\u0430\u0434\u0438\u043e 2', ''], ['radio3', 'Radio 3', '\u0420\u0430\u0434\u0438\u043e 3', ''],
   ['say gl hf', 'Chat: gl hf', '\u0427\u0430\u0442: gl hf', ''], ['say gg wp', 'Chat: gg wp', '\u0427\u0430\u0442: gg wp', ''],
   ['say_team Need backup!', 'Jamoaga: yordam kerak', '\u041a\u043e\u043c\u0430\u043d\u0434\u0435: \u043d\u0443\u0436\u043d\u0430 \u043f\u043e\u043c\u043e\u0449\u044c', ''],
+  ['+xc_jd', 'Sakrab o\'tirish (jump + duck)', '\u041f\u0440\u044b\u0436\u043e\u043a \u0441 \u043f\u0440\u0438\u0441\u0435\u0434\u043e\u043c', ''],
+  ['xc_he', 'HE granata', '\u0413\u0440\u0430\u043d\u0430\u0442\u0430 HE', ''],
+  ['xc_fl', 'Flash granata', '\u0424\u043b\u0435\u0448\u043a\u0430', ''],
+  ['xc_sm', 'Tutun granata', '\u0414\u044b\u043c\u043e\u0432\u0430\u044f \u0433\u0440\u0430\u043d\u0430\u0442\u0430', ''],
+  ['xc_c4', 'C4 bombani tashlash', '\u0412\u044b\u0431\u0440\u043e\u0441\u0438\u0442\u044c C4', ''],
+  ['xc_volup', 'Ovoz +', '\u0413\u0440\u043e\u043c\u043a\u043e\u0441\u0442\u044c +', ''],
+  ['xc_voldn', 'Ovoz -', '\u0413\u0440\u043e\u043c\u043a\u043e\u0441\u0442\u044c -', ''],
+  ['xc_vt', 'Ovozli chat (yoqish/o\'chirish)', '\u0413\u043e\u043b\u043e\u0441\u043e\u0432\u043e\u0439 \u0447\u0430\u0442 (\u0432\u043a\u043b/\u0432\u044b\u043a\u043b)', ''],
+  ['xc_ng', 'net_graph + FPS (yoqish/o\'chirish)', 'net_graph + FPS (\u0432\u043a\u043b/\u0432\u044b\u043a\u043b)', ''],
+  ['xc_awp', 'AWP rejimi: sezgirlik + pritsel almashtirish', '\u0420\u0435\u0436\u0438\u043c AWP: \u0447\u0443\u0432\u0441\u0442\u0432\u0438\u0442\u0435\u043b\u044c\u043d\u043e\u0441\u0442\u044c + \u043f\u0440\u0438\u0446\u0435\u043b', ''],
+  ['xc_dm', 'Demo yozish (boshlash/to\'xtatish)', '\u0417\u0430\u043f\u0438\u0441\u044c \u0434\u0435\u043c\u043e (\u0441\u0442\u0430\u0440\u0442/\u0441\u0442\u043e\u043f)', ''],
+  ['xc_b_rifle', 'Xarid: avtomat + o\'q', '\u0417\u0430\u043a\u0443\u043f\u043a\u0430: \u0430\u0432\u0442\u043e\u043c\u0430\u0442 + \u043f\u0430\u0442\u0440\u043e\u043d\u044b', ''],
+  ['xc_b_awp', 'Xarid: AWP + o\'q', '\u0417\u0430\u043a\u0443\u043f\u043a\u0430: AWP + \u043f\u0430\u0442\u0440\u043e\u043d\u044b', ''],
+  ['xc_b_pist', 'Xarid: Deagle + o\'q', '\u0417\u0430\u043a\u0443\u043f\u043a\u0430: Deagle + \u043f\u0430\u0442\u0440\u043e\u043d\u044b', ''],
+  ['xc_b_full', 'Xarid: to\'liq (avtomat, zirh, granatalar)', '\u0417\u0430\u043a\u0443\u043f\u043a\u0430: \u043f\u043e\u043b\u043d\u0430\u044f (\u0430\u0432\u0442\u043e\u043c\u0430\u0442, \u0431\u0440\u043e\u043d\u044f, \u0433\u0440\u0430\u043d\u0430\u0442\u044b)', ''],
+  ['coverme', 'Radio: Meni qopla', '\u0420\u0430\u0434\u0438\u043e: \u041f\u0440\u0438\u043a\u0440\u043e\u0439 \u043c\u0435\u043d\u044f', ''],
+  ['go', 'Radio: Hujum!', '\u0420\u0430\u0434\u0438\u043e: \u0412\u043f\u0435\u0440\u0451\u0434!', ''],
+  ['fallback', 'Radio: Orqaga!', '\u0420\u0430\u0434\u0438\u043e: \u041e\u0442\u0441\u0442\u0443\u043f\u0430\u0435\u043c!', ''],
+  ['enemyspot', 'Radio: Dushman ko\'rindi', '\u0420\u0430\u0434\u0438\u043e: \u0412\u0440\u0430\u0433 \u0437\u0430\u043c\u0435\u0447\u0435\u043d', ''],
+  ['needbackup', 'Radio: Yordam kerak', '\u0420\u0430\u0434\u0438\u043e: \u041d\u0443\u0436\u043d\u0430 \u043f\u043e\u043c\u043e\u0449\u044c', ''],
+  ['sectorclear', 'Radio: Toza', '\u0420\u0430\u0434\u0438\u043e: \u0427\u0438\u0441\u0442\u043e', ''],
+  ['roger', 'Radio: Tushunarli', '\u0420\u0430\u0434\u0438\u043e: \u041f\u043e\u043d\u044f\u043b', ''],
   ['say_team Bomb planted!', 'Jamoaga: bomba qo\'yildi', '\u041a\u043e\u043c\u0430\u043d\u0434\u0435: \u0431\u043e\u043c\u0431\u0430 \u0437\u0430\u043b\u043e\u0436\u0435\u043d\u0430', '']
 ];
 var BINDS = {}, BINDS2 = {}, KEYWAIT = '', KEYSLOT = 1;   // BINDS2 - ikkinchi (qo'shimcha) tugma
@@ -2119,6 +2154,25 @@ function loadBinds() {
 function binAliases() {                        // tayyor bindlar uchun aliaslar
   cmd('alias +jumpthrow "+jump; -attack"'); cmd('alias -jumpthrow "-jump"');
   cmd('alias xc_qs "slot3; wait; lastinv"');
+  cmd('alias +xc_jd "+jump; +duck"'); cmd('alias -xc_jd "-jump; -duck"');
+  cmd('alias xc_he "use weapon_hegrenade"'); cmd('alias xc_fl "use weapon_flashbang"'); cmd('alias xc_sm "use weapon_smokegrenade"');
+  cmd('alias xc_c4 "use weapon_c4; drop"');
+  cmd('alias xc_b_rifle "m4a1; ak47; primammo"'); cmd('alias xc_b_awp "awp; primammo"'); cmd('alias xc_b_pist "deagle; secammo"');
+  cmd('alias xc_b_full "m4a1; ak47; primammo; vesthelm; defuser; hegren; flash; flash; sgren"');
+  // yoqish/o'chirish (toggle) aliaslari
+  cmd('alias xc_vt1 "+voicerecord; alias xc_vt xc_vt0"'); cmd('alias xc_vt0 "-voicerecord; alias xc_vt xc_vt1"'); cmd('alias xc_vt xc_vt1');
+  cmd('alias xc_ng1 "net_graph 3; cl_showfps 1; alias xc_ng xc_ng0"'); cmd('alias xc_ng0 "net_graph 0; cl_showfps 0; alias xc_ng xc_ng1"'); cmd('alias xc_ng xc_ng1');
+  cmd('alias xc_dm1 "record xc_quick; alias xc_dm xc_dm0"'); cmd('alias xc_dm0 "stop; alias xc_dm xc_dm1"'); cmd('alias xc_dm xc_dm1');
+  // ovoz: 0.0 ... 1.0, 0.1 qadam
+  for (var i = 0; i <= 10; i++) cmd('alias xc_v' + i + ' "volume ' + (i / 10) + '; alias xc_volup xc_v' + Math.min(10, i + 1) + '; alias xc_voldn xc_v' + Math.max(0, i - 1) + '"');
+  var cv = Math.round(((S && S.vol) || 0.8) * 10); cmd('alias xc_volup xc_v' + Math.min(10, cv + 1)); cmd('alias xc_voldn xc_v' + Math.max(0, cv - 1));
+  // AWP rejimi: asosiy (sezgirlik, skop, pritsel) <-> AWP (alohida sezgirlik, skop, pritsel)
+  if (S) {
+    // alias ichida qo'shtirnoq bo'lmaydi - pritsel rangi (3 so'z) almashtirilmaydi, faqat sezgirlik, skop va pritsel o'lchami
+    var A = 'sensitivity ' + S.sens + '; zoom_sensitivity_ratio ' + S.zoom + '; cl_crosshair_size ' + S.xs;
+    var W = 'sensitivity ' + (S.awps || S.sens) + '; zoom_sensitivity_ratio ' + S.awpz + '; cl_crosshair_size ' + S.awpxs;
+    cmd('alias xc_awp1 "' + W + '; alias xc_awp xc_awp0"'); cmd('alias xc_awp0 "' + A + '; alias xc_awp xc_awp1"'); cmd('alias xc_awp xc_awp1');
+  }
 }
 function applyBinds() {
   binAliases();
@@ -2254,6 +2308,29 @@ function act(a) {
   if (a === 'avdel') return api('avatar', { img: 'none' }, function (r) { if (r.ok) { setMe(r.me); toast(T('saved')); openAvatars(); } });
   if (a === 'frback') { CHAT = null; return openFriends(); }
   if (a === 'chatsend') return chatSend();
+  if (a === 'cfgshare') {
+    var cs = copy(E); delete cs.name; delete cs.tag;
+    return api('cfg_share', { cfg: JSON.stringify({ s: cs, b: BINDS, b2: BINDS2 }) }, function (r) {
+      if (!r.ok) return toast(r.msg || 'Xato');
+      var o = $('cfgOut'); if (o) o.innerHTML = '<div class="avurl" style="margin-top:10px"><input class="ipin" readonly value="' + esc(r.code) + '"><a class="cpy" data-copyip="' + esc(r.code) + '">' + esc(T('ip_copy')) + '</a></div>';
+      toast(T('cf_ok').replace('{c}', r.code), 6000);
+    });
+  }
+  if (a === 'cfgload') return ask(T('cf_ask'), function (c) {
+    api('cfg_get', { code: c }, function (r) {
+      if (!r.ok || !r.cfg) return toast(r.msg || T('cf_bad'));
+      var c2 = r.cfg; for (var k in c2.s || {}) if (c2.s.hasOwnProperty(k) && DEF.hasOwnProperty(k) && k !== 'name' && k !== 'tag') E[k] = c2.s[k];
+      if (c2.b) { DB.binds = c2.b; DB.binds2 = c2.b2 || {}; loadBinds(); applyBinds(); persist(); }
+      E.xp = presetOf(E); toast(T('cf_loaded'), 5000); showSetTab('tools');
+    });
+  });
+  if (a === 'keysfactory') return ask(T('k_factory_ask'), function () {
+    // CS 1.6 zavod tugmalari: hammasi o'chiriladi (unbindall), so'ng asl tugmalar qo'yiladi; X CLIENT qo'shimchalari bo'sh qoladi
+    var F = {"`": "toggleconsole", "ESCAPE": "cancelselect", "w": "+forward", "s": "+back", "a": "+moveleft", "d": "+moveright", "SPACE": "+jump", "CTRL": "+duck", "SHIFT": "+speed", "MOUSE1": "+attack", "MOUSE2": "+attack2", "r": "+reload", "e": "+use", "g": "drop", "q": "lastinv", "1": "slot1", "2": "slot2", "3": "slot3", "4": "slot4", "5": "slot5", "6": "slot6", "7": "slot7", "8": "slot8", "9": "slot9", "0": "slot10", "b": "buy", "o": "buyequip", "m": "chooseteam", ",": "buyammo1", ".": "buyammo2", "TAB": "+showscores", "y": "messagemode", "u": "messagemode2", "k": "+voicerecord", "t": "impulse 201", "n": "nightvision", "f": "impulse 100", "z": "radio1", "x": "radio2", "c": "radio3", "F1": "autobuy", "F2": "rebuy", "F5": "snapshot", "MWHEELUP": "invprev", "MWHEELDOWN": "invnext", "PAUSE": "pause"};
+    cmd('unbindall'); for (var fk in F) if (F.hasOwnProperty(fk)) cmd('bind ' + q(fk) + ' ' + q(F[fk]));
+    DB.binds = {}; each(ACTIONS, function (x) { DB.binds[x[0]] = ''; }); for (var fk2 in F) if (F.hasOwnProperty(fk2) && DB.binds.hasOwnProperty(F[fk2])) DB.binds[F[fk2]] = fk2;
+    DB.binds2 = {}; loadBinds(); persist(); cloudSave(); toast(T('k_factory_ok'), 5000); showSetTab('keys');
+  }, false, false, true);
   if (a === 'keysdef') { each(ACTIONS, function (x) { if (BINDS2[x[0]]) cmd('unbind ' + q(BINDS2[x[0]])); }); DB.binds = null; DB.binds2 = null; loadBinds(); applyBinds(); persist(); cloudSave(); toast(T('sy_ok')); return showSetTab('keys'); }
   if (a === 'cache') { OPTS.clean = 1; saveOpts(); return showSetTab('system'); }
   if (a === 'verify') { OPTS.verify = 1; saveOpts(); return showSetTab('system'); }
@@ -2597,6 +2674,8 @@ document.addEventListener('input', onSlide, false);
 document.addEventListener('keyup', function (e) { var t = e.target || e.srcElement; if (t && t.id === 'frIn' && e.keyCode !== 13) frSearch(t.value); if (t && t.id === 'calcIn') { CALC_V = t.value; var o = $('calcOut'); if (o) o.innerHTML = calcOut(); } }, false);
 document.addEventListener('mousedown', function (e) {
   if (!KEYWAIT || closest(e.target || e.srcElement, 'data-bind') || closest(e.target || e.srcElement, 'data-bind2')) return;
+  var pk = closest(e.target || e.srcElement, 'data-pickkey');   // sichqoncha yon tugmalari brauzerga kelmaydi - ro'yxatdan tanlash
+  if (pk) { e.preventDefault(); e.stopPropagation(); var kk = pk.getAttribute('data-pickkey'); if (kk) finishWait(kk); else { KEYWAIT = ''; showSetTab('keys'); } return; }
   var b = e.button === 0 ? 'MOUSE1' : e.button === 2 ? 'MOUSE2' : e.button === 1 ? 'MOUSE3' : e.button === 3 ? 'MOUSE4' : 'MOUSE5';
   e.preventDefault(); e.stopPropagation(); finishWait(b);
 }, true);

@@ -739,6 +739,29 @@ case 'ref_set':
     ach_check($inv); save_user($inv); save_user($u);
     out(array('ok' => true, 'me' => pub($u, true)));
 
+/* ---------- CFG kodi: sozlama + tugmalar 6 belgili kod bilan ulashiladi (xc_data/cfgs) ---------- */
+case 'cfg_share':
+    $raw = p('cfg');
+    if (strlen($raw) < 10 || strlen($raw) > 30000) fail('bad', 'CFG noto\'g\'ri');
+    $c = json_decode($raw, true);
+    if (!is_array($c) || !isset($c['s']) || !is_array($c['s'])) fail('bad', 'CFG noto\'g\'ri');
+    if (rl_count('cfg' . client_ip(), 3600) >= 20) fail('limit', 'Juda ko\'p. Keyinroq urinib ko\'ring');
+    rl_add('cfg' . client_ip(), 3600);
+    @mkdir(XC_DIR . '/cfgs', 0755, true);
+    $abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    do { $code = ''; for ($i = 0; $i < 6; $i++) $code .= $abc[mt_rand(0, strlen($abc) - 1)]; } while (is_file(XC_DIR . '/cfgs/' . $code . '.php'));
+    unset($c['s']['name'], $c['s']['tag']);
+    wr('cfgs/' . $code, array('t' => time(), 'c' => $c));
+    cap_dir(XC_DIR . '/cfgs', 5000);
+    out(array('ok' => true, 'code' => $code));
+
+case 'cfg_get':
+    $code = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', p('code')));
+    if (strlen($code) !== 6) fail('bad', 'Kod 6 belgidan iborat');
+    $x = rd('cfgs/' . $code, null);
+    if (!$x) fail('bad', 'Kod topilmadi');
+    out(array('ok' => true, 'cfg' => $x['c']));
+
 case 'promo':                                            // admin panelda qo'yilgan reklama serverlari (muddati o'tmagan)
     $l = array(); foreach (rd('promo', array()) as $x) if (!empty($x['until']) && $x['until'] > time()) $l[] = array('ip' => $x['ip'], 'title' => $x['title']);
     out(array('ok' => true, 'list' => $l));
