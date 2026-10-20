@@ -362,7 +362,18 @@ function afterLogin(r) {
   else cloudSave(true);
   loadFriends();
 }
-function cloudData() { return { set: DB.set, binds: DB.binds, binds2: DB.binds2, fav: DB.fav, lang: DB.lang }; }
+function histCompact(list, n) {                // tarix: akkauntga oxirgi 50 ta o'yin (boshqa kompyuterda ham chiqadi)
+  var h = [];
+  each((list || []).slice(0, n), function (x) { if (x && x.ip) h.push({ ip: x.ip, name: x.name, map: x.map, t: x.t, d: x.d, k: x.k, x: x.x }); });
+  return h;
+}
+function cloudData() { return { set: DB.set, binds: DB.binds, binds2: DB.binds2, fav: DB.fav, lang: DB.lang, hist: histCompact(DB.hist, 50) }; }
+function mergeHist(add) {                      // ikki kompyuter tarixini birlashtirish: bir xil o'yin (ip + vaqt) bir marta
+  var seen = {}, out = [];
+  each((DB.hist || []).concat(add || []), function (x) { var k = x.ip + '|' + Math.round((x.t || 0) / 60000); if (!seen[k]) { seen[k] = 1; out.push(x); } });
+  out.sort(function (a, b) { return (b.t || 0) - (a.t || 0); });
+  DB.hist = out.slice(0, 300);
+}
 var cloudTm = 0;
 function cloudSave(force) {
   if (!ME || (!DB.autosave && !force)) return;
@@ -381,6 +392,7 @@ function restoreCloud(c, silent) {
   if (c.binds) { DB.binds = c.binds; if (c.binds2) DB.binds2 = c.binds2; loadBinds(); applyBinds(); }
   if (c.fav && c.fav.length) each(c.fav, function (ip) { if (DB.fav.indexOf(ip) < 0) DB.fav.push(ip); });
   if (c.lang) { DB.lang = c.lang; setLang(c.lang); }
+  if (c.hist && c.hist.length) mergeHist(c.hist);
   DB.cloudt = ME ? ME.cloudt : 0; persist();
   if (!silent) toast(T('a_restored'));
   renderAll();
@@ -638,7 +650,7 @@ function startGame(ip) {
   CUR = { ip: ip, name: s.name || ip, map: s.map || '', t: now(), d: 0, k: 0, x: 0 };
   DB.hist.unshift(CUR);
   if (DB.hist.length > 300) DB.hist.length = 300;
-  persist(); renderSoon();
+  persist(); renderSoon(); cloudSave();
 }
 function pad(n) { return (n < 10 ? '0' : '') + n; }
 /* Demo yozish: o'yinchi serverga to'liq kirgach ('putinserver') boshlanadi - ulanish/yuklanish paytida
@@ -670,7 +682,7 @@ function onConnectEvt(addr, inGame) {
 function onDisconnectEvt() {
   var was = CONNECTED;
   setTimeout(musicSync, 500);
-  if (CUR) { CUR.d = Math.round((now() - CUR.t) / 1000); persist(); }
+  if (CUR) { CUR.d = Math.round((now() - CUR.t) / 1000); persist(); cloudSave(); }
   stopRecord();
   CONNECTED = ''; renderAll(); pingPresence();
   // o'yinchi o'zi menyudan chiqmagan bo'lsa (menyu yopiq) - qayta ulanamiz
