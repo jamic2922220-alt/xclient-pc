@@ -215,12 +215,15 @@ function intro() {
  * Kompyuter sekin bo'lsa (taymer kechiksa) o'zi o'chadi. */
 var FX = { tm: 0, p: [], last: 0, slow: 0, off: 0, n: 0 };
 /* Yengil menyu: effektlar (uchqun, porlash, halqa, soyalar) o'chiq - ESC bosilganda o'yin FPS'i tushmasin */
-function lowFx() { return DB.fx === 0 || !!FX.off; }
+/* o'yin menyusi ko'rinib turibdimi: NextClient 'show'/'hide' hodisalari bo'yicha (gameUi.shown xususiyati har versiyada bo'lmasligi mumkin) */
+var UI_VIS = true;
+function uiShown() { try { if (NC && NC.gameUi && typeof NC.gameUi.shown === 'boolean') return NC.gameUi.shown; } catch (e) {} return UI_VIS; }
+/* serverda o'ynalayotganda (ESC menyusi o'yin ustida) - effektlarsiz: aks holda o'yin FPS'i tushadi */
+function lowFx() { return DB.fx === 0 || !!FX.off || !!CONNECTED; }
 function fxClass() { var h = document.documentElement; h.className = (h.className || '').replace(/(^|\s)lowfx(?=\s|$)/g, '') + (lowFx() ? ' lowfx' : ''); }
 function fxVisible() {
   if (curModal || document.webkitHidden) return false;
-  try { if (NC && NC.gameUi && NC.gameUi.shown === false) return false; } catch (e) {}
-  return true;
+  return uiShown();
 }
 /* menyu foni (rang) va zarrachalar: uchqun / qor / yo'q. Bayramlarda o'zi bezanadi (Yangi yil - qor, Navro'z, Mustaqillik) */
 var BGS = { def: '', blue: '#0d2a4a 0%, #0b1526 30%, #080c16 60%, #05070c 100%', purple: '#3a0d4a 0%, #1f0b2a 30%, #110a18 60%, #08060c 100%',
@@ -661,11 +664,23 @@ function query(ip, force) {
   if (!ip) return;
   // serverda o'ynayotganda orqa fonda so'rov yubormaymiz: bitta IP'dan ham o'ynash, ham serverlarni tinmay so'rash
   // himoyalar (DProto/ReChecker) nazarida "FakePlayers" kabi ko'rinadi. Ulangan serverning o'zini umuman so'ramaymiz.
-  if (CONNECTED && (normIp(ip) === CONNECTED || !(force || (curModal === 'mdServers' && NC && NC.gameUi && NC.gameUi.shown)))) return;
+  if (CONNECTED && normIp(ip) === CONNECTED) return queryViaSite(ip, force);   // o'zimiz o'ynayotgan server - faqat sayt orqali (o'yinchi IP'sidan so'rov ketmaydi)
+  if (CONNECTED && !(force || (curModal === 'mdServers' && uiShown()))) return;
   var s = srv(ip);
   if (!force && s.ts && now() - s.ts < 20000) return;
   if (s.q) return;
   s.q = 1; queue.push(ip); pump();
+}
+function queryViaSite(ip, force) {
+  var s = srv(ip);
+  if (s.q || (!force && s.ts && now() - s.ts < 20000)) return;
+  s.q = 1;
+  srvq(ip, function (r) {
+    s.q = 0; s.ts = now();
+    if (r && r.ok) { s.ok = true; s.fail = false; s.name = clean(r.name) || s.name || ip; s.map = clean(r.map); s.pl = r.pl || 0; s.max = r.max || 0; s.bots = r.bots || 0;
+      if (r.players) setPlayers(ip, r.players.map(function (x) { return { name: x.name, score: x.score, timePlayedSeconds: x.time }; })); }
+    renderSoon();
+  });
 }
 function pump() {
   while (running < MAXQ && queue.length) {
@@ -923,12 +938,18 @@ function startRecord(delay) {
     var nm = REC; setTimeout(function () { if (REC === nm) demoAdd(nm); }, 8000);   // konsol javobi kelmasa ham (xato yo'q bo'lsa) ro'yxatga
   }, delay);
 }
+/* mikrofon: birinchi bosishda o'yin ovoz yozish qurilmasini ochadi - ba'zi kompyuterlarda 2-3 soniya qotadi.
+ * Serverga kirgach (xarita yuklangach) qurilmani bir marta oldindan ochib qo'yamiz - gapirganda qotmaydi. */
+function voiceWarm() {
+  if (!S || S.voice === 0 || S.micwarm === 0) return;
+  setTimeout(function () { if (CONNECTED && !uiShown()) { cmd('+voicerecord'); setTimeout(function () { cmd('-voicerecord'); }, 120); } else if (CONNECTED) setTimeout(voiceWarm, 15000); }, 20000);
+}
 function stopRecord() { clearTimeout(REC_TM); if (REC) { cmd('stop'); REC = ''; } }
 function onConnectEvt(addr, inGame) {
   addr = normIp(addr);
   if (!addr) return;
   if (addr !== CONNECTED) { CONNECTED = addr; MUSIC_ON = null; if (!inGame) applyPw(addr); startGame(addr); musicSync();   // serverda mp3 chalinmasin: o'yin ovozlarini bo'g'adi
-    pingPresence(); renderAll(); }
+    pingPresence(); renderAll(); sparks(); voiceWarm(); }
   if (S.demo) startRecord(inGame ? 1500 : 25000);   // 'connect' dan keyin 'putinserver' kelmasa ham 25 soniyadan so'ng urinamiz
 }
 function onDisconnectEvt() {
@@ -936,10 +957,10 @@ function onDisconnectEvt() {
   setTimeout(musicSync, 500);
   if (CUR) { CUR.d = Math.round((now() - CUR.t) / 1000); persist(); cloudSave(); sendStat(CUR); }
   stopRecord();
-  CONNECTED = ''; renderAll(); pingPresence();
+  CONNECTED = ''; renderAll(); pingPresence(); sparks();
   // o'yinchi o'zi menyudan chiqmagan bo'lsa (menyu yopiq) - qayta ulanamiz
   var shown = false;
-  try { shown = !!(NC && NC.gameUi && NC.gameUi.shown); } catch (e) {}
+  shown = uiShown();
   if (S.reconn && was && !shown) setTimeout(function () { if (!CONNECTED) cmd('retry'); }, 3000);
 }
 /* konsoldan o'ldirish/o'lish hisobi: "Player1 killed Player2 with ak47" */
@@ -1089,7 +1110,7 @@ function forgot() {
 /* ============================================================ SERVERLAR oynasi */
 var srvTab = 'internet', srvSel = '', srvSort = 'pl', srvDesc = true;
 var FLT = { ping: false, notempty: false, notfull: false };
-function openServers(tab) { openModal('mdServers'); setSrvTab(tab || 'internet'); }
+function openServers(tab) { openModal('mdServers'); setSrvTab(tab || 'internet'); each(tabIps(), function (ip) { query(ip, true); }); }
 function setSrvTab(tab) {
   if (tab !== srvTab) SORT_USER = false;
   srvTab = tab;
@@ -1283,7 +1304,7 @@ function setPlayers(ip, list) {
   PLAYERS[ip] = list; if (ip === srvSel) renderInfo();
 }
 function loadPlayers(ip) {
-  if (CONNECTED && normIp(ip) === CONNECTED) return;
+  if (CONNECTED && normIp(ip) === CONNECTED) return queryViaSite(ip, true);
   /* NextClient ro'yxat bermasa (yoki server o'yinchi bor desa-yu ro'yxat bo'sh kelsa) - sayt orqali */
   var site = function () {
     srvq(ip, function (r) {
@@ -1529,7 +1550,7 @@ function openAvatars() {
 var DEF = {
   name: '', tag: 'X | ', net: 'fast', dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, buykeys: 0, queue: 1, reconn: 1, demo: 0,
   sens: 2.5, zoom: 1.2, raw: 1, filter: 0, inv: 0,
-  vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1,
+  vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1, micwarm: 1, micfix: 0,
   fps: 100, showfps: 0, uisnd: 1, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
   xp: 'pro', xt: 0, xs: 'small', xc: '255 59 59', xtr: 0, xdyn: 1, xthick: 1, xgap: 3, xout: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
   rscale: 115, ropac: 100, rnames: 0, rhp: 0, rmode: 1, rround: 1, rrot: 1, rmap: 0.8,
@@ -1608,7 +1629,7 @@ function settingsCmds(s) {
   c.push('cl_allowdownload 1', 'cl_allowupload 1', 'cl_righthand ' + s.hand, 'hud_fastswitch ' + s.fastsw);
   c.push('mp3volume ' + (s.mp3off ? 0 : s.mus));
   c.push('sensitivity ' + s.sens, 'zoom_sensitivity_ratio ' + s.zoom, 'm_rawinput ' + s.raw, 'm_filter ' + s.filter, 'm_pitch ' + (s.inv ? -0.022 : 0.022));
-  c.push('volume ' + s.vol, 'voice_enable ' + s.voice, 'voice_scale ' + s.vscale, 'snd_mute_losefocus ' + s.mute);
+  c.push('volume ' + s.vol, 'voice_enable ' + s.voice, 'voice_scale ' + s.vscale, 'snd_mute_losefocus ' + s.mute, 'voice_dsound ' + (s.micfix ? 0 : 1));
   // fps_override 1 bo'lmasa NextClient FPS ni 100 da ushlab qoladi
   // cl_dlmax standart (512): 1024 ba'zi serverlar himoyasida (DProto/ReChecker) "FakePlayers" deb kick qilinishi mumkin
   c.push('fps_override ' + (s.fps > 100 ? 1 : 0), 'cl_showfps ' + s.showfps, 'cl_dlmax 512', 'm_customaccel 0');
@@ -2290,7 +2311,7 @@ var PANES = {
   },
   sound: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('so_title')) + '</div>' + sl('vol', 'so_vol', 0, 1, 0.05) + sl('mus', 'so_mus', 0, 1, 0.05) + sl('vscale', 'so_vscale', 0, 2, 0.1) + '</div>' +
-      '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('voice', 'so_voice') + tg('loop', 'so_loop') + tg('mute', 'so_mute') + tg('uisnd', 'so_ui', 'so_ui2') + tg('mmusic', 'so_music', 'so_music2') +
+      '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('voice', 'so_voice') + tg('micwarm', 'so_micwarm', 'so_micwarm2') + tg('micfix', 'so_micfix', 'so_micfix2') + tg('loop', 'so_loop') + tg('mute', 'so_mute') + tg('uisnd', 'so_ui', 'so_ui2') + tg('mmusic', 'so_music', 'so_music2') +
       '<div class="ph2 m">' + esc(T('so_q')) + '</div>' + tg('hisnd', 'so_hi') + seg('mixa', 'so_mix', [[0.1, 'so_mix2'], [0.15, 'so_mix3']]) + musicPick() + '</div>';
   },
   video: function () {
@@ -3227,8 +3248,8 @@ if (DB.token) api('me', {}, function (r) { if (r.ok) { setMe(r.me); loadFriends(
 
 if (NC) {
   // o'yin ekrani ochildi (NextClient'ning o'z ro'yxatidan yoki konsoldan kirilsa ham) - menyu musiqasi o'chsin
-  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('hide', function () { if (MUSIC_ON !== false) { cmd('mp3 stop'); MUSIC_ON = false; } }); } catch (e) {}
-  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('show', function () { each(TOP.concat(PINNED).concat(DB.fav), function (ip) { query(ip); }); loadFriends(); loadWeek(); ngFit(); }); } catch (e) {}
+  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('hide', function () { UI_VIS = false; if (MUSIC_ON !== false) { cmd('mp3 stop'); MUSIC_ON = false; } }); } catch (e) {}
+  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('show', function () { UI_VIS = true; each(TOP.concat(PINNED).concat(DB.fav), function (ip) { query(ip); }); if (curModal === 'mdServers') { each(tabIps(), function (ip) { query(ip, true); }); if (srvSel) loadPlayers(srvSel); } loadFriends(); loadWeek(); ngFit(); }); } catch (e) {}
   try {
     if (NC.addEventListener) {
       NC.addEventListener('connect', function (e) { onConnectEvt(e && e.detail && e.detail.address, false); });
@@ -3249,13 +3270,18 @@ if (NC) {
  * har 30 soniyada qisqa qotish berardi. Menyu ochilganda ('show') hammasi darhol yangilanadi */
 function playing() {
   if (!CONNECTED) return false;
-  try { return !(NC && NC.gameUi && NC.gameUi.shown); } catch (e) { return true; }
+  return !uiShown();
 }
 setInterval(function () {
   if (playing()) return;
   each(TOP.slice(0, 6).concat(PINNED).concat(DB.fav), function (ip) { query(ip); });
   if (curModal === 'mdServers') each(tabIps(), function (ip) { query(ip); });
 }, 30000);
+setInterval(function () {                          // "Serverlar" oynasi ochiq va ko'rinib turibdi - 15 soniyada bir yangilanadi
+  if (curModal !== 'mdServers' || !uiShown()) return;
+  each(tabIps(), function (ip) { query(ip, true); });
+  if (srvSel) loadPlayers(srvSel);
+}, 15000);
 setInterval(pingPresence, 60000);
 setInterval(function () { if (CONNECTED) sendStat(); }, 120000);   // o'yin davomida 2 daqiqada bir (o'yin qulab tushsa ham yo'qolmasin)
 setInterval(function () { loadFriends(); if (!playing()) loadWeek(); }, 60000);   // do'stlar - xabar bildirishnomalari uchun o'yinda ham
