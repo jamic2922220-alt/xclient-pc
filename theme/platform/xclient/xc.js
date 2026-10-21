@@ -1568,7 +1568,7 @@ var DEF = {
   sens: 2.5, zoom: 1.2, raw: 1, filter: 0, inv: 0,
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1, micwarm: 1, micfix: 0,
   fps: 100, showfps: 0, uisnd: 1, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
-  xp: 'pro', xt: 0, xs: 'small', xc: '255 59 59', xtr: 0, xdyn: 1, xthick: 1, xgap: 3, xout: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
+  xp: 'pro', xt: 0, xs: 'small', xc: '255 59 59', xtr: 0, xdyn: 0, xthick: 1, xgap: 3, xout: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
   rscale: 115, ropac: 100, rnames: 0, rhp: 0, rmode: 1, rround: 1, rrot: 1, rmap: 0.8,
   vmx: 0, vmy: 0, vmz: 0, vmshift: 0, bobst: 0, lagst: 0, camint: 0,
   roll: 0, rollspd: 200, bobv: 0.13, bobl: 0.32, boblow: 8, bobcam: 1, lagsc: 1, lagsp: 8, fovlerp: 0, camsc: 1,
@@ -1593,9 +1593,8 @@ function loadSettings() {
   S = copy(DEF);
   if (DB.set) for (var k in DB.set) if (DB.set.hasOwnProperty(k) && DEF.hasOwnProperty(k)) S[k] = DB.set[k];
   if (!(S.mixa >= 0.1)) S.mixa = 0.1;              // 0.05 (eski PRO CFG) - ovoz buferi juda kichik: FPS tushsa ovoz qotib takrorlanadi va uziladi
-  /* eski PRO CFG pritsel kengayishini o'chirgan edi (cl_dynamiccrosshair 0) - pritsel spreyda kengaymay, o'yinchilar
-   * "razbros o'zgardi" deyishdi. Bir marta qaytaramiz (CS 1.6 standarti - 1); belgi sozlamalarning o'zida (xmig) */
-  if (S.pro && !S.xmig) { S.xdyn = 1; S.xmig = 1; DB.set = S; }
+  /* pritsel otganda kattalashmaydi - hech qaysi CFG da (egasining talabi); saqlangan eski 1 lar ham 0 bo'ladi */
+  S.xdyn = 0; cmd('cl_dynamiccrosshair 0');
   /* "Avto grafika" (bekor qilindi) grafikani pasaytirib yuborgan o'yinchilarda - to'liq grafikani qaytaramiz */
   /* eski PRO CFG soya va dinamik yorug'likni o'chirgan edi - bir marta qaytaramiz (yangi PRO CFG grafikaga tegmaydi) */
   if (S.pro && !S.pmig) { S.shadows = 1; S.dyn = 1; S.pmig = 1; S.gfxc = ''; DB.set = S; }
@@ -1723,7 +1722,7 @@ function xcode(s) {
 function applyCode(code) {
   var m = /^X-([0-3])-([0-3])-([01])-([01])-([0-9A-F]{6})$/i.exec(String(code).replace(/\s+/g, ''));
   if (!m) { toast(T('x_badcode')); return false; }
-  E.xt = Number(m[1]); E.xs = SZ[Number(m[2])] || 'large'; E.xtr = Number(m[3]); E.xdyn = Number(m[4]);
+  E.xt = Number(m[1]); E.xs = SZ[Number(m[2])] || 'large'; E.xtr = Number(m[3]); E.xdyn = 0;
   E.xc = parseInt(m[5].slice(0, 2), 16) + ' ' + parseInt(m[5].slice(2, 4), 16) + ' ' + parseInt(m[5].slice(4, 6), 16);
   E.xp = presetOf(E);
   return true;
@@ -1747,7 +1746,7 @@ function detectXext() {
 function xextVal(k, s) { return k === 'xout' && /draw/.test(XSUP[k] || '') ? (s.xout > 0 ? 1 : 0) : s[k]; }
 function xhairCmds(s) {
   // rang qo'shtirnoq bilan: GoldSrc kvarga faqat 1-so'zni yozadi (cl_crosshair_color 255 0 0 -> "255")
-  var c = ['cl_crosshair_type ' + s.xt, 'cl_crosshair_size ' + s.xs, 'cl_crosshair_color ' + q(String(s.xc).replace(/[^\d ]/g, '')), 'cl_crosshair_translucent ' + s.xtr, 'cl_dynamiccrosshair ' + s.xdyn];
+  var c = ['cl_crosshair_type ' + s.xt, 'cl_crosshair_size ' + s.xs, 'cl_crosshair_color ' + q(String(s.xc).replace(/[^\d ]/g, '')), 'cl_crosshair_translucent ' + s.xtr, 'cl_dynamiccrosshair 0'];
   for (var k in XSUP) if (XSUP.hasOwnProperty(k) && XSUP[k]) c.push(XSUP[k] + ' ' + xextVal(k, s));
   return c;
 }
@@ -1789,19 +1788,19 @@ var STYLES = [
   ['entry', 'st_entry', 'st_entry2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, sens: 3.2, zoom: 1, xt: 0, xs: 'small', xc: '0 230 255', xtr: 0, xdyn: 0, bob: 0, fastsw: 1 }, 'top'],
   ['pistol', 'st_pistol', 'st_pistol2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, sens: 2.4, zoom: 1, xt: 0, xs: 'small', xc: '255 255 255', xtr: 0, xdyn: 0, bob: 0, fastsw: 1 }, 'top'],
   ['low', 'st_low', 'st_low2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, sens: 1.4, zoom: 0.9, xt: 0, xs: 'extra_small', xc: '255 255 255', xtr: 0, xdyn: 0, bob: 0 }, 'top'],
-  ['high', 'st_high', 'st_high2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, sens: 4.5, zoom: 1.2, xt: 0, xs: 'medium', xc: '255 210 60', xtr: 0, xdyn: 1, bob: 0 }, 'top'],
-  ['classic', 'st_classic', 'st_classic2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, sens: 2.5, zoom: 1.2, xt: 0, xs: 'medium', xc: '50 250 50', xtr: 0, xdyn: 1, bob: 0.01 }, 'top'],
+  ['high', 'st_high', 'st_high2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, sens: 4.5, zoom: 1.2, xt: 0, xs: 'medium', xc: '255 210 60', xtr: 0, xdyn: 0, bob: 0 }, 'top'],
+  ['classic', 'st_classic', 'st_classic2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, sens: 2.5, zoom: 1.2, xt: 0, xs: 'medium', xc: '50 250 50', xtr: 0, xdyn: 0, bob: 0.01 }, 'top'],
   ['csgo', 'st_csgo', 'st_csgo2', { bobst: 2, bobv: 0.13, bobl: 0.32, boblow: 8, lagst: 2, lagsc: 1, fovlerp: 0.2, camint: 1, vmx: 1, vmy: 0, vmz: -1, vmfov: 90, xt: 0, xs: 'small', xc: '50 250 50', xdyn: 0 }, 'top'],
-  ['new', 'st_new', 'st_new2', { sens: 3, zoom: 1.2, raw: 1, xt: 0, xs: 'medium', xc: '255 210 60', xdyn: 1, bob: 0.01 }, 'top'],
+  ['new', 'st_new', 'st_new2', { sens: 3, zoom: 1.2, raw: 1, xt: 0, xs: 'medium', xc: '255 210 60', xdyn: 0, bob: 0.01 }, 'top'],
   ['clanwar', 'st_clanwar', 'st_clanwar2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, voice: 1, vscale: 1.2, mp3off: 1, mmusic: 0, saytm: 8, netg: 0, dmax: 6, hs: 1, cid: 1 }, 'sit'],
-  ['zombie', 'st_zombie', 'st_zombie2', { sens: 3.5, xdyn: 1, xs: 'medium', vol: 0.9, dmax: 8, saytm: 8, decals: 1000 }, 'sit'],
+  ['zombie', 'st_zombie', 'st_zombie2', { sens: 3.5, xdyn: 0, xs: 'medium', vol: 0.9, dmax: 8, saytm: 8, decals: 1000 }, 'sit'],
   ['dmcfg', 'st_dm', 'st_dm2', { net: 'fast', interp: 0.01, lw: 1, lc: 1, raw: 1, filter: 0, vsync: 0, hisnd: 1, mixa: 0.1, dmax: 8, dtime: 4, saytm: 4, hs: 1, cid: 0, decals: 1000, fastsw: 1 }, 'sit'],
   ['stream', 'st_stream', 'st_stream2', { netg: 0, showfps: 0, nover: 1, dmax: 5, saytm: 6, decals: 2000 }, 'sit'],
   ['vis', 'st_vis', 'st_vis2', { gamma: 2.7, dyn: 0, detail: 0, hor: 1, fov: 90, vmfov: 90 }, 'pc'],
   ['lowpc', 'st_lowpc', 'st_lowpc2', { detail: 0, shadows: 0, dyn: 0, vsync: 0, decals: 300, fps: 100, hisnd: 1, mixa: 0.15 }, 'pc'],
   ['slownet', 'st_slownet', 'st_slownet2', { net: 'slow', interp: 0.1, lw: 1, lc: 1 }, 'pc'],
   ['midnet', 'st_midnet', 'st_midnet2', { net: 'mid', interp: 0.05, lw: 1, lc: 1 }, 'pc'],
-  ['csdef', 'st_csdef', 'st_csdef2', { sens: 3, zoom: 1.2, raw: 1, filter: 0, xt: 0, xs: 'medium', xc: '50 250 50', xtr: 0, xdyn: 1, fps: 100, interp: 0.1, net: 'slow', bob: 0.01, gamma: 2.5, fov: 90, vmfov: 90 }, 'def']
+  ['csdef', 'st_csdef', 'st_csdef2', { sens: 3, zoom: 1.2, raw: 1, filter: 0, xt: 0, xs: 'medium', xc: '50 250 50', xtr: 0, xdyn: 0, fps: 100, interp: 0.1, net: 'slow', bob: 0.01, gamma: 2.5, fov: 90, vmfov: 90 }, 'def']
 ];
 function applyStyle(id) {
   each(STYLES, function (x) { if (x[0] === id) for (var k in x[3]) if (x[3].hasOwnProperty(k)) E[k] = x[3][k]; });
@@ -2523,7 +2522,7 @@ var PANES = {
       off('xthick', 'hx_thick', 1, 5) + off('xgap', 'hx_gap', 0, 10) +
       '<div class="fr"><div class="lb">' + esc(T('hx_opaq')) + '</div><div class="ct2"><div class="sl"><input type="range" min="0" max="1" step="1" value="' + (E.xtr ? 0 : 1) + '" data-xop="1"><div class="vv" id="vv_xop">' + (E.xtr ? '60%' : '100%') + '</div></div></div></div>' +
       off('xout', 'hx_outl', 0, 3) +
-      '<div class="cks">' + ck('dot', 'hx_dot', xt === 3) + ck('t', 'hx_t', xt === 1) + ck('circle', 'hx_circ', xt === 2) + ck('dyn', 'hx_wdep', !!E.xdyn) + '</div>' +
+      '<div class="cks">' + ck('dot', 'hx_dot', xt === 3) + ck('t', 'hx_t', xt === 1) + ck('circle', 'hx_circ', xt === 2) + '</div>' +
       '<div class="hfoot"><span class="mut">' + (XSUP.xthick && XSUP.xgap && XSUP.xout ? '' : esc(T('hx_na'))) + '</span><a class="btn" data-act="xdef">' + esc(T('hx_std')) + '</a><a class="btn xt" data-act="xtest">' + esc(T('hx_test')) + '</a></div></div>';
   },
   account: function () {
