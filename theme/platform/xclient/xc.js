@@ -129,7 +129,9 @@ function langBox(o) { return '<b class="flb" style="background:' + o[3] + '">' +
 /* kichik ikonkalar: emoji o'yin brauzerida (CEF) kvadrat bo'lib chiqadi - SVG ishlatamiz */
 function ico(n) {
   var P = { chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>', phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',
-    flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>', user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' };
+    flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>',
+    swords: '<polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/><polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5"/><line x1="5" y1="14" x2="9" y2="18"/><line x1="7" y1="17" x2="4" y2="20"/><line x1="3" y1="19" x2="5" y2="21"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>', user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' };
   return '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' + (P[n] || '') + '</svg>';
 }
 function agoText(ts) {
@@ -638,9 +640,9 @@ var CHAMP = null;
 function loadWeek() { api('topk', {}, function (r) { if (r.ok) { WEEK = r.top || []; CHAMP = r.champ || null; renderHome(); } }); }
 function crown(u) { return (u && (u.champ || (CHAMP && CHAMP.login && u.login && CHAMP.login === String(u.login).toLowerCase()))) ? '<span class="crown" title="' + esc(T('chp_title')) + '">\u265b</span>' : ''; }
 /* ---- yutuqlar ---- */
-var ACH = [['k100', '\u2694'], ['k1000', '\u2694'], ['k5000', '\u2694'], ['best30', '\u2605'], ['g100', '\u25b6'], ['t10h', '\u231a'], ['t50h', '\u231a'],
-  ['awp100', '\u25ce'], ['ak500', '\u25ce'], ['knife10', '\u2020'], ['deagle100', '\u25ce'], ['fr5', '\u263a'], ['ref3', '\u2709'], ['champ', '\u265b'], ['clan', '\u2691'],
-  ['k10000', '\u2694'], ['best50', '\u2605'], ['g500', '\u25b6'], ['t100h', '\u231a'], ['fr20', '\u263a'], ['streak7', '\u2600'], ['srv10', '\u25ce'], ['wall10', '\u270e']];
+var ACH = [['k100', ico('swords')], ['k1000', ico('swords')], ['k5000', ico('swords')], ['best30', '\u2605'], ['g100', '\u25b6'], ['t10h', ico('clock')], ['t50h', ico('clock')],
+  ['awp100', '\u25ce'], ['ak500', '\u25ce'], ['knife10', '\u2020'], ['deagle100', '\u25ce'], ['fr5', '\u263a'], ['ref3', '\u2709'], ['champ', '\u265b'], ['clan', ico('flag')],
+  ['k10000', ico('swords')], ['best50', '\u2605'], ['g500', '\u25b6'], ['t100h', ico('clock')], ['fr20', '\u263a'], ['streak7', '\u2600'], ['srv10', '\u25ce'], ['wall10', '\u270e']];
 function achBadges(list, all) {
   var h = '';
   each(ACH, function (a) {
@@ -1432,7 +1434,7 @@ function openFriends() {
       '<div class="nm"><a class="frp" data-frprof="' + esc(f.login) + '">' + crown(f) + (f.clan ? '<span class="ctag">[' + esc(f.clan.tag) + ']</span> ' : '') + nickHtml(f) + '</a> ' + rankBadge(f) + ' <span class="mut" style="font-weight:normal;font-size:12px">' + esc(T('lvl').replace('{n}', f.level)) + '</span></div>' +
       '<div class="mt">' + (f.online ? '<span class="gm">●</span> ' + esc(f.server ? T('fr_in') + ((s && s.name) || f.server) : T('fr_menu')) : esc(f.seen ? T('fr_last').replace('{t}', agoText(f.seen)) : T('fr_off'))) + '</div>' +
       '<div class="fra">' + (!f.online && offd >= 3 ? '<a class="inv" data-mcall="' + esc(f.login) + '">' + esc(T('mc_btn')) + '</a>' : '') + '<a data-frcmp="' + esc(f.login) + '">VS</a><a class="ch" data-chat="' + esc(f.login) + '" data-chatn="' + esc(f.name) + '">' + ico('chat') + ' ' + esc(T('ch_btn')) + un + '</a>' +
-      (f.online ? '<a class="ring" data-ring="' + esc(f.login) + '" title="' + esc(T('rg_btn')) + '">' + ico('phone') + '</a><a class="duel" data-duelp="' + esc(f.login) + '" data-dueln="' + esc(f.name) + '" title="' + esc(T('du_btn')) + '">\u2694</a>' : '') +
+      (f.online ? '<a class="ring" data-ring="' + esc(f.login) + '" title="' + esc(T('rg_btn')) + '">' + ico('phone') + '</a><a class="duel" data-duelp="' + esc(f.login) + '" data-dueln="' + esc(f.name) + '" title="' + esc(T('du_btn')) + '">' + ico('swords') + '</a>' : '') +
       (CONNECTED && f.online && f.server !== CONNECTED ? '<a class="inv" data-inv="' + esc(f.login) + '">' + esc(T('iv_btn')) + '</a>' : '') +
       (f.server ? '<a class="ok" data-ip="' + esc(f.server) + '">' + esc(T('join')) + '</a>' : '<a data-frdel="' + esc(f.login) + '">' + esc(T('fr_del')) + '</a>') + '</div></div>';
   });
@@ -1467,6 +1469,7 @@ function frAdd(login) {
   api('friend_add', { login: login }, function (r) {
     if (!r.ok) return toast(r.msg);
     toast(r.st === 'friend' ? T('fr_now') : T('fr_sent_t'), 3500);
+    if (SUGG) { SUGG.list = SUGG.list.filter(function (x) { return x.login.toLowerCase() !== login.toLowerCase(); }); if (curModal === 'mdSide' && sideMode === 'friends') openFriends(); }
     if (FR_SUG) each(FR_SUG, function (f) { if (f.login.toLowerCase() === login.toLowerCase()) f.st = r.st; });
     loadFriends();
   });
@@ -2083,7 +2086,7 @@ function openFrProfile(login) {
     });
     if (!(u.wall || []).length) h += '<div class="mut">' + esc(T('wl_none')) + '</div>';
     h += '<div class="fpb">' + (u.isfr ? '<a class="btn" data-chat="' + esc(u.login) + '" data-chatn="' + esc(u.name) + '">' + ico('chat') + ' ' + esc(T('ch_btn')) + '</a>' +
-      (u.online ? '<a class="btn" data-ring="' + esc(u.login) + '">' + ico('phone') + ' ' + esc(T('rg_btn')) + '</a><a class="btn" data-duelp="' + esc(u.login) + '" data-dueln="' + esc(u.name) + '">\u2694 ' + esc(T('du_btn')) + '</a>' : '') + '<a class="btn" data-frcmp="' + esc(u.login) + '">VS</a>' : '') +
+      (u.online ? '<a class="btn" data-ring="' + esc(u.login) + '">' + ico('phone') + ' ' + esc(T('rg_btn')) + '</a><a class="btn" data-duelp="' + esc(u.login) + '" data-dueln="' + esc(u.name) + '">' + ico('swords') + ' ' + esc(T('du_btn')) + '</a>' : '') + '<a class="btn" data-frcmp="' + esc(u.login) + '">VS</a>' : '') +
       (u.server ? '<a class="btn red" data-ip="' + esc(u.server) + '">' + esc(T('join')) + '</a>' : '') + '<a class="btn" data-act="friends">\u2190 ' + esc(T('m_friends')) + '</a></div>';
     openSide('frprof', u.name, h);
   });
@@ -2151,7 +2154,7 @@ function showDuelInv(d) {
   DUEL_INV = d;
   var b = $('ringBox');
   if (!b) { b = document.createElement('div'); b.id = 'ringBox'; (document.getElementById('app') || document.body).appendChild(b); }
-  b.innerHTML = '<div class="rgi du">\u2694</div><b>' + esc(d.from) + '</b><span>' + esc(T('du_in').replace('{m}', d.mins)) + '</span>' +
+  b.innerHTML = '<div class="rgi du">' + ico('swords') + '</div><b>' + esc(d.from) + '</b><span>' + esc(T('du_in').replace('{m}', d.mins)) + '</span>' +
     '<div class="rgb"><a class="btn red" data-duelok="1">' + esc(T('du_acc')) + '</a><a class="btn" data-duelok="0">' + esc(T('rg_dec')) + '</a></div>';
   b.className = 'du'; b.style.display = 'block';
   cmd('play buttons/bell1.wav');
@@ -2169,7 +2172,7 @@ function duelBar() {
     if (!DUEL) return;
     var left = Math.max(0, DUEL.end - Math.floor(now() / 1000)), f = null;
     each(FRIENDS, function (x) { if (x.login.toLowerCase() === String(DUEL.op).toLowerCase()) f = x; });
-    b.innerHTML = '\u2694 ' + esc(T('du_bar')) + ' <b>' + DUEL.me_k + '</b> : <b>' + DUEL.op_k + '</b> ' + esc(DUEL.opn) + ' \u00b7 ' + Math.floor(left / 60) + ':' + ('0' + left % 60).slice(-2) +
+    b.innerHTML = ico('swords') + ' ' + esc(T('du_bar')) + ' <b>' + DUEL.me_k + '</b> : <b>' + DUEL.op_k + '</b> ' + esc(DUEL.opn) + ' \u00b7 ' + Math.floor(left / 60) + ':' + ('0' + left % 60).slice(-2) +
       (f && f.server && f.server !== CONNECTED ? ' <a class="btn red" data-ip="' + esc(f.server) + '">' + esc(T('du_join')) + '</a>' : '');
   };
   b.style.display = 'block'; tick(); clearInterval(DUEL_TM); DUEL_TM = setInterval(tick, 1000);
@@ -2194,7 +2197,7 @@ function diagText() {
     'Server: ' + (CONNECTED || 'ulanmagan') + (CONNECTED && SRV[CONNECTED] ? ' · ' + (SRV[CONNECTED].name || '') + ' · ping ' + (SRV[CONNECTED].ping || '?') : ''),
     'Menyu: ochilish ' + Math.round(PERF.load) + ' ms · eng katta qotish ' + Math.round(PERF.lag) + ' ms · menyu FPS ' + (PERF.fps || '?') + ' · yengil rejim: ' + (lowFx() ? 'ha' : 'yo\'q'),
     'Menyu xatolari: ' + ((window.XC_ERRS || []).join(' | ') || 'yo\'q')];
-  var cv = ['fps_max', 'fps_override', 'gl_vsync', 'rate', 'cl_updaterate', 'cl_cmdrate', 'ex_interp', 'm_rawinput', 'sensitivity', 'volume', 'voice_enable', 'voice_dsound', 'voice_scale', '_snd_mixahead', 'hisound', 'net_graph', 'developer', 'gl_texturemode', 'r_detailtextures', 'gamma', 'brightness'];
+  var cv = ['fps_max', 'fps_override', 'gl_vsync', 'rate', 'cl_updaterate', 'cl_cmdrate', 'ex_interp', 'm_rawinput', 'sensitivity', 'volume', 'voice_enable', 'voice_modenable', 'voice_dsound', 'voice_forcemicrecord', 'voice_scale', 'voice_loopback', '_snd_mixahead', 'hisound', 'net_graph', 'developer', 'gl_texturemode', 'r_detailtextures', 'gamma', 'brightness'];
   var o = []; each(cv, function (n) { var v = readCvar(n); if (v != null) o.push(n + '=' + v); });
   L.push('Sozlamalar: ' + (o.join(' · ') || 'o\'qib bo\'lmadi'));
   return L.join('\n');

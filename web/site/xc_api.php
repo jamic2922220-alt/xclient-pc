@@ -1125,6 +1125,7 @@ case 'suggest':
     foreach ((array)glob(XC_DIR . '/users/*.php') as $f) {
         $l = basename($f, '.php'); if (isset($skip[$l])) continue;
         $x = user($l); if (!$x || empty($x['seen']) || time() - $x['seen'] > 14 * 86400) continue;
+        if (isset($x['freq'][$me])) continue;                // so'rov allaqachon yuborilgan
         $sc = 0; $common = '';
         foreach ((isset($x['st']['srv']) ? $x['st']['srv'] : array()) as $ip => $sv) if (isset($mys[$ip])) { $sc += 1 + min($sv['t'], $mys[$ip]['t']) / 3600; if ($common === '') $common = $sv['n'] !== '' ? $sv['n'] : $ip; }
         if ($sc > 0) { $pp = pub($x, false); $cand[] = array('s' => $sc, 'u' => array('login' => $pp['login'], 'name' => $pp['name'], 'level' => $pp['level'], 'av' => $pp['av'], 'avc' => $pp['avc'], 'online' => $pp['online'], 'common' => $common)); }
