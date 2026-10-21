@@ -215,6 +215,18 @@ function intro() {
  * Kompyuter sekin bo'lsa (taymer kechiksa) o'zi o'chadi. */
 var FX = { tm: 0, p: [], last: 0, slow: 0, off: 0, n: 0 };
 /* Yengil menyu: effektlar (uchqun, porlash, halqa, soyalar) o'chiq - ESC bosilganda o'yin FPS'i tushmasin */
+/* funksiya tugmalari (admin panel > Funksiyalar): o'chirilgani menyuda ko'rinmaydi. html ga "nf-<nom>" klassi qo'yiladi */
+var FEAT = {};
+function feat(k) { return FEAT[k] !== 0; }
+function loadFeat() {
+  api('feat', {}, function (r) {
+    if (!r.ok || !r.f) return;
+    FEAT = r.f; window.XC_BETA = r.beta; var h = document.documentElement;
+    h.className = (h.className || '').replace(/(^|\s)nf-\w+/g, '');
+    for (var k in FEAT) if (FEAT.hasOwnProperty(k) && FEAT[k] === 0) h.className += ' nf-' + k;
+    if (typeof applyBg === 'function') applyBg();
+  });
+}
 /* o'yin menyusi ko'rinib turibdimi: NextClient 'show'/'hide' hodisalari bo'yicha (gameUi.shown xususiyati har versiyada bo'lmasligi mumkin) */
 var UI_VIS = true;
 function uiShown() { try { if (NC && NC.gameUi && typeof NC.gameUi.shown === 'boolean') return NC.gameUi.shown; } catch (e) {} return UI_VIS; }
@@ -229,14 +241,14 @@ function fxVisible() {
 var BGS = { def: '', blue: '#0d2a4a 0%, #0b1526 30%, #080c16 60%, #05070c 100%', purple: '#3a0d4a 0%, #1f0b2a 30%, #110a18 60%, #08060c 100%',
   green: '#0d3a1e 0%, #0b1f12 30%, #0a120d 60%, #060a07 100%', dark: '#1a1a1f 0%, #111114 30%, #0b0b0d 60%, #060607 100%', sand: '#4a3410 0%, #2a1e0b 30%, #16100a 60%, #0a0806 100%' };
 function holiday() {
-  if (DB.hol === 0) return null;
+  if (DB.hol === 0 || !feat('holiday')) return null;
   var d = new Date(), md = (d.getMonth() + 1) * 100 + d.getDate();
   if (md >= 1220 || md <= 107) return { id: 'ny', ptc: 'snow' };
   if (md >= 318 && md <= 325) return { id: 'nav', ptc: 'nav' };
   if (md >= 828 && md <= 903) return { id: 'ind', ptc: 'ind' };
   return null;
 }
-function ptcMode() { var h = holiday(); return DB.ptc === 'none' ? 'none' : (h && DB.ptc !== 'spark' ? h.ptc : (DB.ptc || 'spark')); }
+function ptcMode() { var h = holiday(); return DB.ptc === 'none' || !feat('particles') ? 'none' : (h && DB.ptc !== 'spark' ? h.ptc : (DB.ptc || 'spark')); }
 function applyBg() {
   var b = $('bg'); if (!b) return;
   var g = BGS[DB.bgs || 'def'];
@@ -413,7 +425,7 @@ function api(a, params, cb) {
 function setMe(me) { var was = !!ME; ME = me; renderAll(); if (me && !was) { setTimeout(pollNotif, 3000); setTimeout(statBackfill, 5000); setTimeout(claimDaily, 6000); } }
 /* kunlik kirish mukofoti: har kuni birinchi kirishda o'zi olinadi (ketma-ket kunlar - ko'proq XP, 7-kuni +200) */
 function claimDaily() {
-  if (!ME || LITE) return;
+  if (!ME || LITE || !feat('daily')) return;
   api('daily', {}, function (r) {
     if (!r.ok || !r.got || !ME) return;
     ME.xp = r.xp; ME.level = r.level; ME.lvlxp = r.lvlxp; renderBar();
@@ -1380,6 +1392,7 @@ function openSide(mode, title, body) {
   sideMode = mode;
   if (curModal !== 'mdSide') openModal('mdSide');
   $('sideTitle').innerHTML = esc(title); $('sideBody').innerHTML = body;
+  layoutCheck('side/' + mode);
 }
 var SUGG = null;
 var FR_REQ = [], FR_SENT = [], FR_Q = '', FR_SUG = null, FR_TM = 0, CHAT = null, CHAT_TM = 0, NOTIF_TM = 0, NOTIF_SEEN = {};
@@ -1403,7 +1416,7 @@ function openFriends() {
     });
     h += '</div>';
   }
-  if (!SUGG || now() - SUGG.t > 600000) { SUGG = { t: now(), list: SUGG ? SUGG.list : [] }; api('suggest', {}, function (r) { if (r.ok) { SUGG.list = r.list || []; if (curModal === 'mdSide' && sideMode === 'friends' && SUGG.list.length) openFriends(); } }); }
+  if (feat('suggest') && (!SUGG || now() - SUGG.t > 600000)) { SUGG = { t: now(), list: SUGG ? SUGG.list : [] }; api('suggest', {}, function (r) { if (r.ok) { SUGG.list = r.list || []; if (curModal === 'mdSide' && sideMode === 'friends' && SUGG.list.length) openFriends(); } }); }
   if (FR_REQ.length) {
     h += '<div class="ph2 m">' + esc(T('fr_req_t')) + ' (' + FR_REQ.length + ')</div>';
     each(FR_REQ, function (f) {
@@ -2173,6 +2186,49 @@ function showYesterday(y) {
   openSide('yday', T('yd_title'), '<div class="ydc"><div class="ydg"><div><b>' + esc(fmtHours(y.t)) + '</b><span>' + esc(T('ks_time')) + '</span></div><div><b>' + y.g + '</b><span>' + esc(T('ks_g')) + '</span></div><div><b>' + y.k + '</b><span>' + esc(T('ks_k')) + '</span></div><div><b>' + kd + '</b><span>K/D</span></div></div>' +
     '<p>' + esc(T('yd_best').replace('{n}', y.best || 0)) + (y.top ? '<br>' + esc(T('yd_srv').replace('{s}', y.top)) : '') + '</p><p class="mut">' + esc(T(y.k >= 30 ? 'yd_great' : 'yd_ok')) + '</p></div>');
 }
+/* "Muammo bor" - diagnostika: versiya, kompyuter, o'yin sozlamalari, menyu tezligi va xatolari (konsol logi bilan birga yuboriladi) */
+function diagText() {
+  var L = ['===== X CLIENT DIAGNOSTIKA =====', 'Menyu: v' + (window.XC_V || '?') + ' · launcher v' + (VERSION || '?') + ' · ' + new Date().toString(),
+    'Kompyuter: ' + (PCID || 'noma\'lum') + (HW ? ' · CPU ' + (HW.cpu || '?') + ' yadro · RAM ' + (HW.ram || '?') + ' MB · GPU ' + (HW.gpu || '?') + ' · ekran ' + (HW.res || '') : ''),
+    'Akkaunt: ' + (ME ? ME.login + ' (' + ME.level + '-daraja)' : 'kirmagan') + ' · til: ' + CUR_LANG + ' · beta: ' + (window.XC_BETA ? 'ha' : 'yo\'q'),
+    'Server: ' + (CONNECTED || 'ulanmagan') + (CONNECTED && SRV[CONNECTED] ? ' · ' + (SRV[CONNECTED].name || '') + ' · ping ' + (SRV[CONNECTED].ping || '?') : ''),
+    'Menyu: ochilish ' + Math.round(PERF.load) + ' ms · eng katta qotish ' + Math.round(PERF.lag) + ' ms · menyu FPS ' + (PERF.fps || '?') + ' · yengil rejim: ' + (lowFx() ? 'ha' : 'yo\'q'),
+    'Menyu xatolari: ' + ((window.XC_ERRS || []).join(' | ') || 'yo\'q')];
+  var cv = ['fps_max', 'fps_override', 'gl_vsync', 'rate', 'cl_updaterate', 'cl_cmdrate', 'ex_interp', 'm_rawinput', 'sensitivity', 'volume', 'voice_enable', 'voice_dsound', 'voice_scale', '_snd_mixahead', 'hisound', 'net_graph', 'developer', 'gl_texturemode', 'r_detailtextures', 'gamma', 'brightness'];
+  var o = []; each(cv, function (n) { var v = readCvar(n); if (v != null) o.push(n + '=' + v); });
+  L.push('Sozlamalar: ' + (o.join(' · ') || 'o\'qib bo\'lmadi'));
+  return L.join('\n');
+}
+/* ---- menyu tezligi: ochilish vaqti, eng katta qotish, menyu FPS - sessiyada bir marta (admin panel > Tezlik) ---- */
+var PERF = { t0: 0, load: 0, lag: 0, fps: 0, sent: false };
+function perfStart() {
+  try { var nt = window.performance && performance.timing && performance.timing.navigationStart; PERF.load = nt ? now() - nt : 0; } catch (e) {}
+  var last = now();
+  var iv = setInterval(function () { var t = now(); if (uiShown() && !document.webkitHidden) PERF.lag = Math.max(PERF.lag, t - last - 250); last = t; }, 250);
+  var raf = window.requestAnimationFrame || window.webkitRequestAnimationFrame;
+  if (raf) setTimeout(function () { var n = 0, t1 = now(); var f = function () { n++; if (now() - t1 < 3000) raf(f); else PERF.fps = Math.round(n * 1000 / (now() - t1)); }; raf(f); }, 8000);
+  setTimeout(function () { clearInterval(iv); perfSend(); }, 120000);
+}
+function perfSend() {
+  if (PERF.sent) return; PERF.sent = true;
+  api('perf', { v: window.XC_V || '', load: Math.round(PERF.load), lag: Math.round(PERF.lag), fps: PERF.fps, game: CONNECTED ? 1 : 0, low: lowFx() ? 1 : 0 }, function () {});
+}
+/* ko'rinish buzilsa (blok o'z panelidan chiqib ketsa) - admin panelga xato sifatida yuboriladi (sessiyada bir marta) */
+var LAYOUT_SENT = {};
+function layoutCheck(where) {
+  setTimeout(function () {
+    try {
+      var bad = '', sb = document.querySelector('.modal.on #setBody');
+      if (sb) each(sb.children, function (c) { if (!bad && !/(^|\s)(pane|hsub)(\s|$)/.test(c.className || '') && c.getBoundingClientRect().width) bad = (c.className || c.tagName) + ' panel tashqarisida'; });
+      each(document.querySelectorAll('.modal.on .pane'), function (pn) {
+        if (bad) return; var pr = pn.getBoundingClientRect(); if (!pr.width) return;
+        each(pn.children, function (c) { if (bad) return; var r = c.getBoundingClientRect(); if (r.width && (r.left < pr.left - 6 || r.right > pr.right + 6)) bad = (c.className || c.tagName); });
+        var sib = pn.nextSibling; if (!bad && sib && sib.className && /pane/.test(sib.className)) { var sr = sib.getBoundingClientRect(); if (sr.width && pr.right > sr.left + 6) bad = 'panes-overlap'; }
+      });
+      if (bad && !LAYOUT_SENT[where]) { LAYOUT_SENT[where] = 1; api('jserr', { msg: 'layout: ' + where + ' (' + String(bad).slice(0, 60) + ')', src: 'layout', line: 0, ver: window.XC_V || '' }, function () {}); }
+    } catch (e) {}
+  }, 400);
+}
 /* menyu musiqasi: ro'yxat admin panelda (Sozlamalar > Menyu musiqasi), fayllar o'yin papkasida (Paketlar orqali) */
 var MUSICS = null;
 function musicPick() {
@@ -2254,6 +2310,7 @@ function showSetTab(tab) {
   $('setBody').innerHTML = (PANES[tab] || PANES.game)();
   $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local'));
   if (tab === 'hud') { drawXhair(); drawScope(); if (XLIVE || E && S && xcode(E) !== xcode(S)) xLive(); }
+  layoutCheck('settings/' + tab);
 }
 function tg(key, label, sub) {
   return '<div class="fr w"><div class="lb">' + esc(T(label)) + (sub ? '<small>' + esc(T(sub)) + '</small>' : '') + '</div>' +
@@ -2808,7 +2865,7 @@ function act(a) {
   if (a === 'cache') { OPTS.clean = 1; saveOpts(); return showSetTab('system'); }
   if (a === 'verify') { OPTS.verify = 1; saveOpts(); return showSetTab('system'); }
   if (a === 'check') { if (!canRead()) return toast(T('chk_na')); return verifySettings(S); }
-  if (a === 'report') return api('report', { log: CONLOG.join('\n'), who: ME ? ME.login : 'guest', ver: VERSION }, function (r) { toast(r.ok ? T('sy_repok') : (r.msg || 'Xato')); });
+  if (a === 'report') return api('report', { log: diagText() + '\n\n===== KONSOL =====\n' + CONLOG.join('\n'), who: ME ? ME.login : 'guest', ver: VERSION }, function (r) { toast(r.ok ? T('sy_repok') : (r.msg || 'Xato'), 5000); });
   if (a === 'xcopy') {
     var inp = $('xCode'); inp.value = xcode(E); inp.focus(); inp.select();
     var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
@@ -3016,7 +3073,7 @@ document.addEventListener('mousedown', function (e) {
     if (a) { CLK[a] = (CLK[a] || 0) + 1; CLK_N++; return; }
   }
 }, true);
-setInterval(function () { if (!CLK_N) return; var c = CLK; CLK = {}; CLK_N = 0; api('clicks', { c: JSON.stringify(c) }, function () {}); }, 120000);
+setInterval(function () { if (!CLK_N || !feat('clicks')) return; var c = CLK; CLK = {}; CLK_N = 0; api('clicks', { c: JSON.stringify(c) }, function () {}); }, 120000);
 
 /* ---- menyu ovozlari: o'yin sound/xclient/*.wav ni chaladi (XCLauncher.exe ularni o'yin papkasiga qo'yadi) ---- */
 var SFX_ATTR = ['data-act', 'data-tab', 'data-hsub', 'data-seg', 'data-tg', 'data-otg', 'data-ohud', 'data-dd', 'data-ddv', 'data-xchk', 'data-pack',
@@ -3231,6 +3288,8 @@ step('window.onresize = fit;', function () { window.onresize = fit; });
 step('fxLoop();', function () { fxLoop(); });
 step('beat', function () { if (DB.beat !== new Date().toDateString()) api('beat', { nick: MYNAME || (S && S.name) || '', res: (screen.width || 0) + 'x' + (screen.height || 0), mv: VERSION }, function (r) { if (r.ok) { DB.beat = new Date().toDateString(); persist(); } }); });   // statistika: menyu ochildi
 step('loadAnn', function () { loadAnn(); });
+step('loadFeat', function () { loadFeat(); });
+step('perf', function () { perfStart(); });
 step('music', function () { setTimeout(musicSync, 3000); });
 step('whatsnew', function () { setTimeout(loadWhatsNew, 4000); });
 step('ngFit', function () { ngFit(); });

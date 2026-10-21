@@ -242,6 +242,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         flash($n . ' ta o\'yinchiga +' . $xp . ' XP sovg\'a yuborildi'); go(pp('all') === '1' ? '?p=ann' : '?p=accounts&q=' . urlencode(g('q')));
     }
     if ($act === 'music_save') { $CFG['music'] = mb_substr((string)pp('music'), 0, 3000, 'UTF-8'); cfg_save(); flash('Menyu musiqalari saqlandi'); go('?p=settings'); }
+    /* ---- menyu versiyalari: rel/<versiya>/ papkalari ---- */
+    $relv = preg_replace('/[^0-9]/', '', (string)pp('v')); $relDir = __DIR__ . '/rel/' . $relv;
+    if ($act === 'rel_stable' && $relv !== '' && is_file($relDir . '/index.html')) {   // hammaga: asosiy sahifa shu versiyaga almashadi
+        $html = file_get_contents($relDir . '/index.html');
+        foreach (array('xc.html', 'index.html') as $f) @file_put_contents(__DIR__ . '/' . $f, $html, LOCK_EX);
+        @file_put_contents(__DIR__ . '/ver.txt', $relv . "\n", LOCK_EX);
+        if (!isset($CFG['menu_hist'])) $CFG['menu_hist'] = array(); $CFG['menu_hist'][] = array('v' => $relv, 't' => time()); $CFG['menu_hist'] = array_slice($CFG['menu_hist'], -20);
+        if (!empty($CFG['menu_beta']) && $CFG['menu_beta'] === $relv) $CFG['menu_beta'] = '';
+        cfg_save(); flash('v' . $relv . ' hamma o\'yinchilarga chiqarildi (menyuni qayta ochganda ko\'rishadi)'); go('?p=menuver');
+    }
+    if ($act === 'rel_beta' && $relv !== '' && is_file($relDir . '/index.html')) { $CFG['menu_beta'] = $relv; cfg_save(); flash('v' . $relv . ' faqat beta testerlarga berildi'); go('?p=menuver'); }
+    if ($act === 'rel_beta_off') { $CFG['menu_beta'] = ''; cfg_save(); flash('Beta o\'chirildi - hamma barqaror versiyada'); go('?p=menuver'); }
+    if ($act === 'rel_del' && $relv !== '' && is_dir($relDir) && trim((string)@file_get_contents(__DIR__ . '/ver.txt')) !== $relv && (empty($CFG['menu_beta']) || $CFG['menu_beta'] !== $relv)) {
+        foreach ((array)glob($relDir . '/*') as $f) @unlink($f); @rmdir($relDir); flash('v' . $relv . ' o\'chirildi'); go('?p=menuver');
+    }
+    if ($act === 'beta_save') {
+        $CFG['beta_ips'] = array_values(array_filter(array_map('trim', preg_split('/[\s,]+/', (string)pp('ips'))), function ($x) { return (bool)filter_var($x, FILTER_VALIDATE_IP); }));
+        $CFG['beta_pcs'] = array_values(array_filter(array_map('trim', preg_split('/[\s,]+/', (string)pp('pcs'))), function ($x) { return (bool)preg_match('/^[a-z0-9]{8,40}$/', $x); }));
+        cfg_save(); flash('Beta testerlar saqlandi'); go('?p=menuver');
+    }
+    if ($act === 'beta_myip') { $ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : ''; if (!isset($CFG['beta_ips'])) $CFG['beta_ips'] = array(); if ($ip && !in_array($ip, $CFG['beta_ips'])) $CFG['beta_ips'][] = $ip; cfg_save(); flash('IP qo\'shildi: ' . $ip); go('?p=menuver'); }
+    if ($act === 'feat_save') { $CFG['feat'] = array(); foreach (array('duel', 'chest', 'ring', 'wall', 'suggest', 'daily', 'feedback', 'particles', 'anim', 'holiday', 'clicks') as $k) $CFG['feat'][$k] = pp('f_' . $k) ? 1 : 0; cfg_save(); flash('Funksiyalar saqlandi - o\'yinchilar menyuni qayta ochganda kuchga kiradi'); go('?p=feat'); }
     if ($act === 'jserr_clear') { wr('jserr', array()); go('?p=reports'); }
     if ($act === 'wn_save') {
         $items = array(); foreach (preg_split('/\r?\n/', (string)pp('items')) as $x) { $x = trim($x); if ($x !== '') $items[] = mb_substr($x, 0, 300, 'UTF-8'); }
@@ -345,7 +367,7 @@ if ($P === 'installs' && g('csv')) {
 
 /* ---------- sahifa ---------- */
 $NAV = array('dash' => array('Infopanel', '⌂'), 'online' => array('Onlayn', '●'), 'players' => array("O'yinchilar", '☺'), 'installs' => array("O'rnatishlar", '↓'), 'accounts' => array('Akkauntlar', '✉'),
-    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'stats' => array('Statistika', '★'), 'churn' => array('Ketganlar', '↘'), 'fb' => array('Fikrlar', '✎'), 'clicks' => array('Tugmalar', '⊙'), 'promo' => array('Reklama', '$'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
+    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'stats' => array('Statistika', '★'), 'churn' => array('Ketganlar', '↘'), 'fb' => array('Fikrlar', '✎'), 'clicks' => array('Tugmalar', '⊙'), 'menuver' => array('Menyu versiyalari', '⇅'), 'feat' => array('Funksiyalar', '◧'), 'speed' => array('Tezlik', '⚡'), 'promo' => array('Reklama', '$'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
 $devCount = count((array)glob(XC_DIR . '/dev/*.php')); $ncCount = count((array)glob(XC_DIR . '/nc/*.php')); $accCount = count((array)glob(XC_DIR . '/users/*.php')); $repCount = count((array)glob(XC_DIR . '/reports/*.php'));
 $fbCount = count((array)glob(XC_DIR . '/feedback/*.php'));
 $badge = array('players' => $devCount + $ncCount, 'installs' => $devCount, 'accounts' => $accCount, 'reports' => $repCount, 'fb' => $fbCount);
@@ -707,6 +729,51 @@ if ($P === 'churn') {
     $n = 0; foreach ($bye as $b) { if ($b['text'] === '' && $n > 30) continue; if (++$n > 60) break; echo '<tr><td>' . dt($b['t']) . '</td><td>' . h(isset($nm[$b['r']]) ? $nm[$b['r']] : '—') . '</td><td>' . h($b['text']) . '</td><td class="mono mut">' . h($b['d']) . '</td></tr>'; }
     if (!$bye) echo '<tr><td colspan="4" class="mut">Hali yo\'q. X CLIENT o\'chirilganda so\'rovnoma brauzerda ochiladi (yangi X-Client-Setup bilan o\'rnatilganlarda).</td></tr>';
     echo '</table></div>';
+}
+
+/* ===== MENYU VERSIYALARI: beta guruh, hammaga chiqarish, orqaga qaytarish ===== */
+if ($P === 'menuver') {
+    $stable = trim((string)@file_get_contents(__DIR__ . '/ver.txt')); $beta = isset($CFG['menu_beta']) ? $CFG['menu_beta'] : '';
+    $rels = array(); foreach ((array)glob(__DIR__ . '/rel/*', GLOB_ONLYDIR) as $d) { $v = basename($d); if (preg_match('/^\d{6,12}$/', $v)) $rels[$v] = filemtime($d); } krsort($rels);
+    $je = rd('jserr_hour', array()); $errBy = array(); foreach ($je as $k => $n) { $vv = substr($k, strpos($k, '-') + 1); $errBy[$vv] = (isset($errBy[$vv]) ? $errBy[$vv] : 0) + $n; }
+    $btn = function ($act, $v, $t, $cls, $conf) { return '<form method="post" class="inl"' . ($conf ? ' onsubmit="return confirm(\'' . $conf . '\')"' : '') . '>' . csrf_in() . '<input type="hidden" name="act" value="' . $act . '"><input type="hidden" name="v" value="' . h($v) . '"><button class="btn ' . $cls . '">' . $t . '</button></form> '; };
+    echo '<h1>Menyu versiyalari</h1><div class="cards"><div class="card xc"><b>v' . h($stable) . '</b><span class="ct">Hamma o\'yinchilarda (barqaror)</span></div><div class="card"><b>' . ($beta ? 'v' . h($beta) : '—') . '</b><span class="ct">Beta testerlarda</span></div></div>';
+    echo '<div class="panel"><div class="ph">Qanday ishlaydi</div><ol class="help"><li>Yangi menyu zipini FastPanel orqali yuklang - u <b>rel/versiya</b> papkasiga tushadi va hali hech kimga ko\'rinmaydi.</li><li><b>Beta</b> ni bosing - faqat pastdagi beta testerlar (siz va ishonchli o\'yinchilar) ko\'radi.</li><li>1-2 kun muammo bo\'lmasa - <b>Hammaga</b> ni bosing.</li><li>Xato chiqsa - oldingi versiya yonidagi <b>Hammaga</b> ni bosing: 1 daqiqada hamma eski versiyaga qaytadi.</li></ol></div>';
+    echo '<div class="panel"><div class="ph">Versiyalar</div><table class="list"><tr><th>Versiya</th><th>Yuklangan</th><th>Holat</th><th>Xatolar (48 soat)</th><th></th></tr>';
+    foreach ($rels as $v => $t) {
+        $v = (string)$v;                                  // massiv kaliti son bo'lib qoladi - matn bilan solishtiramiz
+        $st = $v === $stable ? '<b class="gr">HAMMADA</b>' : ($v === $beta ? '<b style="color:#f5c542">BETA</b>' : '<span class="mut">-</span>');
+        echo '<tr><td class="mono"><b>v' . h($v) . '</b></td><td>' . dt($t) . '</td><td>' . $st . '</td><td>' . (isset($errBy[$v]) ? '<b class="red">' . $errBy[$v] . '</b>' : '0') . '</td><td class="r">'
+            . ($v !== $stable ? $btn('rel_stable', $v, ($v < $stable ? '⟲ Shunga qaytarish' : 'Hammaga'), 'red', 'v' . $v . ' hamma o\\\'yinchilarga berilsinmi?') : '')
+            . ($v !== $beta && $v !== $stable ? $btn('rel_beta', $v, 'Beta', '', '') : '')
+            . ($v !== $stable && $v !== $beta ? $btn('rel_del', $v, 'O\'chirish', '', 'O\\\'chirilsinmi?') : '') . '</td></tr>';
+    }
+    if (!$rels) echo '<tr><td colspan="5" class="mut">Hali versiya yo\'q - yangi menyu zipini yuklang</td></tr>';
+    echo '</table>' . ($beta ? '<div style="margin-top:10px">' . $btn('rel_beta_off', '', 'Betani o\'chirish', '', '') . '</div>' : '') . '</div>';
+    echo '<div class="panel"><div class="ph">Beta testerlar</div><form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="beta_save">'
+        . '<label>IP manzillar (har qatorga bittadan)</label><textarea name="ips" rows="3">' . h(implode("\n", isset($CFG['beta_ips']) ? $CFG['beta_ips'] : array())) . '</textarea>'
+        . '<label>Kompyuter ID lari (O\'yinchilar sahifasidagi UID)</label><textarea name="pcs" rows="3">' . h(implode("\n", isset($CFG['beta_pcs']) ? $CFG['beta_pcs'] : array())) . '</textarea><button class="btn red">Saqlash</button></form>'
+        . '<form method="post" style="margin-top:8px">' . csrf_in() . '<input type="hidden" name="act" value="beta_myip"><button class="btn">+ Mening hozirgi IP\'imni qo\'shish (' . h(isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '') . ')</button></form></div>';
+}
+
+/* ===== FUNKSIYALAR: har birini alohida o'chirish ===== */
+if ($P === 'feat') {
+    $F = array('duel' => 'Duel', 'chest' => 'Sandiqlar', 'ring' => "Qo'ng'iroq", 'wall' => 'Profil devori', 'suggest' => "Do'st tavsiyalari", 'daily' => 'Kunlik mukofot',
+        'feedback' => 'Taklif / shikoyat tugmasi', 'particles' => 'Uchqun / qor zarrachalari', 'anim' => 'Animatsiyalar (jonli ramka va h.k.)', 'holiday' => 'Bayram bezaklari', 'clicks' => 'Tugma statistikasi yig\'ish');
+    $cur = isset($CFG['feat']) ? $CFG['feat'] : array();
+    echo '<h1>Funksiyalar</h1><div class="panel"><div class="ph">Biror funksiya muammo qilsa - butun menyuni qaytarmasdan faqat o\'shani o\'chiring</div><form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="feat_save">';
+    foreach ($F as $k => $n) echo '<label class="chk"><input type="checkbox" name="f_' . $k . '" value="1"' . (!isset($cur[$k]) || !empty($cur[$k]) ? ' checked' : '') . '> ' . h($n) . '</label>';
+    echo '<button class="btn red">Saqlash</button></form></div>';
+}
+
+/* ===== TEZLIK: har versiyada menyu ochilish vaqti va qotishlar ===== */
+if ($P === 'speed') {
+    $rows = array(); foreach ((array)glob(XC_DIR . '/perf/*.php') as $f) { $v = basename($f, '.php'); $x = rd('perf/' . $v, null); if ($x && $x['n']) $rows[$v] = $x; } krsort($rows);
+    echo '<h1>Tezlik</h1><div class="panel"><div class="ph">Menyu tezligi versiyalar bo\'yicha</div><table class="list"><tr><th>Versiya</th><th>Sessiyalar</th><th>Ochilish (o\'rtacha)</th><th>Eng katta qotish (o\'rtacha)</th><th>Qotgan sessiyalar (&gt;0.5 s)</th><th>Menyu FPS</th><th>O\'yin ichida</th><th>Yengil menyu</th></tr>';
+    foreach ($rows as $v => $x) { $bad = round(100 * $x['bad'] / $x['n']);
+        echo '<tr><td class="mono"><b>v' . h($v) . '</b></td><td>' . $x['n'] . '</td><td>' . round($x['load'] / $x['n'] / 1000, 1) . ' s</td><td>' . round($x['lag'] / $x['n']) . ' ms</td><td class="' . ($bad > 15 ? 'red' : '') . '"><b>' . $bad . '%</b></td><td>' . ($x['fpsn'] ? round($x['fps'] / $x['fpsn']) : '—') . '</td><td>' . round(100 * $x['game'] / $x['n']) . '%</td><td>' . round(100 * $x['low'] / $x['n']) . '%</td></tr>'; }
+    if (!$rows) echo '<tr><td colspan="8" class="mut">Hali ma\'lumot yo\'q - yangi menyu o\'yinchilarda ochilgach yig\'iladi</td></tr>';
+    echo '</table><div class="mut small" style="margin-top:8px">Yangi versiyada "Qotgan sessiyalar" yoki "Ochilish" keskin oshsa - Menyu versiyalari sahifasida oldingisiga qaytaring. Menyu FPS - menyu animatsiyalari tezligi (o\'yin FPS\'ini menyu o\'qiy olmaydi).</div></div>';
 }
 
 /* ===== TUGMALAR: menyuda nima ko'p bosiladi (7 kun) ===== */

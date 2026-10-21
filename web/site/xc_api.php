@@ -228,6 +228,17 @@ function duel_pub($d, $me) {
         'op' => $a ? $d['b'] : $d['a'], 'opn' => $a ? $d['bn'] : $d['an'], 'me_k' => $a ? $d['ka'] : $d['kb'], 'op_k' => $a ? $d['kb'] : $d['ka'],
         'win' => isset($d['win']) ? ($d['win'] === '' ? 'draw' : (($d['win'] === 'a') === $a ? 'me' : 'op')) : '');
 }
+/* ---- funksiya tugmalari (admin panel > Funksiyalar): biror funksiya muammo qilsa - faqat o'shani o'chirish ---- */
+function feat_list() { return array('duel' => 'Duel', 'chest' => 'Sandiqlar', 'ring' => "Qo'ng'iroq", 'wall' => 'Profil devori', 'suggest' => "Do'st tavsiyalari", 'daily' => 'Kunlik mukofot',
+    'feedback' => 'Taklif / shikoyat', 'particles' => 'Uchqun / qor', 'anim' => 'Animatsiyalar (ramka va h.k.)', 'holiday' => 'Bayram bezaklari', 'clicks' => 'Tugma statistikasi'); }
+function feat_on($k) { $c = xc_cfg(); return !isset($c['feat'][$k]) || !empty($c['feat'][$k]); }
+/* ---- menyu versiyalari: beta testerlar (IP yoki kompyuter ID) ---- */
+function is_beta_tester() {
+    $c = xc_cfg();
+    if (!empty($c['beta_ips']) && in_array(client_ip(), $c['beta_ips'], true)) return true;
+    $pc = ip_dev(3 * 86400);
+    return $pc !== '' && !empty($c['beta_pcs']) && in_array($pc, $c['beta_pcs'], true);
+}
 function tg_send($chat, $text) {
     $c = xc_cfg(); if (empty($c['tg_token']) || !$chat) return;
     $ctx = stream_context_create(array('http' => array('method' => 'POST', 'timeout' => 3, 'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
@@ -404,6 +415,14 @@ function touch_device(&$u) {
 
 ensure_dir();
 $a = p('a');
+/* menyu qaysi versiyani ochsin: beta testerlarga - beta, boshqalarga - barqaror (ver.txt). Tez javob: boshqa ishlarsiz */
+if ($a === 'menuver') {
+    header('Content-Type: text/plain'); header('Cache-Control: no-store');
+    $c = xc_cfg(); $st = trim((string)@file_get_contents(__DIR__ . '/ver.txt'));
+    $b = isset($c['menu_beta']) ? preg_replace('/[^0-9]/', '', $c['menu_beta']) : '';
+    echo ($b !== '' && is_file(__DIR__ . '/rel/' . $b . '/index.html') && is_beta_tester()) ? $b : $st;
+    exit;
+}
 daily_report();
 tg_bot_poll();
 
@@ -871,6 +890,23 @@ case 'cfg_share':
     }
     out(array('ok' => true, 'code' => $code));
 
+case 'feat':                                             // menyu: qaysi funksiyalar yoqilgan
+    $f = array(); foreach (feat_list() as $k => $n) $f[$k] = feat_on($k) ? 1 : 0;
+    out(array('ok' => true, 'f' => $f, 'beta' => is_beta_tester() ? 1 : 0));
+
+/* ---------- menyu tezligi (admin panel > Tezlik): har sessiyada bir marta ---------- */
+case 'perf':
+    if (rl_count('pf' . client_ip(), 3600) >= 6) out(array('ok' => true));
+    rl_add('pf' . client_ip(), 3600);
+    $v = preg_replace('/[^0-9]/', '', p('v')); if ($v === '') out(array('ok' => true));
+    $load = max(0, min(60000, (int)p('load'))); $lag = max(0, min(60000, (int)p('lag'))); $fps = max(0, min(1000, (int)p('fps')));
+    @mkdir(XC_DIR . '/perf', 0755, true); lock();
+    $x = rd('perf/' . $v, array('n' => 0, 'load' => 0, 'lag' => 0, 'bad' => 0, 'game' => 0, 'fps' => 0, 'fpsn' => 0, 'low' => 0, 't0' => time()));
+    $x['n']++; $x['load'] += $load; $x['lag'] += $lag; if ($lag > 500) $x['bad']++; if (p('game') === '1') $x['game']++; if (p('low') === '1') $x['low']++;
+    if ($fps > 0) { $x['fps'] += $fps; $x['fpsn']++; }
+    $x['t1'] = time(); wr('perf/' . $v, $x);
+    out(array('ok' => true));
+
 case 'music':                                            // menyu musiqalari ro'yxati (admin panel > Sozlamalar)
     $c = xc_cfg(); $l = array();
     foreach (preg_split('/\r?\n/', isset($c['music']) ? $c['music'] : '') as $ln) { $x = array_map('trim', explode('|', $ln)); if (count($x) === 2 && $x[0] !== '' && preg_match('/^[\w\/.\-]+\.mp3$/', $x[1])) $l[] = array($x[0], $x[1]); }
@@ -925,10 +961,14 @@ case 'jserr':
     if (count($all) > 200) { uasort($all, function ($a, $b) { return $b['last'] - $a['last']; }); $all = array_slice($all, 0, 200, true); }
     wr('jserr', $all);
     if ($new) tg_notify('report', "X CLIENT menyusida yangi xato: " . $msg . " (" . $src . ":" . $line . ")");
+    $hv = rd('jserr_hour', array()); $hk = date('YmdH') . '-' . preg_replace('/[^0-9]/', '', p('ver'));   // shu soatda shu versiyada nechta xato
+    $hv[$hk] = (isset($hv[$hk]) ? $hv[$hk] : 0) + 1; if (count($hv) > 48) $hv = array_slice($hv, -48, 48, true); wr('jserr_hour', $hv);
+    if ($hv[$hk] === 15) tg_notify('report', "DIQQAT! Menyu v" . clean_str(p('ver'), 20) . " da 1 soatda 15+ xato. Admin panel > Menyu versiyalari > oldingisiga qaytaring.");
     out(array('ok' => true));
 
 /* ---------- qaysi tugmalar bosiladi (admin panel > Tugmalar): menyu 2 daqiqada bir yig'ib yuboradi ---------- */
 case 'clicks':
+    if (!feat_on('clicks')) fail('off', 'Bu funksiya vaqtincha o\'chirilgan');
     if (rl_count('ck' . client_ip(), 3600) >= 40) out(array('ok' => true));
     rl_add('ck' . client_ip(), 3600);
     $c = json_decode(p('c'), true); if (!is_array($c)) out(array('ok' => true));
@@ -966,6 +1006,7 @@ case 'notif':
 
 case 'duel_req':
     lock();
+    if (!feat_on('duel')) fail('off', 'Bu funksiya vaqtincha o\'chirilgan');
     $u = auth();
     $to = strtolower(p('to')); $mins = (int)p('mins'); if (!in_array($mins, array(5, 10, 15), true)) $mins = 10;
     if (!preg_match('/^[a-z0-9_]{3,20}$/', $to) || empty($u['friends']) || !in_array($to, array_map('strtolower', $u['friends']))) fail('bad', 'Faqat do\'stni duelga chaqirish mumkin');
@@ -992,6 +1033,7 @@ case 'duel_ans':
 /* ---------- sandiq ochish ---------- */
 case 'chest_open':
     lock();
+    if (!feat_on('chest')) fail('off', 'Bu funksiya vaqtincha o\'chirilgan');
     $u = auth();
     if (chests_avail($u) <= 0) fail('none', 'Sandiq yo\'q. Har yangi darajada bittadan beriladi');
     $u['cho'] = (int)@$u['cho'] + 1;
@@ -1041,6 +1083,7 @@ case 'uinfo':
 /* ---------- profil devori: do'stlar profilingizga izoh qoldiradi (Steam'dagidek) ---------- */
 case 'wall_add':
     lock();
+    if (!feat_on('wall')) fail('off', 'Bu funksiya vaqtincha o\'chirilgan');
     $u = auth();
     $to = strtolower(p('to')); $txt = trim(clean_str(p('text'), 200));
     if (mb_strlen($txt, 'UTF-8') < 1) fail('bad', 'Matn bo\'sh');
@@ -1070,6 +1113,7 @@ case 'wall_del':
 
 /* ---------- "Bilasizmi?": siz bilan bir serverlarda o'ynagan, lekin do'stingiz bo'lmagan o'yinchilar ---------- */
 case 'suggest':
+    if (!feat_on('suggest')) fail('off', 'Bu funksiya vaqtincha o\'chirilgan');
     $u = auth();
     $me = strtolower($u['login']);
     $mys = isset($u['st']['srv']) ? $u['st']['srv'] : array(); uasort($mys, function ($a, $b) { return $b['t'] - $a['t']; });
@@ -1092,6 +1136,7 @@ case 'suggest':
 /* ---------- qo'ng'iroq: onlayn do'stning menyusida qo'ng'iroq oynasi chiqadi (ovoz bilan) ---------- */
 case 'ring':
     lock();
+    if (!feat_on('ring')) fail('off', 'Bu funksiya vaqtincha o\'chirilgan');
     $u = auth();
     $to = strtolower(p('to'));
     if (!preg_match('/^[a-z0-9_]{3,20}$/', $to) || empty($u['friends']) || !in_array($to, array_map('strtolower', $u['friends']))) fail('bad', 'Faqat do\'stlarga qo\'ng\'iroq qilish mumkin');
@@ -1119,6 +1164,7 @@ case 'ring_ans':
 /* ---------- kunlik kirish mukofoti: har kuni birinchi kirishda XP, ketma-ket kunlar (streak) ko'paytiradi, 7-kuni katta bonus ---------- */
 case 'daily':
     lock();
+    if (!feat_on('daily')) fail('off', 'Bu funksiya vaqtincha o\'chirilgan');
     $u = auth();
     @date_default_timezone_set('Asia/Tashkent');
     $day = date('Y-m-d'); $yd = date('Y-m-d', time() - 86400);
@@ -1158,6 +1204,7 @@ case 'miss_call':
 
 /* ---------- menyudagi "Taklif / shikoyat" tugmasi -> admin panel (Fikrlar) + Telegram ---------- */
 case 'feedback':
+    if (!feat_on('feedback')) fail('off', 'Bu funksiya vaqtincha o\'chirilgan');
     if (rl_count('fb' . client_ip(), 3600) >= 5) fail('limit', 'Bir soatda 5 tadan ko\'p yozib bo\'lmaydi');
     $txt = trim(clean_str(p('text'), 1500));
     if (mb_strlen($txt, 'UTF-8') < 3) fail('bad', 'Matn juda qisqa');

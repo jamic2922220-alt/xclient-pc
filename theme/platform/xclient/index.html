@@ -12,19 +12,26 @@
 -->
 <meta http-equiv="Cache-Control" content="no-cache">
 <script>
-/* O'yin brauzeri (CEF) index.html ni soatlab xotiradan ochishi mumkin - yangilanish ko'rinmay qoladi.
- * ver.txt har safar yangidan so'raladi; boshqa bo'lsa - yangi index.html ni yuklab, sahifani shu bilan almashtiramiz. */
+/* O'yin brauzeri (CEF) sahifani soatlab xotiradan ochishi mumkin - yangilanish ko'rinmay qoladi.
+ * Har ochilishda server "qaysi versiya" deb so'raladi (beta testerlarga - beta, boshqalarga - barqaror, admin panel > Menyu versiyalari).
+ * Boshqa bo'lsa - o'sha versiyaning sahifasi (rel/<versiya>/index.html) yuklanib, joriy sahifa shu bilan almashtiriladi. */
 (function () {
-  var V = '10195800';
+  var V = '10195900';
   window.XC_V = V;
   try {
     if (window.name === 'xcfresh' + V) return;
-    var x = new XMLHttpRequest(); x.open('GET', 'ver.txt?t=' + new Date().getTime(), false); x.send(null);
-    var v = String(x.responseText || '').replace(/\s+/g, '');
-    if (x.status !== 200 || !/^\d{6,12}$/.test(v) || v === V || window.name === 'xcfresh' + v) return;
+    var t = new Date().getTime(), get = function (u) { var x = new XMLHttpRequest(); x.open('GET', u, false); x.send(null); return x; }, ok = function (v) { return /^\d{6,12}$/.test(v); };
+    var v = '';
+    try { var a = get('xc_api.php?a=menuver&t=' + t); if (a.status === 200) v = String(a.responseText || '').replace(/\s+/g, ''); } catch (e) {}
+    if (!ok(v)) { var b = get('ver.txt?t=' + t); v = b.status === 200 ? String(b.responseText || '').replace(/\s+/g, '') : ''; }
+    if (!ok(v) || v === V || window.name === 'xcfresh' + v) return;
     window.name = 'xcfresh' + v;
-    var me = (/[^\/]+\.html$/.exec(location.pathname) || ['index.html'])[0];   // xc.html (X CLIENT launcheri) yoki index.html
-    var y = new XMLHttpRequest(); y.open('GET', me + '?t=' + new Date().getTime(), false); y.send(null);
+    var y = null;
+    try { y = get('rel/' + v + '/index.html?t=' + t); } catch (e) {}
+    if (!y || y.status !== 200 || y.responseText.indexOf('id="app"') < 0) {
+      var me = (/[^\/]+\.html$/.exec(location.pathname) || ['index.html'])[0];   // xc.html (X CLIENT launcheri) yoki index.html
+      y = get(me + '?t=' + t);
+    }
     if (y.status === 200 && y.responseText.indexOf('id="app"') > 0) {
       // eski sahifaning qolgan qismi ishlamasin (plaintext), yuklanib bo'lgach - yangisi bilan almashtiramiz
       var fresh = y.responseText;
@@ -34,7 +41,7 @@
   } catch (e) {}
 })();
 </script>
-<link rel="stylesheet" href="xc.css?v=10195800">
+<link rel="stylesheet" href="xc.css?v=10195900">
 <script>
 /* Xato bo'lsa ekranning tepasida ko'rsatamiz (o'yin brauzerida konsol yo'q) */
 window.XC_ERRS = [];
@@ -51,7 +58,7 @@ window.onerror = function (msg, url, line) {
   return false;
 };
 </script>
-<script src="xc_lang.js?v=10195800"></script>
+<script src="xc_lang.js?v=10195900"></script>
 </head>
 <body>
 <div id="app">
@@ -251,6 +258,6 @@ window.onerror = function (msg, url, line) {
   <div id="dbg"></div>
 </div>
 <script src="master.js"></script>
-<script src="xc.js?v=10195800"></script>
+<script src="xc.js?v=10195900"></script>
 </body>
 </html>

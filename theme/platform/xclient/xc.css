@@ -796,3 +796,11 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .ftoxic, .bigav.ftoxic, .fpav.ftoxic, #bar .me .av.ftoxic, .frl a i.av.ftoxic { -webkit-animation: k_ftoxic 2.6s ease-in-out infinite !important; }
 .flegend, .bigav.flegend, .fpav.flegend, #bar .me .av.flegend, .frl a i.av.flegend { -webkit-animation: flg 2s linear infinite !important; }
 .lowfx .bigav, .lowfx .fpav, .lowfx #bar .me .av, .lowfx .frl a i.av { -webkit-animation: none !important; }
+/* admin panelda o'chirilgan funksiyalar menyuda ko'rinmaydi */
+.nf-duel [data-duelp] { display: none !important; }
+.nf-chest #mChest, .nf-chest [data-act="chests"] { display: none !important; }
+.nf-ring [data-ring] { display: none !important; }
+.nf-wall .wladd, .nf-wall .wlr { display: none !important; }
+.nf-suggest .sggl { display: none !important; }
+.nf-feedback #bFb { display: none !important; }
+.nf-anim * { -webkit-animation: none !important; }
