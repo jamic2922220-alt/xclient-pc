@@ -474,7 +474,11 @@ case 'beat':                                             // menyu ochildi (kunig
     /* O'yin brauzeri localStorage ni saqlamaydi - menyuning tasodifiy device id si har ochilishda yangi bo'lib,
      * bitta kompyuter o'nlab "yangi o'yinchi" bo'lib sanalardi. Shuning uchun id serverda: nik + ekran + IP tarmog'i */
     $ipn = implode('.', array_slice(explode('.', client_ip()), 0, 2));
-    $dev = 'f' . substr(md5(strtolower(trim(p('nick'))) . '|' . p('res') . '|' . $ipn), 0, 15);
+    /* nik bo'sh yoki standart ("Player") bo'lsa - bitta provayderdagi (213.230.x.x) hamma o'yinchi bitta bo'lib
+     * qo'shilib ketardi: ular uchun to'liq IP olinadi */
+    $nk = strtolower(trim(p('nick')));
+    if ($nk === '' || preg_match('/^(player|игрок|unnamed|boost-top \| player|\(\d+\)player)$/u', $nk)) $ipn = client_ip();
+    $dev = 'f' . substr(md5($nk . '|' . p('res') . '|' . $ipn), 0, 15);
     lock();
     @mkdir(XC_DIR . '/nc', 0755, true);
     $r = rd('nc/' . $dev, array());
