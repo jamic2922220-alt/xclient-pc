@@ -69,12 +69,19 @@ function nd_api($path, $q, $ttl) {
     if ($c && time() - $c['t'] < $ttl) return $c['d'];
     $ctx = stream_context_create(array('http' => array('method' => 'GET', 'timeout' => 8, 'ignore_errors' => true,
         'header' => "X-API-Key: " . $CFG['nd_key'] . "\r\nAccept: application/json\r\n")));
-    $raw = @file_get_contents(ND_API . $path . '?' . http_build_query($q), false, $ctx);
+    $raw = @file_get_contents(nd_base() . 'api/v1/' . $path . '?' . http_build_query($q), false, $ctx);
     $code = isset($http_response_header[0]) && preg_match('/\s(\d{3})/', $http_response_header[0], $m) ? (int)$m[1] : 0;
     $d = json_decode((string)$raw, true);
     if ($code !== 200 || !is_array($d)) { $ND_ERR = $code ? 'HTTP ' . $code . ($code === 401 || $code === 403 ? ' (kalit noto\'g\'ri)' : ($code === 429 ? ' (limit)' : '')) : 'ulanib bo\'lmadi'; return $c ? $c['d'] : null; }
     wr($ck, array('t' => time(), 'd' => $d));
     return $d;
+}
+/* nDirect manzili: Sozlamalarda yoziladi (masalan ndirect.cssborka.com), bo'lmasa eski standart */
+function nd_base() {
+    global $CFG;
+    $h = isset($CFG['nd_url']) ? $CFG['nd_url'] : '';
+    if ($h === '') return preg_replace('#api/v1/$#', '', ND_API);
+    return 'https://' . $h . '/';
 }
 function nd_days($path, $from) {                       // {Y-m-d: count}
     $d = nd_api($path, array('from' => $from, 'to' => date('Y-m-d'), 'tz' => 'Asia/Tashkent'), 600);
@@ -304,7 +311,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($act === 'api_new') { if (!isset($CFG['api'])) $CFG['api'] = array(); $CFG['api'][] = array('k' => rnd(20), 'name' => mb_substr(pp('name') !== '' ? pp('name') : 'Kalit', 0, 40, 'UTF-8'), 't' => time()); cfg_save(); flash('Yangi API kalit yaratildi'); go('?p=api'); }
     if ($act === 'api_del') { $n = array(); foreach ((array)$CFG['api'] as $k) if ($k['k'] !== pp('k')) $n[] = $k; $CFG['api'] = $n; cfg_save(); flash("Kalit o'chirildi"); go('?p=api'); }
     if ($act === 'nd_save') {
-        $CFG['nd_key'] = preg_replace('/[^A-Za-z0-9_\-\.|]/', '', pp('key')); cfg_save();
+        $nu = strtolower(preg_replace('#^https?://#i', '', trim(pp('url')))); $nu = preg_replace('#/.*$#', '', $nu);
+        $CFG['nd_url'] = preg_match('/^[a-z0-9.-]{3,80}$/', $nu) ? $nu : '';
+        if (pp('key') !== '' || pp('del') === '1') $CFG['nd_key'] = preg_replace('/[^A-Za-z0-9_\-\.|]/', '', pp('key'));
+        cfg_save();
         foreach ((array)glob(XC_DIR . '/ndcache/*.php') as $f) @unlink($f);
         if ($CFG['nd_key'] === '') { flash("nDirect kaliti o'chirildi"); go('?p=settings'); }
         $t = nd_api('unique', array('tz' => 'Asia/Tashkent'), 0);
@@ -374,7 +384,7 @@ $badge = array('players' => $devCount + $ncCount, 'installs' => $devCount, 'acco
 head(isset($NAV[$P]) ? $NAV[$P][0] : 'Admin');
 echo '<div class="side"><div class="brand"><span>X</span> CLIENT<small>admin panel</small></div>';
 foreach ($NAV as $k => $n) echo '<a href="?p=' . $k . '" class="' . ($P === $k || ($P === 'player' && $k === 'players') || ($P === 'report' && $k === 'reports') ? 'on' : '') . '"><i>' . $n[1] . '</i>' . h($n[0]) . (!empty($badge[$k]) ? '<em>' . $badge[$k] . '</em>' : '') . '</a>';
-echo '<div class="sep"></div><a href="' . NDIRECT . '" target="_blank"><i>↗</i>NextClient (nDirect)</a><a href="?logout=1" class="out"><i>⏻</i>Chiqish</a></div><div class="main">';
+echo '<div class="sep"></div><a href="' . h(nd_base() . 'admin') . '" target="_blank"><i>↗</i>NextClient (nDirect)</a><a href="?logout=1" class="out"><i>⏻</i>Chiqish</a></div><div class="main">';
 if (!empty($_SESSION['flash'])) { echo '<div class="flash">' . h($_SESSION['flash']) . '</div>'; unset($_SESSION['flash']); }
 
 /* ===== INFOPANEL ===== */
@@ -828,9 +838,11 @@ if ($P === 'settings') {
     echo '<h1>Sozlamalar</h1><div class="grid2"><div class="panel"><div class="ph">Admin parolini almashtirish</div><form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="pass"><input type="password" name="old" placeholder="Eski parol"><input type="password" name="new" placeholder="Yangi parol (8+ belgi)"><button class="btn red">Almashtirish</button></form></div>'
         . '<div class="panel"><div class="ph">Ma\'lumotlar</div><div class="kv"><span>xc_data hajmi</span><b>' . size_h($sz) . ' · ' . $n . ' fayl</b></div><div class="kv"><span>PHP</span><b>' . h(PHP_VERSION) . '</b></div>'
         . '<form method="post" class="frm" style="margin-top:10px">' . csrf_in() . '<input type="hidden" name="act" value="clean_days"><div class="row"><select name="keep"><option value="90">90 kundan eski</option><option value="180">180 kundan eski</option><option value="365" selected>1 yildan eski</option></select><button class="btn">Kunlik statistikani tozalash</button></div></form></div></div>'
-        . '<div class="panel"><div class="ph">nDirect API (NextClient statistikasi)</div><div class="mut small" style="margin-bottom:10px">nextcs.boost-top.com/admin → API ключи → kalitni nusxalab shu yerga qo\'ying. Shunda Infopanel NextClient o\'yinchilari va o\'rnatishlarini nDirect bilan bir xil ko\'rsatadi. Kalit faqat serveringizda saqlanadi.</div>'
-        . '<form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="nd_save"><input type="password" name="key" autocomplete="off" placeholder="' . (empty($CFG['nd_key']) ? 'X-API-Key' : 'saqlangan ✓ (…' . h(substr($CFG['nd_key'], -4)) . ') - almashtirish uchun yangisini yozing, o\'chirish uchun bo\'sh qoldiring') . '">'
-        . '<button class="btn red">Saqlash va tekshirish</button></form></div>'
+        . '<div class="panel"><div class="ph">nDirect API (NextClient statistikasi)</div><div class="mut small" style="margin-bottom:10px">nDirect paneli → API ключи → kalitni nusxalab shu yerga qo\'ying. Manzil - nDirect panelingiz qaysi saytda ochilsa o\'sha (masalan ndirect.cssborka.com). Shunda Infopanel NextClient o\'yinchilari va o\'rnatishlarini nDirect bilan bir xil ko\'rsatadi. Kalit faqat serveringizda saqlanadi.</div>'
+        . '<form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="nd_save"><input name="url" placeholder="nDirect manzili, masalan ndirect.cssborka.com" value="' . h(isset($CFG['nd_url']) && $CFG['nd_url'] !== '' ? $CFG['nd_url'] : 'nextcs.boost-top.com') . '"><input type="password" name="key" autocomplete="off" placeholder="' . (empty($CFG['nd_key']) ? 'X-API-Key' : 'saqlangan ✓ (…' . h(substr($CFG['nd_key'], -4)) . ') - almashtirish uchun yangisini yozing, bo\'sh qoldirsangiz eskisi qoladi') . '">'
+        . '<label class="mut small"><input type="checkbox" name="del" value="1" style="width:auto"> Kalitni o\'chirish</label>'
+        . '<button class="btn red">Saqlash va tekshirish</button>'
+        . (!empty($CFG['nd_key']) ? (is_array(nd_api('unique', array('tz' => 'Asia/Tashkent'), 600)) ? '<div class="gr small" style="margin-top:8px">✓ nDirect ulangan</div>' : '<div class="red small" style="margin-top:8px">✗ nDirect javob bermadi: ' . h($ND_ERR) . '</div>') : '') . '</form></div>'
         . '<div class="panel"><div class="ph">Menyu musiqalari</div><div class="mut small" style="margin-bottom:8px">O\'yinchilar Sozlamalar > Ovoz bo\'limida shulardan birini tanlaydi. Har qatorga: <b>Nomi | media/fayl.mp3</b>. MP3 fayllarni "Paketlar" orqali o\'yin papkasiga (cstrike/media/...) yuboring. "Asl musiqa" har doim bor.</div>'
         . '<form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="music_save"><textarea name="music" rows="5" placeholder="Jangovar | media/xc_battle.mp3&#10;Sokin | media/xc_calm.mp3">' . h(isset($CFG['music']) ? $CFG['music'] : '') . '</textarea><button class="btn red">Saqlash</button></form></div>'
         . '<div class="panel"><div class="ph">Zaxira nusxa</div><div class="mut small" style="margin-bottom:10px">Akkauntlar, XP, do\'stlar, statistika, e\'lonlar, sozlamalar - hammasi bitta faylga yuklab olinadi. Haftada bir marta olib, kompyuteringizda saqlang. Tiklash: faylni ochib, ichidagi xc_data papkasini FastPanel orqali mmb ga qayta yuklang.</div>'
