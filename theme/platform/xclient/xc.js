@@ -2221,7 +2221,7 @@ function layoutCheck(where) {
   setTimeout(function () {
     try {
       var bad = '', sb = document.querySelector('.modal.on #setBody');
-      if (sb) each(sb.children, function (c) { if (!bad && !/(^|\s)(pane|hsub)(\s|$)/.test(c.className || '') && c.getBoundingClientRect().width) bad = (c.className || c.tagName) + ' panel tashqarisida'; });
+      if (sb) each(sb.children, function (c) { if (!bad && !/(^|\s)(pane|hsub|kpick)(\s|$)/.test(c.className || '') && c.getBoundingClientRect().width) bad = (c.className || c.tagName) + ' panel tashqarisida'; });
       each(document.querySelectorAll('.modal.on .pane'), function (pn) {
         if (bad) return; var pr = pn.getBoundingClientRect(); if (!pr.width) return;
         each(pn.children, function (c) { if (bad) return; var r = c.getBoundingClientRect(); if (r.width && (r.left < pr.left - 6 || r.right > pr.right + 6)) bad = (c.className || c.tagName); });

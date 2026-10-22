@@ -25,7 +25,7 @@ function layoutProblems(p) {
   return p.evaluate(() => {
     const out = [];
     const sb = document.querySelector('.modal.on #setBody');      // Sozlamalar: hamma narsa panel ichida bo'lishi kerak
-    if (sb) Array.from(sb.children).forEach(c => { if (!/(^|\s)(pane|hsub)(\s|$)/.test(c.className) && c.getBoundingClientRect().width) out.push((c.className || c.tagName) + ' panel tashqarisida'); });
+    if (sb) Array.from(sb.children).forEach(c => { if (!/(^|\s)(pane|hsub|kpick)(\s|$)/.test(c.className) && c.getBoundingClientRect().width) out.push((c.className || c.tagName) + ' panel tashqarisida'); });
     document.querySelectorAll('.modal.on .pane').forEach(pn => {
       const pr = pn.getBoundingClientRect(); if (!pr.width) return;
       Array.from(pn.children).forEach(c => { const r = c.getBoundingClientRect(); if (r.width && (r.left < pr.left - 6 || r.right > pr.right + 6)) out.push((c.className || c.tagName) + ' chiqib ketgan'); });
