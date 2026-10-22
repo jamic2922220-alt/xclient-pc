@@ -10,12 +10,14 @@ cp "$ROOT/theme/platform/xclient/index.html" "$W/xc.html"; cp -r "$ROOT/theme/pl
 (cd "$W" && exec php -S 127.0.0.1:$PORT >/dev/null 2>&1) & SRV=$!
 for i in $(seq 1 30); do curl -s -o /dev/null "$XC_BASE/ver.txt" && break; sleep 0.3; done
 A=$XC_BASE/xc_api.php
+export NODE_PATH="${NODE_PATH:-}:$(npm root -g 2>/dev/null):/opt/node-tools/node_modules"
+rc=0
+node "$HERE/lite.js" || rc=1                                          # launcher hali ko'rinmagan holat - hello'dan oldin
 curl -s -d 'a=hello&d=testpc0000001&v=1.0.64&lang=uz' $A >/dev/null   # launcher bor deb (to'liq menyu, "sodda" emas)
 REG=$(curl -s -d "a=register&login=testa&pass=secret12&device=testdev0001" $A); echo "register: ${REG:0:80}"; export XC_TOKEN=$(echo "$REG" | grep -o "\"token\":\"[a-f0-9]*\"" | cut -d\" -f4)
 curl -s -d 'a=register&login=testb&pass=secret12&device=testdev0002' $A >/dev/null
 php "$HERE/seed.php" "$W/xc_data"
-export XC_SHOTS="$W/shots"; mkdir -p "$XC_SHOTS"; export NODE_PATH="${NODE_PATH:-}:$(npm root -g 2>/dev/null):/opt/node-tools/node_modules"
-rc=0
+export XC_SHOTS="$W/shots"; mkdir -p "$XC_SHOTS"
 node "$HERE/crawl.js" || rc=1
 node "$HERE/ingame.js" || rc=1
 python3 "$HERE/visual.py" "$XC_SHOTS" ${1:-} || rc=1

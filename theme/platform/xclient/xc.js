@@ -316,7 +316,11 @@ var OPTS_TRY = 0;
  * uni ochadi - ularda "sodda rejim": tezkor o'yin, serverlar, sozlamalar + X CLIENT ni yuklab olish kartasi.
  * Sayt javobigacha ('gate') akkaunt/do'stlar/vazifalar yashirin turadi; javob kelmasa 8 s dan keyin to'liq menyu ochiladi. */
 var LITE = null;
+/* xc.html ni faqat X CLIENT o'rnatgan o'yin ochadi (launcher bosh sahifani shunga almashtiradi) - u yerda o'yin
+ * launchersiz (eski boost-top yorlig'idan, 10 daqiqadan keyin yoki IP almashgan holda) ochilsa ham to'liq menyu */
+var ON_XC = /(^|\/)xc\.html$/i.test(location.pathname || '');
 function setLite(on) {
+  if (on && ON_XC) on = false;
   if (LITE === on) return;
   LITE = on;
   var h = document.documentElement;
