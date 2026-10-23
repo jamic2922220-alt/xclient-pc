@@ -12,10 +12,11 @@ function rd($name, $def) {
     return is_array($j) ? $j : $def;
 }
 function wr($name, $data) {
+    $j = json_encode($data, JSON_UNESCAPED_UNICODE); if ($j === false) return;   // noto'g'ri UTF-8 - bo'sh fayl yozmaymiz
     $f = XC_DIR . '/' . $name . '.php';
     @mkdir(dirname($f), 0755, true);
     $tmp = $f . '.' . mt_rand(1000, 9999) . '.tmp';
-    if (@file_put_contents($tmp, XC_GUARD . json_encode($data, JSON_UNESCAPED_UNICODE)) !== false) @rename($tmp, $f);
+    if (@file_put_contents($tmp, XC_GUARD . $j) !== false) @rename($tmp, $f);
 }
 function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 $REASONS = array(
@@ -31,13 +32,18 @@ $d = preg_replace('/[^a-z0-9]/', '', strtolower(isset($_REQUEST['d']) ? (string)
 $d = substr($d, 0, 40);
 $done = false;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $r = isset($_POST['r']) && isset($REASONS[$_POST['r']]) ? $_POST['r'] : '';
-    $txt = trim(substr(preg_replace('/[\x00-\x1f<>]/u', ' ', isset($_POST['t']) ? (string)$_POST['t'] : ''), 0, 600));
+    $r = isset($_POST['r']) && is_string($_POST['r']) && isset($REASONS[$_POST['r']]) ? $_POST['r'] : '';
+    $txt = (string)preg_replace('/[\x00-\x1f<>]/u', ' ', isset($_POST['t']) && is_string($_POST['t']) ? $_POST['t'] : '');
+    $txt = trim(function_exists('mb_strcut') ? mb_strcut($txt, 0, 1800, 'UTF-8') : substr($txt, 0, 600));   // harfni o'rtasidan kesmaymiz
     $ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '';
     $key = 'bye/' . date('Ymd') . '-' . substr(sha1($ip . '|' . $d), 0, 12);   // bitta kompyuter kuniga bitta javob (qayta yuborsa - almashadi)
     if ($r !== '' || $txt !== '') {
         $files = glob(XC_DIR . '/bye/*.php');
-        if (count((array)$files) < 5000) wr($key, array('t' => time(), 'd' => $d, 'r' => $r, 'text' => $txt, 'ip' => $ip));
+        // bitta IP kuniga 3 ta javob; 5000 dan oshsa eng eskisi o'chadi (yangi javoblar yo'qolmasin)
+        $ipn = glob(XC_DIR . '/bye/' . date('Ymd') . '-*.php'); $mine = 0;
+        foreach ((array)$ipn as $bf) { $bx = rd('bye/' . basename($bf, '.php'), null); if ($bx && isset($bx['ip']) && $bx['ip'] === $ip) $mine++; }
+        if (count((array)$files) >= 5000) { usort($files, function ($a, $b) { return filemtime($a) - filemtime($b); }); @unlink($files[0]); }
+        if ($mine < 3 || is_file(XC_DIR . '/' . $key . '.php')) wr($key, array('t' => time(), 'd' => $d, 'r' => $r, 'text' => $txt, 'ip' => $ip));
     }
     $done = true;
 }

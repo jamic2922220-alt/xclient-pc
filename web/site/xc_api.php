@@ -37,7 +37,7 @@ function with_forced_packs($o, $d) {
     $o['packs'] = implode(',', array_merge($all, $mine));
     return $o;
 }
-function out($a) { echo json_encode($a); exit; }
+function out($a) { $j = json_encode($a); if ($j === false) $j = json_encode(utf8_fix($a)); echo $j === false ? '{"ok":false,"err":"enc"}' : $j; exit; }
 function fail($code, $msg) { out(array('ok' => false, 'err' => $code, 'msg' => $msg)); }
 function p($k, $def = '') { return isset($_POST[$k]) ? trim((string)$_POST[$k]) : (isset($_GET[$k]) ? trim((string)$_GET[$k]) : $def); }
 
@@ -61,16 +61,27 @@ function rd($name, $def) {
     $j = json_decode(substr($s, strlen(XC_GUARD)), true);
     return is_array($j) ? $j : $def;
 }
+/* noto'g'ri UTF-8 (masalan baytlab kesilgan kirill harfi) json_encode ni false qiladi - fayl bo'sh qolib, akkaunt yo'qolardi.
+ * Shuning uchun: avval tozalab qayta urinamiz, baribir bo'lmasa - eski faylga umuman tegmaymiz */
+function utf8_fix($v) {
+    if (is_array($v)) { $o = array(); foreach ($v as $k => $x) $o[is_string($k) ? utf8_fix($k) : $k] = utf8_fix($x); return $o; }
+    if (!is_string($v) || preg_match('//u', $v)) return $v;
+    return function_exists('mb_convert_encoding') ? mb_convert_encoding($v, 'UTF-8', 'UTF-8') : preg_replace('/[\x80-\xff]/', '?', $v);
+}
 function wr($name, $data) {
+    $j = json_encode($data);
+    if ($j === false) $j = json_encode(utf8_fix($data));
+    if ($j === false) return false;
     $f = XC_DIR . '/' . $name . '.php';
     $tmp = $f . '.' . mt_rand() . '.tmp';
-    file_put_contents($tmp, XC_GUARD . json_encode($data), LOCK_EX);
-    @rename($tmp, $f);
+    if (file_put_contents($tmp, XC_GUARD . $j, LOCK_EX) === false) { @unlink($tmp); return false; }
+    return @rename($tmp, $f);
 }
 /* butun yozish jarayonini bitta qulf ostida bajaramiz (bir vaqtda ikki so'rov) */
 $LOCK = null;
 function lock() {
     global $LOCK;
+    if ($LOCK) return;                                   // bir so'rovda ikkinchi marta - o'zini o'zi kutib qolmasin
     $LOCK = fopen(XC_DIR . '/.lock', 'c');
     if ($LOCK) flock($LOCK, LOCK_EX);
 }
@@ -100,7 +111,7 @@ function ip_key() { return 'ip/' . substr(sha1(client_ip() . 'xc'), 0, 24); }
 function ip_dev($maxAge) { $m = rd(ip_key(), null); return ($m && time() - $m['t'] <= $maxAge) ? $m['d'] : ''; }
 function dev_ok($d, $o) { $k = p('k'); return ($k !== '' && !empty($o['k']) && hash_equals($o['k'], $k)) || ip_dev(600) === $d; }
 function ukey($login) { return 'users/' . strtolower($login); }
-function user($login) { return rd(ukey($login), null); }
+function user($login) { return preg_match('/^[A-Za-z0-9_]{3,20}$/', (string)$login) ? rd(ukey($login), null) : null; }   // login fayl nomi bo'ladi: ../ bilan boshqa fayllarni o'qib bo'lmasin
 function save_user($u) { wr(ukey($u['login']), $u); }
 function week_id() { return date('o-W'); }
 
@@ -271,6 +282,8 @@ function tg_bot_answer($chat, $txt) {
     if (preg_match('/^(?:\/link\s*)?(\d{6})$/', $txt, $m)) {
         $codes = rd('tglink', array());
         if (empty($codes[$m[1]]) || time() - $codes[$m[1]]['t'] > 900) return "Kod topilmadi yoki eskirgan. X CLIENT menyusida: Sozlamalar > Akkaunt > Telegram'ni ulash.";
+        lock(); $codes = rd('tglink', array());          // ping/stat bilan bir vaqtda yozib, ma'lumot yo'qolmasin
+        if (empty($codes[$m[1]])) return "Kod topilmadi yoki eskirgan.";
         $u = user($codes[$m[1]]['l']); if (!$u) return 'Akkaunt topilmadi.';
         $u['tgid'] = $chat; save_user($u); unset($codes[$m[1]]); wr('tglink', $codes);
         return "Ulandi! Salom, " . $u['name'] . ".\n/me - statistikam\n/friends - onlayn do'stlar\n/top - hafta qotillari\n/online - hozir o'ynayotganlar";
@@ -349,6 +362,8 @@ function ach_check(&$u) {
 function champ_update() {
     $prev = date('o-W', strtotime('-7 day')); $c = rd('champ', array());
     if (isset($c['wk']) && $c['wk'] === $prev) return $c;
+    lock(); $c = rd('champ', array());                    // hafta almashganda ikki so'rov bir vaqtda kelsa - mukofot bir marta
+    if (isset($c['wk']) && $c['wk'] === $prev) return $c;
     $best = null; $bk = 0;
     foreach (glob(XC_DIR . '/users/*.php') as $f) {
         $x = rd('users/' . basename($f, '.php'), null); if (!$x) continue;
@@ -393,7 +408,10 @@ function daily_report() {
     if ($top) { $t .= "\nHafta qotillari:"; foreach (array_slice($top, 0, 3) as $i => $r) $t .= "\n" . ($i + 1) . ". " . $r[0] . " - " . $r[1] . " kill"; }
     tg_notify('daily', $t);
 }
-function clean_str($s, $n) { return substr(preg_replace('/[\x00-\x1f<>"\\\\]/u', '', (string)$s), 0, $n); }
+function clean_str($s, $n) {
+    $s = (string)preg_replace('/[\x00-\x1f<>"\\\\]/u', '', (string)$s);   // noto'g'ri UTF-8 bo'lsa preg_replace null qaytaradi - bo'sh satr
+    return function_exists('mb_strcut') ? mb_strcut($s, 0, $n, 'UTF-8') : substr($s, 0, $n);   // harfni o'rtasidan kesmaydi
+}
 
 /* kunlik statistika (admin.php): xc_data/daily/YYYY-MM-DD.php  {d:{qurilma:1}, n:{yangi:1}, m:{menyu:1}} */
 function day_mark($kind, $id, $isNew) {
@@ -471,6 +489,8 @@ case 'login':
 
 case 'beat':                                             // menyu ochildi (kuniga bir marta hisoblanadi)
     if (!preg_match('/^[a-z0-9]{8,40}$/', p('device'))) fail('bad', 'bad');
+    if (rl_count('bt' . client_ip(), 3600) >= 30) out(array('ok' => true));   // sun'iy "yangi o'yinchi" va disk to'ldirishga qarshi
+    rl_add('bt' . client_ip(), 3600);
     /* O'yin brauzeri localStorage ni saqlamaydi - menyuning tasodifiy device id si har ochilishda yangi bo'lib,
      * bitta kompyuter o'nlab "yangi o'yinchi" bo'lib sanalardi. Shuning uchun id serverda: nik + ekran + IP tarmog'i */
     $ipn = implode('.', array_slice(explode('.', client_ip()), 0, 2));
@@ -650,6 +670,15 @@ case 'mission_claim':                                    // vazifa mukofoti (kun
     if (!isset($u['mis']) || !is_array($u['mis'])) $u['mis'] = array();
     foreach (array_keys($u['mis']) as $d) if ($d !== $day) unset($u['mis'][$d]);
     if (!empty($u['mis'][$day][$id])) fail('done', 'Allaqachon olingan');
+    /* bajarilganini saytning o'zi tekshiradi (bugungi o'yin statistikasi - stat orqali yig'ilgan) */
+    $ds = isset($u['dst'][$day]) && is_array($u['dst'][$day]) ? $u['dst'][$day] : array('k' => 0, 'd' => 0, 't' => 0, 'srv' => array());
+    $mk = (int)@$ds['k']; $md = (int)@$ds['d']; $mt = (int)@$ds['t']; $mn = is_array(@$ds['srv']) ? count($ds['srv']) : 0;
+    $okm = $id === 'min' || $id === 'xsrv' ? $mt >= $m['goal'] * 60 - 120
+         : ($id === 'kills' ? $mk >= $m['goal']
+         : ($id === 'servers' ? $mn >= $m['goal']
+         : ($id === 'kd' ? $mk >= $m['goal'] && $mk >= $md
+         : ($id === 'maps' ? $mt >= 600 && ($mn >= 2 || (int)@$ds['g'] >= $m['goal']) : false))));
+    if (!$okm) fail('notyet', 'Vazifa hali bajarilmagan');
     $u['mis'][$day][$id] = 1;
     $u['xp'] = (int)$u['xp'] + $m['xp'];
     if (!isset($u['wk']) || $u['wk'] !== week_id()) { $u['wk'] = week_id(); $u['wkxp'] = 0; }
@@ -898,7 +927,8 @@ case 'feat':                                             // menyu: qaysi funksiy
 case 'perf':
     if (rl_count('pf' . client_ip(), 3600) >= 6) out(array('ok' => true));
     rl_add('pf' . client_ip(), 3600);
-    $v = preg_replace('/[^0-9]/', '', p('v')); if ($v === '') out(array('ok' => true));
+    $v = preg_replace('/[^0-9]/', '', p('v')); if ($v === '' || strlen($v) > 12) out(array('ok' => true));
+    if (!is_file(XC_DIR . '/perf/' . $v . '.php')) cap_dir(XC_DIR . '/perf', 300);
     $load = max(0, min(60000, (int)p('load'))); $lag = max(0, min(60000, (int)p('lag'))); $fps = max(0, min(1000, (int)p('fps')));
     @mkdir(XC_DIR . '/perf', 0755, true); lock();
     $x = rd('perf/' . $v, array('n' => 0, 'load' => 0, 'lag' => 0, 'bad' => 0, 'game' => 0, 'fps' => 0, 'fpsn' => 0, 'low' => 0, 't0' => time()));
@@ -974,7 +1004,7 @@ case 'clicks':
     $c = json_decode(p('c'), true); if (!is_array($c)) out(array('ok' => true));
     @mkdir(XC_DIR . '/clicks', 0755, true); @date_default_timezone_set('Asia/Tashkent');
     lock(); $k = 'clicks/' . date('Y-m-d'); $x = rd($k, array());
-    foreach (array_slice($c, 0, 60, true) as $a => $n) { $a = (string)$a; if (!preg_match('/^[a-z0-9_:\-]{1,40}$/i', $a)) continue; $x[$a] = (isset($x[$a]) ? $x[$a] : 0) + max(0, min(200, (int)$n)); }
+    foreach (array_slice($c, 0, 60, true) as $a => $n) { $a = (string)$a; if (!preg_match('/^[a-z0-9_:\-]{1,40}$/i', $a) || (!isset($x[$a]) && count($x) >= 500)) continue; $x[$a] = (isset($x[$a]) ? $x[$a] : 0) + max(0, min(200, (int)$n)); }
     wr($k, $x);
     out(array('ok' => true));
 
@@ -1010,9 +1040,9 @@ case 'duel_req':
     $u = auth();
     $to = strtolower(p('to')); $mins = (int)p('mins'); if (!in_array($mins, array(5, 10, 15), true)) $mins = 10;
     if (!preg_match('/^[a-z0-9_]{3,20}$/', $to) || empty($u['friends']) || !in_array($to, array_map('strtolower', $u['friends']))) fail('bad', 'Faqat do\'stni duelga chaqirish mumkin');
-    $t = user($to); if (!$t) fail('bad', 'Topilmadi');
+    if (!empty($u['duel'])) { $x = duel_finish($u['duel']); if ($x && $x['st'] === 'on') fail('busy', 'Sizda duel davom etyapti'); $u = auth(); }
+    $t = user($to); if (!$t) fail('bad', 'Topilmadi');   // duel_finish ikkala tomonni saqlaydi - raqib undan keyin o'qiladi (eski nusxa natijani o'chirmasin)
     if (!is_online($t)) fail('off', 'Do\'stingiz hozir onlayn emas');
-    if (!empty($u['duel'])) { $x = duel_finish($u['duel']); if ($x && $x['st'] === 'on') fail('busy', 'Sizda duel davom etyapti'); }
     @mkdir(XC_DIR . '/duels', 0755, true); cap_dir(XC_DIR . '/duels', 2000);
     $id = substr(md5(microtime() . mt_rand()), 0, 10);
     wr('duels/' . $id, array('id' => $id, 'a' => $u['login'], 'an' => $u['name'], 'b' => $t['login'], 'bn' => $t['name'], 'mins' => $mins, 'st' => 'wait', 't' => time(), 'ka' => 0, 'kb' => 0));
@@ -1156,6 +1186,8 @@ case 'ring_ans':
     $to = strtolower(p('to'));
     $t = preg_match('/^[a-z0-9_]{3,20}$/', $to) ? user($to) : null;
     if (!$t) fail('bad', 'Topilmadi');
+    if (empty($u['friends']) || !in_array($to, array_map('strtolower', $u['friends']))) fail('bad', 'Topilmadi');   // faqat do'stga
+    if (rl_count('ra' . strtolower($u['login']), 60) >= 10) fail('limit', 'limit'); rl_add('ra' . strtolower($u['login']), 60);
     if (!isset($t['ringans'])) $t['ringans'] = array();
     $t['ringans'][] = array('from' => $u['name'], 'login' => $u['login'], 'ok' => p('ok') === '1' ? 1 : 0, 't' => time());
     $t['ringans'] = array_slice($t['ringans'], -5);
@@ -1230,10 +1262,17 @@ case 'stat':
     $sid = preg_replace('/[^0-9]/', '', p('sid')); $ip = p('ip');
     if ($sid === '' || strlen($sid) > 15 || !preg_match('/^[a-z0-9.\-]{3,64}:\d{2,5}$/i', $ip)) fail('bad', 'bad');
     $dur = max(0, min(6 * 3600, (int)p('dur')));
+    $ss = isset($u['ss']) && is_array($u['ss']) ? $u['ss'] : array();
+    /* soxta statistika: o'yin vaqti saytning o'z soati bilan cheklanadi (o'yin birinchi marta ko'ringan paytdan beri),
+     * eski (ro'yxatdan chiqib ketgan) o'yinni qayta yuborib bo'lmaydi, daqiqasiga 10 so'rovdan ko'p emas */
+    if (!isset($ss[$sid]) && isset($u['sidcut']) && (float)$sid <= (float)$u['sidcut']) fail('old', 'old');
+    if (rl_count('st' . strtolower($u['login']), 60) >= 10) fail('limit', 'limit');
+    rl_add('st' . strtolower($u['login']), 60);
+    $old = isset($ss[$sid]) ? $ss[$sid] : array('k' => 0, 'd' => 0, 't' => 0, 'w' => array());
+    $s0 = isset($old['s0']) ? (int)$old['s0'] : time() - min($dur, 900);   // birinchi xabar - eng ko'pi 15 daqiqalik o'yin
+    $dur = min($dur, time() - $s0 + 120);
     $cap = (int)ceil($dur / 60 * 6) + 5;
     $k = max(0, min($cap, (int)p('k'))); $d = max(0, min($cap, (int)p('d')));
-    $ss = isset($u['ss']) && is_array($u['ss']) ? $u['ss'] : array();
-    $old = isset($ss[$sid]) ? $ss[$sid] : array('k' => 0, 'd' => 0, 't' => 0, 'w' => array());
     $dk = max(0, $k - $old['k']); $dd = max(0, $d - $old['d']); $dt = max(0, $dur - $old['t']);
     $st = isset($u['st']) && is_array($u['st']) ? $u['st'] : array('k' => 0, 'd' => 0, 'g' => 0, 't' => 0, 'best' => 0, 'wpn' => array(), 'srv' => array());
     if (!isset($ss[$sid])) $st['g'] = (int)@$st['g'] + 1;
@@ -1277,8 +1316,8 @@ case 'stat':
         $u['wkxp'] = (int)$u['wkxp'] + $dk * XP_PER_KILL;
     }
     $newach = ach_check($u);
-    $ss[$sid] = array('k' => $k, 'd' => $d, 't' => $dur, 'w' => $nw);
-    if (count($ss) > 8) { ksort($ss); $ss = array_slice($ss, -8, 8, true); }
+    $ss[$sid] = array('k' => $k, 'd' => $d, 't' => $dur, 'w' => $nw, 's0' => $s0);
+    if (count($ss) > 8) { ksort($ss); foreach (array_slice(array_keys($ss), 0, count($ss) - 8) as $ev) $u['sidcut'] = max((float)@$u['sidcut'], (float)$ev); $ss = array_slice($ss, -8, 8, true); }
     $u['ss'] = $ss;
     save_user($u);
     $pu = pub($u, true);
@@ -1511,6 +1550,8 @@ case 'shot_del':
     if ($a === 'shot_up') {
         $img = file_get_contents('php://input');
         if (!$img || strlen($img) > 2500000 || substr($img, 0, 2) !== "\xFF\xD8") fail('bad', 'JPEG kerak');
+        if (rl_count('su' . client_ip(), 3600) >= 60) fail('limit', 'limit');   // bitta IP soatiga 60 ta rasm (diskni to'ldirmasin)
+        rl_add('su' . client_ip(), 3600);
         @mkdir($sd, 0755, true);
         $name = time() . '_' . mt_rand(100, 999);
         file_put_contents("$sd/$name.php", XC_GUARD . $img, LOCK_EX);
@@ -1533,6 +1574,8 @@ case 'shot_del':
 
 /* ---------- serverning soatlar bo'yicha gavjumligi (o'yinchilar menyusi yuborgan ma'lumotdan) ---------- */
 case 'srvstat':
+    if (rl_count('ss' . client_ip(), 3600) >= 60) out(array('ok' => true));
+    rl_add('ss' . client_ip(), 3600);
     $in = json_decode(p('s'), true);
     if (!is_array($in)) fail('bad', 'bad');
     @date_default_timezone_set('Asia/Tashkent');
@@ -1540,7 +1583,7 @@ case 'srvstat':
     lock();
     @mkdir(XC_DIR . '/stat', 0755, true);
     foreach (array_slice($in, 0, 40) as $x) {
-        if (!is_array($x) || count($x) < 3 || !preg_match('/^[\w.\-]+:\d+$/', $x[0])) continue;
+        if (!is_array($x) || count($x) < 3 || !is_string($x[0]) || !preg_match('/^[\w.\-]+:\d+$/', $x[0])) continue;
         $pl = max(0, min(64, (int)$x[1])); $mx = max(1, min(64, (int)$x[2]));
         $k = 'stat/' . substr(sha1($x[0]), 0, 20);
         if (!is_file(XC_DIR . '/' . $k . '.php') && count((array)glob(XC_DIR . '/stat/*.php')) >= 3000) continue;   // yangi server soni chegarasi

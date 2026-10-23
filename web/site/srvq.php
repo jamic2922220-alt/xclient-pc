@@ -14,10 +14,19 @@ if ($diag) {                                              // tekshiruv sahifasi:
     if ($ip === '') exit;
     if (!preg_match('/^\d{1,3}(?:\.\d{1,3}){3}:\d{2,5}$/', $ip)) { echo '<p class="no">Manzil noto\'g\'ri. Shunday yozing: <b>212.47.58.40:27015</b> (IP, ikki nuqta, port)</p>'; exit; }
 }
-if (!preg_match('/^(\d{1,3}(?:\.\d{1,3}){3}):(\d{2,5})$/', $ip, $m) || preg_match('/^(10|127|0|192\.168|172\.(1[6-9]|2\d|3[01]))\./', $m[1])) {
+/* faqat ochiq internet manzili: ichki tarmoq, maxsus diapazonlar va "012.0.0.1" kabi sakkizlik yozuv (= 10.0.0.1) rad etiladi */
+if (!preg_match('/^(\d{1,3}(?:\.\d{1,3}){3}):(\d{2,5})$/', $ip, $m) || preg_match('/(^|\.)0\d/', $m[1])
+    || !filter_var($m[1], FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)
+    || preg_match('/^(100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])|169\.254|22[4-9]|2[3-5]\d)\./', $m[1])) {
     header('Content-Type: application/json'); echo '{"ok":false,"err":"bad ip"}'; exit;
 }
 $host = $m[1]; $port = (int)$m[2];
+/* sayt UDP "ko'zgu" bo'lib qolmasin: bitta IP dan daqiqasiga 60 ta so'rov */
+$rlf = __DIR__ . '/xc_data/rl'; @mkdir($rlf, 0755, true);
+$rlf .= '/sq' . substr(sha1(isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : ''), 0, 20) . '.txt';
+$rln = is_file($rlf) && time() - filemtime($rlf) < 60 ? (int)@file_get_contents($rlf) : 0;
+if ($rln >= ($diag ? 10 : 60)) { header('Content-Type: application/json'); echo '{"ok":false,"err":"limit"}'; exit; }
+@file_put_contents($rlf, $rln ? $rln + 1 : 1); if ($rln) @touch($rlf, filemtime($rlf));
 
 /* bitta UDP so'rov: javob (yoki null) va ms */
 function udp($host, $port, $pkt, $to = 1.5) {
@@ -26,6 +35,7 @@ function udp($host, $port, $pkt, $to = 1.5) {
     stream_set_timeout($s, (int)$to, (int)(($to - (int)$to) * 1e6));
     $t = microtime(true); @fwrite($s, $pkt); $r = @fread($s, 4096); $ms = (int)round((microtime(true) - $t) * 1000);
     fclose($s);
+    if ($r !== false && strlen($r) < 6) $r = '';         // qisqa/buzilgan javob - $r[4], $r[5] ni o'qib bo'lmaydi
     return array($r === false || $r === '' ? null : $r, $ms, $r === false || $r === '' ? 'javob yo\'q (timeout)' : '');
 }
 function cstr($d, &$o) { $e = strpos($d, "\0", $o); if ($e === false) $e = strlen($d); $s = substr($d, $o, $e - $o); $o = $e + 1; return $s; }

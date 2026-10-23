@@ -9,6 +9,15 @@
 define('GEO_CACHE', __DIR__ . '/xc_data/geo.php');
 define('FLAG_DIR', __DIR__ . '/xc_data/flags');
 
+/* bitta IP soatiga $max ta tashqi so'rov (sayt boshqa xizmatlarga "spam" qilib, bloklanib qolmasin) */
+function ip_quota($tag, $max) {
+    $d = __DIR__ . '/xc_data/rl'; @mkdir($d, 0755, true);
+    $f = $d . '/' . $tag . substr(sha1(isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : ''), 0, 20) . '.txt';
+    $n = is_file($f) && time() - filemtime($f) < 3600 ? (int)@file_get_contents($f) : 0;
+    if ($n >= $max) return false;
+    $t = $n ? filemtime($f) : time(); @file_put_contents($f, $n + 1); @touch($f, $t);
+    return true;
+}
 function http_get($url, $post = null, &$info = null) {
     $info = '';
     if (!function_exists('curl_init')) {
@@ -62,7 +71,7 @@ if (is_file(GEO_CACHE)) { $c = json_decode(substr(file_get_contents(GEO_CACHE), 
 $now = time(); $need = array();
 foreach ($ips as $h) if (!isset($cache[$h]) || $now - $cache[$h][1] > ($cache[$h][0] === '' ? 86400 : 30 * 86400)) $need[] = $h;
 $dbg = 'So\'ralgan: ' . count($ips) . ', keshda yo\'q: ' . count($need) . "\n";
-if ($need) {
+if ($need && ip_quota('geo', 30)) {
     foreach (array_chunk(array_slice($need, 0, 100), 100) as $chunk) {       // bir so'rovda ko'pi bilan 100 ta yangi IP   // ip-api.com: bir so'rovda 100 tagacha
         $q = array();
         foreach ($chunk as $h) $q[] = array('query' => $h, 'fields' => 'countryCode,query');

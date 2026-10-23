@@ -24,7 +24,17 @@ if (!isset($_GET['debug']) && is_file("$CACHE/$m.none") && time() - filemtime("$
 if (!isset($_GET['debug'])) foreach (array(__DIR__ . '/../media/maps/cs16', __DIR__ . '/media/maps/cs16') as $dir)
     foreach ($TYPES as $ext => $type) if (is_file("$dir/$m.$ext")) send("$dir/$m.$ext", $type);
 // 3) internetdan yuklab olib keshlaymiz: avval boost-top.com, keyin GameTracker (minglab CS 1.6 xaritalari)
+/* bitta IP soatiga $max ta tashqi so'rov (sayt boshqa xizmatlarga "spam" qilib, bloklanib qolmasin) */
+function ip_quota($tag, $max) {
+    $d = __DIR__ . '/xc_data/rl'; @mkdir($d, 0755, true);
+    $f = $d . '/' . $tag . substr(sha1(isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : ''), 0, 20) . '.txt';
+    $n = is_file($f) && time() - filemtime($f) < 3600 ? (int)@file_get_contents($f) : 0;
+    if ($n >= $max) return false;
+    $t = $n ? filemtime($f) : time(); @file_put_contents($f, $n + 1); @touch($f, $t);
+    return true;
+}
 @mkdir($CACHE, 0755, true);
+if (!ip_quota('map', 30)) { header('HTTP/1.1 404 Not Found'); exit; }   // noma'lum xaritalar uchun tashqi yuklash - IP ga soatiga 30 marta
 $DEBUG = isset($_GET['debug']);
 if ($DEBUG) header('Content-Type: text/html; charset=utf-8');
 function grab($url, &$info) {
