@@ -67,7 +67,7 @@ function nd_api($path, $q, $ttl) {
     $ck = 'ndcache/' . md5($path . json_encode($q));
     $c = rd($ck, null);
     if ($c && time() - $c['t'] < $ttl) return $c['d'];
-    $ctx = stream_context_create(array('http' => array('method' => 'GET', 'timeout' => 8, 'ignore_errors' => true,
+    $ctx = stream_context_create(array('http' => array('method' => 'GET', 'timeout' => 8, 'ignore_errors' => true, 'follow_location' => 0,
         'header' => "X-API-Key: " . $CFG['nd_key'] . "\r\nAccept: application/json\r\n")));
     $raw = @file_get_contents(nd_base() . 'api/v1/' . $path . '?' . http_build_query($q), false, $ctx);
     $code = isset($http_response_header[0]) && preg_match('/\s(\d{3})/', $http_response_header[0], $m) ? (int)$m[1] : 0;
@@ -131,7 +131,11 @@ if (!$adm) {
     if (!is_file($kf)) @file_put_contents($kf, XC_GUARD . "Admin panel kodi: " . str_pad((string)(function_exists('random_int') ? random_int(0, 99999999) : mt_rand(0, 99999999)), 8, '0', STR_PAD_LEFT) . "\n");
     preg_match('/(\d{8})/', (string)@file_get_contents($kf), $km);
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        if (!$km || !hash_equals($km[1], pp('code'))) $msg = 'Kod noto\'g\'ri';
+        // kodni terib topib bo'lmasin: IP bo'yicha 10 daqiqada 5 urinish (kirish formasi kabi)
+        $lkk = 'admin_lock_' . substr(sha1(isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : ''), 0, 16);
+        $lk = rd($lkk, array('n' => 0, 't' => 0));
+        if ($lk['n'] >= 5 && time() - $lk['t'] < 600) { $msg = 'Ko\'p urinish. 10 daqiqadan keyin qayta urinib ko\'ring'; usleep(700000); }
+        elseif (!$km || !hash_equals($km[1], pp('code'))) { wr($lkk, array('n' => ($lk['n'] >= 5 ? 0 : $lk['n']) + 1, 't' => time())); $msg = 'Kod noto\'g\'ri'; usleep(700000); }
         elseif (strlen(pp('pass')) < 8) $msg = 'Parol kamida 8 belgi bo\'lsin';
         else { wr('admin', array('pass' => password_hash(pp('pass'), PASSWORD_DEFAULT))); @unlink($kf); session_regenerate_id(true); $_SESSION['adm'] = 1; go(''); }
     }
@@ -144,7 +148,7 @@ if (!$adm) {
 /* ---------- kirish ---------- */
 if (g('logout')) { $_SESSION = array(); session_destroy(); go(''); }
 if (empty($_SESSION['adm'])) {
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pass'])) {   // sessiya tugagan eski oynadan yuborilgan forma - urinish emas
         // urinishlar IP bo'yicha sanaladi (begona odam adminni bloklay olmaydi), sanash qulf ostida (parallel so'rovlar chetlab o'tolmaydi)
         $lkk = 'admin_lock_' . substr(sha1(isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : ''), 0, 16);
         $fh = fopen(XC_DIR . '/.alock', 'c'); if ($fh) flock($fh, LOCK_EX);
@@ -202,7 +206,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = strtolower(preg_replace('/[^a-z0-9_\-]/i', '', pp('id')));
         $rel = trim(str_replace('\\', '/', pp('path')), '/');
         if ($rel === '' && isset($_FILES['f']['name'])) $rel = 'cstrike/' . basename($_FILES['f']['name']);
-        if (!is_dir(PACKS_DIR . '/' . $id) || strpos($rel, '..') !== false || !preg_match('#^[A-Za-z0-9_\-./ ]+$#', $rel) || empty($_FILES['f']['tmp_name']) || !is_uploaded_file($_FILES['f']['tmp_name'])) { flash('Fayl yuklanmadi (yo\'l yoki fayl noto\'g\'ri)'); go('?p=packs&id=' . $id); }
+        if ($id === '' || !is_dir(PACKS_DIR . '/' . $id) || strpos($rel, '..') !== false || !preg_match('#^[A-Za-z0-9_\-./ ]+$#', $rel) || empty($_FILES['f']['tmp_name']) || !is_uploaded_file($_FILES['f']['tmp_name'])) { flash('Fayl yuklanmadi (yo\'l yoki fayl noto\'g\'ri)'); go('?p=packs&id=' . $id); }
         // faqat o'yin fayllari (ruxsat etilganlar ro'yxati): .php, .html, .svg va boshqalar saytda kod sifatida ishlashi mumkin
         if (!preg_match('/\.(wav|mp3|mdl|spr|bmp|tga|wad|cfg|txt|res|dll|exe|bsp|nav|ini|lst|gam|jpg|jpeg|png|ttf|otf|vtf|fgd|scr|vgui|json|dat|zip)$/i', $rel) || preg_match('/\.(php\d?|phtml|phar|html?|svg|shtml|cgi|pl|sh)\./i', $rel) || basename($rel)[0] === '.') { flash('Bu turdagi faylni yuklab bo\'lmaydi (faqat o\'yin fayllari: wav, mdl, spr, cfg, txt, wad, bsp ...)'); go('?p=packs&id=' . $id); }
         $dst = PACKS_DIR . '/' . $id . '/files/' . $rel;
@@ -217,7 +221,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($act === 'pack_del') {
         $id = strtolower(preg_replace('/[^a-z0-9_\-]/i', '', pp('id')));
-        if ($id !== '') { $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(PACKS_DIR . '/' . $id, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST); foreach ($it as $f) { $f->isDir() ? @rmdir($f->getPathname()) : @unlink($f->getPathname()); } @rmdir(PACKS_DIR . '/' . $id); }
+        if ($id !== '' && is_dir(PACKS_DIR . '/' . $id)) { $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(PACKS_DIR . '/' . $id, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST); foreach ($it as $f) { $f->isDir() ? @rmdir($f->getPathname()) : @unlink($f->getPathname()); } @rmdir(PACKS_DIR . '/' . $id); }
         flash("Paket o'chirildi"); go('?p=packs');
     }
     if ($act === 'rel_save') {
@@ -266,7 +270,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($act === 'beta_save') {
         $CFG['beta_ips'] = array_values(array_filter(array_map('trim', preg_split('/[\s,]+/', (string)pp('ips'))), function ($x) { return (bool)filter_var($x, FILTER_VALIDATE_IP); }));
-        $CFG['beta_pcs'] = array_values(array_filter(array_map('trim', preg_split('/[\s,]+/', (string)pp('pcs'))), function ($x) { return (bool)preg_match('/^[a-z0-9]{8,40}$/', $x); }));
+        $CFG['beta_pcs'] = array_values(array_filter(array_map(function ($x) { return strtolower(trim($x)); }, preg_split('/[\s,]+/', (string)pp('pcs'))), function ($x) { return (bool)preg_match('/^[a-z0-9]{8,40}$/', $x); }));
         cfg_save(); flash('Beta testerlar saqlandi'); go('?p=menuver');
     }
     if ($act === 'beta_myip') { $ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : ''; if (!isset($CFG['beta_ips'])) $CFG['beta_ips'] = array(); if ($ip && !in_array($ip, $CFG['beta_ips'])) $CFG['beta_ips'][] = $ip; cfg_save(); flash('IP qo\'shildi: ' . $ip); go('?p=menuver'); }
@@ -294,7 +298,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         go('?p=fb');
     }
     if ($act === 'tg_save') {
-        $CFG['tg_token'] = preg_replace('/[^A-Za-z0-9:_\-]/', '', pp('token')); $CFG['tg_chat'] = preg_replace('/[^0-9\-@A-Za-z_]/', '', pp('chat'));
+        if (pp('token') !== '') $CFG['tg_token'] = preg_replace('/[^A-Za-z0-9:_\-]/', '', pp('token'));   // bo'sh qoldirilsa - eskisi qoladi $CFG['tg_chat'] = preg_replace('/[^0-9\-@A-Za-z_]/', '', pp('chat'));
         $CFG['tg_ev'] = array(); foreach (array('install', 'account', 'report', 'daily', 'feedback') as $e) $CFG['tg_ev'][$e] = pp('ev_' . $e) ? 1 : 0;
         $CFG['tg_bot'] = pp('tg_bot') ? 1 : 0;
         if ($CFG['tg_bot'] && $CFG['tg_token']) { $me = json_decode((string)@file_get_contents('https://api.telegram.org/bot' . $CFG['tg_token'] . '/getMe', false, stream_context_create(array('http' => array('timeout' => 5)))), true);
@@ -312,11 +316,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($act === 'api_del') { $n = array(); foreach ((array)$CFG['api'] as $k) if ($k['k'] !== pp('k')) $n[] = $k; $CFG['api'] = $n; cfg_save(); flash("Kalit o'chirildi"); go('?p=api'); }
     if ($act === 'nd_save') {
         $nu = strtolower(preg_replace('#^https?://#i', '', trim(pp('url')))); $nu = preg_replace('#/.*$#', '', $nu);
-        $CFG['nd_url'] = preg_match('/^[a-z0-9.-]{3,80}$/', $nu) ? $nu : '';
+        $CFG['nd_url'] = preg_match('/^[a-z0-9.-]{3,80}$/', $nu) && !filter_var($nu, FILTER_VALIDATE_IP) && strpos($nu, '.') !== false && $nu !== 'localhost' ? $nu : '';
         if (pp('key') !== '' || pp('del') === '1') $CFG['nd_key'] = preg_replace('/[^A-Za-z0-9_\-\.|]/', '', pp('key'));
         cfg_save();
         foreach ((array)glob(XC_DIR . '/ndcache/*.php') as $f) @unlink($f);
-        if ($CFG['nd_key'] === '') { flash("nDirect kaliti o'chirildi"); go('?p=settings'); }
+        if (empty($CFG['nd_key'])) { flash(pp('del') === '1' ? "nDirect kaliti o'chirildi" : "Manzil saqlandi. Endi nDirect kalitini kiriting"); go('?p=settings'); }
         $t = nd_api('unique', array('tz' => 'Asia/Tashkent'), 0);
         flash(is_array($t) ? 'nDirect ulandi ✓ Infopanel endi NextClient raqamlarini nDirect dan oladi' : 'nDirect javob bermadi: ' . $ND_ERR);
         go('?p=settings');
@@ -389,7 +393,8 @@ if (!empty($_SESSION['flash'])) { echo '<div class="flash">' . h($_SESSION['flas
 
 /* ===== INFOPANEL ===== */
 if ($P === 'dash') {
-    $range = g('r', 'w'); $days = $range === 'q' ? 90 : ($range === 'm' ? 30 : 7);
+    $range = g('r', 'w'); if (!in_array($range, array('w', 'm', 'q'), true)) $range = 'w';   // havolaga qo'yiladi - faqat ruxsat etilgan qiymat
+    $days = $range === 'q' ? 90 : ($range === 'm' ? 30 : 7);
     $src = g('s', 'xc') === 'nc' ? 'nc' : 'xc';
     $ser = array();
     for ($i = max($days, 14) - 1; $i >= 0; $i--) { $ts = strtotime("-$i day"); $x = day(date('Y-m-d', $ts)); $ser[] = array('date' => date('Y-m-d', $ts), 'l' => date('d.m', $ts), 'xc' => cnt($x['d']), 'xn' => cnt($x['n']), 'nc' => cnt($x['m']), 'nn' => cnt($x['mn'])); }
@@ -814,7 +819,7 @@ if ($P === 'tg') {
     $ev = isset($CFG['tg_ev']) ? $CFG['tg_ev'] : array('install' => 1, 'account' => 1, 'report' => 1);
     $ck = function ($k, $t) use ($ev) { return '<label class="chk"><input type="checkbox" name="ev_' . $k . '" value="1"' . (!empty($ev[$k]) ? ' checked' : '') . '> ' . $t . '</label>'; };
     echo '<h1>Telegram xabarnomalar</h1><div class="grid2"><div class="panel"><div class="ph">Sozlash</div><form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="tg_save">'
-        . '<label>Bot token</label><input name="token" value="' . h(isset($CFG['tg_token']) ? $CFG['tg_token'] : '') . '" placeholder="123456:ABC-DEF...">'
+        . '<label>Bot token</label><input name="token" type="password" autocomplete="off" value="" placeholder="' . (!empty($CFG['tg_token']) ? 'saqlangan ✓ (…' . h(substr($CFG['tg_token'], -4)) . ') - almashtirish uchun yangisini yozing' : '123456:ABC-DEF...') . '">'
         . '<label>Chat ID (siz yoki guruh)</label><input name="chat" value="' . h(isset($CFG['tg_chat']) ? $CFG['tg_chat'] : '') . '" placeholder="123456789 yoki -100...">'
         . $ck('install', 'Yangi X CLIENT o\'rnatish') . $ck('account', 'Yangi akkaunt') . $ck('report', 'Xatolik haqida xabar') . $ck('daily', 'Kunlik hisobot (har kuni 9:00 dan keyin) va hafta chempioni') . $ck('feedback', 'Menyudan taklif / shikoyat')
         . '<div class="ph" style="margin-top:14px">O\'yinchilar uchun bot</div><label class="chk"><input type="checkbox" name="tg_bot" value="1"' . (!empty($CFG['tg_bot']) ? ' checked' : '') . '> O\'yinchilar shu botga akkauntini ulaydi: /me, /friends, /top, /online' . (!empty($CFG['tg_botname']) ? ' (@' . h($CFG['tg_botname']) . ')' : '') . '</label>'
@@ -824,7 +829,7 @@ if ($P === 'tg') {
 
 /* ===== API ===== */
 if ($P === 'api') {
-    $base = 'http://' . (isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'mmb.boost-top.com') . '/admin.php';
+    $base = 'https://' . (isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'mmb.boost-top.com') . '/admin.php';
     echo '<h1>API kalitlari</h1><div class="panel"><div class="ph">Kalitlar <form method="post" class="inl r">' . csrf_in() . '<input type="hidden" name="act" value="api_new"><input name="name" placeholder="Nomi (masalan: boost-top sayt)"><button class="btn red">Yaratish</button></form></div><table class="list"><tr><th>Nomi</th><th>Kalit</th><th>Yaratilgan</th><th></th></tr>';
     foreach ((array)(isset($CFG['api']) ? $CFG['api'] : array()) as $k) echo '<tr><td>' . h($k['name']) . '</td><td class="mono">' . h($k['k']) . '</td><td>' . dt($k['t']) . '</td><td class="r"><form method="post" class="inl" onsubmit="return confirm(\'O\\\'chirilsinmi?\')">' . csrf_in() . '<input type="hidden" name="act" value="api_del"><input type="hidden" name="k" value="' . h($k['k']) . '"><button class="lnk red">O\'chirish</button></form></td></tr>';
     echo '</table></div><div class="panel"><div class="ph">API hujjati</div><p>Statistika (JSON):</p><pre>GET ' . h($base) . '?api=stats&amp;key=KALIT&amp;days=7</pre>'

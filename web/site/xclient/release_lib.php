@@ -12,13 +12,19 @@ function rel_rd($name, $def) {
     $d = json_decode(substr((string)@file_get_contents($f), strlen(XC_GUARD)), true);
     return is_array($d) ? $d : $def;
 }
-function rel_wr($name, $data) { @mkdir(XC_DIR, 0755, true); @file_put_contents(XC_DIR . '/' . $name . '.php', XC_GUARD . json_encode($data), LOCK_EX); }
+function rel_wr($name, $data) {
+    // vaqtinchalik faylga yozib, keyin almashtiramiz: o'qiyotgan so'rov yarim yozilgan faylni ko'rmasin
+    $j = json_encode($data); if ($j === false) return;
+    @mkdir(XC_DIR, 0755, true);
+    $f = XC_DIR . '/' . $name . '.php'; $tmp = $f . '.' . mt_rand(1000, 9999) . '.tmp';
+    if (@file_put_contents($tmp, XC_GUARD . $j) !== false) @rename($tmp, $f);
+}
 
 function rel_http($url) {
     if (function_exists('curl_init')) {
         $c = curl_init($url);
         curl_setopt_array($c, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_TIMEOUT => 8, CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_SSL_VERIFYPEER => false, CURLOPT_SSL_VERIFYHOST => 0, CURLOPT_USERAGENT => 'XClient-release',
+            CURLOPT_USERAGENT => 'XClient-release',
             CURLOPT_HTTPHEADER => array('Accept: application/vnd.github+json')));
         $d = curl_exec($c); $code = curl_getinfo($c, CURLINFO_HTTP_CODE); curl_close($c);
         return ($d === false || $code != 200) ? '' : $d;
