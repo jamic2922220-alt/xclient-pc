@@ -45,6 +45,7 @@
 #define WM_XC_STATUS (WM_APP + 1)
 #define WM_XC_DONE   (WM_APP + 2)
 
+static HANDLE  g_one = NULL;            /* bitta nusxa mutexi: o'yin ishga tushgach (yoki qayta ishga tushishdan oldin) bo'shatiladi */
 static wchar_t g_dir[MAX_PATH];        /* klient papkasi */
 static wchar_t g_self[MAX_PATH];       /* shu exe */
 static char    g_key[64]   = "";
@@ -433,8 +434,8 @@ static int sync_files(const UpdInfo *u, BOOL *selfUpdated)
                 BOOL moved = FALSE;
                 for (int i = 0; i < 10 && !(moved = MoveFileExW(tmp, g_self, MOVEFILE_REPLACE_EXISTING)); i++) Sleep(500);
                 if (moved) *selfUpdated = TRUE;
-                else { MoveFileExW(old, g_self, MOVEFILE_REPLACE_EXISTING); DeleteFileW(tmp); }
-            } else DeleteFileW(tmp);
+                else { MoveFileExW(old, g_self, MOVEFILE_REPLACE_EXISTING); DeleteFileW(tmp); fails++; }   /* keyingi safar qayta urinamiz */
+            } else { DeleteFileW(tmp); fails++; }
         } else {
             if (!MoveFileExW(tmp, dst, MOVEFILE_REPLACE_EXISTING | MOVEFILE_COPY_ALLOWED)) { DeleteFileW(tmp); fails++; }
         }
@@ -1215,7 +1216,7 @@ static BOOL pack_id_ok(const char *id)
 {
     size_t n = strlen(id);
     if (!n || n > 40) return FALSE;
-    for (; *id; id++) if (!((*id >= 'a' && *id <= 'z') || (*id >= 'A' && *id <= 'Z') || (*id >= '0' && *id <= '9') || *id == '_' || *id == '-')) return FALSE;
+    for (; *id; id++) if (!((*id >= 'a' && *id <= 'z') || (*id >= 'A' && *id <= 'Z') || (*id >= '0' && *id <= '9') || *id == '_' || *id == '-' || *id == '~')) return FALSE;   /* "id~versiya" - admin "hammaga" bergan paket */
     return TRUE;
 }
 static void apply_packs(void)
@@ -1257,7 +1258,9 @@ static void compat_flags(const wchar_t *exe, int on)
     const wchar_t *tok = L"DISABLEDXMAXIMIZEDWINDOWEDMODE";
     if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers", 0, NULL, 0, KEY_QUERY_VALUE | KEY_SET_VALUE, NULL, &k, NULL) != ERROR_SUCCESS) return;
     wchar_t cur[512] = L"", out[600] = L""; DWORD sz = sizeof(cur) - sizeof(wchar_t), type = 0;
-    if (RegQueryValueExW(k, exe, NULL, &type, (BYTE *)cur, &sz) != ERROR_SUCCESS || type != REG_SZ) cur[0] = 0;
+    LONG qr = RegQueryValueExW(k, exe, NULL, &type, (BYTE *)cur, &sz);
+    if (qr == ERROR_MORE_DATA) { RegCloseKey(k); return; }   /* juda uzun qiymat - o'yinchinikiga tegmaymiz */
+    if (qr != ERROR_SUCCESS || type != REG_SZ) cur[0] = 0;
     cur[511] = 0;
     BOOL has = FALSE;
     for (wchar_t *ctx = NULL, *t = wcstok_s(cur, L" ", &ctx); t; t = wcstok_s(NULL, L" ", &ctx)) {
@@ -1320,7 +1323,7 @@ static void upload_shots(void)
             if (t <= last || fd.nFileSizeLow < 100000 || (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
             int slot = cnt < 8 ? cnt++ : -1;
             if (slot < 0) { slot = 0; for (int i = 1; i < 8; i++) if (best[i] < best[slot]) slot = i; if (best[slot] >= t) continue; }
-            best[slot] = t; path_join(names[slot], g_dir, L"cstrike"); path_join(names[slot], names[slot], fd.cFileName);
+            best[slot] = t; { wchar_t cs[MAX_PATH]; path_join(cs, g_dir, L"cstrike"); path_join(names[slot], cs, fd.cFileName); }
         } while (FindNextFileW(h, &fd));
         FindClose(h);
     }
@@ -1580,8 +1583,10 @@ static int game_procs(HANDLE out[], wchar_t names[][64], int cap)
     PROCESSENTRY32W pe; pe.dwSize = sizeof(pe);
     for (BOOL ok = Process32FirstW(snap, &pe); ok && n < cap; ok = Process32NextW(snap, &pe)) {
         if (pe.th32ProcessID == me || !_wcsicmp(pe.szExeFile, XC_EXE) || !_wcsicmp(pe.szExeFile, XC_EXE_LEGACY)
-            || !_wcsnicmp(pe.szExeFile, L"XClient-Uninstall", 17)) continue;
-        HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE | SYNCHRONIZE, FALSE, pe.th32ProcessID);
+            || !_wcsnicmp(pe.szExeFile, L"XClient-Uninstall", 17) || !_wcsnicmp(pe.szExeFile, L"unins", 5)
+            || !_wcsicmp(pe.szExeFile, L"hlds.exe") || !_wcsicmp(pe.szExeFile, L"hltv.exe")) continue;   /* server/HLTV - o'yin emas */
+        /* faqat so'rash huquqi: o'yin administrator sifatida ochilgan bo'lsa ham ko'rinsin (yopish huquqi keyin, "Ha" dan so'ng) */
+        HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, FALSE, pe.th32ProcessID);
         if (!h) continue;
         wchar_t img[MAX_PATH]; DWORD il = MAX_PATH;
         if (QueryFullProcessImageNameW(h, 0, img, &il) && il > dl && !_wcsnicmp(img, g_dir, dl) && (img[dl] == L'\\' || img[dl] == L'/')) {
@@ -1602,6 +1607,7 @@ static BOOL handle_running_game(void)
     for (int i = 0; i < n && wcslen(list) < 180; i++) { if (i) wcscat(list, L", "); wcscat(list, nm[i]); }
     HWND live = NULL; BOOL hung = FALSE;
     for (int i = 0; i < n; i++) {
+        if (_wcsicmp(nm[i], L"hl.exe") && _wcsicmp(nm[i], L"cstrike.exe")) continue;   /* oyna holati - faqat o'yinning o'zi */
         GameWnd g = { GetProcessId(ph[i]), NULL };
         EnumWindows(game_wnd_cb, (LPARAM)&g);
         if (g.wnd) { if (IsHungAppWindow(g.wnd)) hung = TRUE; else live = g.wnd; }
@@ -1616,12 +1622,21 @@ static BOOL handle_running_game(void)
         _snwprintf(q, 512, L"O‘yin oldingi safardan ochiq qolgan yoki qotib qolgan (%s).\nUni yopib, qayta ochaymi?\n\n"
                            L"Игра осталась открытой или зависла. Закрыть и запустить заново?", list);
         q[511] = 0;
-        if (MessageBoxW(NULL, q, L"X CLIENT", MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND) != IDYES) go = FALSE;
+        /* g_wnd ustida: launcher oynasi (topmost) so'rovni yopib qo'ymasin; xarita yuklanayotgan sog' o'yin ham "qotgan" ko'rinishi mumkin - standart "Yo'q" */
+        if (MessageBoxW(g_wnd, q, L"X CLIENT", MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND | MB_TOPMOST | MB_DEFBUTTON2) != IDYES) go = FALSE;
     }
     if (go && !(live && !hung)) {
-        for (int i = 0; i < n; i++) TerminateProcess(ph[i], 1);
-        for (int i = 0; i < n; i++) WaitForSingleObject(ph[i], 5000);
+        BOOL denied = FALSE;
+        for (int i = 0; i < n; i++) {
+            HANDLE t = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, FALSE, GetProcessId(ph[i]));
+            if (t) { TerminateProcess(t, 1); WaitForSingleObject(t, 5000); CloseHandle(t); } else denied = TRUE;
+        }
         Sleep(500);
+        if (denied) {
+            MessageBoxW(g_wnd, L"O‘yinni yopib bo‘lmadi (administrator sifatida ochilgan). Диспетчер задач orqali yoping yoki kompyuterni qayta yoqing.\n\n"
+                               L"Не удалось закрыть игру (запущена от администратора). Закройте её через диспетчер задач.", L"X CLIENT", MB_ICONWARNING | MB_TOPMOST);
+            go = FALSE;
+        }
     }
     for (int i = 0; i < n; i++) CloseHandle(ph[i]);
     return go;
@@ -1671,6 +1686,7 @@ static void run_game(void)
     PROCESS_INFORMATION pi;
     if (o_ok) compat_flags(exe, o_prio);
     if (CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, g_dir, &si, &pi)) {
+        if (g_one) { CloseHandle(g_one); g_one = NULL; }   /* o'yin ochildi - endi yana bosilsa, yangi launcher uni topib oldinga chiqaradi */
         if (o_prio) SetPriorityClass(pi.hProcess, ABOVE_NORMAL_PRIORITY_CLASS);   /* "O'yinni tezlashtirish": HIGH Windows ovoz xizmatini (audiodg) siqib, ovoz qotishi va chirsillashiga sabab bo'lardi */
         CloseHandle(pi.hThread);
         /* guard_theme olib tashlandi: nDirect fayllarini qayta yozish har ochilishda yangilanishga sabab bo'lardi */
@@ -1686,7 +1702,6 @@ static void run_game(void)
 
 /* ---------------------------------------------------------------- ish oqimi */
 static BOOL g_relaunch = FALSE, g_play = TRUE;
-static HANDLE g_one = NULL;
 static wchar_t g_err[256] = L"";
 
 static DWORD WINAPI worker(LPVOID unused)
@@ -1856,7 +1871,10 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, LPWSTR cmdline, int show)
 
     /* bitta nusxa: ikki marta bosilsa ikkinchisi bir xil fayllarni bir vaqtda yangilab, o'yinni ikki marta ochmasin */
     HANDLE one = CreateMutexW(NULL, FALSE, L"Local\\XClientLauncher");
-    if (one && GetLastError() == ERROR_ALREADY_EXISTS) { CloseHandle(one); CoUninitialize(); return 0; }
+    if ((one && GetLastError() == ERROR_ALREADY_EXISTS) || (!one && GetLastError() == ERROR_ACCESS_DENIED)) {   /* denied: admin huquqidagi nusxa ishlayapti */
+        if (one) CloseHandle(one);
+        CoUninitialize(); return 0;
+    }
     g_one = one;
 
     INITCOMMONCONTROLSEX ic = { sizeof(ic), ICC_PROGRESS_CLASS };
@@ -1888,7 +1906,7 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, LPWSTR cmdline, int show)
     WaitForSingleObject(th, 5000);
 
     if (g_err[0]) MessageBoxW(NULL, g_err, L"X CLIENT", MB_ICONERROR);
-    if (g_one) { CloseHandle(g_one); g_one = NULL; }   /* yangilangan launcher va o'yin paytida yana bosilgan launcher ochila olsin */
+    if (g_relaunch && g_one) { CloseHandle(g_one); g_one = NULL; }   /* yangilangan launcher ochila olsin */
     if (g_relaunch) {
         /* yangi launcher bilan qayta ishga tushamiz */
         STARTUPINFOW si = { sizeof(si) };
