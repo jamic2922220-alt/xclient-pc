@@ -42,8 +42,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // bitta IP kuniga 3 ta javob; 5000 dan oshsa eng eskisi o'chadi (yangi javoblar yo'qolmasin)
         $ipn = glob(XC_DIR . '/bye/' . date('Ymd') . '-*.php'); $mine = 0;
         foreach ((array)$ipn as $bf) { $bx = rd('bye/' . basename($bf, '.php'), null); if ($bx && isset($bx['ip']) && $bx['ip'] === $ip) $mine++; }
-        if (count((array)$files) >= 5000) { usort($files, function ($a, $b) { return filemtime($a) - filemtime($b); }); @unlink($files[0]); }
-        if ($mine < 3 || is_file(XC_DIR . '/' . $key . '.php')) wr($key, array('t' => time(), 'd' => $d, 'r' => $r, 'text' => $txt, 'ip' => $ip));
+        if ($mine < 3 || is_file(XC_DIR . '/' . $key . '.php')) {
+            if (count((array)$files) >= 5000) { usort($files, function ($a, $b) { return filemtime($a) - filemtime($b); }); @unlink($files[0]); }
+            wr($key, array('t' => time(), 'd' => $d, 'r' => $r, 'text' => $txt, 'ip' => $ip));
+        }
     }
     $done = true;
 }

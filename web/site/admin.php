@@ -24,7 +24,8 @@ function rd($name, $def) {
 function wr($name, $data) {                            // vaqtinchalik fayl + nomini almashtirish: o'qiyotgan so'rov yarim yozilgan faylni ko'rmasin
     @mkdir(dirname(XC_DIR . '/' . $name), 0755, true);
     $f = XC_DIR . '/' . $name . '.php'; $tmp = $f . '.' . mt_rand() . '.tmp';
-    if (@file_put_contents($tmp, XC_GUARD . json_encode($data), LOCK_EX) !== false) @rename($tmp, $f);
+    $j = json_encode($data); if ($j === false) return;   // noto'g'ri UTF-8 - eski faylni bo'sh bilan almashtirmaymiz
+    if (@file_put_contents($tmp, XC_GUARD . $j, LOCK_EX) !== false) @rename($tmp, $f);
 }
 function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 function g($k, $d = '') { return isset($_GET[$k]) ? (string)$_GET[$k] : $d; }
@@ -298,7 +299,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         go('?p=fb');
     }
     if ($act === 'tg_save') {
-        if (pp('token') !== '') $CFG['tg_token'] = preg_replace('/[^A-Za-z0-9:_\-]/', '', pp('token'));   // bo'sh qoldirilsa - eskisi qoladi $CFG['tg_chat'] = preg_replace('/[^0-9\-@A-Za-z_]/', '', pp('chat'));
+        if (pp('token') !== '' || pp('tg_del') === '1') $CFG['tg_token'] = preg_replace('/[^A-Za-z0-9:_\-]/', '', pp('token'));   // bo'sh qoldirilsa - eskisi qoladi
+        $CFG['tg_chat'] = preg_replace('/[^0-9\-@A-Za-z_]/', '', pp('chat'));
         $CFG['tg_ev'] = array(); foreach (array('install', 'account', 'report', 'daily', 'feedback') as $e) $CFG['tg_ev'][$e] = pp('ev_' . $e) ? 1 : 0;
         $CFG['tg_bot'] = pp('tg_bot') ? 1 : 0;
         if ($CFG['tg_bot'] && $CFG['tg_token']) { $me = json_decode((string)@file_get_contents('https://api.telegram.org/bot' . $CFG['tg_token'] . '/getMe', false, stream_context_create(array('http' => array('timeout' => 5)))), true);
@@ -820,6 +822,7 @@ if ($P === 'tg') {
     $ck = function ($k, $t) use ($ev) { return '<label class="chk"><input type="checkbox" name="ev_' . $k . '" value="1"' . (!empty($ev[$k]) ? ' checked' : '') . '> ' . $t . '</label>'; };
     echo '<h1>Telegram xabarnomalar</h1><div class="grid2"><div class="panel"><div class="ph">Sozlash</div><form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="tg_save">'
         . '<label>Bot token</label><input name="token" type="password" autocomplete="off" value="" placeholder="' . (!empty($CFG['tg_token']) ? 'saqlangan ✓ (…' . h(substr($CFG['tg_token'], -4)) . ') - almashtirish uchun yangisini yozing' : '123456:ABC-DEF...') . '">'
+        . (!empty($CFG['tg_token']) ? '<label class="chk"><input type="checkbox" name="tg_del" value="1"> Tokenni o\'chirish</label>' : '')
         . '<label>Chat ID (siz yoki guruh)</label><input name="chat" value="' . h(isset($CFG['tg_chat']) ? $CFG['tg_chat'] : '') . '" placeholder="123456789 yoki -100...">'
         . $ck('install', 'Yangi X CLIENT o\'rnatish') . $ck('account', 'Yangi akkaunt') . $ck('report', 'Xatolik haqida xabar') . $ck('daily', 'Kunlik hisobot (har kuni 9:00 dan keyin) va hafta chempioni') . $ck('feedback', 'Menyudan taklif / shikoyat')
         . '<div class="ph" style="margin-top:14px">O\'yinchilar uchun bot</div><label class="chk"><input type="checkbox" name="tg_bot" value="1"' . (!empty($CFG['tg_bot']) ? ' checked' : '') . '> O\'yinchilar shu botga akkauntini ulaydi: /me, /friends, /top, /online' . (!empty($CFG['tg_botname']) ? ' (@' . h($CFG['tg_botname']) . ')' : '') . '</label>'

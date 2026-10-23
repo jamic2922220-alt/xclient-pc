@@ -86,6 +86,8 @@ function lock() {
     if ($LOCK) flock($LOCK, LOCK_EX);
 }
 
+function unlock() { global $LOCK; if ($LOCK) { flock($LOCK, LOCK_UN); fclose($LOCK); $LOCK = null; } }   // tarmoqqa chiqishdan oldin - boshqa so'rovlar kutib qolmasin
+
 /* oddiy chastota cheklovi: $key bo'yicha $win soniyada nechta hodisa bo'lgani (xc_data/rl/) */
 function rl_count($key, $win) {
     $x = rd('rl/' . substr(sha1($key), 0, 24), array());
@@ -109,7 +111,9 @@ function cap_dir($dir, $max) {
  * o'sha IP dan yaqinda 'hello' yuborgan bo'lsa. Kalit boshqa hech kimga berilmaydi. */
 function ip_key() { return 'ip/' . substr(sha1(client_ip() . 'xc'), 0, 24); }
 function ip_dev($maxAge) { $m = rd(ip_key(), null); return ($m && time() - $m['t'] <= $maxAge) ? $m['d'] : ''; }
-function dev_ok($d, $o) { $k = p('k'); return ($k !== '' && !empty($o['k']) && hash_equals($o['k'], $k)) || ip_dev(600) === $d; }
+/* kompyuter ma'lumotiga (saqlangan kirish tokeni ham bor) faqat shu kompyuterning maxfiy kaliti bilan: bitta IP dagi (internet-kafe,
+ * mobil internet) boshqa odam IP orqali kira olmasin. Kalitni menyu launcher ochilgach bir marta oladi (opts) */
+function dev_ok($d, $o) { $k = p('k'); return $k !== '' && !empty($o['k']) && hash_equals($o['k'], $k); }
 function ukey($login) { return 'users/' . strtolower($login); }
 function user($login) { return preg_match('/^[A-Za-z0-9_]{3,20}$/', (string)$login) ? rd(ukey($login), null) : null; }   // login fayl nomi bo'ladi: ../ bilan boshqa fayllarni o'qib bo'lmasin
 function save_user($u) { wr(ukey($u['login']), $u); }
@@ -285,7 +289,7 @@ function tg_bot_answer($chat, $txt) {
         lock(); $codes = rd('tglink', array());          // ping/stat bilan bir vaqtda yozib, ma'lumot yo'qolmasin
         if (empty($codes[$m[1]])) return "Kod topilmadi yoki eskirgan.";
         $u = user($codes[$m[1]]['l']); if (!$u) return 'Akkaunt topilmadi.';
-        $u['tgid'] = $chat; save_user($u); unset($codes[$m[1]]); wr('tglink', $codes);
+        $u['tgid'] = $chat; save_user($u); unset($codes[$m[1]]); wr('tglink', $codes); unlock();
         return "Ulandi! Salom, " . $u['name'] . ".\n/me - statistikam\n/friends - onlayn do'stlar\n/top - hafta qotillari\n/online - hozir o'ynayotganlar";
     }
     if (!$me) return "Salom! Bu X CLIENT boti.\nAkkauntingizni ulash: X CLIENT menyusida Sozlamalar > Akkaunt > \"Telegram'ni ulash\" ni bosing va chiqqan 6 xonali kodni shu yerga yozing.";
@@ -327,6 +331,17 @@ function missions_today() {
         $out[] = array('id' => $pool[$k][0], 'goal' => $g[($seed >> 4) % count($g)], 'xp' => $pool[$k][2]);
     }
     return $out;
+}
+/* vazifa progressi saytning o'z bugungi statistikasidan (stat orqali yig'iladi) - menyu ham shuni ko'rsatadi */
+function mis_prog($u, $day, $id) {
+    $ds = isset($u['dst'][$day]) && is_array($u['dst'][$day]) ? $u['dst'][$day] : array();
+    $k = (int)@$ds['k']; $d = (int)@$ds['d']; $t = (int)@$ds['t'];
+    if ($id === 'min' || $id === 'xsrv') return (int)floor($t / 60);
+    if ($id === 'kills') return $k;
+    if ($id === 'servers') return isset($ds['ips']) && is_array($ds['ips']) ? count($ds['ips']) : (isset($ds['srv']) && is_array($ds['srv']) ? count($ds['srv']) : 0);
+    if ($id === 'maps') return isset($ds['maps']) && is_array($ds['maps']) ? count($ds['maps']) : 0;
+    if ($id === 'kd') return $k >= $d ? $k : 0;
+    return 0;
 }
 /* ---------- yutuqlar (achievement): shart bajarilganda bir marta beriladi, profilda nishon ---------- */
 function ach_list() {
@@ -377,7 +392,7 @@ function champ_update() {
         ach_check($best);
         if (!isset($best['msgs'])) $best['msgs'] = array();
         $best['msgs'][] = array('t' => time(), 'text' => "\xF0\x9F\x91\x91 Tabriklaymiz! Siz o'tgan haftaning chempionisiz ($bk kill). +500 XP va toj nishoni.");
-        save_user($best);
+        save_user($best); unlock();
         tg_notify('daily', "Hafta chempioni: " . $best['name'] . " - $bk kill");
     }
     return $c;
@@ -489,12 +504,13 @@ case 'login':
 
 case 'beat':                                             // menyu ochildi (kuniga bir marta hisoblanadi)
     if (!preg_match('/^[a-z0-9]{8,40}$/', p('device'))) fail('bad', 'bad');
-    if (rl_count('bt' . client_ip(), 3600) >= 30) out(array('ok' => true));   // sun'iy "yangi o'yinchi" va disk to'ldirishga qarshi
+    if (rl_count('bt' . client_ip(), 3600) >= 120) out(array('ok' => true));   // sun'iy "yangi o'yinchi" va disk to'ldirishga qarshi
     rl_add('bt' . client_ip(), 3600);
     /* O'yin brauzeri localStorage ni saqlamaydi - menyuning tasodifiy device id si har ochilishda yangi bo'lib,
      * bitta kompyuter o'nlab "yangi o'yinchi" bo'lib sanalardi. Shuning uchun id serverda: nik + ekran + IP tarmog'i */
     $ipn = implode('.', array_slice(explode('.', client_ip()), 0, 2));
     $dev = 'f' . substr(md5(strtolower(trim(p('nick'))) . '|' . p('res') . '|' . $ipn), 0, 15);
+    geo_cc(client_ip());                                   // davlat - qulfdan oldin (yangi IP bo'lsa tarmoqqa chiqadi, boshqalar kutmasin)
     lock();
     @mkdir(XC_DIR . '/nc', 0755, true);
     $r = rd('nc/' . $dev, array());
@@ -659,7 +675,8 @@ case 'ping':                                             // har daqiqada: onlayn
 case 'missions':                                         // bugungi vazifalar va qaysilari olingan
     $u = auth();
     $list = missions_today(); $day = date('Y-m-d');
-    out(array('ok' => true, 'day' => $day, 'list' => $list, 'done' => isset($u['mis'][$day]) ? array_keys($u['mis'][$day]) : array()));
+    $prog = array(); foreach ($list as $x) $prog[$x['id']] = mis_prog($u, $day, $x['id']);
+    out(array('ok' => true, 'day' => $day, 'list' => $list, 'prog' => $prog, 'done' => isset($u['mis'][$day]) ? array_keys($u['mis'][$day]) : array()));
 
 case 'mission_claim':                                    // vazifa mukofoti (kuniga bir marta)
     lock();
@@ -671,13 +688,7 @@ case 'mission_claim':                                    // vazifa mukofoti (kun
     foreach (array_keys($u['mis']) as $d) if ($d !== $day) unset($u['mis'][$d]);
     if (!empty($u['mis'][$day][$id])) fail('done', 'Allaqachon olingan');
     /* bajarilganini saytning o'zi tekshiradi (bugungi o'yin statistikasi - stat orqali yig'ilgan) */
-    $ds = isset($u['dst'][$day]) && is_array($u['dst'][$day]) ? $u['dst'][$day] : array('k' => 0, 'd' => 0, 't' => 0, 'srv' => array());
-    $mk = (int)@$ds['k']; $md = (int)@$ds['d']; $mt = (int)@$ds['t']; $mn = is_array(@$ds['srv']) ? count($ds['srv']) : 0;
-    $okm = $id === 'min' || $id === 'xsrv' ? $mt >= $m['goal'] * 60 - 120
-         : ($id === 'kills' ? $mk >= $m['goal']
-         : ($id === 'servers' ? $mn >= $m['goal']
-         : ($id === 'kd' ? $mk >= $m['goal'] && $mk >= $md
-         : ($id === 'maps' ? $mt >= 600 && ($mn >= 2 || (int)@$ds['g'] >= $m['goal']) : false))));
+    $okm = mis_prog($u, $day, $id) + ($id === 'min' || $id === 'xsrv' ? 2 : 0) >= $m['goal'];   // daqiqalarda 2 daq. zaxira (oxirgi xabar kechikishi)
     if (!$okm) fail('notyet', 'Vazifa hali bajarilmagan');
     $u['mis'][$day][$id] = 1;
     $u['xp'] = (int)$u['xp'] + $m['xp'];
@@ -846,6 +857,8 @@ case 'clan_top':
         $u['clan'] = array('id' => $cid, 'tag' => $tag, 'name' => $name); ach_check($u); save_user($u);
     } elseif ($a === 'clan_join') {
         if ($c) fail('bad', 'Avval hozirgi klandan chiqing');
+        if (rl_count('cj' . strtolower($u['login']), 3600) >= 15) fail('limit', 'Juda ko\'p urinish, keyinroq');   // taklif kodini terib topmasin
+        rl_add('cj' . strtolower($u['login']), 3600);
         $code = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', p('code'))); $found = null;
         foreach (glob(XC_DIR . '/clans/*.php') as $f) { $x = rd('clans/' . basename($f, '.php'), null); if ($x && $code !== '' && hash_equals($x['code'], $code)) $found = $x; }
         if (!$found) fail('bad', 'Taklif kodi noto\'g\'ri');
@@ -1186,7 +1199,8 @@ case 'ring_ans':
     $to = strtolower(p('to'));
     $t = preg_match('/^[a-z0-9_]{3,20}$/', $to) ? user($to) : null;
     if (!$t) fail('bad', 'Topilmadi');
-    if (empty($u['friends']) || !in_array($to, array_map('strtolower', $u['friends']))) fail('bad', 'Topilmadi');   // faqat do'stga
+    $me = strtolower($u['login']);
+    if (!in_array($to, array_map('strtolower', (array)@$u['friends'])) && !in_array($me, array_map('strtolower', (array)@$t['friends']))) fail('bad', 'Topilmadi');   // faqat do'stga
     if (rl_count('ra' . strtolower($u['login']), 60) >= 10) fail('limit', 'limit'); rl_add('ra' . strtolower($u['login']), 60);
     if (!isset($t['ringans'])) $t['ringans'] = array();
     $t['ringans'][] = array('from' => $u['name'], 'login' => $u['login'], 'ok' => p('ok') === '1' ? 1 : 0, 't' => time());
@@ -1265,14 +1279,16 @@ case 'stat':
     $ss = isset($u['ss']) && is_array($u['ss']) ? $u['ss'] : array();
     /* soxta statistika: o'yin vaqti saytning o'z soati bilan cheklanadi (o'yin birinchi marta ko'ringan paytdan beri),
      * eski (ro'yxatdan chiqib ketgan) o'yinni qayta yuborib bo'lmaydi, daqiqasiga 10 so'rovdan ko'p emas */
-    if (!isset($ss[$sid]) && isset($u['sidcut']) && (float)$sid <= (float)$u['sidcut']) fail('old', 'old');
+    $nowms = time() * 1000.0;   // soati noto'g'ri kompyuter (klub PC) boshqa qurilmalardagi statistikani bloklamasin
+    if (!isset($ss[$sid]) && isset($u['sidcut']) && (float)$sid <= (float)$u['sidcut'] && abs((float)$sid - $nowms) < 2 * 86400000) fail('old', 'old');
     if (rl_count('st' . strtolower($u['login']), 60) >= 10) fail('limit', 'limit');
     rl_add('st' . strtolower($u['login']), 60);
     $old = isset($ss[$sid]) ? $ss[$sid] : array('k' => 0, 'd' => 0, 't' => 0, 'w' => array());
-    $s0 = isset($old['s0']) ? (int)$old['s0'] : time() - min($dur, 900);   // birinchi xabar - eng ko'pi 15 daqiqalik o'yin
+    $s0 = isset($old['s0']) ? (int)$old['s0'] : time() - $dur;   // birinchi xabar (o'yin o'rtasida kirilgan bo'lsa ham) - o'zi aytgan vaqt, 6 soatgacha
     $dur = min($dur, time() - $s0 + 120);
     $cap = (int)ceil($dur / 60 * 6) + 5;
     $k = max(0, min($cap, (int)p('k'))); $d = max(0, min($cap, (int)p('d')));
+    $k = max($k, (int)$old['k']); $d = max($d, (int)$old['d']); $dur = max($dur, (int)$old['t']);   // kamayib, keyin qayta qo'shilmasin
     $dk = max(0, $k - $old['k']); $dd = max(0, $d - $old['d']); $dt = max(0, $dur - $old['t']);
     $st = isset($u['st']) && is_array($u['st']) ? $u['st'] : array('k' => 0, 'd' => 0, 'g' => 0, 't' => 0, 'best' => 0, 'wpn' => array(), 'srv' => array());
     if (!isset($ss[$sid])) $st['g'] = (int)@$st['g'] + 1;
@@ -1303,6 +1319,9 @@ case 'stat':
     if (!isset($dsa[$td])) $dsa[$td] = array('k' => 0, 'd' => 0, 't' => 0, 'g' => 0, 'srv' => array());
     $dsa[$td]['k'] += $dk; $dsa[$td]['d'] += $dd; $dsa[$td]['t'] += $dt; if (!isset($ss[$sid])) $dsa[$td]['g']++;
     $sn = p('name') !== '' ? clean_str(p('name'), 60) : $ip; $dsa[$td]['srv'][$sn] = (isset($dsa[$td]['srv'][$sn]) ? $dsa[$td]['srv'][$sn] : 0) + $dt;
+    if (!isset($dsa[$td]['ips']) || count($dsa[$td]['ips']) < 30) $dsa[$td]['ips'][$ip] = 1;   // "serverlar" vazifasi - manzil bo'yicha (nomlari bir xil bo'lishi mumkin)
+    $mp = strtolower(preg_replace('/[^a-z0-9_\-]/i', '', p('map')));   // "xaritalar" vazifasi uchun
+    if ($mp !== '' && strlen($mp) <= 40 && (!isset($dsa[$td]['maps']) || count($dsa[$td]['maps']) < 30)) $dsa[$td]['maps'][$mp] = 1;
     if ($k > (isset($dsa[$td]['best']) ? $dsa[$td]['best'] : 0)) $dsa[$td]['best'] = $k;
     ksort($dsa); if (count($dsa) > 3) $dsa = array_slice($dsa, -3, 3, true); $u['dst'] = $dsa;
     if (!empty($u['duel']) && $dk > 0) {                                       // duel davom etyapti - kill hisobga
@@ -1317,7 +1336,7 @@ case 'stat':
     }
     $newach = ach_check($u);
     $ss[$sid] = array('k' => $k, 'd' => $d, 't' => $dur, 'w' => $nw, 's0' => $s0);
-    if (count($ss) > 8) { ksort($ss); foreach (array_slice(array_keys($ss), 0, count($ss) - 8) as $ev) $u['sidcut'] = max((float)@$u['sidcut'], (float)$ev); $ss = array_slice($ss, -8, 8, true); }
+    if (count($ss) > 8) { ksort($ss); foreach (array_slice(array_keys($ss), 0, count($ss) - 8) as $ev) $u['sidcut'] = max((float)@$u['sidcut'], min((float)$ev, $nowms)); $ss = array_slice($ss, -8, 8, true); }
     $u['ss'] = $ss;
     save_user($u);
     $pu = pub($u, true);
@@ -1415,6 +1434,7 @@ case 'opts_done':
     $d = strtolower(p('d'));
     if ($a === 'hello') {
         if (!preg_match('/^[a-z0-9]{8,40}$/', $d)) fail('dev', 'device');
+        geo_cc(client_ip());                               // qulfdan oldin - keyin keshdan olinadi
         lock();
         $o = rd('dev/' . $d, array());
         $isNew = empty($o['first']) && empty($o['seen']);  // birinchi marta ko'rinayotgan kompyuter = yangi o'rnatish
@@ -1458,7 +1478,7 @@ case 'opts_done':
     if ($claim) {
         if (!empty($o['kc'])) $claim = false;   // kalit allaqachon olingan: kalitni qayta bermaymiz, lekin sozlamalar ochiladi (dev_ok - shu IP dan 10 daqiqa ichida launcher)
         else { $o['kc'] = 1; wr('dev/' . $d, $o); }
-    } elseif (!dev_ok($d, $o)) fail('nolaunch', 'XCLauncher.exe topilmadi');
+    } elseif (!dev_ok($d, $o) && !($a === 'opts_done' && ip_dev(600) === $d)) fail('nolaunch', 'XCLauncher.exe topilmadi');   // opts_done - launcherning o'zi (kalitsiz, IP bo'yicha); u faqat belgilarni o'chiradi
     if ($a === 'opts_set') {
         $in = json_decode(p('o'), true);
         if (!is_array($in)) fail('bad', 'bad');
@@ -1473,7 +1493,7 @@ case 'opts_done':
         wr('dev/' . $d, $o);
     }
     $key = isset($o['k']) ? $o['k'] : '';
-    unset($o['k'], $o['kc'], $o['ip']);
+    unset($o['k'], $o['kc'], $o['ip'], $o['st'], $o['fav']);   // saqlangan holat (token) faqat dstate orqali, kalit bilan
     out(array('ok' => true, 'o' => $o, 'd' => $d, 'k' => $claim ? $key : null));
 
 /* ---------- sevimli serverlar kompyuter bo'yicha zaxirada (menyu keshi tozalansa yoki manzil o'zgarsa yo'qolmasin) ---------- */

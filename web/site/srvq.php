@@ -21,12 +21,13 @@ if (!preg_match('/^(\d{1,3}(?:\.\d{1,3}){3}):(\d{2,5})$/', $ip, $m) || preg_matc
     header('Content-Type: application/json'); echo '{"ok":false,"err":"bad ip"}'; exit;
 }
 $host = $m[1]; $port = (int)$m[2];
-/* sayt UDP "ko'zgu" bo'lib qolmasin: bitta IP dan daqiqasiga 60 ta so'rov */
+/* sayt UDP "ko'zgu" bo'lib qolmasin: bitta IP dan daqiqasiga 300 ta so'rov */
 $rlf = __DIR__ . '/xc_data/rl'; @mkdir($rlf, 0755, true);
 $rlf .= '/sq' . substr(sha1(isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : ''), 0, 20) . '.txt';
-$rln = is_file($rlf) && time() - filemtime($rlf) < 60 ? (int)@file_get_contents($rlf) : 0;
-if ($rln >= ($diag ? 10 : 60)) { header('Content-Type: application/json'); echo '{"ok":false,"err":"limit"}'; exit; }
-@file_put_contents($rlf, $rln ? $rln + 1 : 1); if ($rln) @touch($rlf, filemtime($rlf));
+$rlt = is_file($rlf) ? filemtime($rlf) : 0;
+$rln = $rlt && time() - $rlt < 60 ? (int)@file_get_contents($rlf) : 0;
+if ($rln >= ($diag ? 10 : 300)) { header('Content-Type: application/json'); echo '{"ok":false,"err":"limit"}'; exit; }   // internet-kafe bitta IP da ko'p o'yinchi
+@file_put_contents($rlf, $rln + 1); @touch($rlf, $rln ? $rlt : time());
 
 /* bitta UDP so'rov: javob (yoki null) va ms */
 function udp($host, $port, $pkt, $to = 1.5) {

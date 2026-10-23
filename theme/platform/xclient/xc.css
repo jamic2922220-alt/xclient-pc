@@ -808,7 +808,7 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 #bar .me .av.fice, .frl a i.av.fice, .av2.fice { -webkit-animation: none !important; -webkit-box-shadow: 0 0 0 2px #bfe9ff, 0 0 0 4px rgba(14,10,16,.95), 0 0 0 5px #5fb8ff; }
 #bar .me .av.fneon, .frl a i.av.fneon, .av2.fneon { -webkit-animation: none !important; -webkit-box-shadow: 0 0 0 2px #39f9ff, 0 0 0 4px rgba(14,10,16,.95), 0 0 0 5px #ff4fd8; }
 #bar .me .av.ftoxic, .frl a i.av.ftoxic, .av2.ftoxic { -webkit-animation: none !important; -webkit-box-shadow: 0 0 0 2px #9dff3a, 0 0 0 4px rgba(14,10,16,.95), 0 0 0 5px #2fd36a; }
-#bar .me .av.flegend, .frl a i.av.flegend, .av2.flegend { -webkit-animation: none !important; }
+#bar .me .av.flegend, .frl a i.av.flegend, .av2.flegend { -webkit-animation: none !important; -webkit-box-shadow: 0 0 0 2px #ffcf3a, 0 0 0 4px rgba(14,10,16,.95), 0 0 0 5px #ff4fb4; }
 /* admin panelda o'chirilgan funksiyalar menyuda ko'rinmaydi */
 .nf-duel [data-duelp] { display: none !important; }
 .nf-chest #mChest, .nf-chest [data-act="chests"] { display: none !important; }
