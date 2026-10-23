@@ -786,16 +786,28 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 @-webkit-keyframes k_fneon { 0% { -webkit-box-shadow: 0 0 0 3px #39f9ff, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #ff4fd8, 0 0 14px 4px rgba(57,249,255,.65); } 50% { -webkit-box-shadow: 0 0 0 4px #ff4fd8, 0 0 0 7px rgba(14,10,16,.95), 0 0 0 10px #39f9ff, 0 0 30px 10px rgba(57,249,255,.65); } 100% { -webkit-box-shadow: 0 0 0 3px #39f9ff, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #ff4fd8, 0 0 14px 4px rgba(57,249,255,.65); } }
 @-webkit-keyframes k_ftoxic { 0% { -webkit-box-shadow: 0 0 0 3px #9dff3a, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #2fd36a, 0 0 14px 4px rgba(157,255,58,.6); } 50% { -webkit-box-shadow: 0 0 0 4px #2fd36a, 0 0 0 7px rgba(14,10,16,.95), 0 0 0 10px #9dff3a, 0 0 30px 10px rgba(157,255,58,.6); } 100% { -webkit-box-shadow: 0 0 0 3px #9dff3a, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #2fd36a, 0 0 14px 4px rgba(157,255,58,.6); } }
 .bigav, .fpav, #bar .me .av, .frl a i.av { -webkit-animation: k_avr 2.8s ease-in-out infinite; }
-.fgreen, .bigav.fgreen, .fpav.fgreen, #bar .me .av.fgreen, .frl a i.av.fgreen { -webkit-animation: k_fgreen 2.6s ease-in-out infinite !important; }
-.fblue, .bigav.fblue, .fpav.fblue, #bar .me .av.fblue, .frl a i.av.fblue { -webkit-animation: k_fblue 2.6s ease-in-out infinite !important; }
-.fpurp, .bigav.fpurp, .fpav.fpurp, #bar .me .av.fpurp, .frl a i.av.fpurp { -webkit-animation: k_fpurp 2.6s ease-in-out infinite !important; }
-.fgold, .bigav.fgold, .fpav.fgold, #bar .me .av.fgold, .frl a i.av.fgold { -webkit-animation: k_fgold 2.6s ease-in-out infinite !important; }
-.ffire, .bigav.ffire, .fpav.ffire, #bar .me .av.ffire, .frl a i.av.ffire { -webkit-animation: k_ffire 2.6s ease-in-out infinite !important; }
-.fice, .bigav.fice, .fpav.fice, #bar .me .av.fice, .frl a i.av.fice { -webkit-animation: k_fice 2.6s ease-in-out infinite !important; }
-.fneon, .bigav.fneon, .fpav.fneon, #bar .me .av.fneon, .frl a i.av.fneon { -webkit-animation: k_fneon 2.6s ease-in-out infinite !important; }
-.ftoxic, .bigav.ftoxic, .fpav.ftoxic, #bar .me .av.ftoxic, .frl a i.av.ftoxic { -webkit-animation: k_ftoxic 2.6s ease-in-out infinite !important; }
-.flegend, .bigav.flegend, .fpav.flegend, #bar .me .av.flegend, .frl a i.av.flegend { -webkit-animation: flg 2s linear infinite !important; }
+.fgreen, .bigav.fgreen, .fpav.fgreen, #bar .me .av.fgreen, .frl a i.av.fgreen, .av2.fgreen { -webkit-animation: k_fgreen 2.6s ease-in-out infinite !important; }
+.fblue, .bigav.fblue, .fpav.fblue, #bar .me .av.fblue, .frl a i.av.fblue, .av2.fblue { -webkit-animation: k_fblue 2.6s ease-in-out infinite !important; }
+.fpurp, .bigav.fpurp, .fpav.fpurp, #bar .me .av.fpurp, .frl a i.av.fpurp, .av2.fpurp { -webkit-animation: k_fpurp 2.6s ease-in-out infinite !important; }
+.fgold, .bigav.fgold, .fpav.fgold, #bar .me .av.fgold, .frl a i.av.fgold, .av2.fgold { -webkit-animation: k_fgold 2.6s ease-in-out infinite !important; }
+.ffire, .bigav.ffire, .fpav.ffire, #bar .me .av.ffire, .frl a i.av.ffire, .av2.ffire { -webkit-animation: k_ffire 2.6s ease-in-out infinite !important; }
+.fice, .bigav.fice, .fpav.fice, #bar .me .av.fice, .frl a i.av.fice, .av2.fice { -webkit-animation: k_fice 2.6s ease-in-out infinite !important; }
+.fneon, .bigav.fneon, .fpav.fneon, #bar .me .av.fneon, .frl a i.av.fneon, .av2.fneon { -webkit-animation: k_fneon 2.6s ease-in-out infinite !important; }
+.ftoxic, .bigav.ftoxic, .fpav.ftoxic, #bar .me .av.ftoxic, .frl a i.av.ftoxic, .av2.ftoxic { -webkit-animation: k_ftoxic 2.6s ease-in-out infinite !important; }
+.flegend, .bigav.flegend, .fpav.flegend, #bar .me .av.flegend, .frl a i.av.flegend, .av2.flegend { -webkit-animation: flg 2s linear infinite !important; }
 .lowfx .bigav, .lowfx .fpav, .lowfx #bar .me .av, .lowfx .frl a i.av { -webkit-animation: none !important; }
+/* pastki panel, do'stlar ro'yxati (.av2) va ramka tanlash (.frl) dagi kichik avatarlar - ramka joyida, lekin animatsiyasiz: o'yin brauzeri (Chrome 17) box-shadow
+ * animatsiyasini har kadrda qayta chizadi, do'stlar ro'yxatida 7-8 tasi birga menyuni qotirib qo'yardi. Jonli ramka - faqat profilda */
+#bar .me .av, .frl a i.av { -webkit-animation: none !important; -webkit-box-shadow: 0 0 0 2px #ff3b3b, 0 0 0 4px rgba(14,10,16,.95), 0 0 0 5px #ff9a39; }
+#bar .me .av.fgreen, .frl a i.av.fgreen, .av2.fgreen { -webkit-animation: none !important; -webkit-box-shadow: 0 0 0 2px #3ccf4e, 0 0 0 4px rgba(14,10,16,.95), 0 0 0 5px #b6ff5a; }
+#bar .me .av.fblue, .frl a i.av.fblue, .av2.fblue { -webkit-animation: none !important; -webkit-box-shadow: 0 0 0 2px #3b8cff, 0 0 0 4px rgba(14,10,16,.95), 0 0 0 5px #5fe0ff; }
+#bar .me .av.fpurp, .frl a i.av.fpurp, .av2.fpurp { -webkit-animation: none !important; -webkit-box-shadow: 0 0 0 2px #9b4dff, 0 0 0 4px rgba(14,10,16,.95), 0 0 0 5px #ff5fd8; }
+#bar .me .av.fgold, .frl a i.av.fgold, .av2.fgold { -webkit-animation: none !important; -webkit-box-shadow: 0 0 0 2px #f5c518, 0 0 0 4px rgba(14,10,16,.95), 0 0 0 5px #fff3a0; }
+#bar .me .av.ffire, .frl a i.av.ffire, .av2.ffire { -webkit-animation: none !important; -webkit-box-shadow: 0 0 0 2px #ff6a1a, 0 0 0 4px rgba(14,10,16,.95), 0 0 0 5px #ffd23a; }
+#bar .me .av.fice, .frl a i.av.fice, .av2.fice { -webkit-animation: none !important; -webkit-box-shadow: 0 0 0 2px #bfe9ff, 0 0 0 4px rgba(14,10,16,.95), 0 0 0 5px #5fb8ff; }
+#bar .me .av.fneon, .frl a i.av.fneon, .av2.fneon { -webkit-animation: none !important; -webkit-box-shadow: 0 0 0 2px #39f9ff, 0 0 0 4px rgba(14,10,16,.95), 0 0 0 5px #ff4fd8; }
+#bar .me .av.ftoxic, .frl a i.av.ftoxic, .av2.ftoxic { -webkit-animation: none !important; -webkit-box-shadow: 0 0 0 2px #9dff3a, 0 0 0 4px rgba(14,10,16,.95), 0 0 0 5px #2fd36a; }
+#bar .me .av.flegend, .frl a i.av.flegend, .av2.flegend { -webkit-animation: none !important; }
 /* admin panelda o'chirilgan funksiyalar menyuda ko'rinmaydi */
 .nf-duel [data-duelp] { display: none !important; }
 .nf-chest #mChest, .nf-chest [data-act="chests"] { display: none !important; }
