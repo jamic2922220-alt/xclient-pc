@@ -1532,20 +1532,26 @@ static BOOL CALLBACK game_wnd_cb(HWND w, LPARAM lp)
     if (pid == g->pid && IsWindowVisible(w) && !GetWindow(w, GW_OWNER)) { g->wnd = w; return FALSE; }
     return TRUE;
 }
-static int game_procs(HANDLE out[], int cap)
+/* O'yin papkasidan ishga tushgan hamma jarayonlar (hl.exe, cstrike.exe va o'yin brauzerining yordamchi jarayonlari -
+ * o'yin qulaganda ular orqada qolib, CS ni "already running" deb ochilmaydigan qilib qo'yadi). Launcherning o'zi kirmaydi. */
+static int game_procs(HANDLE out[], wchar_t names[][64], int cap)
 {
     int n = 0;
     size_t dl = wcslen(g_dir);
+    DWORD me = GetCurrentProcessId();
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snap == INVALID_HANDLE_VALUE) return 0;
     PROCESSENTRY32W pe; pe.dwSize = sizeof(pe);
     for (BOOL ok = Process32FirstW(snap, &pe); ok && n < cap; ok = Process32NextW(snap, &pe)) {
-        if (_wcsicmp(pe.szExeFile, L"hl.exe") && _wcsicmp(pe.szExeFile, L"cstrike.exe")) continue;
+        if (pe.th32ProcessID == me || !_wcsicmp(pe.szExeFile, XC_EXE) || !_wcsicmp(pe.szExeFile, XC_EXE_LEGACY)
+            || !_wcsnicmp(pe.szExeFile, L"XClient-Uninstall", 17)) continue;
         HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE | SYNCHRONIZE, FALSE, pe.th32ProcessID);
         if (!h) continue;
         wchar_t img[MAX_PATH]; DWORD il = MAX_PATH;
-        if (QueryFullProcessImageNameW(h, 0, img, &il) && il > dl && !_wcsnicmp(img, g_dir, dl) && (img[dl] == L'\\' || img[dl] == L'/')) out[n++] = h;
-        else CloseHandle(h);
+        if (QueryFullProcessImageNameW(h, 0, img, &il) && il > dl && !_wcsnicmp(img, g_dir, dl) && (img[dl] == L'\\' || img[dl] == L'/')) {
+            lstrcpynW(names[n], pe.szExeFile, 64);
+            out[n++] = h;
+        } else CloseHandle(h);
     }
     CloseHandle(snap);
     return n;
@@ -1553,9 +1559,11 @@ static int game_procs(HANDLE out[], int cap)
 /* TRUE - o'yinni ochish mumkin, FALSE - ochmaymiz (ishlab turgan oynasi oldinga chiqarildi yoki o'yinchi "Yo'q" dedi) */
 static BOOL handle_running_game(void)
 {
-    HANDLE ph[8];
-    int n = game_procs(ph, 8);
+    HANDLE ph[16]; wchar_t nm[16][64];
+    int n = game_procs(ph, nm, 16);
     if (!n) return TRUE;
+    wchar_t list[256] = L"";
+    for (int i = 0; i < n && wcslen(list) < 180; i++) { if (i) wcscat(list, L", "); wcscat(list, nm[i]); }
     HWND live = NULL; BOOL hung = FALSE;
     for (int i = 0; i < n; i++) {
         GameWnd g = { GetProcessId(ph[i]), NULL };
@@ -1567,12 +1575,18 @@ static BOOL handle_running_game(void)
         if (IsIconic(live)) ShowWindow(live, SW_RESTORE);
         SetForegroundWindow(live);
         go = FALSE;
-    } else if (MessageBoxW(NULL, L"O‘yin oldingi safardan ochiq qolgan yoki qotib qolgan.\nUni yopib, qayta ochaymi?\n\nИгра осталась открытой или зависла. Закрыть и запустить заново?",
-                           L"X CLIENT", MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND) == IDYES) {
+    } else {
+        wchar_t q[512];
+        _snwprintf(q, 512, L"O‘yin oldingi safardan ochiq qolgan yoki qotib qolgan (%s).\nUni yopib, qayta ochaymi?\n\n"
+                           L"Игра осталась открытой или зависла. Закрыть и запустить заново?", list);
+        q[511] = 0;
+        if (MessageBoxW(NULL, q, L"X CLIENT", MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND) != IDYES) go = FALSE;
+    }
+    if (go && !(live && !hung)) {
         for (int i = 0; i < n; i++) TerminateProcess(ph[i], 1);
         for (int i = 0; i < n; i++) WaitForSingleObject(ph[i], 5000);
         Sleep(500);
-    } else go = FALSE;
+    }
     for (int i = 0; i < n; i++) CloseHandle(ph[i]);
     return go;
 }
