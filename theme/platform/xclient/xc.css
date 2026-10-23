@@ -448,7 +448,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 .amsg { background: #1d171c; border-left: 3px solid #ff3b3b; padding: 12px 14px; margin-bottom: 10px; font-size: 14px; line-height: 1.5; }
 .amsg small { display: block; margin-top: 6px; }
 .mis .msr .xpw { height: 6px; background: #2a2026; overflow: hidden; margin-right: 96px; }
-.mis .msr .xpw i { display: block; height: 100%; background: linear-gradient(90deg, #c4262e, #ff4d4d); }
+.mis .msr .xpw i { display: block; height: 100%; background: #e0353b; background: -webkit-linear-gradient(left, #c4262e, #ff4d4d); }
 .mis .msr.got .xpw i { background: #3fa45b; }
 
 /* do'stlar: qidiruv variantlari, so'rovlar, yozishma */
@@ -500,7 +500,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 .lite #menu [data-act="friends"], .lite #menu [data-act="profile"], .lite #menu [data-act="missions"], .lite #acct, .lite #frCard, .lite #bar .me, .lite #meVip { display: none !important; }
 #xpromo { display: none; cursor: pointer; border-color: rgba(255, 59, 59, .55); }
 .lite #xpromo { display: block; }
-.xph { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.xph { margin-bottom: 12px; overflow: hidden; } .xph img { float: left; margin-right: 14px; }   /* flexbox Chrome 17 da ishlamaydi */
 .xph img { width: 54px; height: 54px; }
 .xph b { display: block; font-size: 22px; color: #fff; }
 .xph small { color: #ffb4a0; font-size: 14px; }
@@ -726,7 +726,8 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .rkcard { position: relative; padding: 14px 16px 12px 86px; margin-bottom: 12px; background: #15111a; border: 1px solid #2a2026; min-height: 86px; }
 .rkcard .rkico { position: absolute; left: 14px; top: 14px; width: 58px; height: 58px; line-height: 58px; text-align: center; font-size: 30px; font-weight: 900; border-radius: 12px; border: 2px solid; -webkit-transform: rotate(45deg); }
 .rkcard b { font-size: 22px; } .rkcard span { margin-left: 10px; color: #c9b7bd; }
-.rkcard .xpw { margin: 8px 0 4px; }
+.rkcard .xpw { margin: 8px 0 4px; height: 6px; background: #2a2026; border-radius: 3px; overflow: hidden; }
+.rkcard .xpw i { display: block; height: 6px; background: #ff3b3b; }
 /* rangli nik */
 .nk-red { color: #ff5a5a; } .nk-orange { color: #ff9a39; } .nk-yellow { color: #ffd23a; } .nk-green { color: #3ccf4e; }
 .nk-cyan { color: #2fd3e8; } .nk-blue { color: #5f9bff; } .nk-purple { color: #b07cff; } .nk-pink { color: #ff6ac0; }

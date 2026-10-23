@@ -410,7 +410,7 @@ function saveOpts(msg) {
 /* ============================================================ akkaunt API (xc_api.php) */
 var ME = null, FRIENDS = [], WEEK = [];
 function api(a, params, cb) {
-  var body = 'a=' + encodeURIComponent(a) + '&device=' + DB.device + (DB.token ? '&token=' + DB.token : '') + (params && params.d && DB.pck ? '&k=' + DB.pck : '');
+  var body = 'a=' + encodeURIComponent(a) + '&device=' + DB.device + (DB.token ? '&token=' + DB.token : '') + (params && params.d && params.d === PCID && DB.pck ? '&k=' + DB.pck : '');
   for (var k in params) if (params.hasOwnProperty(k)) body += '&' + k + '=' + encodeURIComponent(params[k]);
   var x;
   try { x = new XMLHttpRequest(); x.open('POST', 'xc_api.php', true); x.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded'); }
@@ -556,7 +556,7 @@ function renderClan() {
       '<div class="ph2 m">' + esc(T('cl_code')) + '</div><div class="avurl"><input class="ipin" readonly value="' + esc(CLAN.code) + '"><a class="cpy" data-copyip="' + esc(CLAN.code) + '">' + esc(T('ip_copy')) + '</a></div>' +
       '<div class="ph2 m">' + esc(T('cl_members')) + '</div>';
     each(CLAN.members, function (m) {
-      h += '<div class="tr" style="cursor:default">' + frAv(m) + '<div class="nm">' + (m.login === CLAN.owner ? '\u2691 ' : '') + crown(m) + esc(m.name) + '</div><div class="mt">' + m.wk + ' kill \u00b7 K/D ' + kdOf(m.st) + '</div>' +
+      h += '<div class="tr" style="cursor:default">' + frAv(m) + '<div class="nm">' + (m.login === CLAN.owner ? ico('flag') + ' ' : '') + crown(m) + esc(m.name) + '</div><div class="mt">' + m.wk + ' kill \u00b7 K/D ' + kdOf(m.st) + '</div>' +
         (CLAN.boss && m.login !== CLAN.owner ? '<div class="fra"><a data-clkick="' + esc(m.login) + '">' + esc(T('cl_kick')) + '</a></div>' : '') + '</div>';
     });
     h += '<a class="btn out" data-act="clanleave" style="margin-top:10px">' + esc(T('cl_leave')) + '</a>';
@@ -660,6 +660,7 @@ function achToast(ids) { each(ids || [], function (id, i) { setTimeout(function 
 /* do'stdan taklif: "X sizni serverga chaqiryapti" -> Kirish */
 function showInvite(iv) {
   var ip = normIp(iv.ip); if (!ip || ip === CONNECTED) return;
+  if ($('mdAsk') && /(^|\s)on(\s|$)/.test($('mdAsk').className)) return setTimeout(function () { showInvite(iv); }, 5000);   // ochiq so'rov (parol, nom...) ustiga yozmaymiz
   var s = srv(ip); query(ip);
   ask(T('iv_title').replace('{n}', iv.from || iv.login).replace('{s}', s.name || ip), function () { closeModal(); connect(ip); }, false, false, true);
 }
@@ -775,8 +776,9 @@ function setMaster(list) {
 function loadScript(src, ok, fail) {
   var done = false, el = document.createElement('script');
   el.src = src;
-  el.onload = function () { if (!done) { done = true; ok(); } };
-  el.onerror = function () { if (!done) { done = true; fail(); } };
+  var rm = function () { if (el.parentNode) el.parentNode.removeChild(el); };   // har 10 daqiqada yangi teg - eskilari qolib ketmasin
+  el.onload = function () { if (!done) { done = true; ok(); } rm(); };
+  el.onerror = function () { if (!done) { done = true; fail(); } rm(); };
   setTimeout(function () { if (!done) { done = true; fail(); } }, 6000);
   document.getElementsByTagName('head')[0].appendChild(el);
 }
@@ -900,7 +902,7 @@ function queueBar() {
   if (!QUEUE_IP) { if (b) b.style.display = 'none'; return; }
   if (!b) { b = document.createElement('div'); b.id = 'qbar'; (document.getElementById('app') || document.body).appendChild(b); }
   var s = srv(QUEUE_IP);
-  b.innerHTML = '\u23f3 ' + esc(T('q_wait')) + ' <b>' + esc(s.name || QUEUE_IP) + '</b>' + (s.ok ? ' \u00b7 ' + s.pl + '/' + s.max : '') + ' <a data-act="qstop">' + esc(T('q_stop')) + '</a>';
+  b.innerHTML = ico('clock') + ' ' + esc(T('q_wait')) + ' <b>' + esc(s.name || QUEUE_IP) + '</b>' + (s.ok ? ' \u00b7 ' + s.pl + '/' + s.max : '') + ' <a data-act="qstop">' + esc(T('q_stop')) + '</a>';
   b.style.display = 'block';
 }
 
@@ -966,6 +968,7 @@ function stopRecord() { clearTimeout(REC_TM); if (REC) { cmd('stop'); REC = ''; 
 function onConnectEvt(addr, inGame) {
   addr = normIp(addr);
   if (!addr) return;
+  if (QUEUE_IP && addr !== QUEUE_IP) stopQueue();   // boshqa serverga (konsol, o'yin ro'yxati) kirildi - navbat bekor
   if (addr !== CONNECTED) { CONNECTED = addr; MUSIC_ON = null; if (!inGame) applyPw(addr); startGame(addr); musicSync();   // serverda mp3 chalinmasin: o'yin ovozlarini bo'g'adi
     pingPresence(); renderAll(); sparks(); voiceWarm(); }
   if (S.demo) startRecord(inGame ? 1500 : 25000);   // 'connect' dan keyin 'putinserver' kelmasa ham 25 soniyadan so'ng urinamiz
@@ -975,6 +978,7 @@ function onDisconnectEvt() {
   setTimeout(musicSync, 500);
   if (CUR) { CUR.d = Math.round((now() - CUR.t) / 1000); persist(); cloudSave(); sendStat(CUR); }
   stopRecord();
+  CUR = null;                                        // demo ko'rganda konsoldagi kill'lar oxirgi o'yinga qo'shilmasin
   CONNECTED = ''; renderAll(); pingPresence(); sparks();
   // o'yinchi o'zi menyudan chiqmagan bo'lsa (menyu yopiq) - qayta ulanamiz
   var shown = false;
@@ -1120,7 +1124,7 @@ function forgot() {
           afterLogin(r2);
           toast(T('rs_ok'), 5000);
         });
-      }, true, false);
+      }, true, false, false, true);
     });
   });
 }
@@ -1501,10 +1505,12 @@ function chatRender() {
 function chatLoad() {
   clearTimeout(CHAT_TM);
   if (!CHAT || curModal !== 'mdSide' || sideMode !== 'chat') return;
+  if (playing()) { CHAT_TM = setTimeout(chatLoad, 15000); return; }   // menyu yopiq, o'yindasiz - 4 s da so'ramaymiz
   var c = CHAT;
   api('msg_list', { login: c.login }, function (r) {
-    if (CHAT !== c) return;
-    if (r.ok) { var n = (r.list || []).length; if (n !== c.list.length || !$('chatBox').getElementsByTagName('div').length) { c.list = r.list || []; chatRender(); } }
+    var cbx = $('chatBox');
+    if (CHAT !== c || !cbx) return;                 // chat yopilgan (ESC/X) - javob kelguncha oyna yo'q
+    if (r.ok) { var n = (r.list || []).length; if (n !== c.list.length || !cbx.getElementsByTagName('div').length) { c.list = r.list || []; chatRender(); } }
     each(FRIENDS, function (f) { if (f.login.toLowerCase() === c.login.toLowerCase()) f.unread = 0; }); NOTIF_SEEN['m:' + c.login.toLowerCase()] = 0; frBadge();
     CHAT_TM = setTimeout(chatLoad, 4000);
   });
@@ -2172,7 +2178,7 @@ function duelBar() {
   if (!DUEL) { if (b) b.style.display = 'none'; clearInterval(DUEL_TM); DUEL_TM = 0; return; }
   if (!b) { b = document.createElement('div'); b.id = 'duelBar'; (document.getElementById('app') || document.body).appendChild(b); }
   var tick = function () {
-    if (!DUEL) return;
+    if (!DUEL || playing()) return;                 // o'yin paytida chizmaymiz - menyu ochilganda 'show' qayta chizadi
     var left = Math.max(0, DUEL.end - Math.floor(now() / 1000)), f = null;
     each(FRIENDS, function (x) { if (x.login.toLowerCase() === String(DUEL.op).toLowerCase()) f = x; });
     b.innerHTML = ico('swords') + ' ' + esc(T('du_bar')) + ' <b>' + DUEL.me_k + '</b> : <b>' + DUEL.op_k + '</b> ' + esc(DUEL.opn) + ' \u00b7 ' + Math.floor(left / 60) + ':' + ('0' + left % 60).slice(-2) +
@@ -2746,11 +2752,12 @@ function closeModal() {
   if (!SFX_QUIET) sfx('close');
 }
 var askCb = null;
-function ask(title, cb, two, pw, noin) {
+function ask(title, cb, two, pw, noin, pw2) {
   askCb = cb; $('askT').innerHTML = esc(title); $('askI').value = ''; $('askI2').value = '';
   $('askI').style.display = noin ? 'none' : '';
   $('askI').type = pw ? 'password' : 'text';
   $('askI2').style.display = two ? '' : 'none';
+  $('askI2').type = pw2 ? 'password' : 'text';      // ikkinchi maydon faqat parol bo'lganda yashirin (klan tegi, setinfo nomi ko'rinib yozilsin)
   $('mdAsk').className = 'modal on';
   setTimeout(function () { try { $('askI').focus(); } catch (e) {} }, 50);
 }
@@ -2829,7 +2836,7 @@ function act(a) {
     if (FR_SUG && FR_SUG.length === 1 && !FR_SUG[0].st) v = FR_SUG[0].login;   // bitta variant bo'lsa - o'sha
     return frAdd(v);
   }
-  if (a === 'avdel') return api('avatar', { img: 'none' }, function (r) { if (r.ok) { setMe(r.me); toast(T('saved')); openAvatars(); } });
+  if (a === 'avdel' && curModal !== 'mdSettings') return api('avatar', { img: 'none' }, function (r) { if (r.ok) { setMe(r.me); toast(T('saved')); openAvatars(); } });
   if (a === 'frback') { CHAT = null; return openFriends(); }
   if (a === 'chatsend') return chatSend();
   if (a === 'cfgtop') return openCfgTop();
@@ -2934,7 +2941,7 @@ function act(a) {
   if (a === 'xcode') { if (applyCode($('xCode').value)) showSetTab('hud'); return; }
   if (a === 'rename') return ask(T('a_newname'), function (v) { api('profile', { name: v }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); }); });
   if (a === 'email') return ask(T('a_newmail'), function (v) { api('profile', { email: v }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); }); });
-  if (a === 'passwd') return ask(T('a_oldnew'), function (o, n) { api('profile', { oldpass: o, newpass: n }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); toast(T('saved')); showSetTab('account'); }); }, true, true);
+  if (a === 'passwd') return ask(T('a_oldnew'), function (o, n) { api('profile', { oldpass: o, newpass: n }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); toast(T('saved')); showSetTab('account'); }); }, true, true, false, true);
   if (a === 'avpick') return openAvatars();   // o'yin to'liq ekranda bo'lganda Windows fayl oynasi o'yin ortida ochilib, o'yin "qotib" qolardi
   if (a === 'avdel') return api('avatar', { img: 'none' }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); });
   if (a === 'cloudsave') return cloudSave(true);
@@ -3146,14 +3153,15 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-mcall'))) { var mc = el; api('miss_call', { to: el.getAttribute('data-mcall') }, function (r) { toast(r.ok ? T('mc_ok') : (r.msg || 'Xato'), 5000); if (r.ok && mc.parentNode) mc.parentNode.removeChild(mc); }); return; }
   if ((el = closest(t, 'data-fbk'))) { FBK = el.getAttribute('data-fbk'); var sib = el.parentNode.childNodes; for (var fi = 0; fi < sib.length; fi++) sib[fi].className = sib[fi] === el ? 'on' : ''; return; }
   if ((el = closest(t, 'data-frdel'))) { api('friend_del', { login: el.getAttribute('data-frdel') }, function () { loadFriends(); }); return; }
-  if ((el = closest(t, 'data-dbtg'))) { var dk = el.getAttribute('data-dbtg'); var cur = dk === 'autosave' || dk === 'dnd' ? !!DB[dk] : DB[dk] !== 0; DB[dk] = cur ? 0 : 1; persist(); if (dk === 'fx') { FX.off = 0; FX.slow = 0; sparks(); } if (dk === 'hol') applyBg(); if (dk === 'autosave') $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local')); el.className = 'tg' + (DB[dk] ? ' on' : ''); return; }
+  if ((el = closest(t, 'data-dbtg'))) { var dk = el.getAttribute('data-dbtg'); var cur = dk === 'fx' ? (DB.fx !== 0 && !FX.off) : (dk === 'autosave' || dk === 'dnd' ? !!DB[dk] : DB[dk] !== 0); DB[dk] = cur ? 0 : 1; persist(); if (dk === 'fx') { FX.off = 0; FX.slow = 0; sparks(); } if (dk === 'hol') applyBg(); if (dk === 'autosave') $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local')); el.className = 'tg' + (DB[dk] ? ' on' : ''); return; }
   if ((el = closest(t, 'data-misclaim'))) {
     var mid = el.getAttribute('data-misclaim');
-    api('mission_claim', { id: mid }, function (r) {
-      if (!r.ok) return toast(r.msg || 'Xato');
+    if (CONNECTED) sendStat();                       // sayt bajarilganini o'zi tekshiradi - oxirgi o'yin natijasi avval yetib borsin
+    setTimeout(function () { api('mission_claim', { id: mid }, function (r) {
+      if (!r.ok) return toast(r.err === 'notyet' ? T('ms_notyet') : (r.msg || 'Xato'), 5000);
       if (ME) { ME.xp = r.xp; ME.level = r.level; ME.lvlxp = r.lvlxp; renderBar(); }
       MIS.done.push(mid); renderMissions(); toast(T('ms_ok').replace('{n}', r.got), 4000);
-    });
+    }); }, CONNECTED ? 1200 : 0);
     return;
   }
   if ((el = closest(t, 'data-ohud'))) { OPTS.hud = Number(el.getAttribute('data-ohud')); saveOpts(T('h_size4')); showSetTab('hud'); return; }
@@ -3349,8 +3357,8 @@ setInterval(function () {                          // "Serverlar" oynasi ochiq v
 }, 15000);
 setInterval(pingPresence, 60000);
 setInterval(function () { if (CONNECTED) sendStat(); }, 120000);   // o'yin davomida 2 daqiqada bir (o'yin qulab tushsa ham yo'qolmasin)
-setInterval(function () { loadFriends(); if (!playing()) loadWeek(); }, 60000);   // do'stlar - xabar bildirishnomalari uchun o'yinda ham
+setInterval(function () { if (!playing()) { loadFriends(); loadWeek(); } }, 60000);   // o'yinda xabarlar pollNotif orqali keladi
 setInterval(function () { if (!playing()) loadTop(); }, 10 * 60 * 1000);
-setInterval(loadAnn, 5 * 60 * 1000);
+setInterval(function () { if (!playing()) loadAnn(); }, 5 * 60 * 1000);
 setTimeout(sendStats, 90000); setInterval(sendStats, 10 * 60 * 1000);
 })();

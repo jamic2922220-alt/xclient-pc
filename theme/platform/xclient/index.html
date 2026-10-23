@@ -16,7 +16,7 @@
  * Har ochilishda server "qaysi versiya" deb so'raladi (beta testerlarga - beta, boshqalarga - barqaror, admin panel > Menyu versiyalari).
  * Boshqa bo'lsa - o'sha versiyaning sahifasi (rel/<versiya>/index.html) yuklanib, joriy sahifa shu bilan almashtiriladi. */
 (function () {
-  var V = '10196400';
+  var V = '10196500';
   window.XC_V = V;
   try {
     if (window.name === 'xcfresh' + V) return;
@@ -41,13 +41,13 @@
   } catch (e) {}
 })();
 </script>
-<link rel="stylesheet" href="xc.css?v=10196400">
+<link rel="stylesheet" href="xc.css?v=10196500">
 <script>
 /* Xato bo'lsa ekranning tepasida ko'rsatamiz (o'yin brauzerida konsol yo'q) */
 window.XC_ERRS = [];
 window.onerror = function (msg, url, line) {
   var t = String(msg) + ' (' + String(url || '').replace(/^.*\//, '') + ':' + line + ')';
-  window.XC_ERRS.push(t);
+  window.XC_ERRS.push(t); if (window.XC_ERRS.length > 20) window.XC_ERRS.shift();   // takrorlanuvchi xato soatlab o'smasin
   var d = document.getElementById('xcerr');
   if (!d && document.body) { d = document.createElement('div'); d.id = 'xcerr'; d.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:999;padding:6px 12px;font:13px Tahoma,Arial;color:#fff;background:#b3161c'; document.body.appendChild(d); }
   if (d) d.innerHTML = 'X CLIENT xato: ' + window.XC_ERRS.join(' | ').replace(/</g, '&lt;');
@@ -58,7 +58,7 @@ window.onerror = function (msg, url, line) {
   return false;
 };
 </script>
-<script src="xc_lang.js?v=10196400"></script>
+<script src="xc_lang.js?v=10196500"></script>
 </head>
 <body>
 <div id="app">
@@ -258,6 +258,6 @@ window.onerror = function (msg, url, line) {
   <div id="dbg"></div>
 </div>
 <script src="master.js"></script>
-<script src="xc.js?v=10196400"></script>
+<script src="xc.js?v=10196500"></script>
 </body>
 </html>
