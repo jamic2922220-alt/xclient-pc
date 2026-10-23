@@ -1,0 +1,2 @@
+// X CLIENT launcher ikonkasi (xclient_launcher.c: LoadIconW(hi, MAKEINTRESOURCEW(1)))
+1 ICON "xclient.ico"

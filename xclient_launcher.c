@@ -6,7 +6,10 @@
  *  2) Har ishga tushganda: serverdan eng yangi versiyani so'raydi (vetka:
  *     stable/beta), o'zgargan fayllarnigina yuklab oladi (SHA-256 bilan
  *     tekshiriladi), "launch" yuboradi va o'yinni ochadi.
- *  3) Internet bo'lmasa — o'yin baribir ochiladi.
+ *  3) X CLIENT dizaynini (xc_theme papkasi) o'yin papkasiga qo'yadi va
+ *     cstrike.exe ni TO'G'RIDAN-TO'G'RI ochadi — alohida oyna yo'q,
+ *     hamma narsa (menyu, serverlar, sozlamalar) o'yinning o'zida.
+ *  4) Internet bo'lmasa — o'yin baribir ochiladi.
  *
  *  Kalit va vetka: .exe oxiriga yozilgan "XCKEY:kalit|vetka" (sayt qo'shadi)
  *  yoki o'rnatilgandan keyin xclient.ini dan olinadi.
@@ -22,21 +25,27 @@
 #include <shlobj.h>
 #include <objbase.h>
 #include <shobjidl.h>
+#include <tlhelp32.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #ifndef XC_API
-#define XC_API "https://mmb.boost-top.com/xclient/api.php"
+#define XC_API "http://mmb.boost-top.com/xclient/api.php"   /* admin.php > Yangilanishlar */
 #endif
 #ifndef XC_GAME_URL
 /* asl PC CS 1.6 (boost-top PRO) o'rnatuvchisi - o'yin yo'q bo'lsa shundan o'rnatiladi; panel "game=" bilan almashtirishi mumkin */
 #define XC_GAME_URL "https://cssborka.uz/uploads/files/1791198609_6ac38591b615c_CS_1_6_boost-top_PRO_2_5_3.exe"
 #endif
 #define XC_VERSION_FILE L"xclient_version.txt"
+/* Launcher fayli nomi. Eski nomi "XClient.exe" ba'zi server himoyalarida (Vanga/ReChecker) 5 yil oldingi
+ * shu nomli cheat sifatida ro'yxatda turibdi - o'yin papkasida bu nomdagi fayl qolmasligi kerak. */
+#define XC_EXE        L"XCLauncher.exe"
+#define XC_EXE_LEGACY L"XClient.exe"
 #define WM_XC_STATUS (WM_APP + 1)
 #define WM_XC_DONE   (WM_APP + 2)
 
+static HANDLE  g_one = NULL;            /* bitta nusxa mutexi: o'yin ishga tushgach (yoki qayta ishga tushishdan oldin) bo'shatiladi */
 static wchar_t g_dir[MAX_PATH];        /* klient papkasi */
 static wchar_t g_self[MAX_PATH];       /* shu exe */
 static char    g_key[64]   = "";
@@ -136,12 +145,14 @@ static BOOL http_download(const char *url, const wchar_t *dst)
     static char buf[65536];
     DWORD got, wr;
     BOOL ok = TRUE;
-    while (InternetReadFile(h, buf, sizeof(buf), &got)) {
+    for (;;) {
+        if (!InternetReadFile(h, buf, sizeof(buf), &got)) { ok = FALSE; break; }   /* uzilish - fayl chala, muvaffaqiyat emas */
         if (!got) break;
         if (!WriteFile(f, buf, got, &wr, NULL) || wr != got) { ok = FALSE; break; }
     }
     CloseHandle(f);
     InternetCloseHandle(h);
+    if (!ok) DeleteFileW(dst);
     return ok;
 }
 
@@ -208,6 +219,7 @@ static BOOL sha256_part(const wchar_t *path, char hex[65], ULONGLONG *size, ULON
 static BOOL sha256_file(const wchar_t *path, char hex[65], ULONGLONG *size) { return sha256_part(path, hex, size, 0); }
 
 /* ---------------------------------------------------------------- sozlamalar */
+static char g_lang[8] = "";
 static void ini_path(wchar_t *out) { path_join(out, g_dir, L"xclient.ini"); }
 
 static void ini_load(void)
@@ -223,6 +235,8 @@ static void ini_load(void)
     GetPrivateProfileStringW(L"x", L"version", L"", w, 64, ini);
     if (w[0]) WideCharToMultiByte(CP_UTF8, 0, w, -1, g_version, sizeof(g_version), NULL, NULL);
     g_build = GetPrivateProfileIntW(L"x", L"build", 0, ini);
+    GetPrivateProfileStringW(L"x", L"lang", L"", w, 64, ini);              /* o'rnatuvchida tanlangan til (ru/uz/en) */
+    if (w[0]) WideCharToMultiByte(CP_UTF8, 0, w, -1, g_lang, sizeof(g_lang), NULL, NULL);
 }
 
 static void ini_save(void)
@@ -342,6 +356,11 @@ static BOOL get_update(UpdInfo *u)
     kv(r, "build", tmp, sizeof(tmp)); u->build = atoi(tmp);
     kv(r, "min", tmp, sizeof(tmp));   u->min = atoi(tmp);
     free(r);
+    /* yangilanish faqat shu repo'dan (https): sayt javobi http orqali keladi - yo'lda almashtirilsa ham boshqa joydan exe olinmaydi */
+    static const char REPO[] = "https://raw.githubusercontent.com/jamic2922220-alt/xclient-pc/";
+    if (u->base[0] && (_strnicmp(u->base, REPO, sizeof(REPO) - 1) || strstr(u->base, "..")
+        || _strnicmp(u->manifest, u->base, strlen(u->base)))) { u->base[0] = 0; u->manifest[0] = 0; }
+    if (u->game[0] && _stricmp(u->game, XC_GAME_URL) && _strnicmp(u->game, "https://cssborka.uz/", 20)) u->game[0] = 0;
     return u->status[0] != 0;
 }
 
@@ -377,11 +396,12 @@ static int sync_files(const UpdInfo *u, BOOL *selfUpdated)
         done++;
 
         wchar_t wrel[MAX_PATH], dst[MAX_PATH], tmp[MAX_PATH];
-        MultiByteToWideChar(CP_UTF8, 0, rel, -1, wrel, MAX_PATH);
+        if (!MultiByteToWideChar(CP_UTF8, 0, rel, -1, wrel, MAX_PATH)) continue;   /* juda uzun yo'l */
         path_join(dst, g_dir, wrel);
 
         if (onlyMissing && GetFileAttributesW(dst) != INVALID_FILE_ATTRIBUTES) continue;
-        BOOL isSelf = !_wcsicmp(wrel, L"XClient.exe");
+        if (!_wcsicmp(wrel, XC_EXE_LEGACY)) continue;   /* faqat eski launcherlar o'zini yangilashi uchun */
+        BOOL isSelf = !_wcsicmp(wrel, XC_EXE);
         char have[65] = {0}; ULONGLONG hs = 0;
         /* o'z exe'mizda oxirida kalit bo'lishi mumkin - faqat asosiy qismini solishtiramiz */
         if (sha256_part(isSelf ? g_self : dst, have, &hs, isSelf ? size : 0) && hs == size && !_stricmp(have, sha)) continue;
@@ -395,7 +415,7 @@ static int sync_files(const UpdInfo *u, BOOL *selfUpdated)
         _snprintf(url, sizeof(url), "%s/%s", u->base, enc);
         url[sizeof(url) - 1] = 0;
         mkdirs_for(dst);
-        _snwprintf(tmp, MAX_PATH, L"%s.xcdl", dst);
+        _snwprintf(tmp, MAX_PATH, L"%s.xcdl", dst); tmp[MAX_PATH - 1] = 0;
 
         BOOL ok = FALSE;
         for (int attempt = 0; attempt < 3 && !ok; attempt++) {
@@ -406,11 +426,16 @@ static int sync_files(const UpdInfo *u, BOOL *selfUpdated)
 
         if (isSelf) {
             wchar_t old[MAX_PATH];
-            _snwprintf(old, MAX_PATH, L"%s.old", g_self);
+            _snwprintf(old, MAX_PATH, L"%s.old", g_self); old[MAX_PATH - 1] = 0;
             DeleteFileW(old);
-            if (MoveFileExW(g_self, old, MOVEFILE_REPLACE_EXISTING) && MoveFileExW(tmp, g_self, MOVEFILE_REPLACE_EXISTING))
-                *selfUpdated = TRUE;
-            else DeleteFileW(tmp);
+            if (MoveFileExW(g_self, old, MOVEFILE_REPLACE_EXISTING)) {
+                /* antivirus yangi exe'ni tekshirayotgan bo'lsa ko'chirish bir zum rad etiladi - bir necha marta urinamiz,
+                 * bo'lmasa eski launcherni joyiga qaytaramiz (aks holda yorliq hech narsaga qaramay qolardi) */
+                BOOL moved = FALSE;
+                for (int i = 0; i < 10 && !(moved = MoveFileExW(tmp, g_self, MOVEFILE_REPLACE_EXISTING)); i++) Sleep(500);
+                if (moved) *selfUpdated = TRUE;
+                else { MoveFileExW(old, g_self, MOVEFILE_REPLACE_EXISTING); DeleteFileW(tmp); fails++; }   /* keyingi safar qayta urinamiz */
+            } else { DeleteFileW(tmp); fails++; }
         } else {
             if (!MoveFileExW(tmp, dst, MOVEFILE_REPLACE_EXISTING | MOVEFILE_COPY_ALLOWED)) { DeleteFileW(tmp); fails++; }
         }
@@ -424,7 +449,7 @@ static void make_shortcut(const wchar_t *target)
 {
     wchar_t desk[MAX_PATH], lnk[MAX_PATH];
     if (FAILED(SHGetFolderPathW(NULL, CSIDL_DESKTOPDIRECTORY, NULL, 0, desk))) return;
-    _snwprintf(lnk, MAX_PATH, L"%s\\X CLIENT.lnk", desk);
+    _snwprintf(lnk, MAX_PATH, L"%s\\X CLIENT.lnk", desk); lnk[MAX_PATH - 1] = 0;
     IShellLinkW *sl = NULL;
     if (SUCCEEDED(CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void **)&sl))) {
         IPersistFile *pf = NULL;
@@ -436,6 +461,57 @@ static void make_shortcut(const wchar_t *target)
             pf->lpVtbl->Release(pf);
         }
         sl->lpVtbl->Release(sl);
+    }
+}
+
+/* CS 1.6 (boost-top PRO) o'rnatuvchisi ish stoli va Pusk menyusiga o'z yorliqlarini qo'yadi - o'yinchi "ikkita client
+ * o'rnatildi" deb o'ylaydi. O'yin papkamizdagi fayllarga olib boradigan, X CLIENT ga tegishli bo'lmagan yorliqlarni o'chiramiz
+ * (o'yin fayllari qoladi - X CLIENT ularni ishlatadi). Boshqa sborkalar yorliqlariga tegmaymiz: faqat nishoni g_dir ichida bo'lsa. */
+static BOOL lnk_is_game(const wchar_t *lnk)
+{
+    BOOL r = FALSE;
+    IShellLinkW *sl = NULL;
+    if (FAILED(CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void **)&sl))) return FALSE;
+    IPersistFile *pf = NULL;
+    if (SUCCEEDED(sl->lpVtbl->QueryInterface(sl, &IID_IPersistFile, (void **)&pf))) {
+        wchar_t t[MAX_PATH] = L"";
+        if (SUCCEEDED(pf->lpVtbl->Load(pf, lnk, STGM_READ)) && SUCCEEDED(sl->lpVtbl->GetPath(sl, t, MAX_PATH, NULL, SLGP_RAWPATH)) && t[0]) {
+            size_t n = wcslen(g_dir);
+            const wchar_t *b = wcsrchr(t, L'\\');
+            b = b ? b + 1 : t;
+            r = n > 3 && !_wcsnicmp(t, g_dir, n) && (t[n] == L'\\' || !t[n])
+                && _wcsicmp(b, L"XCLauncher.exe") && _wcsicmp(b, XC_EXE_LEGACY) && _wcsicmp(b, L"XClient-Uninstall.exe");
+        }
+        pf->lpVtbl->Release(pf);
+    }
+    sl->lpVtbl->Release(sl);
+    return r;
+}
+static void clean_links_in(const wchar_t *dir, int depth)
+{
+    wchar_t mask[MAX_PATH], p[MAX_PATH];
+    path_join(mask, dir, L"*");
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(mask, &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        if (!wcscmp(fd.cFileName, L".") || !wcscmp(fd.cFileName, L"..")) continue;
+        path_join(p, dir, fd.cFileName);
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            if (depth > 0 && _wcsicmp(fd.cFileName, L"X CLIENT")) { clean_links_in(p, depth - 1); RemoveDirectoryW(p); }   /* bo'shab qolsa o'chadi */
+            continue;
+        }
+        size_t l = wcslen(fd.cFileName);
+        if (l > 4 && !_wcsicmp(fd.cFileName + l - 4, L".lnk") && lnk_is_game(p)) DeleteFileW(p);
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+}
+static void remove_game_links(void)
+{
+    static const int ids[] = { CSIDL_DESKTOPDIRECTORY, CSIDL_COMMON_DESKTOPDIRECTORY, CSIDL_PROGRAMS, CSIDL_COMMON_PROGRAMS };
+    for (int i = 0; i < 4; i++) {
+        wchar_t d[MAX_PATH];
+        if (SUCCEEDED(SHGetFolderPathW(NULL, ids[i], NULL, 0, d))) clean_links_in(d, i >= 2 ? 1 : 0);
     }
 }
 
@@ -476,12 +552,12 @@ static BOOL ensure_installed(BOOL *fresh)
     if (!g_dir[0]) return FALSE;
 
     wchar_t dst[MAX_PATH];
-    path_join(dst, g_dir, L"XClient.exe");
+    path_join(dst, g_dir, XC_EXE);
     if (_wcsicmp(dst, g_self)) {
         CopyFileW(g_self, dst, FALSE);
-        /* paket ichida kelgan X CLIENT oynasini ham ko'chiramiz */
-        const wchar_t *items[] = { L"x-ui", L"xclient_version.txt", L"X CLIENT.bat" };
-        for (int i = 0; i < 3; i++) {
+        /* paket ichida kelgan X CLIENT dizaynini ham ko'chiramiz */
+        const wchar_t *items[] = { L"xc_theme", L"xclient_version.txt" };
+        for (int i = 0; i < 2; i++) {
             wchar_t from[MAX_PATH + 2] = {0}, to[MAX_PATH + 2] = {0};
             path_join(from, selfDir, items[i]);
             if (GetFileAttributesW(from) == INVALID_FILE_ATTRIBUTES) continue;
@@ -538,7 +614,7 @@ static BOOL ensure_game(const char *url)
     if (!ok) { DeleteFileW(tmp); return FALSE; }
     status(L"CS 1.6 o‘rnatilmoqda... (ruxsat so‘ralsa \"Ha\" ni bosing)", 100);
     SetWindowPos(g_wnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    _snwprintf(params, 1024, L"/SILENT /SP- /SUPPRESSMSGBOXES /NORESTART /NOICONS /TASKS=\"\" /LANG=uzbek /DIR=\"%s\"", g_dir);
+    _snwprintf(params, 1024, L"/VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /NOICONS /TASKS=\"\" /LANG=uzbek /DIR=\"%s\"", g_dir);
     run_setup(tmp, params);
     if (!has_game()) {
         /* jim rejim ishlamasa - oddiy oynali o'rnatish (papka oldindan tanlangan) */
@@ -561,34 +637,1065 @@ static void write_master_cfg(const char *master)
     fclose(f);
 }
 
+/* ---------------------------------------------------------------- X CLIENT dizayni */
+/* xc_theme/<yo'l> -> o'yin papkasi/<yo'l>. Asl fayl bir marta xclient_backup ga saqlanadi.
+ * Har ochilishda tekshiriladi: boost-top o'rnatuvchisi yoki o'yinchi fayllarni almashtirsa ham tiklanadi. */
+static BOOL same_file(const wchar_t *a, const wchar_t *b)
+{
+    char ha[65], hb[65];
+    ULONGLONG sa = 0, sb = 0;
+    return sha256_file(a, ha, &sa) && sha256_file(b, hb, &sb) && sa == sb && !strcmp(ha, hb);
+}
+
+/* nDirect (NextClient yangilovchisi) shu fayllarni har ochilishda serverdagi bilan solishtiradi: biz almashtirsak,
+ * o'yin har safar "Downloading updates" bilan ularni qayta yuklaydi. Ularga tegmaymiz - X CLIENT foni
+ * cstrike_<til> papkasidan (lang_bg, fix_override_bg) ko'rinadi, bosh menyu esa saytdan ochiladi. */
+static BOOL ndirect_managed(const wchar_t *r)
+{
+    return !_wcsnicmp(r, L"cstrike\\resource\\background\\", 28) || !_wcsicmp(r, L"cstrike\\resource\\BackgroundLayout.txt")
+        || !_wcsicmp(r, L"cstrike\\resource\\BackgroundLoadingLayout.txt") || !_wcsnicmp(r, L"platform\\mmb\\", 13)
+        || !_wcsicmp(r, L"platform\\mmb_error_page.html");
+}
+
+static void apply_theme_dir(const wchar_t *rel)
+{
+    wchar_t src[MAX_PATH], mask[MAX_PATH];
+    path_join(src, g_dir, L"xc_theme");
+    if (rel[0]) { wchar_t t[MAX_PATH]; path_join(t, src, rel); lstrcpyW(src, t); }
+    path_join(mask, src, L"*");
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(mask, &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        if (!wcscmp(fd.cFileName, L".") || !wcscmp(fd.cFileName, L"..")) continue;
+        wchar_t r[MAX_PATH], from[MAX_PATH], to[MAX_PATH], bak[MAX_PATH];
+        if (rel[0]) path_join(r, rel, fd.cFileName); else lstrcpynW(r, fd.cFileName, MAX_PATH);
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) { apply_theme_dir(r); continue; }
+        if (ndirect_managed(r)) continue;
+        path_join(from, src, fd.cFileName);
+        path_join(to, g_dir, r);
+        if (GetFileAttributesW(to) != INVALID_FILE_ATTRIBUTES) {
+            if (same_file(from, to)) continue;
+            _snwprintf(bak, MAX_PATH, L"%s\\xclient_backup\\%s", g_dir, r);
+            bak[MAX_PATH - 1] = 0;
+            if (GetFileAttributesW(bak) == INVALID_FILE_ATTRIBUTES) { mkdirs_for(bak); CopyFileW(to, bak, TRUE); }
+        }
+        mkdirs_for(to);
+        SetFileAttributesW(to, FILE_ATTRIBUTE_NORMAL);
+        CopyFileW(from, to, FALSE);
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+}
+
+/* O'yin tilga qarab avval cstrike_russian, cstrike_addon, cstrike_hd ... papkalaridan o'qiydi. Sborka o'z fonini
+ * (bt_*.tga, Background*Layout.txt) o'sha yerga ham qo'ygan bo'lsa, bizning fon ko'rinmaydi - u yerdagini ham almashtiramiz. */
+static BOOL file_exists(const wchar_t *p);
+static void copy_bg_to(const wchar_t *modDir)
+{
+    wchar_t src[MAX_PATH], dst[MAX_PATH], mask[MAX_PATH], from[MAX_PATH], to[MAX_PATH], bg[MAX_PATH];
+    path_join(src, g_dir, L"xc_theme\\cstrike\\resource");
+    path_join(dst, modDir, L"resource");
+    const wchar_t *lay[2] = { L"BackgroundLayout.txt", L"BackgroundLoadingLayout.txt" };
+    for (int i = 0; i < 2; i++) {
+        path_join(from, src, lay[i]); path_join(to, dst, lay[i]);
+        if (!file_exists(from)) continue;
+        mkdirs_for(to); SetFileAttributesW(to, FILE_ATTRIBUTE_NORMAL); CopyFileW(from, to, FALSE);
+    }
+    path_join(bg, src, L"background");
+    path_join(mask, bg, L"*.tga");
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(mask, &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        wchar_t sub[MAX_PATH];
+        path_join(from, bg, fd.cFileName);
+        _snwprintf(sub, MAX_PATH, L"background\\%s", fd.cFileName); sub[MAX_PATH - 1] = 0;
+        path_join(to, dst, sub);
+        mkdirs_for(to); SetFileAttributesW(to, FILE_ATTRIBUTE_NORMAL); CopyFileW(from, to, FALSE);
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+}
+static void fix_override_bg(void)
+{
+    wchar_t mask[MAX_PATH], dir[MAX_PATH], chk[MAX_PATH];
+    path_join(mask, g_dir, L"cstrike_*");
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(mask, &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || !_wcsicmp(fd.cFileName, L"cstrike_downloads")) continue;
+        path_join(dir, g_dir, fd.cFileName);
+        path_join(chk, dir, L"resource\\background");
+        BOOL has = file_exists(chk);
+        path_join(chk, dir, L"resource\\BackgroundLayout.txt"); has = has || file_exists(chk);
+        path_join(chk, dir, L"resource\\BackgroundLoadingLayout.txt"); has = has || file_exists(chk);
+        if (has) copy_bg_to(dir);
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+}
+
+/* nDirect (NextClient yangilovchisi) o'yin ochilganda sborka fonini (bt_*.tga, platform/mmb...) qaytarib qo'yadi.
+ * 1) O'yin tilining papkasi (cstrike_russian ...) cstrike dan oldin o'qiladi va nDirect uni kuzatmaydi:
+ *    fonni shu yerga o'z nomlari (xcl_*.tga) bilan yozamiz.
+ * cstrike/ va platform/ dagi nDirect fayllariga tegilmaydi (ndirect_managed). */
+static void lang_bg_dir(const wchar_t *lang)
+{
+    wchar_t dir[MAX_PATH], src[MAX_PATH], from[MAX_PATH], to[MAX_PATH], sub[MAX_PATH];
+    _snwprintf(sub, MAX_PATH, L"cstrike_%s\\resource", lang); sub[MAX_PATH - 1] = 0;
+    path_join(dir, g_dir, sub);
+    path_join(src, g_dir, L"xc_theme\\cstrike\\resource\\background");
+    int n = 0;
+    for (int r = 1; r <= 5; r++) for (int c = 1; c <= 8; c++) {
+        wchar_t f[32], t[48];
+        _snwprintf(f, 32, L"xc_%d_%d.tga", r, c);
+        _snwprintf(t, 48, L"background\\xcl_%d_%d.tga", r, c);
+        path_join(from, src, f); path_join(to, dir, t);
+        if (!file_exists(from)) continue;
+        if (!file_exists(to) || !same_file(from, to)) { mkdirs_for(to); SetFileAttributesW(to, FILE_ATTRIBUTE_NORMAL); CopyFileW(from, to, FALSE); }
+        n++;
+    }
+    if (n < 40) return;                              /* fon to'liq bo'lmasa layout yozmaymiz */
+    char lay[4096]; size_t len = 0;
+    len += _snprintf(lay + len, sizeof(lay) - len, "resolution\t1920\t1080\r\n\r\n");
+    for (int r = 1; r <= 5; r++) {
+        for (int c = 1; c <= 8; c++)
+            len += _snprintf(lay + len, sizeof(lay) - len, "resource/background/xcl_%d_%d.tga\t\tscaled\t\t%d\t%d\r\n", r, c, (c - 1) * 256, (r - 1) * 256);
+        len += _snprintf(lay + len, sizeof(lay) - len, "\r\n");
+    }
+    const wchar_t *names[2] = { L"BackgroundLayout.txt", L"BackgroundLoadingLayout.txt" };
+    for (int i = 0; i < 2; i++) {
+        path_join(to, dir, names[i]);
+        mkdirs_for(to); SetFileAttributesW(to, FILE_ATTRIBUTE_NORMAL);
+        FILE *f = _wfopen(to, L"wb");
+        if (f) { fwrite(lay, 1, len, f); fclose(f); }
+    }
+}
+static void lang_bg(void)
+{
+    wchar_t lang[32] = L"russian", w[64];
+    HKEY k; DWORD sz = sizeof(w), type = 0;
+    lang_bg_dir(L"russian");
+    lang_bg_dir(L"hd");          /* cstrike_hd ham cstrike dan oldin o'qiladi (HD kontent yoqilgan bo'lsa) - nDirect uni ham kuzatmaydi */
+    /* boshqa til tanlangan bo'lsa (Steam/NextClient sozlamasi) - o'sha papkaga ham */
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Valve\\Steam", 0, KEY_QUERY_VALUE, &k) == ERROR_SUCCESS) {
+        if (RegQueryValueExW(k, L"Language", NULL, &type, (BYTE *)w, &sz) == ERROR_SUCCESS && type == REG_SZ) lstrcpynW(lang, w, 32);
+        RegCloseKey(k);
+    }
+    /* O'yin tili inglizcha (yoki yozilmagan) bo'lsa cstrike_<til> papkasi o'qilmaydi va X CLIENT foni ko'rinmaydi.
+     * Steam o'rnatilmagan bo'lsa (bu kalit faqat o'yin tilini bildiradi) - ruscha qilib qo'yamiz: o'yin cstrike_russian ni o'qiydi. */
+    if (!_wcsicmp(lang, L"russian") || !_wcsicmp(lang, L"english")) {
+        BOOL steam = FALSE; wchar_t sp[MAX_PATH]; DWORD spsz = sizeof(sp);
+        if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Valve\\Steam", 0, KEY_QUERY_VALUE, &k) == ERROR_SUCCESS) {
+            steam = RegQueryValueExW(k, L"SteamExe", NULL, NULL, (BYTE *)sp, &spsz) == ERROR_SUCCESS;
+            RegCloseKey(k);
+        }
+        if (!steam && RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Valve\\Steam", 0, NULL, 0, KEY_SET_VALUE, NULL, &k, NULL) == ERROR_SUCCESS) {
+            RegSetValueExW(k, L"Language", 0, REG_SZ, (const BYTE *)L"russian", (DWORD)sizeof(L"russian"));
+            RegCloseKey(k);
+            lstrcpynW(lang, L"russian", 32);
+        }
+    }
+    for (wchar_t *c = lang; *c; c++) if (!((*c >= L'a' && *c <= L'z') || (*c >= L'A' && *c <= L'Z'))) { lang[0] = 0; break; }
+    if (lang[0] && _wcsicmp(lang, L"russian") && _wcsicmp(lang, L"english")) lang_bg_dir(lang);
+}
+/* eski versiyadagi alohida oyna (x-ui, Electron) va .bat endi kerak emas */
+static void remove_old_ui(void)
+{
+    wchar_t p[MAX_PATH + 2] = {0};
+    path_join(p, g_dir, L"X CLIENT.bat");
+    DeleteFileW(p);
+    memset(p, 0, sizeof(p));
+    path_join(p, g_dir, L"x-ui");
+    if (GetFileAttributesW(p) == INVALID_FILE_ATTRIBUTES) return;
+    SHFILEOPSTRUCTW op = {0};
+    op.wFunc = FO_DELETE; op.pFrom = p;   /* pFrom ikki marta 0 bilan tugashi kerak */
+    op.fFlags = FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
+    SHFileOperationW(&op);
+}
+
+/* xclient_launcher.cfg har safar qayta yoziladi: eski versiya (Electron oynasi) unga sensitivity, fps_max, pritsel yozgan edi -
+ * u o'yin ochilganda eng oxirida bajarilib, menyudagi sozlamalarni bosib ketardi. Sozlamalar config.cfg da qoladi. */
+static void ensure_launcher_cfg(void)
+{
+    wchar_t p[MAX_PATH];
+    path_join(p, g_dir, L"cstrike\\xclient_launcher.cfg");
+    mkdirs_for(p);
+    FILE *f = _wfopen(p, L"wb");
+    if (!f) return;
+    fprintf(f, "// X CLIENT\nscr_drawversion \"0\"\n");
+    fclose(f);
+}
+
+/* NextClient Serverlar/Sozlamalar oynalari rangini resource/schemes/ dagi tanlangan sxemadan oladi;
+ * tanlov cstrike/MiscellaneousSettings.vdf dagi "Scheme" kalitida. Birinchi marta X CLIENT sxemasini
+ * tanlab qo'yamiz - keyin o'yinchi Sozlamalar > Misc > Color scheme da o'zgartirishi mumkin. */
+#define XC_SCHEME "TrackerScheme_XClient.res"
+/* cstrike/MiscellaneousSettings.vdf (NextClient KeyValues) dagi bitta kalitni o'rnatadi; boshqa kalitlar saqlanadi */
+static BOOL vdf_set(const char *key, const char *val)
+{
+    wchar_t vdf[MAX_PATH];
+    path_join(vdf, g_dir, L"cstrike\\MiscellaneousSettings.vdf");
+    char *buf = NULL, *out = NULL, qk[64];
+    long n = 0;
+    FILE *f = _wfopen(vdf, L"rb");
+    if (f) {
+        fseek(f, 0, SEEK_END); n = ftell(f); fseek(f, 0, SEEK_SET);
+        if (n > 0 && n < 65536 && (buf = (char *)calloc(1, n + 1)) != NULL) fread(buf, 1, n, f);
+        fclose(f);
+    }
+    _snprintf(qk, sizeof(qk), "\"%s\"", key); qk[sizeof(qk) - 1] = 0;
+    out = (char *)malloc(n + 512);
+    if (!out) { free(buf); return FALSE; }
+    char *k = buf ? strstr(buf, qk) : NULL;
+    char *close = buf ? strrchr(buf, '}') : NULL;
+    if (k) {
+        char *eol = strchr(k, '\n');
+        size_t pre = (size_t)(k - buf);
+        memcpy(out, buf, pre);
+        sprintf(out + pre, "%s\t\t\"%s\"\r\n%s", qk, val, eol ? eol + 1 : "");
+    } else if (close) {
+        size_t pre = (size_t)(close - buf);
+        memcpy(out, buf, pre);
+        sprintf(out + pre, "\t%s\t\t\"%s\"\r\n%s", qk, val, close);
+    } else {
+        sprintf(out, "\"MiscellaneousSettings\"\r\n{\r\n\t%s\t\t\"%s\"\r\n}\r\n", qk, val);
+    }
+    BOOL ok = FALSE;
+    if (!buf || strcmp(buf, out)) {
+        mkdirs_for(vdf);
+        f = _wfopen(vdf, L"wb");
+        if (f) { fwrite(out, 1, strlen(out), f); fclose(f); ok = TRUE; }
+    } else ok = TRUE;
+    free(buf); free(out);
+    return ok;
+}
+static void ensure_scheme(void)
+{
+    wchar_t ini[MAX_PATH];
+    ini_path(ini);
+    /* o'yin ochilganda eski Serverlar oynasi o'zi chiqmasin - serverlar X CLIENT menyusida */
+    vdf_set("DisableAutoOpenServerBrowser", "1");
+    /* X CLIENT rang sxemasi - faqat birinchi marta (keyin o'yinchi o'zgartirishi mumkin) */
+    if (!GetPrivateProfileIntW(L"x", L"scheme", 0, ini) && vdf_set("Scheme", XC_SCHEME))
+        WritePrivateProfileStringW(L"x", L"scheme", L"1", ini);
+}
+
+/* ---------------------------------------------------------------- X CLIENT bosh menyusi (HTML) */
+/* NextClient bosh menyuda platform/mmb_home_page.html dagi manzilni (mmb.boost-top.com) butun ekranga ochadi.
+ * X CLIENT menyusi (theme/platform/xclient) o'sha saytga yuklanadi; launcher faqat serverlar ro'yxatini beradi. */
+#ifndef XC_MASTER_URL
+#define XC_MASTER_URL "http://mmb.boost-top.com/ms.php?q=/v1/servers/cstrike"
+#endif
+
+static char *read_all(const wchar_t *path, long *len)
+{
+    FILE *f = _wfopen(path, L"rb");
+    if (!f) return NULL;
+    fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
+    char *b = (n >= 0 && n < (1 << 20)) ? (char *)calloc(1, n + 1) : NULL;
+    if (b) fread(b, 1, n, f);
+    fclose(f);
+    if (len) *len = b ? n : 0;
+    return b;
+}
+
+/* Sinovda o'yin brauzeri (CEF1) file:/// sahifani ochmadi - xato sahifasi chiqdi. Shuning uchun X CLIENT menyusi
+ * saytda (mmb.boost-top.com) turadi va bosh menyu manzili asl holida qoladi. Oldingi versiya yozgan
+ * file:/// manzilni shu yerda qaytaramiz. */
+#define XC_SITE "http://mmb.boost-top.com/"
+
+/* ---------------------------------------------------------------- Tizim sozlamalari (menyudan) */
+/* O'yin ichidagi X CLIENT menyusi (Sozlamalar > Tizim) ularni xc_api.php ga shu kompyuter id'si (g_id)
+ * bilan yozadi; XClient.exe har ishga tushganda o'qiydi va bajaradi. */
+static int  o_beta = -1, o_auto = 1, o_start = -1, o_win = 0, o_clean = 0, o_verify = 0;
+static int  o_prio = 0, o_shots = 0, o_spray = 0, o_sprays = 0, o_ok = 0, o_hud = 100;   /* o_hud: HUD kattaligi, % */   /* o_ok: sozlamalar saytdan olindi */
+static char o_res[16] = "", o_packs[256] = "";
+
+static int jint(const char *b, const char *k, int def)
+{
+    char key[32];
+    _snprintf(key, sizeof(key), "\"%s\":", k); key[sizeof(key) - 1] = 0;
+    const char *p = b ? strstr(b, key) : NULL;
+    if (!p) return def;
+    p += strlen(key);
+    if (*p == '"') p++;
+    return atoi(p);
+}
+/* JSON dagi "k":"qiymat" satrini olish (faqat oddiy belgilar) */
+static void jstr(const char *b, const char *k, char *out, size_t cap)
+{
+    char key[40];
+    _snprintf(key, sizeof(key), "\"%s\":\"", k); key[sizeof(key) - 1] = 0;
+    const char *p = b ? strstr(b, key) : NULL;
+    size_t n = 0;
+    out[0] = 0;
+    if (!p) return;
+    for (p += strlen(key); *p && *p != '"' && n + 1 < cap; p++) out[n++] = *p;
+    out[n] = 0;
+}
+/* kompyuter quvvati: menyu shunga qarab grafika sozlamalarini tavsiya qiladi */
+static void hw_query(char *out, size_t cap)
+{
+    MEMORYSTATUSEX ms; ms.dwLength = sizeof(ms);
+    SYSTEM_INFO si;
+    DISPLAY_DEVICEA dd;
+    char gpu[128] = "", eg[256];
+    unsigned ram = GlobalMemoryStatusEx(&ms) ? (unsigned)(ms.ullTotalPhys >> 20) : 0;
+    GetSystemInfo(&si);
+    for (DWORD i = 0; ; i++) {
+        ZeroMemory(&dd, sizeof(dd)); dd.cb = sizeof(dd);
+        if (!EnumDisplayDevicesA(NULL, i, &dd, 0)) break;
+        if (!gpu[0] || (dd.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE)) lstrcpynA(gpu, dd.DeviceString, sizeof(gpu));
+        if (dd.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE) break;
+    }
+    url_escape(eg, sizeof(eg), gpu);
+    /* Windows nomi va ekran o'lchami (admin paneldagi o'yinchi sahifasi uchun) */
+    char win[160] = "Windows", ew[256], ek[96];
+    HKEY k;
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &k) == ERROR_SUCCESS) {
+        char pn[96] = "", dv[32] = "", cb[16] = ""; DWORD sz;
+        sz = sizeof(pn); RegQueryValueExA(k, "ProductName", NULL, NULL, (BYTE *)pn, &sz);
+        sz = sizeof(dv); RegQueryValueExA(k, "DisplayVersion", NULL, NULL, (BYTE *)dv, &sz);
+        sz = sizeof(cb); RegQueryValueExA(k, "CurrentBuildNumber", NULL, NULL, (BYTE *)cb, &sz);
+        RegCloseKey(k);
+        /* Windows 11 ham "Windows 10" deb yoziladi - build 22000+ bo'lsa tuzatamiz */
+        if (atoi(cb) >= 22000 && !strncmp(pn, "Windows 10", 10)) pn[9] = '1';
+        if (pn[0]) _snprintf(win, sizeof(win), "%s%s%s", pn, dv[0] ? " " : "", dv);
+        win[sizeof(win) - 1] = 0;
+    }
+    url_escape(ew, sizeof(ew), win);
+    url_escape(ek, sizeof(ek), g_key[0] ? g_key : "boost-top.com");
+    _snprintf(out, cap, "&ram=%u&cpu=%u&gpu=%s&res=%dx%d&os=%s&ch=%s&pt=%s&lang=%s", ram, (unsigned)si.dwNumberOfProcessors, eg,
+        GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), ew, g_chan, ek, (g_lang[0] >= 'a' && g_lang[0] <= 'z') ? g_lang : ""); out[cap - 1] = 0;
+}
+static unsigned cache_mb(void);
+static void fetch_opts(void)
+{
+    char url[1200], hw[800];
+    char v[48];
+    url_escape(v, sizeof(v), g_version[0] ? g_version : "1.0");
+    hw_query(hw, sizeof(hw));
+    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=hello&d=%s&v=%s&cache=%u%s", g_id, v, cache_mb(), hw); url[sizeof(url) - 1] = 0;
+    char *r = http_get(url, NULL);
+    if (!r || !strstr(r, "\"ok\":true")) { free(r); return; }
+    o_beta = jint(r, "beta", -1); o_auto = jint(r, "auto", 1); o_start = jint(r, "start", -1);
+    o_win = jint(r, "win", 0); o_clean = jint(r, "clean", 0); o_verify = jint(r, "verify", 0);
+    o_prio = jint(r, "prio", 0); o_hud = jint(r, "hud", 100); o_shots = jint(r, "shots", 0); o_spray = jint(r, "spray", 0); o_sprays = jint(r, "sprays", 0);
+    jstr(r, "packs", o_packs, sizeof(o_packs));
+    o_ok = 1;
+    const char *p = strstr(r, "\"res\":\"");
+    unsigned w = 0, h = 0;
+    if (p && sscanf(p + 7, "%ux%u", &w, &h) == 2 && w >= 640 && w <= 7680 && h >= 480 && h <= 4320) _snprintf(o_res, sizeof(o_res), "%ux%u", w, h);
+    free(r);
+}
+static void opts_done(unsigned cacheMb)
+{
+    char url[320], v[48];
+    url_escape(v, sizeof(v), g_version[0] ? g_version : "1.0");
+    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=opts_done&d=%s&cache=%u&v=%s", g_id, cacheMb, v); url[sizeof(url) - 1] = 0;
+    free(http_get(url, NULL));
+}
+/* Windows bilan birga ishga tushirish (HKCU\...\Run) */
+static void set_autostart(int on)
+{
+    HKEY k;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_SET_VALUE, &k) != ERROR_SUCCESS) return;
+    if (on) {
+        wchar_t v[MAX_PATH + 4];
+        _snwprintf(v, MAX_PATH + 4, L"\"%s\"", g_self); v[MAX_PATH + 3] = 0;
+        RegSetValueExW(k, L"X CLIENT", 0, REG_SZ, (const BYTE *)v, (DWORD)((wcslen(v) + 1) * sizeof(wchar_t)));
+    } else RegDeleteValueW(k, L"X CLIENT");
+    RegCloseKey(k);
+}
+static ULONGLONG dir_size(const wchar_t *dir)
+{
+    wchar_t mask[MAX_PATH], sub[MAX_PATH];
+    ULONGLONG n = 0;
+    path_join(mask, dir, L"*");
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(mask, &fd);
+    if (h == INVALID_HANDLE_VALUE) return 0;
+    do {
+        if (!wcscmp(fd.cFileName, L".") || !wcscmp(fd.cFileName, L"..")) continue;
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) continue;   /* junction/havola - boshqa papkaga olib chiqadi */
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) { path_join(sub, dir, fd.cFileName); n += dir_size(sub); }
+        else n += ((ULONGLONG)fd.nFileSizeHigh << 32) | fd.nFileSizeLow;
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+    return n;
+}
+static unsigned cache_mb(void)
+{
+    wchar_t d[MAX_PATH];
+    path_join(d, g_dir, L"cstrike_downloads");
+    return (unsigned)(dir_size(d) >> 20);
+}
+/* Keshni tozalash: serverlardan yuklangan xarita va fayllar (cstrike_downloads) */
+static void clean_cache(void)
+{
+    wchar_t p[MAX_PATH + 2] = {0};
+    path_join(p, g_dir, L"cstrike_downloads");
+    if (GetFileAttributesW(p) == INVALID_FILE_ATTRIBUTES) return;
+    SHFILEOPSTRUCTW op = {0};
+    op.wFunc = FO_DELETE; op.pFrom = p;
+    op.fFlags = FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
+    SHFileOperationW(&op);
+}
+
+/* Avtomatik tozalash (har ishga tushishda): 30 kundan beri yangilanmagan yuklangan fayllar o'chiriladi -
+ * kerak bo'lsa server ularni yana beradi. Kesh baribir 3 GB dan oshsa - hammasi tozalanadi. Band fayllar o'tkazib yuboriladi. */
+#define AUTOCLEAN_DAYS 30
+#define AUTOCLEAN_MAX_MB 3072
+static void prune_old(const wchar_t *dir, ULONGLONG cutoff)
+{
+    wchar_t mask[MAX_PATH], sub[MAX_PATH];
+    path_join(mask, dir, L"*");
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(mask, &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        if (!wcscmp(fd.cFileName, L".") || !wcscmp(fd.cFileName, L"..")) continue;
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) continue;   /* junction/havola - tashqaridagi fayllarga tegmaymiz */
+        path_join(sub, dir, fd.cFileName);
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) { prune_old(sub, cutoff); RemoveDirectoryW(sub); continue; }   /* bo'sh qolsa - papka ham */
+        ULONGLONG w = ((ULONGLONG)fd.ftLastWriteTime.dwHighDateTime << 32) | fd.ftLastWriteTime.dwLowDateTime;
+        ULONGLONG c = ((ULONGLONG)fd.ftCreationTime.dwHighDateTime << 32) | fd.ftCreationTime.dwLowDateTime;
+        if ((w > c ? w : c) < cutoff) DeleteFileW(sub);
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+}
+static void auto_clean_cache(void)
+{
+    wchar_t d[MAX_PATH];
+    path_join(d, g_dir, L"cstrike_downloads");
+    if (GetFileAttributesW(d) == INVALID_FILE_ATTRIBUTES) return;
+    FILETIME now; GetSystemTimeAsFileTime(&now);
+    ULONGLONG t = ((ULONGLONG)now.dwHighDateTime << 32) | now.dwLowDateTime;
+    prune_old(d, t - (ULONGLONG)AUTOCLEAN_DAYS * 24 * 3600 * 10000000ULL);
+    if (cache_mb() > AUTOCLEAN_MAX_MB) clean_cache();
+}
+
+/* ---------------------------------------------------------------- Kontent (menyudan tanlanadi) */
+static BOOL file_exists(const wchar_t *p) { return GetFileAttributesW(p) != INVALID_FILE_ATTRIBUTES; }
+static int ini_int(const wchar_t *k) { wchar_t ini[MAX_PATH]; ini_path(ini); return GetPrivateProfileIntW(L"x", k, 0, ini); }
+static void ini_set_int(const wchar_t *k, int v) { wchar_t ini[MAX_PATH], w[24]; ini_path(ini); _snwprintf(w, 24, L"%d", v); WritePrivateProfileStringW(L"x", k, w, ini); }
+
+/* Spray: menyu tayyorlagan tempdecal.wad ni o'rnatish */
+/* O'yin tempdecal.wad ni avval til/qo'shimcha papkalardan (cstrike_russian, cstrike_addon, cstrike_hd ...) qidiradi,
+ * shuning uchun spray cstrike\ dagina emas, o'sha papkalarda turgan tempdecal.wad o'rniga ham yoziladi. */
+static int spray_targets(wchar_t out[][MAX_PATH], int cap)
+{
+    int n = 0;
+    path_join(out[n++], g_dir, L"cstrike\\tempdecal.wad");
+    wchar_t pat[MAX_PATH];
+    path_join(pat, g_dir, L"cstrike_*");
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(pat, &fd);
+    if (h == INVALID_HANDLE_VALUE) return n;
+    do {
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || n >= cap) continue;
+        wchar_t sub[MAX_PATH];
+        _snwprintf(sub, MAX_PATH, L"%s\\tempdecal.wad", fd.cFileName); sub[MAX_PATH - 1] = 0;
+        path_join(out[n], g_dir, sub);
+        if (file_exists(out[n])) n++;
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+    return n;
+}
+static void install_spray(void)
+{
+    wchar_t dst[16][MAX_PATH], tmp[MAX_PATH];
+    char url[256];
+    if (o_spray <= 0) return;
+    int n = spray_targets(dst, 16);
+    if (o_spray == ini_int(L"sprayt") && o_sprays) {      /* o'rnatilgan - lekin o'yin yoki boshqa dastur almashtirgan bo'lsa qayta yozamiz */
+        BOOL ok = TRUE;
+        for (int i = 0; i < n && ok; i++) {
+            WIN32_FILE_ATTRIBUTE_DATA fa;
+            ok = GetFileAttributesExW(dst[i], GetFileExInfoStandard, &fa) && fa.nFileSizeLow == (DWORD)o_sprays;
+        }
+        if (ok) return;
+    }
+    path_join(tmp, g_dir, L"cstrike\\tempdecal.xcdl");
+    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=spray_get&d=%s", g_id); url[sizeof(url) - 1] = 0;
+    status(L"Spray o‘rnatilmoqda...", 1);
+    if (!http_download(url, tmp)) { DeleteFileW(tmp); return; }
+    int done = 0;
+    for (int i = 0; i < n; i++) {
+        SetFileAttributesW(dst[i], FILE_ATTRIBUTE_NORMAL);
+        if (CopyFileW(tmp, dst[i], FALSE)) { SetFileAttributesW(dst[i], FILE_ATTRIBUTE_READONLY); done++; }   /* o'yin ustidan yozib yubormasin */
+    }
+    DeleteFileW(tmp);
+    if (done == n) ini_set_int(L"sprayt", o_spray);
+}
+
+/* Paketlar: saytdagi mmb/packs/<id>/files/ o'yin papkasiga ko'chiriladi, asl fayllar xc_backup/<id>/ ga saqlanadi */
+static BOOL safe_rel(const char *rel)
+{
+    if (!rel[0] || rel[0] == '/' || rel[0] == '\\' || strstr(rel, "..") || strchr(rel, ':')) return FALSE;
+    return TRUE;
+}
+static void rel_to_w(const char *rel, wchar_t *out)
+{
+    MultiByteToWideChar(CP_UTF8, 0, rel, -1, out, MAX_PATH);
+    for (wchar_t *c = out; *c; c++) if (*c == L'/') *c = L'\\';
+}
+static BOOL pack_install(const char *id)
+{
+    char url[256];
+    _snprintf(url, sizeof(url), XC_SITE "packs.php?files=%s", id); url[sizeof(url) - 1] = 0;
+    char *list = http_get(url, NULL);
+    if (!list) return FALSE;
+    wchar_t wid[64], bdir[MAX_PATH], sub[MAX_PATH], lst[MAX_PATH];
+    MultiByteToWideChar(CP_UTF8, 0, id, -1, wid, 64);
+    _snwprintf(sub, MAX_PATH, L"xc_backup\\%s", wid); sub[MAX_PATH - 1] = 0;
+    path_join(bdir, g_dir, sub);
+    path_join(lst, bdir, L"_files.txt");
+    mkdirs_for(lst);
+    FILE *lf = _wfopen(lst, L"ab");
+    int n = 0, fails = 0;
+    status(L"Paket o‘rnatilmoqda...", 1);
+    for (char *line = strtok(list, "\n"); line; line = strtok(NULL, "\n")) {
+        char *t1 = strchr(line, '\t'); if (!t1) continue;
+        *t1 = 0;
+        char *t2 = strchr(t1 + 1, '\t'); if (!t2) continue;
+        char *u = t2 + 1, *cr = strchr(u, '\r'); if (cr) *cr = 0;
+        /* fayllar faqat shu saytning packs/ papkasidan (javob http orqali keladi - begona manzildan yuklamaymiz) */
+        if (!safe_rel(line) || (_strnicmp(u, XC_SITE "packs/", sizeof(XC_SITE "packs/") - 1)
+            && _strnicmp(u, "https://mmb.boost-top.com/packs/", 32)) || strstr(u, "..")) continue;
+        wchar_t wrel[MAX_PATH], dst[MAX_PATH], bak[MAX_PATH], tmp[MAX_PATH + 8];
+        rel_to_w(line, wrel);
+        path_join(dst, g_dir, wrel);
+        path_join(bak, bdir, wrel);
+        if (file_exists(dst) && !file_exists(bak)) { mkdirs_for(bak); CopyFileW(dst, bak, TRUE); }
+        mkdirs_for(dst);
+        _snwprintf(tmp, MAX_PATH + 8, L"%s.xcdl", dst); tmp[MAX_PATH + 7] = 0;
+        if (http_download(u, tmp) && MoveFileExW(tmp, dst, MOVEFILE_REPLACE_EXISTING)) {
+            if (lf) fprintf(lf, "%s\n", line);
+            n++;
+        } else { DeleteFileW(tmp); fails++; }
+    }
+    if (lf) fclose(lf);
+    free(list);
+    return n > 0;
+}
+static void pack_remove(const char *id)
+{
+    wchar_t wid[64], bdir[MAX_PATH + 2] = {0}, sub[MAX_PATH], lst[MAX_PATH];
+    MultiByteToWideChar(CP_UTF8, 0, id, -1, wid, 64);
+    _snwprintf(sub, MAX_PATH, L"xc_backup\\%s", wid); sub[MAX_PATH - 1] = 0;
+    path_join(bdir, g_dir, sub);
+    path_join(lst, bdir, L"_files.txt");
+    long len = 0;
+    char *b = read_all(lst, &len);
+    if (b) {
+        for (char *line = strtok(b, "\n"); line; line = strtok(NULL, "\n")) {
+            char *cr = strchr(line, '\r'); if (cr) *cr = 0;
+            if (!safe_rel(line)) continue;
+            wchar_t wrel[MAX_PATH], dst[MAX_PATH], bak[MAX_PATH];
+            rel_to_w(line, wrel);
+            path_join(dst, g_dir, wrel);
+            path_join(bak, bdir, wrel);
+            if (file_exists(bak)) CopyFileW(bak, dst, FALSE); else DeleteFileW(dst);
+        }
+        free(b);
+    }
+    SHFILEOPSTRUCTW op = {0};
+    op.wFunc = FO_DELETE; op.pFrom = bdir;
+    op.fFlags = FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
+    SHFileOperationW(&op);
+}
+static BOOL in_list(const char *list, const char *id)
+{
+    size_t n = strlen(id);
+    for (const char *p = list; (p = strstr(p, id)) != NULL; p += n)
+        if ((p == list || p[-1] == ',') && (p[n] == 0 || p[n] == ',')) return TRUE;
+    return FALSE;
+}
+static BOOL pack_id_ok(const char *id)
+{
+    size_t n = strlen(id);
+    if (!n || n > 40) return FALSE;
+    for (; *id; id++) if (!((*id >= 'a' && *id <= 'z') || (*id >= 'A' && *id <= 'Z') || (*id >= '0' && *id <= '9') || *id == '_' || *id == '-' || *id == '~')) return FALSE;   /* "id~versiya" - admin "hammaga" bergan paket */
+    return TRUE;
+}
+static void apply_packs(void)
+{
+    wchar_t ini[MAX_PATH], w[256];
+    char have[256], now[256] = "", id[48];
+    ini_path(ini);
+    GetPrivateProfileStringW(L"x", L"packs", L"", w, 256, ini);
+    WideCharToMultiByte(CP_UTF8, 0, w, -1, have, sizeof(have), NULL, NULL);
+    /* menyuda o'chirilganlarini qaytarib olamiz */
+    for (const char *p = have; *p; ) {
+        size_t n = strcspn(p, ",");
+        if (n && n < sizeof(id)) {
+            memcpy(id, p, n); id[n] = 0;
+            if (!pack_id_ok(id)) { p += n; if (*p == ',') p++; continue; }   /* id papka nomi bo'ladi - faqat harf/raqam/_- */
+            if (!in_list(o_packs, id)) pack_remove(id);
+            else { if (now[0]) strcat(now, ","); strcat(now, id); }
+        }
+        p += n; if (*p == ',') p++;
+    }
+    /* yangi tanlanganlarini o'rnatamiz */
+    for (const char *p = o_packs; *p; ) {
+        size_t n = strcspn(p, ",");
+        if (n && n < sizeof(id)) {
+            memcpy(id, p, n); id[n] = 0;
+            if (pack_id_ok(id) && !in_list(now, id) && strlen(now) + n + 2 < sizeof(now) && pack_install(id)) { if (now[0]) strcat(now, ","); strcat(now, id); }
+        }
+        p += n; if (*p == ',') p++;
+    }
+    MultiByteToWideChar(CP_UTF8, 0, now, -1, w, 256);
+    WritePrivateProfileStringW(L"x", L"packs", w, ini);
+}
+
+/* O'yinni tezlashtirish: Windows to'liq ekran "optimizatsiya"sini o'chirish (eski o'yinlarda FPS va kirish kechikishi) */
+static void compat_flags(const wchar_t *exe, int on)
+{
+    HKEY k;
+    /* boshqa moslik sozlamalari (RUNASADMIN, HIGHDPIAWARE ...) saqlanadi - faqat o'z belgimizni qo'shamiz/olamiz */
+    const wchar_t *tok = L"DISABLEDXMAXIMIZEDWINDOWEDMODE";
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers", 0, NULL, 0, KEY_QUERY_VALUE | KEY_SET_VALUE, NULL, &k, NULL) != ERROR_SUCCESS) return;
+    wchar_t cur[512] = L"", out[600] = L""; DWORD sz = sizeof(cur) - sizeof(wchar_t), type = 0;
+    LONG qr = RegQueryValueExW(k, exe, NULL, &type, (BYTE *)cur, &sz);
+    if (qr == ERROR_MORE_DATA) { RegCloseKey(k); return; }   /* juda uzun qiymat - o'yinchinikiga tegmaymiz */
+    if (qr != ERROR_SUCCESS || type != REG_SZ) cur[0] = 0;
+    cur[511] = 0;
+    BOOL has = FALSE;
+    for (wchar_t *ctx = NULL, *t = wcstok_s(cur, L" ", &ctx); t; t = wcstok_s(NULL, L" ", &ctx)) {
+        if (!wcscmp(t, L"~")) continue;
+        if (!wcscmp(t, tok)) { has = TRUE; if (!on) continue; }
+        if (wcslen(out) + wcslen(t) + 2 < 600) { wcscat(out, L" "); wcscat(out, t); }
+    }
+    if (on && !has && wcslen(out) + wcslen(tok) + 2 < 600) { wcscat(out, L" "); wcscat(out, tok); }
+    if (!out[0]) RegDeleteValueW(k, exe);
+    else {
+        wchar_t val[604]; _snwprintf(val, 604, L"~%s", out); val[603] = 0;
+        RegSetValueExW(k, exe, 0, REG_SZ, (const BYTE *)val, (DWORD)((wcslen(val) + 1) * sizeof(wchar_t)));
+    }
+    RegCloseKey(k);
+}
+
+/* Skrinshotlar: yangi BMP larni JPEG qilib saytga yuklash (menyudagi galereya uchun). GDI+ (Windows bilan keladi) */
+typedef struct { UINT32 GdiplusVersion; void *DebugEventCallback; BOOL SuppressBackgroundThread; BOOL SuppressExternalCodecs; } XGdipStartupInput;
+int WINAPI GdiplusStartup(ULONG_PTR *token, const XGdipStartupInput *input, void *output);
+void WINAPI GdiplusShutdown(ULONG_PTR token);
+int WINAPI GdipLoadImageFromFile(const WCHAR *file, void **image);
+int WINAPI GdipGetImageWidth(void *image, UINT *w);
+int WINAPI GdipGetImageHeight(void *image, UINT *h);
+int WINAPI GdipGetImageThumbnail(void *image, UINT w, UINT h, void **thumb, void *cb, void *data);
+int WINAPI GdipSaveImageToFile(void *image, const WCHAR *file, const CLSID *encoder, const void *params);
+int WINAPI GdipDisposeImage(void *image);
+static const CLSID XC_JPEG = { 0x557cf401, 0x1a04, 0x11d3, { 0x9a, 0x73, 0x00, 0x00, 0xf8, 0x1e, 0xf3, 0x2e } };
+
+static char *http_post(const char *path, const void *data, DWORD len)
+{
+    HINTERNET c = InternetConnectA(g_net, "mmb.boost-top.com", INTERNET_DEFAULT_HTTP_PORT, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
+    if (!c) return NULL;
+    HINTERNET r = HttpOpenRequestA(c, "POST", path, NULL, NULL, NULL, INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_NO_UI, 0);
+    char *out = NULL;
+    if (r && HttpSendRequestA(r, "Content-Type: application/octet-stream\r\n", (DWORD)-1L, (LPVOID)data, len)) {
+        out = (char *)calloc(1, 4097);
+        DWORD got, n = 0;
+        while (out && n < 4096 && InternetReadFile(r, out + n, 4096 - n, &got) && got) n += got;
+    }
+    if (r) InternetCloseHandle(r);
+    InternetCloseHandle(c);
+    return out;
+}
+static ULONGLONG ft64(FILETIME t) { return ((ULONGLONG)t.dwHighDateTime << 32) | t.dwLowDateTime; }
+static void upload_shots(void)
+{
+    wchar_t ini[MAX_PATH], w[32], mask[MAX_PATH];
+    ini_path(ini);
+    GetPrivateProfileStringW(L"x", L"shott", L"0", w, 32, ini);
+    ULONGLONG last = _wcstoui64(w, NULL, 10), best[8] = {0}, newest = last;
+    wchar_t names[8][MAX_PATH];
+    int cnt = 0;
+    /* faqat oxirgi 8 ta yangi skrinshot */
+    path_join(mask, g_dir, L"cstrike\\*.bmp");
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(mask, &fd);
+    if (h != INVALID_HANDLE_VALUE) {
+        do {
+            ULONGLONG t = ft64(fd.ftLastWriteTime);
+            if (t <= last || fd.nFileSizeLow < 100000 || (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
+            int slot = cnt < 8 ? cnt++ : -1;
+            if (slot < 0) { slot = 0; for (int i = 1; i < 8; i++) if (best[i] < best[slot]) slot = i; if (best[slot] >= t) continue; }
+            best[slot] = t; { wchar_t cs[MAX_PATH]; path_join(cs, g_dir, L"cstrike"); path_join(names[slot], cs, fd.cFileName); }
+        } while (FindNextFileW(h, &fd));
+        FindClose(h);
+    }
+    if (!cnt) return;
+    ULONG_PTR tok = 0;
+    XGdipStartupInput in = { 1, NULL, FALSE, FALSE };
+    if (GdiplusStartup(&tok, &in, NULL) != 0) return;
+    status(L"Skrinshotlar yuklanmoqda...", 1);
+    wchar_t tmp[MAX_PATH];
+    path_join(tmp, g_dir, L"xc_shot.tmp.jpg");
+    for (int i = 0; i < cnt; i++) {
+        void *img = NULL, *th = NULL;
+        UINT iw = 0, ih = 0;
+        if (GdipLoadImageFromFile(names[i], &img) != 0 || !img) continue;
+        GdipGetImageWidth(img, &iw); GdipGetImageHeight(img, &ih);
+        if (iw > 1280 && ih) { UINT tw = 1280, thh = (UINT)((ULONGLONG)ih * 1280 / iw); if (GdipGetImageThumbnail(img, tw, thh, &th, NULL, NULL) != 0) th = NULL; }
+        int ok = GdipSaveImageToFile(th ? th : img, tmp, &XC_JPEG, NULL) == 0;
+        if (th) GdipDisposeImage(th);
+        GdipDisposeImage(img);
+        long len = 0;
+        char *jpg = ok ? read_all(tmp, &len) : NULL;
+        DeleteFileW(tmp);
+        if (!jpg) continue;
+        char path[160];
+        _snprintf(path, sizeof(path), "/xc_api.php?a=shot_up&d=%s", g_id); path[sizeof(path) - 1] = 0;
+        free(http_post(path, jpg, (DWORD)len));
+        free(jpg);
+        if (best[i] > newest) newest = best[i];
+    }
+    GdiplusShutdown(tok);
+    _snwprintf(w, 32, L"%I64u", newest);
+    WritePrivateProfileStringW(L"x", L"shott", w, ini);
+}
+
+/* X CLIENT menyusi saytda alohida manzilda: http://mmb.boost-top.com/xc.html. index.html - boshqa boost-top sborkalari
+ * uchun (ular ham shu saytni ochadi), shuning uchun X CLIENT menyusi faqat shu launcher o'rnatgan o'yinda chiqadi.
+ * Asl manzil bir marta platform/mmb_home_page.orig ga saqlanadi (o'chirishda qaytariladi). O'yin brauzeri "?..."
+ * qo'shimchali manzilni ocholmaydi - shuning uchun alohida fayl nomi. Kompyuter id'si menyuga sayt orqali (IP) yetadi. */
+#define XC_HOME XC_SITE "xc.html"
+static void setup_main_menu(void)
+{
+    wchar_t home[MAX_PATH], orig[MAX_PATH];
+    path_join(home, g_dir, L"platform\\mmb_home_page.html");
+    path_join(orig, g_dir, L"platform\\mmb_home_page.orig");
+    long n = 0;
+    char *cur = read_all(home, &n);
+    if (cur && !strstr(cur, XC_HOME)) {
+        if (GetFileAttributesW(orig) == INVALID_FILE_ATTRIBUTES && !strstr(cur, "xclient") && !strstr(cur, "?xc=")) {
+            FILE *o = _wfopen(orig, L"wb");
+            if (o) { fwrite(cur, 1, n, o); fclose(o); }
+        }
+    }
+    if (!cur || !strstr(cur, XC_HOME)) {
+        mkdirs_for(home);
+        SetFileAttributesW(home, FILE_ATTRIBUTE_NORMAL);
+        FILE *f = _wfopen(home, L"wb");
+        if (f) { fputs(XC_HOME, f); fclose(f); }
+    }
+    free(cur);
+}
+
+/* Internet serverlar ro'yxati + versiya -> platform/xclient/master.js (sahifa o'zi tashqi saytga XHR qila olmasligi mumkin) */
+static void write_master_js(void)
+{
+    wchar_t p[MAX_PATH];
+    path_join(p, g_dir, L"platform\\xclient\\master.js");
+    char *body = http_get(XC_MASTER_URL, NULL);
+    if (!body && GetFileAttributesW(p) != INVALID_FILE_ATTRIBUTES) return;   /* eski ro'yxat qolsin */
+    mkdirs_for(p);
+    FILE *f = _wfopen(p, L"wb");
+    if (!f) { free(body); return; }
+    fprintf(f, "// X CLIENT launcher tomonidan yoziladi\nwindow.XC_VERSION = \"%s\";\nwindow.XC_MASTER = [", g_version);
+    int cnt = 0;
+    for (char *line = body; line && *line && cnt < 1000;) {
+        char *next = strchr(line, '\n');
+        if (next) *next++ = 0;
+        char kind[8], addr[64];
+        unsigned a, b, c, d2, port;
+        if (sscanf(line, " %7s %63s", kind, addr) == 2 && (!strcmp(kind, "gs") || !strcmp(kind, "ip"))
+            && sscanf(addr, "%u.%u.%u.%u:%u", &a, &b, &c, &d2, &port) == 5 && a < 256 && b < 256 && c < 256 && d2 < 256 && port < 65536)
+            fprintf(f, "%s\"%u.%u.%u.%u:%u\"", cnt++ ? "," : "", a, b, c, d2, port);
+        line = next;
+    }
+    fprintf(f, "];\n");
+    fclose(f);
+    free(body);
+}
+
 static BOOL g_fresh = FALSE;
+/* ---------------------------------------------------------------- HUD kattaligi */
+/* O'yinda HUD'ni kattalashtiradigan sozlama yo'q: CS 1.6 raqamlar, pul, o'q va qurol rasmlarini
+ * sprites\640hud(N).spr dan, joylashuvini sprites\(nom).txt dagi to'rtburchaklardan oladi. Shu rasmlarni
+ * kattalashtirib, to'rtburchaklarni ham shuncha ko'paytirsak - butun HUD kattalashadi.
+ * Asl fayllar xc_backup\hud\<papka>\ ga bir marta saqlanadi va har safar o'shalardan yasaladi. */
+static int sc_i(int v, int pct) { return v >= 0 ? (v * pct + 50) / 100 : -((-v * pct + 50) / 100); }
+
+static BOOL spr_scale(const char *in, long n, int pct, char **out, long *outLen)
+{
+    if (n < 44 || memcmp(in, "IDSP", 4) || *(const int *)(in + 4) != 2) return FALSE;
+    int frames = *(const int *)(in + 28);
+    unsigned short pal = *(const unsigned short *)(in + 40);
+    long off = 42 + pal * 3L;
+    if (frames < 1 || frames > 64 || off > n) return FALSE;
+    long cap = off + 64;
+    /* avval kirishni tekshirib, chiqish hajmini hisoblaymiz */
+    long o = off;
+    for (int f = 0; f < frames; f++) {
+        if (o + 20 > n || *(const int *)(in + o) != 0) return FALSE;   /* guruh kadrlari - tegmaymiz */
+        int w = *(const int *)(in + o + 12), h = *(const int *)(in + o + 16);
+        if (w <= 0 || h <= 0 || w > 1024 || h > 1024 || o + 20 + (long)w * h > n) return FALSE;
+        cap += 20 + (long)sc_i(w, pct) * sc_i(h, pct);
+        o += 20 + (long)w * h;
+    }
+    char *b = (char *)malloc(cap);
+    if (!b) return FALSE;
+    memcpy(b, in, off);
+    *(int *)(b + 20) = sc_i(*(const int *)(in + 20), pct);   /* umumiy kenglik/balandlik */
+    *(int *)(b + 24) = sc_i(*(const int *)(in + 24), pct);
+    long d = off; o = off;
+    for (int f = 0; f < frames; f++) {
+        int w = *(const int *)(in + o + 12), h = *(const int *)(in + o + 16);
+        int w2 = sc_i(w, pct), h2 = sc_i(h, pct);
+        *(int *)(b + d) = 0;
+        *(int *)(b + d + 4) = sc_i(*(const int *)(in + o + 4), pct);
+        *(int *)(b + d + 8) = sc_i(*(const int *)(in + o + 8), pct);
+        *(int *)(b + d + 12) = w2; *(int *)(b + d + 16) = h2;
+        const unsigned char *src = (const unsigned char *)in + o + 20;
+        unsigned char *dst = (unsigned char *)b + d + 20;
+        for (int y = 0; y < h2; y++) {
+            int sy = y * h / h2;
+            for (int x = 0; x < w2; x++) dst[y * w2 + x] = src[sy * w + x * w / w2];
+        }
+        d += 20 + (long)w2 * h2; o += 20 + (long)w * h;
+    }
+    *out = b; *outLen = d;
+    return TRUE;
+}
+
+/* "nom 640 640hudN x y w h" qatorlaridagi x y w h ni ko'paytiradi; boshqa qatorlar o'zgarmaydi */
+static char *txt_scale(const char *in, int pct, BOOL *changed)
+{
+    size_t n = strlen(in);
+    char *b = (char *)malloc(n * 2 + 64), *d = b;
+    if (!b) return NULL;
+    *changed = FALSE;
+    for (const char *p = in; *p; ) {
+        const char *e = strchr(p, '\n');
+        size_t L = e ? (size_t)(e - p + 1) : strlen(p);
+        char line[256], name[64], spr[64]; int res, x, y, w, h;
+        if (L < sizeof(line)) {
+            memcpy(line, p, L); line[L] = 0;
+            if (sscanf(line, "%63s %d %63s %d %d %d %d", name, &res, spr, &x, &y, &w, &h) == 7 && res == 640 && !_strnicmp(spr, "640hud", 6)) {
+                d += sprintf(d, "%s\t%d\t%s\t%d\t%d\t%d\t%d\r\n", name, res, spr, sc_i(x, pct), sc_i(y, pct), sc_i(w, pct), sc_i(h, pct));
+                *changed = TRUE; p += L; continue;
+            }
+        }
+        memcpy(d, p, L); d += L; p += L;
+    }
+    *d = 0;
+    return b;
+}
+
+static void hud_scale_dir(const wchar_t *sub, int pct)
+{
+    wchar_t dir[MAX_PATH], bak[MAX_PATH], st[MAX_PATH], pat[MAX_PATH], tmp[MAX_PATH];
+    path_join(dir, g_dir, sub);
+    _snwprintf(tmp, MAX_PATH, L"xc_backup\\hud\\%s", sub); tmp[MAX_PATH - 1] = 0;
+    path_join(bak, g_dir, tmp);
+    path_join(st, bak, L"_scale.txt");
+    int was = 100;
+    { long l = 0; char *s = read_all(st, &l); if (s) { was = atoi(s); free(s); } }
+    if (was <= 0) was = 100;
+    if (was == pct) return;
+    path_join(pat, dir, L"*.*");
+    WIN32_FIND_DATAW fd;
+    HANDLE hf = FindFirstFileW(pat, &fd);
+    if (hf == INVALID_HANDLE_VALUE) return;
+    mkdirs_for(st);
+    do {
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+        const wchar_t *ext = wcsrchr(fd.cFileName, L'.');
+        BOOL isSpr = ext && !_wcsicmp(ext, L".spr") && !_wcsnicmp(fd.cFileName, L"640hud", 6);
+        BOOL isTxt = ext && !_wcsicmp(ext, L".txt");
+        if (!isSpr && !isTxt) continue;
+        wchar_t cur[MAX_PATH], org[MAX_PATH];
+        path_join(cur, dir, fd.cFileName);
+        path_join(org, bak, fd.cFileName);
+        if (!file_exists(org)) {                              /* asl nusxa hali yo'q: hozirgisi asl (was==100 bo'lsa) */
+            if (was != 100) continue;
+            if (isTxt) { long l = 0; char *t = read_all(cur, &l); BOOL ch = FALSE; char *x = t ? txt_scale(t, 100, &ch) : NULL; free(t); free(x); if (!ch) continue; }
+            CopyFileW(cur, org, TRUE);
+        }
+        if (pct == 100) { CopyFileW(org, cur, FALSE); continue; }
+        long l = 0; char *src = read_all(org, &l), *res = NULL; long rl = 0;
+        if (!src) continue;
+        if (isSpr) { if (!spr_scale(src, l, pct, &res, &rl)) res = NULL; }
+        else { BOOL ch = FALSE; res = txt_scale(src, pct, &ch); rl = res ? (long)strlen(res) : 0; if (!ch) { free(res); res = NULL; } }
+        free(src);
+        if (!res) continue;
+        SetFileAttributesW(cur, FILE_ATTRIBUTE_NORMAL);
+        FILE *f = _wfopen(cur, L"wb");
+        if (f) { fwrite(res, 1, rl, f); fclose(f); }
+        free(res);
+    } while (FindNextFileW(hf, &fd));
+    FindClose(hf);
+    FILE *f = _wfopen(st, L"wb");
+    if (f) { fprintf(f, "%d", pct); fclose(f); }
+}
+static void hud_scale(void)
+{
+    int pct = o_hud == 150 || o_hud == 200 || o_hud == 125 ? o_hud : 100;
+    hud_scale_dir(L"cstrike\\sprites", pct);
+    wchar_t ru[MAX_PATH];
+    path_join(ru, g_dir, L"cstrike_russian\\sprites\\hud.txt");
+    if (file_exists(ru)) hud_scale_dir(L"cstrike_russian\\sprites", pct);
+}
+
+/* O'yin brauzeri (CEF) menyuni (mmb.boost-top.com/index.html) htmlcache dan soatlab ochishi mumkin - yangi menyu ko'rinmay qoladi.
+ * Launcher yangi versiyaga o'tganda keshni bir marta tozalaymiz (sozlamalar va kirish saytdan qayta tiklanadi). */
+static void clear_menu_cache(void)
+{
+    wchar_t ini[MAX_PATH], p[MAX_PATH + 2] = {0};
+    ini_path(ini);
+    int done = GetPrivateProfileIntW(L"x", L"cachebuild", 0, ini);
+    if (done == g_build || g_build <= 0) return;
+    path_join(p, g_dir, L"htmlcache");
+    if (GetFileAttributesW(p) != INVALID_FILE_ATTRIBUTES) {
+        SHFILEOPSTRUCTW op = {0};
+        op.wFunc = FO_DELETE; op.pFrom = p;   /* pFrom ikki marta 0 bilan tugaydi */
+        op.fFlags = FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
+        SHFileOperationW(&op);
+    }
+    wchar_t w[24]; _snwprintf(w, 24, L"%d", g_build);
+    WritePrivateProfileStringW(L"x", L"cachebuild", w, ini);
+}
+
+/* O'yin allaqachon ochiqmi (shu papkadagi hl.exe / cstrike.exe). Ishlab turgan bo'lsa - oynasini oldinga chiqaramiz,
+ * qotib qolgan yoki oynasiz orqada qolgan bo'lsa (CS "already running" deb ochilmay qoladi) - so'rab, yopamiz. */
+typedef struct { DWORD pid; HWND wnd; } GameWnd;
+static BOOL CALLBACK game_wnd_cb(HWND w, LPARAM lp)
+{
+    GameWnd *g = (GameWnd *)lp; DWORD pid = 0;
+    GetWindowThreadProcessId(w, &pid);
+    if (pid == g->pid && IsWindowVisible(w) && !GetWindow(w, GW_OWNER)) { g->wnd = w; return FALSE; }
+    return TRUE;
+}
+/* O'yin papkasidan ishga tushgan hamma jarayonlar (hl.exe, cstrike.exe va o'yin brauzerining yordamchi jarayonlari -
+ * o'yin qulaganda ular orqada qolib, CS ni "already running" deb ochilmaydigan qilib qo'yadi). Launcherning o'zi kirmaydi. */
+static int game_procs(HANDLE out[], wchar_t names[][64], int cap)
+{
+    int n = 0;
+    size_t dl = wcslen(g_dir);
+    if (dl <= 3) return 0;                                  /* o'yin disk ildizida (D:\) - butun diskdagi jarayonlarni o'yin deb olmaymiz */
+    DWORD me = GetCurrentProcessId();
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return 0;
+    PROCESSENTRY32W pe; pe.dwSize = sizeof(pe);
+    for (BOOL ok = Process32FirstW(snap, &pe); ok && n < cap; ok = Process32NextW(snap, &pe)) {
+        if (pe.th32ProcessID == me || !_wcsicmp(pe.szExeFile, XC_EXE) || !_wcsicmp(pe.szExeFile, XC_EXE_LEGACY)
+            || !_wcsnicmp(pe.szExeFile, L"XClient-Uninstall", 17) || !_wcsnicmp(pe.szExeFile, L"unins", 5)
+            || !_wcsicmp(pe.szExeFile, L"hlds.exe") || !_wcsicmp(pe.szExeFile, L"hltv.exe")) continue;   /* server/HLTV - o'yin emas */
+        /* faqat so'rash huquqi: o'yin administrator sifatida ochilgan bo'lsa ham ko'rinsin (yopish huquqi keyin, "Ha" dan so'ng) */
+        HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, FALSE, pe.th32ProcessID);
+        if (!h) continue;
+        wchar_t img[MAX_PATH]; DWORD il = MAX_PATH;
+        if (QueryFullProcessImageNameW(h, 0, img, &il) && il > dl && !_wcsnicmp(img, g_dir, dl) && (img[dl] == L'\\' || img[dl] == L'/')) {
+            lstrcpynW(names[n], pe.szExeFile, 64);
+            out[n++] = h;
+        } else CloseHandle(h);
+    }
+    CloseHandle(snap);
+    return n;
+}
+/* TRUE - o'yinni ochish mumkin, FALSE - ochmaymiz (ishlab turgan oynasi oldinga chiqarildi yoki o'yinchi "Yo'q" dedi) */
+static BOOL handle_running_game(void)
+{
+    HANDLE ph[16]; wchar_t nm[16][64];
+    int n = game_procs(ph, nm, 16);
+    if (!n) return TRUE;
+    wchar_t list[256] = L"";
+    for (int i = 0; i < n && wcslen(list) < 180; i++) { if (i) wcscat(list, L", "); wcscat(list, nm[i]); }
+    HWND live = NULL; BOOL hung = FALSE;
+    for (int i = 0; i < n; i++) {
+        if (_wcsicmp(nm[i], L"hl.exe") && _wcsicmp(nm[i], L"cstrike.exe")) continue;   /* oyna holati - faqat o'yinning o'zi */
+        GameWnd g = { GetProcessId(ph[i]), NULL };
+        EnumWindows(game_wnd_cb, (LPARAM)&g);
+        if (g.wnd) { if (IsHungAppWindow(g.wnd)) hung = TRUE; else live = g.wnd; }
+    }
+    BOOL go = TRUE;
+    if (live && !hung) {
+        if (IsIconic(live)) ShowWindow(live, SW_RESTORE);
+        SetForegroundWindow(live);
+        go = FALSE;
+    } else {
+        wchar_t q[512];
+        _snwprintf(q, 512, L"O‘yin oldingi safardan ochiq qolgan yoki qotib qolgan (%s).\nUni yopib, qayta ochaymi?\n\n"
+                           L"Игра осталась открытой или зависла. Закрыть и запустить заново?", list);
+        q[511] = 0;
+        /* g_wnd ustida: launcher oynasi (topmost) so'rovni yopib qo'ymasin; xarita yuklanayotgan sog' o'yin ham "qotgan" ko'rinishi mumkin - standart "Yo'q" */
+        if (MessageBoxW(g_wnd, q, L"X CLIENT", MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND | MB_TOPMOST | MB_DEFBUTTON2) != IDYES) go = FALSE;
+    }
+    if (go && !(live && !hung)) {
+        BOOL denied = FALSE;
+        for (int i = 0; i < n; i++) {
+            HANDLE t = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, FALSE, GetProcessId(ph[i]));
+            if (t) { TerminateProcess(t, 1); WaitForSingleObject(t, 5000); CloseHandle(t); } else denied = TRUE;
+        }
+        Sleep(500);
+        if (denied) {
+            MessageBoxW(g_wnd, L"O‘yinni yopib bo‘lmadi (administrator sifatida ochilgan). Диспетчер задач orqali yoping yoki kompyuterni qayta yoqing.\n\n"
+                               L"Не удалось закрыть игру (запущена от администратора). Закройте её через диспетчер задач.", L"X CLIENT", MB_ICONWARNING | MB_TOPMOST);
+            go = FALSE;
+        }
+    }
+    for (int i = 0; i < n; i++) CloseHandle(ph[i]);
+    return go;
+}
+
 static void run_game(void)
 {
     wchar_t exe[MAX_PATH], cmd[1024];
-    /* X CLIENT oynasi (x-ui) bo'lsa - o'shani ochamiz, o'yinni u ishga tushiradi */
-    wchar_t ui[MAX_PATH];
-    path_join(ui, g_dir, L"x-ui\\XClientUI.exe");
-    if (GetFileAttributesW(ui) != INVALID_FILE_ATTRIBUTES) {
-        STARTUPINFOW si0 = { sizeof(si0) };
-        PROCESS_INFORMATION pi0;
-        wchar_t uidir[MAX_PATH];
-        path_join(uidir, g_dir, L"x-ui");
-        if (CreateProcessW(ui, NULL, NULL, NULL, FALSE, 0, NULL, uidir, &si0, &pi0)) {
-            CloseHandle(pi0.hThread); CloseHandle(pi0.hProcess);
-            return;
-        }
-    }
+    remove_old_ui();
+    clear_menu_cache();
+    apply_theme_dir(L"");
+    fix_override_bg();
+    lang_bg();
+    setup_main_menu();
+    remove_game_links();
+    ensure_scheme();
+    ensure_launcher_cfg();
+    if (o_ok) hud_scale();
     path_join(exe, g_dir, L"cstrike.exe");
     if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) path_join(exe, g_dir, L"hl.exe");
     if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) {
         MessageBoxW(NULL, L"O‘yin fayllari (cstrike.exe) topilmadi. X CLIENT ni to‘liq paketdan qayta o‘rnating.", L"X CLIENT", MB_ICONERROR);
         return;
     }
-    _snwprintf(cmd, 1024, L"\"%s\" -game cstrike -noforcemparms -noforcemaccel +exec xclient_launcher.cfg", exe);
+    wchar_t vid[96] = L"";
+    unsigned w = 0, h = 0;
+    if (o_res[0] && sscanf(o_res, "%ux%u", &w, &h) == 2) _snwprintf(vid, 96, L" -width %u -height %u%s", w, h, o_win ? L" -window" : L" -full");
+    else if (o_win) lstrcpyW(vid, L" -window");
+    else {
+        /* "Avto": o'yin monitorning haqiqiy o'lchamida ochiladi (Windows masshtabi 125%/150% bo'lsa ham - EnumDisplaySettings) */
+        DEVMODEW dm; ZeroMemory(&dm, sizeof(dm)); dm.dmSize = sizeof(dm);
+        if (EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &dm) && dm.dmPelsWidth >= 640 && dm.dmPelsHeight >= 480) {
+            w = dm.dmPelsWidth; h = dm.dmPelsHeight;
+            _snwprintf(vid, 96, L" -width %u -height %u -full", w, h);
+        }
+    }
+    /* -freq: busiz CS 1.6 to'liq ekranni ko'pincha 60 Hz da ochadi (144 Hz monitorda ham) - 100 FPS 60 Hz da notekis, "silliq emas".
+     * Shu o'lcham uchun monitor qo'llaydigan eng yuqori chastotani tanlaymiz */
+    if (!o_win && w && h) {
+        DWORD best = 0; DEVMODEW m; ZeroMemory(&m, sizeof(m)); m.dmSize = sizeof(m);
+        for (DWORD i = 0; EnumDisplaySettingsW(NULL, i, &m); i++)
+            if (m.dmPelsWidth == w && m.dmPelsHeight == h && m.dmBitsPerPel >= 32 && m.dmDisplayFrequency > best && m.dmDisplayFrequency <= 500) best = m.dmDisplayFrequency;
+        if (best > 60) { size_t l = wcslen(vid); _snwprintf(vid + l, 96 - l, L" -freq %lu", best); }
+    }
+    _snwprintf(cmd, 1024, L"\"%s\" -game cstrike%s -noforcemparms -noforcemaccel +exec xclient_launcher.cfg", exe, vid);
     STARTUPINFOW si = { sizeof(si) };
     PROCESS_INFORMATION pi;
+    if (o_ok) compat_flags(exe, o_prio);
     if (CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, g_dir, &si, &pi)) {
+        if (g_one) { CloseHandle(g_one); g_one = NULL; }   /* o'yin ochildi - endi yana bosilsa, yangi launcher uni topib oldinga chiqaradi */
+        if (o_prio) SetPriorityClass(pi.hProcess, ABOVE_NORMAL_PRIORITY_CLASS);   /* "O'yinni tezlashtirish": HIGH Windows ovoz xizmatini (audiodg) siqib, ovoz qotishi va chirsillashiga sabab bo'lardi */
         CloseHandle(pi.hThread);
+        /* guard_theme olib tashlandi: nDirect fayllarini qayta yozish har ochilishda yangilanishga sabab bo'lardi */
+        /* O'yin yopilgach skrinshotlarni (F5) darhol galereyaga yuklaymiz - keyingi ishga tushishni kutmasdan.
+         * fetch_opts qayta: menyuda o'yin paytida yoqilgan "galereyaga yuklash" ham hisobga olinadi va
+         * sayt shu kompyuterni yana taniydi (shot_up 30 daqiqalik IP tekshiruvi). */
+        WaitForSingleObject(pi.hProcess, INFINITE);
+        fetch_opts();
+        if (o_ok && o_shots) upload_shots();
         CloseHandle(pi.hProcess);
     }
 }
@@ -611,13 +1718,27 @@ static DWORD WINAPI worker(LPVOID unused)
     if (!g_key[0]) read_trailer();
     make_id();
     ini_save();
+    /* o'yin allaqachon ochiq: fayllarni (kesh, paketlar, yangilanish) o'yin ishlab turganda o'zgartirmaymiz -
+     * ishlab turgan bo'lsa oynasi oldinga chiqadi, qotgan bo'lsa so'raladi va yopilgach odatdagidek davom etamiz */
+    if (!handle_running_game()) { g_play = FALSE; PostMessageW(g_wnd, WM_XC_DONE, 0, 0); return 0; }
 
     g_net = InternetOpenA("XClient", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
-    DWORD to = 15000;
+    /* ulanish 6 s: sayt javob bermasa launcher 15 s kutib turmaydi (yuklab olishda o'qish kutishi 15 s qoladi) */
+    DWORD to = 6000, rto = 15000;
     InternetSetOptionA(g_net, INTERNET_OPTION_CONNECT_TIMEOUT, &to, sizeof(to));
-    InternetSetOptionA(g_net, INTERNET_OPTION_RECEIVE_TIMEOUT, &to, sizeof(to));
+    InternetSetOptionA(g_net, INTERNET_OPTION_RECEIVE_TIMEOUT, &rto, sizeof(rto));
 
     if (fresh) { g_fresh = TRUE; status(L"O‘rnatilmoqda...", 1); api_call("install", NULL); }
+
+    fetch_opts();
+    if (o_beta >= 0) { lstrcpynA(g_chan, o_beta ? "beta" : "stable", sizeof(g_chan)); ini_save(); }
+    if (o_start >= 0) set_autostart(o_start);
+    if (o_clean) { status(L"Kesh tozalanmoqda...", 1); clean_cache(); }
+    else auto_clean_cache();
+    if (o_ok) {                                   /* internet bo'lmasa paketlarga tegmaymiz */
+        install_spray();
+        apply_packs();
+    }   /* skrinshotlar o'yin yopilgach yuklanadi (run_game) - o'yin tezroq ochiladi */
 
     status(L"Yangilanish tekshirilmoqda...", 1);
     UpdInfo u;
@@ -627,7 +1748,8 @@ static DWORD WINAPI worker(LPVOID unused)
             MultiByteToWideChar(CP_UTF8, 0, u.msg, -1, w, 256);
             MessageBoxW(g_wnd, w, L"X CLIENT", MB_ICONWARNING);
         }
-        if (u.build && u.base[0] && u.manifest[0] && (u.build != g_build || fresh)) {
+        BOOL must = fresh || o_verify || (u.min && g_build < u.min);
+        if (u.build && u.base[0] && u.manifest[0] && (u.build != g_build || must) && (o_auto || must)) {
             BOOL selfUp = FALSE;
             int fails = sync_files(&u, &selfUp);
             if (fails == 0) {
@@ -642,13 +1764,15 @@ static DWORD WINAPI worker(LPVOID unused)
         }
         write_master_cfg(u.master);
     }
+    if (!g_relaunch) write_master_js();
+    if (!g_relaunch && (o_clean || o_verify || o_beta >= 0)) opts_done(cache_mb());
     if (!g_relaunch && !ensure_game(u.game)) {
         lstrcpyW(g_err, L"CS 1.6 o‘yin fayllarini o‘rnatib bo‘lmadi. Internetni tekshirib, X CLIENT ni qayta oching.");
         g_play = FALSE;
     }
     status(L"O‘yin ochilmoqda...", 100);
     if (!g_relaunch) api_call("launch", NULL);   /* yangi launcher o'zi yuboradi */
-    InternetCloseHandle(g_net);
+    /* g_net yopilmaydi: o'yin yopilgach run_game() undan foydalanadi (sozlamalar, skrinshotlar) */
     PostMessageW(g_wnd, WM_XC_DONE, 0, 0);
     return 0;
 }
@@ -675,17 +1799,83 @@ static LRESULT CALLBACK wndproc(HWND h, UINT m, WPARAM w, LPARAM l)
     return DefWindowProcW(h, m, w, l);
 }
 
+/* Eski nom (XClient.exe) bilan ishga tushgan bo'lsak: o'zimizni XCLauncher.exe qilib nusxalaymiz va o'shani ochamiz.
+ * Yangi nusxa eski faylni o'chiradi, ish stoli yorlig'i va avto-ishga tushirishni yangi nomga o'tkazadi. */
+static BOOL g_migrated = FALSE;
+static BOOL migrate_name(void)
+{
+    wchar_t *base = wcsrchr(g_self, L'\\');
+    if (!base || _wcsicmp(base + 1, XC_EXE_LEGACY)) return FALSE;
+    wchar_t dir[MAX_PATH], dst[MAX_PATH];
+    lstrcpynW(dir, g_self, MAX_PATH);
+    dir[base - g_self] = 0;
+    path_join(dst, dir, XC_EXE);
+    if (!CopyFileW(g_self, dst, FALSE)) return FALSE;
+    STARTUPINFOW si = { sizeof(si) };
+    PROCESS_INFORMATION pi;
+    if (!CreateProcessW(dst, NULL, NULL, NULL, FALSE, 0, NULL, dir, &si, &pi)) return FALSE;
+    CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+    return TRUE;
+}
+static void remove_legacy_exe(void)
+{
+    wchar_t dir[MAX_PATH], old[MAX_PATH], oldBak[MAX_PATH];
+    lstrcpynW(dir, g_self, MAX_PATH);
+    wchar_t *bs = wcsrchr(dir, L'\\');
+    if (!bs) return;
+    *bs = 0;
+    path_join(old, dir, XC_EXE_LEGACY);
+    _snwprintf(oldBak, MAX_PATH, L"%s.old", old); oldBak[MAX_PATH - 1] = 0;
+    DeleteFileW(oldBak);
+    if (GetFileAttributesW(old) == INVALID_FILE_ATTRIBUTES) return;
+    for (int i = 0; i < 40; i++) {                        /* eski jarayon yopilishini kutamiz (10 s gacha) */
+        SetFileAttributesW(old, FILE_ATTRIBUTE_NORMAL);
+        if (DeleteFileW(old)) { g_migrated = TRUE; return; }
+        Sleep(250);
+    }
+    MoveFileExW(old, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
+    g_migrated = TRUE;
+}
+/* yorliq va avto-ishga tushirish eski exe'ga qarab turgan bo'lsa - yangisiga */
+static void fix_links_after_migration(void)
+{
+    if (!g_migrated) return;
+    make_shortcut(g_self);
+    HKEY k; wchar_t v[MAX_PATH + 4]; DWORD sz = sizeof(v), type = 0;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_QUERY_VALUE, &k) == ERROR_SUCCESS) {
+        BOOL had = RegQueryValueExW(k, L"X CLIENT", NULL, &type, (BYTE *)v, &sz) == ERROR_SUCCESS;
+        RegCloseKey(k);
+        if (had) set_autostart(1);
+    }
+}
+
 int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, LPWSTR cmdline, int show)
 {
     (void)hp; (void)cmdline; (void)show;
     CoInitialize(NULL);
     GetModuleFileNameW(NULL, g_self, MAX_PATH);
+    if (migrate_name()) { CoUninitialize(); return 0; }
+    remove_legacy_exe();
+    if (g_migrated) {                                       /* yorliq uchun ishchi papka - exe turgan papka */
+        lstrcpynW(g_dir, g_self, MAX_PATH);
+        wchar_t *bs = wcsrchr(g_dir, L'\\'); if (bs) *bs = 0;
+        fix_links_after_migration();
+        g_dir[0] = 0;
+    }
     detect_os();
 
     /* oldingi yangilanishdan qolgan eski exe */
     wchar_t old[MAX_PATH];
-    _snwprintf(old, MAX_PATH, L"%s.old", g_self);
+    _snwprintf(old, MAX_PATH, L"%s.old", g_self); old[MAX_PATH - 1] = 0;
     DeleteFileW(old);
+
+    /* bitta nusxa: ikki marta bosilsa ikkinchisi bir xil fayllarni bir vaqtda yangilab, o'yinni ikki marta ochmasin */
+    HANDLE one = CreateMutexW(NULL, FALSE, L"Local\\XClientLauncher");
+    if ((one && GetLastError() == ERROR_ALREADY_EXISTS) || (!one && GetLastError() == ERROR_ACCESS_DENIED)) {   /* denied: admin huquqidagi nusxa ishlayapti */
+        if (one) CloseHandle(one);
+        CoUninitialize(); return 0;
+    }
+    g_one = one;
 
     INITCOMMONCONTROLSEX ic = { sizeof(ic), ICC_PROGRESS_CLASS };
     InitCommonControlsEx(&ic);
@@ -716,6 +1906,7 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, LPWSTR cmdline, int show)
     WaitForSingleObject(th, 5000);
 
     if (g_err[0]) MessageBoxW(NULL, g_err, L"X CLIENT", MB_ICONERROR);
+    if (g_relaunch && g_one) { CloseHandle(g_one); g_one = NULL; }   /* yangilangan launcher ochila olsin */
     if (g_relaunch) {
         /* yangi launcher bilan qayta ishga tushamiz */
         STARTUPINFOW si = { sizeof(si) };

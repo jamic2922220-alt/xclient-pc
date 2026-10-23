@@ -9,6 +9,10 @@ on:
         default: stable
         type: choice
         options: [ stable, beta ]
+      setup:
+        description: "X-Client-Setup.exe ni ham yangilash (odatda YO'Q: Setup barqaror qoladi - SmartScreen obro'si yo'qolmasin; launcher o'zi yangilanadi)"
+        default: false
+        type: boolean
 
 env:
   CHANNEL: ${{ github.event.inputs.channel || 'beta' }}
@@ -20,38 +24,35 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+    env:
+      # Raqamli imzo (SmartScreen "isn't commonly downloaded" ogohlantirishini kamaytiradi): GitHub > Settings > Secrets
+      # SIGN_PFX_B64 - kod imzolash sertifikati (.pfx) base64 ko'rinishida, SIGN_PASS - uning paroli. Bo'lmasa - imzosiz yig'iladi.
+      SIGN_PFX_B64: ${{ secrets.SIGN_PFX_B64 }}
+      SIGN_PASS: ${{ secrets.SIGN_PASS }}
     steps:
+      # Windows runner git'i matnli fayllarni CRLF ga o'giradi: manifest CRLF bo'yicha hisoblanadi, raw.githubusercontent
+      # esa LF beradi - launcher hash mos kelmay yangilanishni hech qachon yakunlamaydi. Baytlar o'zgarmasin.
+      - name: Git - qator oxirlarini o'zgartirmaslik
+        shell: bash
+        run: git config --global core.autocrlf false
+
       - name: Checkout X CLIENT fayllari
         uses: actions/checkout@v5
         with:
           path: own
           fetch-depth: 1
 
-      - name: X CLIENT fayllari (o'yinni launcher o'zi o'rnatadi)
+      - name: X CLIENT fayllari (o'yin + dizayn bitta XClient.exe da)
         shell: bash
         run: |
           set -e
           # Asl PC CS 1.6 (boost-top PRO 2.5.3) GitHub'ga joylanmaydi:
           # XClient.exe o'yin yo'q bo'lsa uni cssborka.uz dan yuklab, o'rnatuvchi orqali o'rnatadi.
-          mkdir -p dist
+          # Alohida oyna (Electron) YO'Q: XClient.exe dizaynni qo'yib, cstrike.exe ni o'zi ochadi.
+          mkdir -p dist/xc_theme
           echo "${GITHUB_RUN_NUMBER}" > dist/bt_build.txt
-          cat > "dist/X CLIENT.bat" <<'BAT'
-          @echo off
-          cd /d "%~dp0"
-          if exist "x-ui\XClientUI.exe" ( start "" "x-ui\XClientUI.exe" ) else ( start "" XClient.exe )
-          BAT
-          sed -i 's/^          //' "dist/X CLIENT.bat"
-
-      - name: X CLIENT oynasi (x-ui, Electron 22 — Windows 7..11)
-        shell: bash
-        run: |
-          set -e
-          cd own/ui
-          npx --yes @electron/packager@18.3.6 . XClientUI --platform=win32 --arch=ia32 --electron-version=22.3.27 --icon=app/img/icon.ico --asar --overwrite --out ../../uiout
-          cd ../..
-          mkdir -p dist/x-ui
-          cp -r uiout/XClientUI-win32-ia32/. dist/x-ui/
-          ls -la dist/x-ui | head
+          cp -r own/theme/. dist/xc_theme/
+          find dist -type f | head -50
 
       - name: Setup Visual Studio (x86)
         uses: ilammy/msvc-dev-cmd@v1
@@ -61,7 +62,15 @@ jobs:
       - name: X CLIENT launcher (avto-yangilovchi)
         shell: cmd
         run: |
-          cl /nologo /O2 /MT /utf-8 /DUNICODE /D_UNICODE own\xclient_launcher.c /Fe:dist\XClient.exe /link /SUBSYSTEM:WINDOWS wininet.lib comctl32.lib ole32.lib uuid.lib shell32.lib advapi32.lib user32.lib gdi32.lib
+          rem ikonka (xclient.ico -> xclient.res)
+          pushd own && rc /nologo /fo xclient.res xclient.rc && popd
+          cl /nologo /O2 /MT /utf-8 /DUNICODE /D_UNICODE own\xclient_launcher.c own\xclient.res /Fe:dist\XCLauncher.exe /link /SUBSYSTEM:WINDOWS wininet.lib comctl32.lib ole32.lib uuid.lib shell32.lib advapi32.lib user32.lib gdi32.lib gdiplus.lib
+          if defined SIGN_PFX_B64 (
+            powershell -NoProfile -Command "[IO.File]::WriteAllBytes('sign.pfx', [Convert]::FromBase64String($env:SIGN_PFX_B64))"
+            signtool sign /f sign.pfx /p "%SIGN_PASS%" /fd sha256 /tr http://timestamp.digicert.com /td sha256 /d "X CLIENT" dist\XCLauncher.exe || exit /b 1
+          ) else ( echo ::notice::Imzo sertifikati yo'q - launcher imzosiz )
+          rem eski launcherlar (XClient.exe) o'zini shu nusxadan yangilaydi va XCLauncher.exe ga o'tadi
+          copy /Y dist\XCLauncher.exe dist\XClient.exe
 
       - name: Manifest + dist vetkasiga joylash
         id: dist
@@ -73,9 +82,9 @@ jobs:
           cd dist
           echo "$XC_VERSION" > xclient_version.txt
           KEEP='^cstrike/(config|userconfig|video|opengl|boosttop_settings|autoexec)\.cfg$'
-          # Electron binarlari juda katta (git 100MB chegarasi) - yangilanishda faqat app.asar
-          printf 'x-ui/*\n!x-ui/resources/\nx-ui/resources/*\n!x-ui/resources/app.asar\n' > .gitignore
+          : > .gitignore
           git init -q
+          git config core.autocrlf false
           git ls-files --others --cached --exclude-standard | grep -v -e '^manifest.txt$' -e '^.gitignore$' | LC_ALL=C sort | while IFS= read -r f; do
             h=$(sha256sum "$f" | cut -d' ' -f1); sz=$(stat -c%s "$f"); p=""
             if echo "$f" | grep -Eq "$KEEP"; then p="?"; fi
@@ -90,9 +99,32 @@ jobs:
           SHA=$(git rev-parse HEAD)
           echo "base=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${SHA}" >> "$GITHUB_OUTPUT"
           cd ..
-          # paket: XClient.exe + x-ui (o'yinni birinchi ochilishda o'zi o'rnatadi)
-          mkdir -p full && cp -r dist/. full/ && rm -rf full/.git full/.gitignore full/manifest.txt
+          # paket: XCLauncher.exe + xc_theme (o'yinni birinchi ochilishda o'zi o'rnatadi)
+          mkdir -p full && cp -r dist/. full/ && rm -rf full/.git full/.gitignore full/manifest.txt full/XClient.exe
           7z a -tzip X-Client-CS16.zip ./full/* > /dev/null
+
+      - name: O'rnatuvchi (X-Client-Setup.exe)
+        shell: cmd
+        run: |
+          copy /Y own\installer.nsi . && copy /Y own\xclient.ico .
+          if not exist "%ProgramFiles(x86)%\NSIS\makensis.exe" choco install nsis -y --no-progress
+          rem CS 1.6 (boost-top PRO) o'rnatuvchisi ham ichiga qo'shiladi - yuklab bo'lmasa, faqat launcher
+          curl -fsSL --retry 3 -o game_setup.exe "https://cssborka.uz/uploads/files/1791198609_6ac38591b615c_CS_1_6_boost-top_PRO_2_5_3.exe" || del game_setup.exe
+          if exist game_setup.exe ( "%ProgramFiles(x86)%\NSIS\makensis.exe" /V2 /DSRC=full /DVER=%XC_VERSION% /DGAME=game_setup.exe installer.nsi ) else ( echo ::warning::CS 1.6 o'rnatuvchisi yuklanmadi - Setup faqat launcher bilan && "%ProgramFiles(x86)%\NSIS\makensis.exe" /V2 /DSRC=full /DVER=%XC_VERSION% installer.nsi )
+          for %%F in (X-Client-Setup.exe) do echo Setup hajmi: %%~zF bayt
+          if defined SIGN_PFX_B64 ( signtool sign /f sign.pfx /p "%SIGN_PASS%" /fd sha256 /tr http://timestamp.digicert.com /td sha256 /d "X CLIENT" X-Client-Setup.exe || exit /b 1 )
+          if exist sign.pfx del /q sign.pfx
+
+      - name: Sinov o'rnatuvchisi (beta - GitHub pre-release)
+        if: env.CHANNEL == 'beta'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # havola: https://github.com/<repo>/releases/download/xclient-beta/X-Client-Setup.exe (hammaga yangilanish bo'lib bormaydi)
+          gh release delete xclient-beta --repo "$GITHUB_REPOSITORY" --cleanup-tag -y || true
+          gh release create xclient-beta X-Client-Setup.exe --repo "$GITHUB_REPOSITORY" --target "${{ github.sha }}" --prerelease \
+            --title "X CLIENT $XC_VERSION (beta sinov)" --notes "Sinov versiyasi."
 
       - name: Panelga xabar (hamma klientlar yangilanadi)
         shell: bash
@@ -110,8 +142,32 @@ jobs:
             --data-urlencode "notes=$(git -C own log -1 --pretty=%s)" \
             "$XC_API?a=release"
 
+      - name: Yuklab olish havolasi (GitHub Release, faqat stable)
+        if: env.CHANNEL == 'stable'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # doimiy havolalar: .../releases/download/xclient-latest/X-Client-Setup.exe va X-Client-CS16.zip
+          # X-Client-Setup.exe BARQAROR: har yangi fayl SmartScreen uchun "notanish" bo'ladi (Microsoft'ga qayta yuborish kerak).
+          # Shuning uchun u faqat "setup" belgisi bilan almashtiriladi; launcher o'yinchilarda o'zini o'zi yangilaydi.
+          NOTES="X CLIENT $XC_VERSION - CS 1.6 uchun launcher. X-Client-Setup.exe ni yuklab o'rnating (yoki zipni oching va XCLauncher.exe ni ishga tushiring)."
+          if gh release view xclient-latest --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload xclient-latest X-Client-CS16.zip --repo "$GITHUB_REPOSITORY" --clobber
+            if [ "${{ github.event.inputs.setup }}" = "true" ]; then
+              gh release upload xclient-latest X-Client-Setup.exe --repo "$GITHUB_REPOSITORY" --clobber
+              echo "::notice::X-Client-Setup.exe yangilandi - SmartScreen uchun Microsoft'ga qayta yuboring"
+            else echo "::notice::X-Client-Setup.exe o'zgartirilmadi (barqaror)"; fi
+            gh release edit xclient-latest --repo "$GITHUB_REPOSITORY" --title "X CLIENT $XC_VERSION" --notes "$NOTES"
+          else
+            gh release create xclient-latest X-Client-Setup.exe X-Client-CS16.zip --repo "$GITHUB_REPOSITORY" --target "${{ github.sha }}" \
+              --title "X CLIENT $XC_VERSION" --notes "$NOTES"
+          fi
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: X-Client-build${{ github.run_number }}
-          path: X-Client-CS16.zip
+          path: |
+            X-Client-CS16.zip
+            X-Client-Setup.exe
