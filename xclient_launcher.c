@@ -1027,6 +1027,38 @@ static void clean_cache(void)
     SHFileOperationW(&op);
 }
 
+/* Avtomatik tozalash (har ishga tushishda): 30 kundan beri yangilanmagan yuklangan fayllar o'chiriladi -
+ * kerak bo'lsa server ularni yana beradi. Kesh baribir 3 GB dan oshsa - hammasi tozalanadi. Band fayllar o'tkazib yuboriladi. */
+#define AUTOCLEAN_DAYS 30
+#define AUTOCLEAN_MAX_MB 3072
+static void prune_old(const wchar_t *dir, ULONGLONG cutoff)
+{
+    wchar_t mask[MAX_PATH], sub[MAX_PATH];
+    path_join(mask, dir, L"*");
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(mask, &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        if (!wcscmp(fd.cFileName, L".") || !wcscmp(fd.cFileName, L"..")) continue;
+        path_join(sub, dir, fd.cFileName);
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) { prune_old(sub, cutoff); RemoveDirectoryW(sub); continue; }   /* bo'sh qolsa - papka ham */
+        ULONGLONG w = ((ULONGLONG)fd.ftLastWriteTime.dwHighDateTime << 32) | fd.ftLastWriteTime.dwLowDateTime;
+        ULONGLONG c = ((ULONGLONG)fd.ftCreationTime.dwHighDateTime << 32) | fd.ftCreationTime.dwLowDateTime;
+        if ((w > c ? w : c) < cutoff) DeleteFileW(sub);
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+}
+static void auto_clean_cache(void)
+{
+    wchar_t d[MAX_PATH];
+    path_join(d, g_dir, L"cstrike_downloads");
+    if (GetFileAttributesW(d) == INVALID_FILE_ATTRIBUTES) return;
+    FILETIME now; GetSystemTimeAsFileTime(&now);
+    ULONGLONG t = ((ULONGLONG)now.dwHighDateTime << 32) | now.dwLowDateTime;
+    prune_old(d, t - (ULONGLONG)AUTOCLEAN_DAYS * 24 * 3600 * 10000000ULL);
+    if (cache_mb() > AUTOCLEAN_MAX_MB) clean_cache();
+}
+
 /* ---------------------------------------------------------------- Kontent (menyudan tanlanadi) */
 static BOOL file_exists(const wchar_t *p) { return GetFileAttributesW(p) != INVALID_FILE_ATTRIBUTES; }
 static int ini_int(const wchar_t *k) { wchar_t ini[MAX_PATH]; ini_path(ini); return GetPrivateProfileIntW(L"x", k, 0, ini); }
@@ -1577,6 +1609,7 @@ static DWORD WINAPI worker(LPVOID unused)
     if (o_beta >= 0) { lstrcpynA(g_chan, o_beta ? "beta" : "stable", sizeof(g_chan)); ini_save(); }
     if (o_start >= 0) set_autostart(o_start);
     if (o_clean) { status(L"Kesh tozalanmoqda...", 1); clean_cache(); }
+    else auto_clean_cache();
     if (o_ok) {                                   /* internet bo'lmasa paketlarga tegmaymiz */
         install_spray();
         apply_packs();
