@@ -25,6 +25,7 @@
 #include <shlobj.h>
 #include <objbase.h>
 #include <shobjidl.h>
+#include <tlhelp32.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1521,9 +1522,65 @@ static void clear_menu_cache(void)
     WritePrivateProfileStringW(L"x", L"cachebuild", w, ini);
 }
 
+/* O'yin allaqachon ochiqmi (shu papkadagi hl.exe / cstrike.exe). Ishlab turgan bo'lsa - oynasini oldinga chiqaramiz,
+ * qotib qolgan yoki oynasiz orqada qolgan bo'lsa (CS "already running" deb ochilmay qoladi) - so'rab, yopamiz. */
+typedef struct { DWORD pid; HWND wnd; } GameWnd;
+static BOOL CALLBACK game_wnd_cb(HWND w, LPARAM lp)
+{
+    GameWnd *g = (GameWnd *)lp; DWORD pid = 0;
+    GetWindowThreadProcessId(w, &pid);
+    if (pid == g->pid && IsWindowVisible(w) && !GetWindow(w, GW_OWNER)) { g->wnd = w; return FALSE; }
+    return TRUE;
+}
+static int game_procs(HANDLE out[], int cap)
+{
+    int n = 0;
+    size_t dl = wcslen(g_dir);
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return 0;
+    PROCESSENTRY32W pe; pe.dwSize = sizeof(pe);
+    for (BOOL ok = Process32FirstW(snap, &pe); ok && n < cap; ok = Process32NextW(snap, &pe)) {
+        if (_wcsicmp(pe.szExeFile, L"hl.exe") && _wcsicmp(pe.szExeFile, L"cstrike.exe")) continue;
+        HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE | SYNCHRONIZE, FALSE, pe.th32ProcessID);
+        if (!h) continue;
+        wchar_t img[MAX_PATH]; DWORD il = MAX_PATH;
+        if (QueryFullProcessImageNameW(h, 0, img, &il) && il > dl && !_wcsnicmp(img, g_dir, dl) && (img[dl] == L'\\' || img[dl] == L'/')) out[n++] = h;
+        else CloseHandle(h);
+    }
+    CloseHandle(snap);
+    return n;
+}
+/* TRUE - o'yinni ochish mumkin, FALSE - ochmaymiz (ishlab turgan oynasi oldinga chiqarildi yoki o'yinchi "Yo'q" dedi) */
+static BOOL handle_running_game(void)
+{
+    HANDLE ph[8];
+    int n = game_procs(ph, 8);
+    if (!n) return TRUE;
+    HWND live = NULL; BOOL hung = FALSE;
+    for (int i = 0; i < n; i++) {
+        GameWnd g = { GetProcessId(ph[i]), NULL };
+        EnumWindows(game_wnd_cb, (LPARAM)&g);
+        if (g.wnd) { if (IsHungAppWindow(g.wnd)) hung = TRUE; else live = g.wnd; }
+    }
+    BOOL go = TRUE;
+    if (live && !hung) {
+        if (IsIconic(live)) ShowWindow(live, SW_RESTORE);
+        SetForegroundWindow(live);
+        go = FALSE;
+    } else if (MessageBoxW(NULL, L"O‘yin oldingi safardan ochiq qolgan yoki qotib qolgan.\nUni yopib, qayta ochaymi?\n\nИгра осталась открытой или зависла. Закрыть и запустить заново?",
+                           L"X CLIENT", MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND) == IDYES) {
+        for (int i = 0; i < n; i++) TerminateProcess(ph[i], 1);
+        for (int i = 0; i < n; i++) WaitForSingleObject(ph[i], 5000);
+        Sleep(500);
+    } else go = FALSE;
+    for (int i = 0; i < n; i++) CloseHandle(ph[i]);
+    return go;
+}
+
 static void run_game(void)
 {
     wchar_t exe[MAX_PATH], cmd[1024];
+    if (!handle_running_game()) return;
     remove_old_ui();
     clear_menu_cache();
     apply_theme_dir(L"");
