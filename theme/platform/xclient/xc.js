@@ -62,7 +62,7 @@ function cmd(c) {
     if (hasApi()) {
       /* serverga ulanishdan OLDIN menyu musiqasini o'chiramiz: xarita yuklanayotganda mp3 chalinsa o'yin qotib,
        * ovoz takrorlanib qoladi va ba'zan yuklanish tugamaydi ('connect' hodisasi kech yoki manzilsiz kelishi mumkin) */
-      if (/^(connect|retry|reconnect)\b/.test(c)) { NC.exec('mp3 stop\n'); NC.exec('stopsound\n'); MUSIC_ON = false; }
+      if (/^(connect|retry|reconnect)\b/.test(c)) { if (DEMO_PLAY) demoEnd(); NC.exec('host_framerate 0\n'); NC.exec('mp3 stop\n'); NC.exec('stopsound\n'); MUSIC_ON = false; }
       NC.exec(c + '\n'); return true;
     }
   } catch (e) { dbg('exec xato ' + e); }
@@ -968,10 +968,38 @@ function voiceWarm() {
   if (!S || S.voice === 0 || S.micwarm === 0) return;
   setTimeout(function () { if (CONNECTED && !uiShown()) { cmd('+voicerecord'); setTimeout(function () { cmd('-voicerecord'); }, 120); } else if (CONNECTED) setTimeout(voiceWarm, 15000); }, 20000);
 }
+/* Demo ko'rish boshqaruvi: F6 pauza, F7 sekinroq, F8 tezroq, F9 oddiy tezlik. Tezlik host_framerate bilan
+ * (har kadr demo vaqtini belgilangan miqdorda suradi; 1/fps_max = oddiy tezlik). Tugmalar faqat demo paytida bog'lanadi,
+ * tugagach (yoki serverga ulanganda) host_framerate 0 va o'yinchining tugmalari qaytariladi - onlayn o'yinga ta'sir qilmasin. */
+var DEMO_PLAY = false, DEMO_KEYS = ['F6', 'F7', 'F8', 'F9'];
+function demoPlay(nm) {
+  nm = String(nm || '').replace(/[^\w\-]/g, '');
+  if (!nm) return;
+  var f = 1 / Math.max(30, Math.min(1000, Number(S && S.fps) || 100)), sp = [0.25, 0.5, 1, 2, 4, 8];
+  for (var i = 0; i < sp.length; i++) {
+    var hf = sp[i] === 1 ? 0 : Math.round(f * sp[i] * 1e6) / 1e6;
+    cmd('alias xcd_' + i + ' "host_framerate ' + hf + '; alias xcd_up xcd_' + Math.min(i + 1, sp.length - 1) + '; alias xcd_dn xcd_' + Math.max(i - 1, 0) +
+      '; alias xcd_p xcd_pz; alias xcd_back xcd_' + i + '; echo X CLIENT demo: ' + sp[i] + 'x"');
+  }
+  cmd('alias xcd_pz "host_framerate 0.000001; alias xcd_p xcd_back; echo X CLIENT demo: pauza (F6 - davom)"');
+  cmd('xcd_2');
+  cmd('bind F6 xcd_p'); cmd('bind F7 xcd_dn'); cmd('bind F8 xcd_up'); cmd('bind F9 xcd_2');
+  DEMO_PLAY = true;
+  cmd('echo X CLIENT demo: F6 pauza, F7 sekinroq, F8 tezroq, F9 oddiy tezlik. Video: Win+Alt+R');
+  cmd('playdemo ' + nm);
+}
+function demoEnd() {
+  cmd('host_framerate 0');
+  if (!DEMO_PLAY) return;
+  DEMO_PLAY = false;
+  for (var i = 0; i < DEMO_KEYS.length; i++) cmd('unbind ' + DEMO_KEYS[i]);
+  applyBinds();
+}
 function stopRecord() { clearTimeout(REC_TM); if (REC) { cmd('stop'); REC = ''; } }
 function onConnectEvt(addr, inGame) {
   addr = normIp(addr);
   if (!addr) return;
+  if (!DEMO_PLAY) cmd('host_framerate 0');          // demo o'zi ham ulanish hodisasini berishi mumkin - demo paytida tegmaymiz (serverga ulanish 'Connecting to' bilan ushlanadi)
   if (QUEUE_IP && addr !== QUEUE_IP && addr !== CONNECTED) stopQueue();   // hozirgi serverning o'z hodisalari (xarita almashishi) bekor qilmaydi   // boshqa serverga (konsol, o'yin ro'yxati) kirildi - navbat bekor
   if (addr !== CONNECTED) { CONNECTED = addr; MUSIC_ON = null; if (!inGame) applyPw(addr); startGame(addr); musicSync();   // serverda mp3 chalinmasin: o'yin ovozlarini bo'g'adi
     pingPresence(); renderAll(); sparks(); voiceWarm(); }
@@ -997,6 +1025,7 @@ function onConsole(txt) {
   var r = /Recording to (\S+?)(?:\.dem)?\.?\s*$/i.exec(txt);
   if (r && REC && r[1].indexOf(REC) === 0) demoAdd(REC);
   else if (REC && /(can'?t|cannot|not) record|must be connected/i.test(txt)) { REC = ''; if (S.demo && CONNECTED) startRecord(10000); }   // erta bo'ldi - keyinroq qayta
+  if (DEMO_PLAY && /Completed demo|couldn'?t open|ERROR: couldn|^\s*Connecting to/i.test(txt)) demoEnd();   // tugadi yoki serverga ulanyapti - oddiy tezlik
   if (/\b(wrote|writing|saved)\b.*\.(bmp|tga|jpg|png)\b/i.test(txt)) toast(T('sh_saved'), 2500);   // F5: skrinshot saqlandi
   if (!CUR || !MYNAME) return;
   var m = /^(.+?) killed (.+?) with ([\w\-]+)/.exec(txt.replace(/^\s+/, ''));
@@ -1611,6 +1640,7 @@ function loadSettings() {
   S.xdyn = 0; cmd('cl_dynamiccrosshair 0');
   /* spray: o'zimiznikini yuborish va boshqalarnikini ko'rish doim yoqiq (X CLIENT spreyi hamma serverda ko'rinsin) */
   S.spray = 1; S.dl = 1; cmd('cl_allowupload 1'); cmd('cl_allowdownload 1');
+  cmd('host_framerate 0');                         // demo tezligi oldingi ishga tushishdan qolib ketgan bo'lsa
   /* "Avto grafika" (bekor qilindi) grafikani pasaytirib yuborgan o'yinchilarda - to'liq grafikani qaytaramiz */
   /* eski PRO CFG soya va dinamik yorug'likni o'chirgan edi - bir marta qaytaramiz (yangi PRO CFG grafikaga tegmaydi) */
   if (S.pro && !S.pmig) { S.shadows = 1; S.dyn = 1; S.pmig = 1; S.gfxc = ''; DB.set = S; }
@@ -2427,6 +2457,7 @@ var PANES = {
       '<div class="pane r"><div class="ph2">' + esc(T('st_title')) + '</div>' + st +
       '<div class="ph2 m">' + esc(T('dm_title')) + '</div>' +
       (S && S.demo ? '' : '<div class="mut" style="font-size:12px;margin-bottom:6px">' + esc(T('dm_off')) + '</div>') +
+      '<div class="mut" style="font-size:12px;margin-bottom:6px">' + esc(T('dm_keys')) + '</div>' +
       '<div class="dml">' + (dm || '<div class="empty">' + esc(T('dm_none')) + '</div>') + '</div></div>';
   },
   cont: function () {                             // Kontent: spray, skrinshotlar, mavzu, paketlar
@@ -3201,7 +3232,7 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-frcmp'))) { openCompare(el.getAttribute('data-frcmp')); return; }
   if ((el = closest(t, 'data-clkick'))) { clanCall('clan_kick', { who: el.getAttribute('data-clkick') }); return; }
   if ((el = closest(t, 'data-copyip'))) { copyIp(el.getAttribute('data-copyip'), el.parentNode.querySelector('input')); return; }
-  if ((el = closest(t, 'data-demo'))) { closeModal(); cmd('playdemo ' + el.getAttribute('data-demo').replace(/[^\w\-]/g, '')); return; }
+  if ((el = closest(t, 'data-demo'))) { closeModal(); demoPlay(el.getAttribute('data-demo')); return; }
   if ((el = closest(t, 'data-hsub'))) { HSUB = el.getAttribute('data-hsub'); showSetTab('hud'); return; }
   if ((el = closest(t, 'data-xchk'))) {
     var xk = el.getAttribute('data-xchk'), XT = { dot: 3, t: 1, circle: 2 };
