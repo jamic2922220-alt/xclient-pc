@@ -101,6 +101,55 @@ static HWND g_rec_wnd = NULL;
 static wchar_t g_rec_last[MAX_PATH] = L"";
 static int g_rec_saved = 0;
 
+/* Videolar\X CLIENT papkasi */
+static BOOL vid_dir(wchar_t *out)
+{
+    if (FAILED(SHGetFolderPathW(NULL, CSIDL_MYVIDEO | CSIDL_FLAG_CREATE, NULL, 0, out))) return FALSE;
+    wcscat(out, L"\\X CLIENT");
+    CreateDirectoryW(out, NULL);
+    return TRUE;
+}
+/* "&vl=xc_20261025_143012~85,..." - eng yangi 120 ta video (nom~MB) */
+typedef struct { char n[20]; ULONGLONG t; unsigned mb; } VidF;
+static int vid_cmp(const void *a, const void *b) { ULONGLONG x = ((const VidF *)a)->t, y = ((const VidF *)b)->t; return x < y ? 1 : x > y ? -1 : 0; }
+static BOOL vid_name_ok(const char *n);
+static void vid_list(char *out, size_t cap)
+{
+    wchar_t dir[MAX_PATH], pat[MAX_PATH];
+    lstrcpynA(out, "&vl=", (int)cap);
+    if (!vid_dir(dir)) return;
+    _snwprintf(pat, MAX_PATH, L"%s\\xc_*.mp4", dir); pat[MAX_PATH - 1] = 0;
+    VidF *l = (VidF *)malloc(sizeof(VidF) * 1000); int n = 0;
+    if (!l) return;
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(pat, &fd);
+    if (h != INVALID_HANDLE_VALUE) {
+        do {
+            if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || wcslen(fd.cFileName) != 22 || n >= 1000) continue;
+            WideCharToMultiByte(CP_UTF8, 0, fd.cFileName, 18, l[n].n, 19, NULL, NULL); l[n].n[18] = 0;
+            if (!vid_name_ok(l[n].n)) continue;
+            l[n].t = ((ULONGLONG)fd.ftLastWriteTime.dwHighDateTime << 32) | fd.ftLastWriteTime.dwLowDateTime;
+            l[n].mb = (unsigned)(((((ULONGLONG)fd.nFileSizeHigh << 32) | fd.nFileSizeLow) + 524288) / 1048576);
+            n++;
+        } while (FindNextFileW(h, &fd));
+        FindClose(h);
+    }
+    qsort(l, n, sizeof(VidF), vid_cmp);
+    size_t len = strlen(out);
+    for (int i = 0; i < n && i < 120; i++) {
+        if (len + 32 >= cap) break;
+        len += _snprintf(out + len, cap - len, "%s%s~%u", i ? "," : "", l[i].n, l[i].mb);
+    }
+    out[cap - 1] = 0;
+    free(l);
+}
+static BOOL vid_name_ok(const char *n)     /* xc_YYYYMMDD_HHMMSS */
+{
+    if (strlen(n) != 18 || strncmp(n, "xc_", 3) || n[11] != '_') return FALSE;
+    for (int i = 3; i < 18; i++) if (i != 11 && (n[i] < '0' || n[i] > '9')) return FALSE;
+    return TRUE;
+}
+
 /* ---- tasvir: o'yin turgan monitorni Desktop Duplication bilan olish ---- */
 typedef struct {
     ID3D11Device *dev; ID3D11DeviceContext *ctx; IDXGIOutputDuplication *dup; IDXGIOutput1 *out1;
@@ -551,6 +600,7 @@ static DWORD WINAPI rec_thread(LPVOID unused)
     wchar_t dir[MAX_PATH], path[MAX_PATH] = L"";
     BOOL mf = FALSE, ok = FALSE;
     IMFDXGIDeviceManager *mgr = NULL;   /* videokarta yo'li: yozuvchi yopilguncha yashashi kerak */
+    ULONGLONG k = 0;                   /* yozilgan kadrlar - davomiylik uchun */
     CoInitializeEx(NULL, COINIT_MULTITHREADED);
     if (!rec_load() || FAILED(rf.MFStartup(0x00020070 /* MF_VERSION */, 0))) goto done;
     mf = TRUE;
@@ -599,7 +649,7 @@ static DWORD WINAPI rec_thread(LPVOID unused)
     LARGE_INTEGER f, t0, now;
     QueryPerformanceFrequency(&f); QueryPerformanceCounter(&t0);
     const LONGLONG fdur = 10000000 / c.fps;
-    ULONGLONG k = 1;                   /* 0-kadr yuqorida yozildi */
+    k = 1;                             /* 0-kadr yuqorida yozildi */
     while (g_rec_run) {
         QueryPerformanceCounter(&now);
         ULONGLONG el = (ULONGLONG)((now.QuadPart - t0.QuadPart) * 10000000.0 / f.QuadPart);   /* 100 ns */
@@ -623,6 +673,18 @@ done:
     if (mf) rf.MFShutdown();
     CoUninitialize();
     InterlockedExchange(&g_rec_run, 0);
+    if (ok) {                           /* menyudagi "Videolarim" ro'yxatiga */
+        WIN32_FILE_ATTRIBUTE_DATA fa; char url[300], nm[24] = "";
+        const wchar_t *b = wcsrchr(path, L'\\');
+        if (b) WideCharToMultiByte(CP_UTF8, 0, b + 1, 18, nm, 19, NULL, NULL);
+        nm[18] = 0;
+        ULONGLONG mb = GetFileAttributesExW(path, GetFileExInfoStandard, &fa) ? ((((ULONGLONG)fa.nFileSizeHigh << 32) | fa.nFileSizeLow) + 524288) / 1048576 : 0;
+        if (vid_name_ok(nm)) {
+            _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=vadd&d=%s&n=%s&mb=%u&sec=%u&q=%s", g_id, nm, (unsigned)mb, (unsigned)(k / (c.fps ? c.fps : 30)), g_vq == 2 ? "hi" : g_vq ? "mid" : "low");
+            url[sizeof(url) - 1] = 0;
+            free(http_get(url, NULL));
+        }
+    }
     if (ok) { lstrcpynW(g_rec_last, path, MAX_PATH); g_rec_saved++; PostThreadMessageW(g_hk_tid, WM_REC_STATE, 2, 0); rec_beep(0); }
     else { if (path[0]) DeleteFileW(path); PostThreadMessageW(g_hk_tid, WM_REC_STATE, 3, 0); rec_beep(-1); }
     return 0;
@@ -665,8 +727,47 @@ static DWORD WINAPI rec_hotkey_thread(LPVOID unused)
     return 0;
 }
 
+/* o'yin paytida menyudagi "Videolarim" tugmalari: sayt navbatidan buyruqlarni olib bajaradi (har 4 soniya) */
+static HANDLE g_vp_th = NULL, g_vp_stop = NULL;
+static void vid_exec(const char *line)
+{
+    char c[8] = "", n[24] = "";
+    if (sscanf(line, "%7s %23s", c, n) < 1) return;
+    wchar_t dir[MAX_PATH], f[MAX_PATH], wn[24];
+    if (!vid_dir(dir)) return;
+    if (!strcmp(c, "folder")) { ShellExecuteW(NULL, L"open", dir, NULL, NULL, SW_SHOWNORMAL); return; }
+    if (!vid_name_ok(n)) return;                       /* faqat o'zimiz yozgan nomlar - boshqa fayllarga tegilmaydi */
+    MultiByteToWideChar(CP_UTF8, 0, n, -1, wn, 24);
+    _snwprintf(f, MAX_PATH - 2, L"%s\\%s.mp4", dir, wn); f[MAX_PATH - 3] = 0;
+    if (GetFileAttributesW(f) == INVALID_FILE_ATTRIBUTES) return;
+    if (!strcmp(c, "open")) ShellExecuteW(NULL, L"open", f, NULL, NULL, SW_SHOWNORMAL);
+    else if (!strcmp(c, "del")) {                      /* Savatga - adashib o'chirilsa qaytarish mumkin */
+        size_t L = wcslen(f); f[L + 1] = 0;
+        SHFILEOPSTRUCTW op = { 0 }; op.wFunc = FO_DELETE; op.pFrom = f;
+        op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI;
+        SHFileOperationW(&op);
+    }
+}
+static DWORD WINAPI vid_poll_thread(LPVOID unused)
+{
+    (void)unused;
+    char url[200];
+    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=vpoll&d=%s", g_id); url[sizeof(url) - 1] = 0;
+    CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    while (WaitForSingleObject(g_vp_stop, 4000) == WAIT_TIMEOUT) {
+        char *r = http_get(url, NULL);
+        if (!r) continue;
+        for (char *ctx = NULL, *ln = strtok_s(r, "\r\n", &ctx); ln; ln = strtok_s(NULL, "\r\n", &ctx)) vid_exec(ln);
+        free(r);
+    }
+    CoUninitialize();
+    return 0;
+}
+
 static void rec_session_begin(DWORD game_pid)
 {
+    g_vp_stop = CreateEventW(NULL, TRUE, FALSE, NULL);
+    if (g_vp_stop) g_vp_th = CreateThread(NULL, 0, vid_poll_thread, NULL, 0, NULL);
     g_game_pid = game_pid; g_rec_saved = 0; g_rec_last[0] = 0;
     g_hk_th = CreateThread(NULL, 0, rec_hotkey_thread, NULL, 0, &g_hk_tid);
 }
@@ -674,6 +775,8 @@ static void rec_session_begin(DWORD game_pid)
 /* o'yin yopildi: yozilayotgan bo'lsa saqlaymiz; yangi video bo'lsa papkani ochib, faylni belgilaymiz */
 static void rec_session_end(void)
 {
+    if (g_vp_th) { SetEvent(g_vp_stop); WaitForSingleObject(g_vp_th, 8000); CloseHandle(g_vp_th); g_vp_th = NULL; }
+    if (g_vp_stop) { CloseHandle(g_vp_stop); g_vp_stop = NULL; }
     if (g_hk_th) { PostThreadMessageW(g_hk_tid, WM_QUIT, 0, 0); WaitForSingleObject(g_hk_th, 3000); CloseHandle(g_hk_th); g_hk_th = NULL; }
     InterlockedExchange(&g_rec_run, 0);
     if (g_rec_th) { WaitForSingleObject(g_rec_th, 30000); CloseHandle(g_rec_th); g_rec_th = NULL; }

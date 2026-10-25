@@ -458,6 +458,34 @@ if ($a === 'menuver') {
     exit;
 }
 /* launcher: F10 bosilganda video sifatini so'raydi (o'yin paytida menyuda o'zgartirilgan bo'lishi mumkin). Maxfiy emas - kalitsiz */
+/* ---- F10 videolari (Demo bo'limi). Ro'yxat kompyuter yozuvida ('vids'); menyu buyruqlari ('vc') launcherga navbat orqali ----
+ * vadd  - launcher: yangi video saqlandi (n, mb, sec)
+ * vpoll - launcher: o'yin paytida har 4 soniyada - menyu yuborgan buyruqlarni oladi ("open|del|folder nom" qatorlari) */
+function vid_name($n) { return is_string($n) && preg_match('/^xc_\d{8}_\d{6}$/', $n) ? $n : ''; }
+if ($a === 'vadd' || $a === 'vpoll') {
+    header('Content-Type: text/plain'); header('Cache-Control: no-store');
+    $d = strtolower(p('d'));
+    if (!preg_match('/^[a-z0-9]{8,40}$/', $d) || !is_file(XC_DIR . '/dev/' . $d . '.php')) exit;
+    if ($a === 'vpoll') {
+        $o = rd('dev/' . $d, array());
+        if (empty($o['vc'])) exit;                           // ko'p hollarda - faqat o'qish, yozuvsiz
+        lock(); $o = rd('dev/' . $d, array()); $c = isset($o['vc']) ? $o['vc'] : array(); unset($o['vc']); wr('dev/' . $d, $o); unlock();
+        foreach ($c as $x) echo $x, "\n";
+        exit;
+    }
+    $n = vid_name(p('n'));
+    if ($n === '' || rl_count('vadd' . $d, 3600) >= 120) exit;
+    rl_add('vadd' . $d, 3600);
+    lock();
+    $o = rd('dev/' . $d, array());
+    $v = isset($o['vids']) && is_array($o['vids']) ? $o['vids'] : array();
+    $v = array_values(array_filter($v, function ($x) use ($n) { return isset($x['n']) && $x['n'] !== $n; }));
+    array_unshift($v, array('n' => $n, 'mb' => max(0, min(100000, (int)p('mb'))), 'sec' => max(0, min(86400, (int)p('sec'))), 'q' => preg_replace('/[^a-z]/', '', substr(p('q'), 0, 4))));
+    $o['vids'] = array_slice($v, 0, 200);
+    wr('dev/' . $d, $o);
+    echo 'ok';
+    exit;
+}
 if ($a === 'vq') {
     header('Content-Type: text/plain'); header('Cache-Control: no-store');
     $d = strtolower(p('d'));
@@ -1468,6 +1496,16 @@ case 'opts_done':
             foreach (explode(',', (string)p('dm')) as $x) if (preg_match('/^[\w\-]{1,40}$/', $x) && count($dmf) < 40) $dmf[] = $x;
             $o['dmf'] = $dmf;
         }
+        if (isset($_GET['vl']) || isset($_POST['vl'])) {     // launcher: Videolar\X CLIENT dagi haqiqiy MP4 lar - qo'lda o'chirilganlar ro'yxatdan ketadi
+            $old = array(); foreach ((isset($o['vids']) && is_array($o['vids']) ? $o['vids'] : array()) as $x) if (isset($x['n'])) $old[$x['n']] = $x;
+            $v = array();
+            foreach (explode(',', (string)p('vl')) as $x) {
+                $pp = explode('~', $x); $n = vid_name($pp[0]);
+                if ($n === '' || count($v) >= 200) continue;
+                $v[] = isset($old[$n]) ? $old[$n] : array('n' => $n, 'mb' => isset($pp[1]) ? (int)$pp[1] : 0, 'sec' => 0, 'q' => '');
+            }
+            $o['vids'] = $v;
+        }
         if (preg_match('/^(ru|uz|en)$/', p('lang'))) $o['ilang'] = p('lang');      // o'rnatuvchida tanlangan til
         if (p('ch') !== '') $o['ch'] = preg_replace('/[^a-z]/', '', p('ch'));
         if (p('pt') !== '') $o['pt'] = clean_str(p('pt'), 60);
@@ -1508,7 +1546,7 @@ case 'opts_done':
         wr('dev/' . $d, $o);
     }
     $key = isset($o['k']) ? $o['k'] : '';
-    unset($o['k'], $o['kc'], $o['ip'], $o['st'], $o['fav']);   // saqlangan holat (token) faqat dstate orqali, kalit bilan
+    unset($o['k'], $o['kc'], $o['ip'], $o['st'], $o['fav'], $o['vc']);   // saqlangan holat (token) faqat dstate orqali, kalit bilan
     out(array('ok' => true, 'o' => $o, 'd' => $d, 'k' => $claim ? $key : null));
 
 /* ---------- sevimli serverlar kompyuter bo'yicha zaxirada (menyu keshi tozalansa yoki manzil o'zgarsa yo'qolmasin) ---------- */
@@ -1527,6 +1565,22 @@ case 'favs':
         wr('dev/' . $d, $o);
     }
     out(array('ok' => true, 'fav' => isset($o['fav']) ? $o['fav'] : array()));
+
+/* menyu: F10 videosi bilan amal - launcher o'yin paytida bajaradi (ochish / o'chirish / papka) */
+case 'vcmd':
+    $d = strtolower(p('d'));
+    if (!preg_match('/^[a-z0-9]{8,40}$/', $d) || !is_file(XC_DIR . '/dev/' . $d . '.php')) fail('nolaunch', 'XCLauncher.exe topilmadi');
+    lock();
+    $o = rd('dev/' . $d, array());
+    if (!dev_ok($d, $o)) fail('nolaunch', 'XCLauncher.exe topilmadi');
+    $c = p('c'); $n = vid_name(p('n'));
+    if (!in_array($c, array('open', 'del', 'folder'), true) || ($c !== 'folder' && $n === '')) fail('bad', 'bad');
+    $q = isset($o['vc']) && is_array($o['vc']) ? $o['vc'] : array();
+    $q[] = $c . ' ' . ($n !== '' ? $n : '-');
+    $o['vc'] = array_slice($q, -5);
+    if ($c === 'del' && isset($o['vids'])) $o['vids'] = array_values(array_filter($o['vids'], function ($x) use ($n) { return isset($x['n']) && $x['n'] !== $n; }));
+    wr('dev/' . $d, $o);
+    out(array('ok' => true, 'vids' => isset($o['vids']) ? $o['vids'] : array()));
 
 /* menyu holati (kirish tokeni, sevimlilar, tarix, tugmalar, til) - kompyuter bo'yicha; o'yin brauzeri localStorage ni yo'qotsa tiklanadi */
 case 'dstate':

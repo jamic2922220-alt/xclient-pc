@@ -136,6 +136,7 @@ function ico(n) {
     clock: '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>',
     play: '<polygon points="6 4 20 12 6 20 6 4" fill="currentColor"/>', pause: '<rect x="6" y="4" width="4" height="16" fill="currentColor"/><rect x="14" y="4" width="4" height="16" fill="currentColor"/>',
     rew: '<polygon points="11 19 2 12 11 5 11 19" fill="currentColor"/><polygon points="22 19 13 12 22 5 22 19" fill="currentColor"/>', ff: '<polygon points="13 19 22 12 13 5 13 19" fill="currentColor"/><polygon points="2 19 11 12 2 5 2 19" fill="currentColor"/>',
+    trash: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/>', folder: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
     stop: '<rect x="5" y="5" width="14" height="14" fill="currentColor"/>', film: '<rect x="2" y="4" width="20" height="16" rx="2"/><line x1="7" y1="4" x2="7" y2="20"/><line x1="17" y1="4" x2="17" y2="20"/><line x1="2" y1="12" x2="22" y2="12"/>', user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' };
   return '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' + (P[n] || '') + '</svg>';
 }
@@ -315,7 +316,7 @@ function fxLoop() {
  * xc_api.php ga yoziladi va XClient.exe ularni keyingi ishga tushishda bajaradi. */
 function qparam(k) { var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search || ''); return m ? decodeURIComponent(m[1]) : ''; }
 var PCID = /^[a-z0-9]{8,40}$/.test(qparam('xc')) ? qparam('xc') : '';   // kompyuter id (DB.pcid) va uning maxfiy kaliti (DB.pck) load() dan keyin olinadi
-var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '', hud: 100, vq: 'mid', dmf: null }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
+var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '', hud: 100, vq: 'mid', dmf: null, vids: null }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
 var OPTS_TRY = 0;
 /* To'liq X CLIENT menyusi faqat XCLauncher.exe orqali ochilganda. Menyu saytda turadi va boshqa boost-top sborkalari ham
  * uni ochadi - ularda "sodda rejim": tezkor o'yin, serverlar, sozlamalar + X CLIENT ni yuklab olish kartasi.
@@ -1012,6 +1013,26 @@ function demoEnd(why) {
   applyBinds();
   setTimeout(musicSync, 1500);
 }
+/* F10 videolari ro'yxati saytdan (launcher har video saqlanganda va har ochilishda yangilaydi) */
+var VIDS_T = 0;
+function vidsRefresh() {
+  if (!PCID || now() - VIDS_T < 4000) return;
+  VIDS_T = now();
+  api('opts', { d: PCID }, function (r) {
+    if (!r.ok || !r.o) return;
+    OPTS.vids = r.o.vids || [];
+    if (curModal === 'mdSettings' && setTab === 'demo') $('setBody').innerHTML = PANES.demo();
+  });
+}
+function vidCmd(c, n) {
+  if (!PCID) { toast(T('sy_nolaunch'), 4000); return; }
+  api('vcmd', { d: PCID, c: c, n: n || '' }, function (r) {
+    if (!r.ok) { toast(r.msg || 'Xato', 3500); return; }
+    if (r.vids) OPTS.vids = r.vids;
+    toast(T(c === 'del' ? 'vd_deleted' : c === 'open' ? 'vd_opening' : 'vd_opening2'), 5000);
+    if (curModal === 'mdSettings' && setTab === 'demo') $('setBody').innerHTML = PANES.demo();
+  });
+}
 /* demolar ro'yxati: launcher haqiqiy fayllarni beradi (OPTS.dmf) - o'chirilganlar chiqmaydi, menyu yozib ulgurmaganlari ham ko'rinadi.
  * Launcher eski bo'lsa (dmf yo'q) - menyu o'zi eslab qolgan ro'yxat */
 var MENU_T0 = now(), DEMO_SEL = '';
@@ -1660,7 +1681,7 @@ function openAvatars() {
 
 /* ============================================================ SOZLAMALAR */
 var DEF = {
-  name: '', tag: 'X | ', net: 'fast', dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, buykeys: 0, queue: 1, reconn: 1, demo: 1, dmig: 0,
+  name: '', tag: 'X | ', net: 'fast', dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, buykeys: 0, queue: 1, reconn: 1, demo: 0, dmig: 0, dmig2: 0,
   sens: 2.5, zoom: 1.2, raw: 1, filter: 0, inv: 0,
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1, micwarm: 1, micfix: 0,
   fps: 100, showfps: 0, uisnd: 1, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
@@ -1696,7 +1717,7 @@ function loadSettings() {
   cmd('host_framerate 0');                         // demo tezligi oldingi ishga tushishdan qolib ketgan bo'lsa
   /* "Avto grafika" (bekor qilindi) grafikani pasaytirib yuborgan o'yinchilarda - to'liq grafikani qaytaramiz */
   /* eski PRO CFG soya va dinamik yorug'likni o'chirgan edi - bir marta qaytaramiz (yangi PRO CFG grafikaga tegmaydi) */
-  if (!S.dmig) { S.demo = 1; S.dmig = 1; DB.set = S; }   // demo avtomatik yozish hammaga yoqiladi (bir marta; keyin o'chirsa - o'chiq qoladi)
+  if (!S.dmig2) { S.demo = 0; S.dmig = 1; S.dmig2 = 1; DB.set = S; }   // .dem avtomatik yozish o'chirildi: Demo bo'limida endi faqat F10 videolari (demo ko'rish NextClient ni yiqitardi)
   if (S.pro && !S.pmig) { S.shadows = 1; S.dyn = 1; S.pmig = 1; S.gfxc = ''; DB.set = S; }
   /* detal teksturalar (devorlarga naqsh) va baland gamma xaritalarni g'alati va og'ir ko'rsatdi - bir marta CS 1.6 holatiga */
   if (!S.gmig) {
@@ -2411,6 +2432,7 @@ function showSetTab(tab) {
   each(document.querySelectorAll('#setTabs a'), function (a) { a.className = a.getAttribute('data-tab') === tab ? 'on' : ''; });
   $('setBody').innerHTML = (PANES[tab] || PANES.game)();
   $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local'));
+  if (tab === 'demo') vidsRefresh();
   if (tab === 'hud') { drawXhair(); drawScope(); if (XLIVE || E && S && xcode(E) !== xcode(S)) xLive(); }
   layoutCheck('settings/' + tab);
 }
@@ -2505,30 +2527,26 @@ var PANES = {
       '<div id="cfgOut"></div></div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('st_title')) + '</div>' + st + '</div>';
   },
-  demo: function () {                            // Demo: pleyer pulti, avtomatik yozish, ro'yxat
-    var cur = null, dm = '', items = demoItems(), pick = DEMO_PLAY ? DEMO_CUR : DEMO_SEL || (items[0] && items[0].n) || '';
-    each(items, function (d) {
-      if (d.n === pick) cur = d;
-      dm += '<div class="dmr' + (d.n === pick ? ' on' : '') + '" data-dsel="' + esc(d.n) + '"><b>' + esc(d.s) + '</b><small>' + esc(fmtTime(d.t) + (d.m ? ' \u00b7 ' + d.m : '') + ' \u00b7 ' + d.n) + '</small>' +
-        '<a class="btn red" data-demo="' + esc(d.n) + '">' + ico('play') + ' ' + esc(T('dm_play')) + '</a></div>';
-    });
-    var vq = OPTS && OPTS.vq || 'mid', vqs = '';
+  demo: function () {                            // F10 videolari: sifat, ko'rsatma, "Mening videolarim" (ochish / o'chirish / papka - launcher bajaradi)
+    var vq = OPTS && OPTS.vq || 'mid', vqs = '', rows = '', vids = OPTS && OPTS.vids || [];
     each([['hi', 'vq_hi', 'vq_hi2'], ['mid', 'vq_mid', 'vq_mid2'], ['low', 'vq_low', 'vq_low2']], function (o) {
       vqs += '<a class="' + (vq === o[0] ? 'on' : '') + '" data-ovq="' + o[0] + '">' + esc(T(o[1])) + '<small>' + esc(T(o[2])) + '</small></a>';
     });
-    vqs = '<div class="big vqb">' + vqs + '</div>';
-    var st = !DEMO_PLAY ? T('dm_idle') : DEMO_PAUSE ? T('dm_paused') : DEMO_SP[DEMO_SPD] + 'x';
-    var b = function (c, i, title) { return '<a class="btn dpb' + (DEMO_PLAY || (cur && (c === 'n' || c === 'p')) ? '' : ' dis') + '" data-dctl="' + c + '" title="' + esc(T(title)) + '">' + ico(i) + '</a>'; };
-    return '<div class="pane l"><div class="ph2">' + esc(T('dm_player')) + '</div>' +
-      '<div class="dpl"><div class="dpscr">' + ico('film') + '<b>' + esc(cur ? cur.s : pick || T(items.length ? 'dm_pick' : 'dm_none')) + '</b><small>' + esc(cur ? (cur.t ? fmtTime(cur.t) : '') + (cur.m ? ' \u00b7 ' + cur.m : '') + ' \u00b7 ' + cur.n : '') + '</small>' +
-      '<span class="dpst">' + esc(st) + '</span></div>' +
-      '<div class="dpc">' + b('dn', 'rew', 'dm_slow') + b('p', DEMO_PAUSE ? 'play' : 'pause', 'dm_pause') + b('n', 'play', 'dm_norm') + b('up', 'ff', 'dm_fast') + b('stop', 'stop', 'dm_stop') + '</div></div>' +
-      '<div class="f10box"><b>' + esc(T('f10_t')) + '</b>' + esc(T('f10_1')) + '<br>' + esc(T('f10_2')) + '<br>' + esc(T('f10_3')) + '</div>' +
-      '<div class="mut" style="font-size:12px;margin:8px 0 10px">' + esc(T('dm_keys2')) + '</div>' +
-      tg('demo', 'g_rec', 'g_rec2') + '</div>' +
-      '<div class="pane r"><div class="ph2">' + esc(T('vq_title')) + '</div>' + vqs +
-      '<div class="ph2 m">' + esc(T('dm_title')) + '</div>' +
-      '<div class="dml dml2">' + (dm || '<div class="empty">' + esc(T(S && S.demo ? 'dm_none' : 'dm_off')) + '</div>') + '</div></div>';
+    each(vids, function (v) {
+      var m = /^xc_(\d{4})(\d\d)(\d\d)_(\d\d)(\d\d)(\d\d)$/.exec(v.n || ''); if (!m) return;
+      var t = new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime(), sec = v.sec | 0;
+      var info = [(v.mb | 0) + ' MB'];
+      if (sec) info.push(Math.floor(sec / 60) + ':' + pad(sec % 60));
+      if (v.q) info.push(T('vq_' + v.q));
+      rows += '<div class="dmr"><b>' + esc(fmtTime(t)) + ' · ' + esc(m[3] + '.' + m[2] + '.' + m[1]) + '</b><small>' + esc(info.join(' · ')) + '</small>' +
+        '<a class="btn vdel" data-vdel="' + esc(v.n) + '" title="' + esc(T('vd_del')) + '">' + ico('trash') + '</a>' +
+        '<a class="btn red" data-vopen="' + esc(v.n) + '">' + ico('play') + ' ' + esc(T('vd_open')) + '</a></div>';
+    });
+    return '<div class="pane l"><div class="f10box big2"><b>' + esc(T('f10_t')) + '</b>' + esc(T('f10_1')) + '<br>' + esc(T('f10_2')) + '<br>' + esc(T('f10_3')) + '</div>' +
+      '<div class="ph2 m">' + esc(T('vq_title')) + '</div><div class="big vqb">' + vqs + '</div></div>' +
+      '<div class="pane r"><div class="ph2">' + esc(T('vd_title')) + ' <a class="btn vfold" data-vfold="1">' + ico('folder') + ' ' + esc(T('vd_folder')) + '</a></div>' +
+      '<div class="dml dml2">' + (rows || '<div class="empty">' + esc(T(PCID ? 'vd_none' : 'sy_nolaunch')) + '</div>') + '</div>' +
+      '<div class="mut" style="font-size:12px;margin-top:8px">' + esc(T('vd_note')) + '</div></div>';
   },
   cont: function () {                             // Kontent: spray, skrinshotlar, mavzu, paketlar
     if (PACKS === null) loadPacks();
@@ -3199,7 +3217,7 @@ setInterval(function () { if (!CLK_N || !feat('clicks')) return; var c = CLK; CL
 
 /* ---- menyu ovozlari: o'yin sound/xclient/*.wav ni chaladi (XCLauncher.exe ularni o'yin papkasiga qo'yadi) ---- */
 var SFX_ATTR = ['data-act', 'data-tab', 'data-hsub', 'data-seg', 'data-tg', 'data-otg', 'data-ohud', 'data-dd', 'data-ddv', 'data-xchk', 'data-pack',
-  'data-sort', 'data-flt', 'data-theme', 'data-daymode', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-dctl', 'data-ovq', 'data-dsel', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec', 'data-avpre'];
+  'data-sort', 'data-flt', 'data-theme', 'data-daymode', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-dctl', 'data-ovq', 'data-dsel', 'data-vopen', 'data-vdel', 'data-vfold', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec', 'data-avpre'];
 var SFX_QUIET = false, sfxLast = null, sfxT = 0;
 function sfx(n) {
   if (!S || S.uisnd === 0 || !hasApi()) return;
@@ -3303,6 +3321,9 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-clkick'))) { clanCall('clan_kick', { who: el.getAttribute('data-clkick') }); return; }
   if ((el = closest(t, 'data-copyip'))) { copyIp(el.getAttribute('data-copyip'), el.parentNode.querySelector('input')); return; }
   if ((el = closest(t, 'data-ovq'))) { OPTS = OPTS || {}; OPTS.vq = el.getAttribute('data-ovq'); saveOpts(T('vq_ok')); showSetTab('demo'); return; }
+  if ((el = closest(t, 'data-vopen'))) { vidCmd('open', el.getAttribute('data-vopen')); return; }
+  if ((el = closest(t, 'data-vdel'))) { var vn = el.getAttribute('data-vdel'); ask(T('vd_delq'), function () { vidCmd('del', vn); }, false, false, true); return; }
+  if ((el = closest(t, 'data-vfold'))) { vidCmd('folder', ''); return; }
   if ((el = closest(t, 'data-dctl'))) { demoCtl(el.getAttribute('data-dctl')); return; }
   if ((el = closest(t, 'data-demo'))) { closeModal(); demoPlay(el.getAttribute('data-demo')); return; }
   if ((el = closest(t, 'data-dsel'))) { DEMO_SEL = el.getAttribute('data-dsel'); showSetTab('demo'); return; }   // qatorni bosish - pleyerda tanlash (▶ tugmasi yuqorida ushlanadi)

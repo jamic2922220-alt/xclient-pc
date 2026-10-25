@@ -970,14 +970,14 @@ static void hw_query(char *out, size_t cap)
         GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), ew, g_chan, ek, (g_lang[0] >= 'a' && g_lang[0] <= 'z') ? g_lang : ""); out[cap - 1] = 0;
 }
 static unsigned cache_mb(void);
-static void demo_list(char *out, size_t cap);
+static void vid_list(char *out, size_t cap);   /* xc_rec.c */
 static void fetch_opts(void)
 {
-    char url[2400], hw[800], dm[1000];
+    char url[4400], hw[800], dm[3200];
     char v[48];
     url_escape(v, sizeof(v), g_version[0] ? g_version : "1.0");
     hw_query(hw, sizeof(hw));
-    demo_list(dm, sizeof(dm));                    /* menyu demolar ro'yxatini haqiqiy fayllardan ko'rsatadi */
+    vid_list(dm, sizeof(dm));                     /* menyudagi "Videolarim" - papkadagi haqiqiy MP4 lar */
     _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=hello&d=%s&v=%s&cache=%u%s%s", g_id, v, cache_mb(), hw, dm); url[sizeof(url) - 1] = 0;
     char *r = http_get(url, NULL);
     if (!r || !strstr(r, "\"ok\":true")) { free(r); return; }
@@ -1170,37 +1170,6 @@ static void prune_demos(void)
         path_join(p, g_dir, sub);
         DeleteFileW(p);
     }
-    free(l);
-}
-/* "&dm=xc_20261025_143012,xc_..." - eng yangi 40 ta demo (prune_demos dan keyin) */
-static void demo_list(char *out, size_t cap)
-{
-    wchar_t pat[MAX_PATH];
-    out[0] = 0;
-    path_join(pat, g_dir, L"cstrike\\xc_*.dem");
-    DemoF *l = (DemoF *)malloc(sizeof(DemoF) * 200); int n = 0;
-    if (!l) return;
-    WIN32_FIND_DATAW fd;
-    HANDLE h = FindFirstFileW(pat, &fd);
-    if (h != INVALID_HANDLE_VALUE) {
-        do {
-            if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || wcslen(fd.cFileName) >= 44 || n >= 200 || fd.nFileSizeLow < 1024) continue;
-            lstrcpynW(l[n].n, fd.cFileName, 64); l[n].t = ((ULONGLONG)fd.ftLastWriteTime.dwHighDateTime << 32) | fd.ftLastWriteTime.dwLowDateTime; n++;
-        } while (FindNextFileW(h, &fd));
-        FindClose(h);
-    }
-    qsort(l, n, sizeof(DemoF), demo_cmp);
-    size_t len = 0;
-    for (int i = 0, k = 0; i < n && k < DEMO_KEEP; i++) {
-        char a[48]; int j = 0, bad = 0;
-        for (const wchar_t *c = l[i].n; *c && *c != L'.' && j < 47; c++) { if ((*c >= L'a' && *c <= L'z') || (*c >= L'A' && *c <= L'Z') || (*c >= L'0' && *c <= L'9') || *c == L'_' || *c == L'-') a[j++] = (char)*c; else bad = 1; }
-        a[j] = 0;
-        if (bad || !j || len + j + 6 >= cap) continue;
-        len += _snprintf(out + len, cap - len, "%s%s", k ? "," : "&dm=", a);
-        k++;
-    }
-    if (!len) lstrcpynA(out, "&dm=", (int)cap);   /* demo yo'q - menyu ham bo'sh ko'rsatsin */
-    out[cap - 1] = 0;
     free(l);
 }
 static void install_spray(void)
