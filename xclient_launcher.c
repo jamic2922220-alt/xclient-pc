@@ -97,7 +97,7 @@ static void url_escape(char *out, size_t cap, const char *in)
 }
 
 /* ---------------------------------------------------------------- HTTP */
-static HINTERNET open_url(const char *url)
+static HINTERNET open_url_raw(const char *url)
 {
     DWORD fl = INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_NO_UI | INTERNET_FLAG_KEEP_CONNECTION;
     if (!_strnicmp(url, "https://", 8)) fl |= INTERNET_FLAG_SECURE;
@@ -109,6 +109,22 @@ static HINTERNET open_url(const char *url)
         return NULL;
     }
     return h;
+}
+
+/* O'z saytimizga so'rovlar avval https bilan (internet-kafe, provayder tarmog'ida o'qib/o'zgartirib bo'lmasin).
+ * Ishlamasa (Windows 7 da TLS 1.2 yo'q, sertifikat muammosi) - shu ishga tushish davomida http. Sertifikat tekshiruvi o'chirilmaydi. */
+static BOOL g_https_bad = FALSE;
+static HINTERNET open_url(const char *url)
+{
+    static const char own[] = "http://mmb.boost-top.com/";
+    if (!g_https_bad && !_strnicmp(url, own, sizeof(own) - 1) && strlen(url) < 8000) {
+        char su[8200];
+        _snprintf(su, sizeof(su), "https://%s", url + 7); su[sizeof(su) - 1] = 0;
+        HINTERNET h = open_url_raw(su);
+        if (h) return h;
+        g_https_bad = TRUE;
+    }
+    return open_url_raw(url);
 }
 
 /* kichik javob (API, manifest) -> malloc'langan satr */

@@ -29,7 +29,10 @@ VIAddVersionKey "LegalCopyright" "boost-top.com"
 !define MUI_LANGDLL_ALLLANGUAGES
 !define MUI_LANGDLL_WINDOWTITLE "X CLIENT"
 !define MUI_LANGDLL_INFO "Tilni tanlang / Выберите язык / Choose language"
-!define MUI_FINISHPAGE_RUN "$INSTDIR\XCLauncher.exe"
+; "Ishga tushirish" - administrator huquqisiz (explorer orqali): aks holda launcher va o'yin admin bo'lib ochilib,
+; keyin oddiy ochilganda fayllarga yoza olmaydi, menyu va yangilanishlar buziladi
+!define MUI_FINISHPAGE_RUN
+!define MUI_FINISHPAGE_RUN_FUNCTION RunUnelevated
 !define MUI_DIRECTORYPAGE_TEXT_TOP "CS 1.6 kompyuteringizda bor bo'lsa, o'sha papkani tanlang. Yo'q bo'lsa - shu papka qolsin, XCLauncher.exe o'yinni o'zi yuklab o'rnatadi.$\r$\n$\r$\nЕсли CS 1.6 уже установлена - выберите её папку. Если нет - оставьте эту, XCLauncher.exe сам скачает игру."
 
 !insertmacro MUI_PAGE_DIRECTORY
@@ -47,6 +50,10 @@ Var GLANG    ; boost-top o'rnatuvchisi (Inno) uchun: russian / uzbek / english
 
 Function .onInit
   !insertmacro MUI_LANGDLL_DISPLAY
+FunctionEnd
+
+Function RunUnelevated
+  Exec '"$WINDIR\explorer.exe" "$INSTDIR\XCLauncher.exe"'
 FunctionEnd
 
 Function SetLangVars
@@ -83,6 +90,11 @@ Section "X CLIENT"
   SetOutPath "$INSTDIR"
   File /r "${SRC}\*.*"
   WriteINIStr "$INSTDIR\xclient.ini" "x" "lang" $XLANG
+  ; ustidan qayta o'rnatilsa: eski "build" qolsa launcher Setup dagi (eskiroq bo'lishi mumkin) fayllarni yangi deb o'ylardi - qayta tekshirsin
+  DeleteINIStr "$INSTDIR\xclient.ini" "x" "build"
+!ifdef CHAN
+  WriteINIStr "$INSTDIR\xclient.ini" "x" "channel" "${CHAN}"
+!endif
   WriteUninstaller "$INSTDIR\XClient-Uninstall.exe"
   CreateShortcut "$DESKTOP\X CLIENT.lnk" "$INSTDIR\XCLauncher.exe" "" "$INSTDIR\XCLauncher.exe" 0
   CreateDirectory "$SMPROGRAMS\X CLIENT"
@@ -96,7 +108,7 @@ Section "X CLIENT"
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\XClient" "NoModify" 1
 SectionEnd
 
-; O'chirish: faqat launcher va yorliqlar. O'yin fayllari (cstrike va h.k.) va sozlamalar qoladi.
+; O'chirish: launcher, yorliqlar va launcher yaratgan/o'zgartirgan narsalar. O'yin fayllari (cstrike va h.k.), o'yin sozlamalari va F10 videolari qoladi.
 Section "Uninstall"
   ; "Nega o'chiryapsiz?" - qisqa so'rovnoma brauzerda ochiladi (javoblar admin panelda ko'rinadi)
   ReadINIStr $0 "$INSTDIR\xclient.ini" "x" "id"
@@ -113,6 +125,39 @@ Section "Uninstall"
   IfFileExists "$INSTDIR\platform\mmb_home_page.orig" 0 +3
     Delete "$INSTDIR\platform\mmb_home_page.html"
     Rename "$INSTDIR\platform\mmb_home_page.orig" "$INSTDIR\platform\mmb_home_page.html"
+  ; launcher o'zgartirgan HUD rasmlari va paketlar almashtirgan fayllarning asl nusxalari qaytariladi
+  IfFileExists "$INSTDIR\xc_backup\*.*" 0 no_backup
+    IfFileExists "$INSTDIR\xc_backup\hud\*.*" 0 +2
+      CopyFiles /SILENT "$INSTDIR\xc_backup\hud\*.*" "$INSTDIR"
+    RMDir /r "$INSTDIR\xc_backup\hud"
+    FindFirst $1 $2 "$INSTDIR\xc_backup\*.*"
+    pk_loop:
+      StrCmp $2 "" pk_done
+      StrCmp $2 "." pk_next
+      StrCmp $2 ".." pk_next
+      CopyFiles /SILENT "$INSTDIR\xc_backup\$2\*.*" "$INSTDIR"
+    pk_next:
+      FindNext $1 $2
+      Goto pk_loop
+    pk_done:
+    FindClose $1
+    RMDir /r "$INSTDIR\xc_backup"
+  no_backup:
+  ; launcher yaratgan fayllar
+  Delete "$INSTDIR\xclient.ini"
+  Delete "$INSTDIR\cstrike\xclient_launcher.cfg"
+  Delete "$INSTDIR\cstrike\xclient_master.cfg"
+  Delete "$INSTDIR\cstrike\tempdecal.xcdl"
+  Delete "$INSTDIR\cstrike\xc_*.dem"
+  SetFileAttributes "$INSTDIR\cstrike\tempdecal.wad" NORMAL   ; spray "faqat o'qish" qilingan edi - o'yin yana o'zgartira olsin
+  ; Windows bilan ishga tushish va "O'yinni tezlashtirish" belgisi (faqat o'zimizniki bo'lsa)
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "X CLIENT"
+  ReadRegStr $1 HKCU "Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers" "$INSTDIR\cstrike.exe"
+  StrCmp $1 "~ DISABLEDXMAXIMIZEDWINDOWEDMODE" 0 +2
+    DeleteRegValue HKCU "Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers" "$INSTDIR\cstrike.exe"
+  ReadRegStr $1 HKCU "Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers" "$INSTDIR\hl.exe"
+  StrCmp $1 "~ DISABLEDXMAXIMIZEDWINDOWEDMODE" 0 +2
+    DeleteRegValue HKCU "Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers" "$INSTDIR\hl.exe"
   Delete "$INSTDIR\XClient-Uninstall.exe"
   RMDir "$INSTDIR"
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\XClient"
