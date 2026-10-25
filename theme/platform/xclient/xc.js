@@ -62,7 +62,9 @@ function cmd(c) {
     if (hasApi()) {
       /* serverga ulanishdan OLDIN menyu musiqasini o'chiramiz: xarita yuklanayotganda mp3 chalinsa o'yin qotib,
        * ovoz takrorlanib qoladi va ba'zan yuklanish tugamaydi ('connect' hodisasi kech yoki manzilsiz kelishi mumkin) */
-      if (/^(connect|retry|reconnect)\b/.test(c)) { if (DEMO_PLAY) demoEnd(); NC.exec('host_framerate 0\n'); NC.exec('mp3 stop\n'); NC.exec('stopsound\n'); MUSIC_ON = false; }
+      if (/^(connect|retry|reconnect)\b/.test(c)) { if (DEMO_PLAY) demoEnd('menyu: ' + c); NC.exec('host_framerate 0\n'); NC.exec('mp3 stop\n'); NC.exec('stopsound\n'); MUSIC_ON = false; }
+      /* demo paytida menyu yuborgan har bir buyruq konsolda ko'rinsin - demo nima sababdan yopilganini topish uchun */
+      if (DEMO_PLAY && !/^(echo|play |xcd_|alias xcd|bind F[6-9]|unbind F[6-9])/.test(c)) NC.exec('echo [X CLIENT menyu] ' + c.replace(/["\n]/g, ' ') + '\n');
       NC.exec(c + '\n'); return true;
     }
   } catch (e) { dbg('exec xato ' + e); }
@@ -992,16 +994,20 @@ function demoPlay(nm) {
   cmd('xcd_2');
   cmd('bind F6 xcd_p'); cmd('bind F7 xcd_dn'); cmd('bind F8 xcd_up'); cmd('bind F9 xcd_2');
   if (QUEUE_IP) stopQueue();                         // navbat demo paytida serverga ulab yubormasin
+  cmd('cl_filterstuffcmd 1');                        // demo ichiga yozilgan server buyruqlari (connect/retry/disconnect) demoni yopmasin
+  DB.dplay = { n: nm, t: now() }; persist();         // menyu sahifasi demo paytida qayta yuklansa ham holat saqlansin
   DEMO_PLAY = true; DEMO_CUR = nm; DEMO_SPD = 2; DEMO_PAUSE = false;
   cmd('echo X CLIENT demo: F6 pauza, F7 sekinroq, F8 tezroq, F9 oddiy tezlik, F10 video yozish');
   cmd('mp3 stop'); MUSIC_ON = false;
   cmd('playdemo ' + nm);
 }
-function demoEnd() {
+function demoEnd(why) {
+  if (DEMO_PLAY) cmd('echo [X CLIENT] demo tugadi: ' + (why || '?'));
   cmd('host_framerate 0');
   if (!DEMO_PLAY) return;
   cmd('volume ' + (S && S.vol != null ? S.vol : 0.8));
   DEMO_PLAY = false; DEMO_PAUSE = false; DEMO_END_T = now();
+  if (DB.dplay) { DB.dplay = null; persist(); }
   for (var i = 0; i < DEMO_KEYS.length; i++) cmd('unbind ' + DEMO_KEYS[i]);
   applyBinds();
   setTimeout(musicSync, 1500);
@@ -1030,7 +1036,7 @@ function demoCtl(c) {
     if ((c === 'n' || c === 'p') && nm) { closeModal(); demoPlay(nm); return; }
     toast(T(it.length ? 'dm_first' : 'dm_none'), 3500); return;
   }
-  if (c === 'stop') { cmd('disconnect'); demoEnd(); }
+  if (c === 'stop') { demoEnd('stop tugmasi'); cmd('disconnect'); }
   else if (c === 'p') { cmd('xcd_p'); DEMO_PAUSE = !DEMO_PAUSE; }
   else if (c === 'dn') { DEMO_SPD = Math.max(0, DEMO_SPD - 1); DEMO_PAUSE = false; cmd('xcd_' + DEMO_SPD); }
   else if (c === 'up') { DEMO_SPD = Math.min(DEMO_SP.length - 1, DEMO_SPD + 1); DEMO_PAUSE = false; cmd('xcd_' + DEMO_SPD); }
@@ -1071,7 +1077,7 @@ function onConsole(txt) {
   var r = /Recording to (\S+?)(?:\.dem)?\.?\s*$/i.exec(txt);
   if (r && REC && r[1].indexOf(REC) === 0) demoAdd(REC);
   else if (REC && /(can'?t|cannot|not) record|must be connected/i.test(txt)) { REC = ''; if (S.demo && CONNECTED) startRecord(10000); }   // erta bo'ldi - keyinroq qayta
-  if (DEMO_PLAY && /Completed demo|couldn'?t open|ERROR: couldn|^\s*Connecting to/i.test(txt)) demoEnd();   // tugadi yoki serverga ulanyapti - oddiy tezlik
+  if (DEMO_PLAY) { var dm = /Completed demo|couldn'?t open|ERROR: couldn|^\s*Connecting to/i.exec(txt); if (dm) demoEnd(dm[0]); }   // tugadi yoki serverga ulanyapti - oddiy tezlik
   if (/\b(wrote|writing|saved)\b.*\.(bmp|tga|jpg|png)\b/i.test(txt)) toast(T('sh_saved'), 2500);   // F5: skrinshot saqlandi
   if (!CUR || !MYNAME) return;
   var m = /^(.+?) killed (.+?) with ([\w\-]+)/.exec(txt.replace(/^\s+/, ''));
@@ -3401,6 +3407,7 @@ step('loadSettings();', function () { loadSettings(); });
 step('loadBinds();', function () { loadBinds(); binAliases(); });
 step('seedFromGame();', function () { seedFromGame(); });
 // saqlangan sozlamalar har ochilishda qayta qo'yiladi: sborkaning userconfig.cfg / eski xclient_launcher.cfg ularni o'zgartirib yuboradi
+step('demo', function () { if (DB.dplay && now() - DB.dplay.t < 600000) { DEMO_PLAY = true; DEMO_CUR = DB.dplay.n; } });   // demo paytida menyu qayta yuklandi
 step('f10', function () { var used = false; for (var a in BINDS) if (BINDS.hasOwnProperty(a) && BINDS[a] === 'F10') used = true; if (!used) { cmd('alias xc_f10 "echo X CLIENT: F10 - video (launcher)"'); cmd('bind F10 xc_f10'); } });   // launcher F10 ni ushlay olmasa ham o'yinda "quit prompt" chiqmasin
 step('reapply', function () { if (DB.set) { var ra = function () { applySettings(S); applyBinds(); }; setTimeout(ra, 2500); setTimeout(ra, 12000); } });
 step('fit();', function () { fit(); });
