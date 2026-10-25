@@ -909,7 +909,7 @@ static char *read_all(const wchar_t *path, long *len)
  * bilan yozadi; XClient.exe har ishga tushganda o'qiydi va bajaradi. */
 static int  o_beta = -1, o_auto = 1, o_start = -1, o_win = 0, o_clean = 0, o_verify = 0;
 static int  o_prio = 0, o_shots = 0, o_spray = 0, o_sprays = 0, o_ok = 0, o_hud = 100;   /* o_hud: HUD kattaligi, % */   /* o_ok: sozlamalar saytdan olindi */
-static char o_res[16] = "", o_packs[256] = "";
+static char o_res[16] = "", o_packs[256] = "", o_sprayh[72] = "";   /* o_sprayh: spray faylining sha256 (sayt beradi) */
 
 static int jint(const char *b, const char *k, int def)
 {
@@ -982,6 +982,8 @@ static void fetch_opts(void)
     o_win = jint(r, "win", 0); o_clean = jint(r, "clean", 0); o_verify = jint(r, "verify", 0);
     o_prio = jint(r, "prio", 0); o_hud = jint(r, "hud", 100); o_shots = jint(r, "shots", 0); o_spray = jint(r, "spray", 0); o_sprays = jint(r, "sprays", 0);
     jstr(r, "packs", o_packs, sizeof(o_packs));
+    jstr(r, "sprayh", o_sprayh, sizeof(o_sprayh));
+    if (strlen(o_sprayh) != 64) o_sprayh[0] = 0;
     o_ok = 1;
     const char *p = strstr(r, "\"res\":\"");
     unsigned w = 0, h = 0;
@@ -1102,24 +1104,32 @@ static int spray_targets(wchar_t out[][MAX_PATH], int cap)
     FindClose(h);
     return n;
 }
+/* o'rnatilgan spray saytdagisi bilan bir xilmi: sha256 bo'yicha (64x64 spraylarning hajmi hammasida bir xil - 6296 bayt,
+ * shuning uchun faqat hajm bo'yicha tekshirilsa o'yin/Setup qo'ygan boshqa 64x64 rasm "to'g'ri" bo'lib qolardi) */
+static BOOL spray_same(const wchar_t *p)
+{
+    if (o_sprayh[0]) {
+        char h[65]; ULONGLONG sz = 0;
+        return sha256_file(p, h, &sz) && sz == (ULONGLONG)o_sprays && !_stricmp(h, o_sprayh);
+    }
+    WIN32_FILE_ATTRIBUTE_DATA fa;
+    return GetFileAttributesExW(p, GetFileExInfoStandard, &fa) && fa.nFileSizeLow == (DWORD)o_sprays;
+}
 static void install_spray(void)
 {
     wchar_t dst[16][MAX_PATH], tmp[MAX_PATH];
     char url[256];
     if (o_spray <= 0) return;
     int n = spray_targets(dst, 16);
-    if (o_spray == ini_int(L"sprayt") && o_sprays) {      /* o'rnatilgan - lekin o'yin yoki boshqa dastur almashtirgan bo'lsa qayta yozamiz */
+    if ((o_sprayh[0] || o_spray == ini_int(L"sprayt")) && o_sprays) {   /* o'rnatilgan - lekin o'yin yoki boshqa dastur almashtirgan bo'lsa qayta yozamiz */
         BOOL ok = TRUE;
-        for (int i = 0; i < n && ok; i++) {
-            WIN32_FILE_ATTRIBUTE_DATA fa;
-            ok = GetFileAttributesExW(dst[i], GetFileExInfoStandard, &fa) && fa.nFileSizeLow == (DWORD)o_sprays;
-        }
-        if (ok) return;
+        for (int i = 0; i < n && ok; i++) ok = spray_same(dst[i]);
+        if (ok) { ini_set_int(L"sprayt", o_spray); return; }
     }
     path_join(tmp, g_dir, L"cstrike\\tempdecal.xcdl");
     _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=spray_get&d=%s", g_id); url[sizeof(url) - 1] = 0;
     status(L"Spray o‘rnatilmoqda...", 1);
-    if (!http_download(url, tmp)) { DeleteFileW(tmp); return; }
+    if (!http_download(url, tmp) || (o_sprayh[0] && !spray_same(tmp))) { DeleteFileW(tmp); return; }   /* yarim yoki boshqa fayl kelsa - qo'ymaymiz */
     int done = 0;
     for (int i = 0; i < n; i++) {
         SetFileAttributesW(dst[i], FILE_ATTRIBUTE_NORMAL);

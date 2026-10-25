@@ -24,7 +24,8 @@ define('SPRAY_DEFAULT_VER', 20261026);   // spray_default.wad almashtirilsa - os
 function with_forced_packs($o, $d) {
     // spray hammada bir xil - X CLIENT logotipi. sprays: tempdecal.wad hajmi - launcher farq qilsa qayta yozadi
     unset($o['spray'], $o['sprays']);
-    if (is_file(__DIR__ . '/spray_default.wad')) { $o['spray'] = SPRAY_DEFAULT_VER; $o['sprays'] = filesize(__DIR__ . '/spray_default.wad'); }
+    unset($o['sprayh']);
+    if (is_file(__DIR__ . '/spray_default.wad')) { $o['spray'] = SPRAY_DEFAULT_VER; $o['sprays'] = filesize(__DIR__ . '/spray_default.wad'); $o['sprayh'] = hash_file('sha256', __DIR__ . '/spray_default.wad'); }
     $mine = array_filter(explode(',', isset($o['packs']) ? $o['packs'] : ''));
     $all = array();
     foreach ((array)@scandir(__DIR__ . '/packs') as $id) {
@@ -1463,7 +1464,7 @@ case 'opts_done':
         wr('dev/' . $d, $o);
         if ($isNew) tg_notify('install', "Yangi X CLIENT o'rnatish\n" . strtoupper(isset($o['cc']) ? $o['cc'] : '') . ' ' . $ip . "\n" . (isset($o['os']) ? $o['os'] : '') . (isset($o['scr']) ? ' · ' . $o['scr'] : ''));
         wr($ipk, array('d' => $d, 't' => time()));
-        $ho = with_forced_packs($o, $d); unset($ho['k'], $ho['kc']);
+        $ho = with_forced_packs($o, $d); unset($ho['k'], $ho['kc'], $ho['st'], $ho['fav'], $ho['ip']);   // launcherga saqlangan holat (token) kerak emas
         out(array('ok' => true, 'o' => $ho));
     }
     $claim = false;
