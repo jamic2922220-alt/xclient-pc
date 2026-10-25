@@ -131,7 +131,10 @@ function ico(n) {
   var P = { chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>', phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',
     flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>',
     swords: '<polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/><polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5"/><line x1="5" y1="14" x2="9" y2="18"/><line x1="7" y1="17" x2="4" y2="20"/><line x1="3" y1="19" x2="5" y2="21"/>',
-    clock: '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>', user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' };
+    clock: '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>',
+    play: '<polygon points="6 4 20 12 6 20 6 4" fill="currentColor"/>', pause: '<rect x="6" y="4" width="4" height="16" fill="currentColor"/><rect x="14" y="4" width="4" height="16" fill="currentColor"/>',
+    rew: '<polygon points="11 19 2 12 11 5 11 19" fill="currentColor"/><polygon points="22 19 13 12 22 5 22 19" fill="currentColor"/>', ff: '<polygon points="13 19 22 12 13 5 13 19" fill="currentColor"/><polygon points="2 19 11 12 2 5 2 19" fill="currentColor"/>',
+    stop: '<rect x="5" y="5" width="14" height="14" fill="currentColor"/>', film: '<rect x="2" y="4" width="20" height="16" rx="2"/><line x1="7" y1="4" x2="7" y2="20"/><line x1="17" y1="4" x2="17" y2="20"/><line x1="2" y1="12" x2="22" y2="12"/>', user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' };
   return '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' + (P[n] || '') + '</svg>';
 }
 function agoText(ts) {
@@ -971,11 +974,12 @@ function voiceWarm() {
 /* Demo ko'rish boshqaruvi: F6 pauza, F7 sekinroq, F8 tezroq, F9 oddiy tezlik. Tezlik host_framerate bilan
  * (har kadr demo vaqtini belgilangan miqdorda suradi; 1/fps_max = oddiy tezlik). Tugmalar faqat demo paytida bog'lanadi,
  * tugagach (yoki serverga ulanganda) host_framerate 0 va o'yinchining tugmalari qaytariladi - onlayn o'yinga ta'sir qilmasin. */
-var DEMO_PLAY = false, DEMO_KEYS = ['F6', 'F7', 'F8', 'F9'];
+var DEMO_PLAY = false, DEMO_KEYS = ['F6', 'F7', 'F8', 'F9'], DEMO_CUR = '', DEMO_SPD = 2, DEMO_PAUSE = false;
+var DEMO_SP = [0.25, 0.5, 1, 2, 4, 8];
 function demoPlay(nm) {
   nm = String(nm || '').replace(/[^\w\-]/g, '');
   if (!nm) return;
-  var f = 1 / Math.max(30, Math.min(1000, Number(S && S.fps) || 100)), sp = [0.25, 0.5, 1, 2, 4, 8];
+  var f = 1 / Math.max(30, Math.min(1000, Number(S && S.fps) || 100)), sp = DEMO_SP;
   for (var i = 0; i < sp.length; i++) {
     var hf = sp[i] === 1 ? 0 : Math.round(f * sp[i] * 1e6) / 1e6;
     cmd('alias xcd_' + i + ' "host_framerate ' + hf + '; alias xcd_up xcd_' + Math.min(i + 1, sp.length - 1) + '; alias xcd_dn xcd_' + Math.max(i - 1, 0) +
@@ -984,16 +988,26 @@ function demoPlay(nm) {
   cmd('alias xcd_pz "host_framerate 0.000001; alias xcd_p xcd_back; echo X CLIENT demo: pauza (F6 - davom)"');
   cmd('xcd_2');
   cmd('bind F6 xcd_p'); cmd('bind F7 xcd_dn'); cmd('bind F8 xcd_up'); cmd('bind F9 xcd_2');
-  DEMO_PLAY = true;
+  DEMO_PLAY = true; DEMO_CUR = nm; DEMO_SPD = 2; DEMO_PAUSE = false;
   cmd('echo X CLIENT demo: F6 pauza, F7 sekinroq, F8 tezroq, F9 oddiy tezlik, F10 video yozish');
   cmd('playdemo ' + nm);
 }
 function demoEnd() {
   cmd('host_framerate 0');
   if (!DEMO_PLAY) return;
-  DEMO_PLAY = false;
+  DEMO_PLAY = false; DEMO_PAUSE = false;
   for (var i = 0; i < DEMO_KEYS.length; i++) cmd('unbind ' + DEMO_KEYS[i]);
   applyBinds();
+}
+/* Demo bo'limidagi pult: menyu tugmalari F6-F9 bilan bir xil aliaslarni chaqiradi */
+function demoCtl(c) {
+  if (!DEMO_PLAY) { toast(T('dm_first'), 3500); return; }
+  if (c === 'stop') { cmd('disconnect'); demoEnd(); }
+  else if (c === 'p') { cmd('xcd_p'); DEMO_PAUSE = !DEMO_PAUSE; }
+  else if (c === 'dn') { DEMO_SPD = Math.max(0, DEMO_SPD - 1); DEMO_PAUSE = false; cmd('xcd_' + DEMO_SPD); }
+  else if (c === 'up') { DEMO_SPD = Math.min(DEMO_SP.length - 1, DEMO_SPD + 1); DEMO_PAUSE = false; cmd('xcd_' + DEMO_SPD); }
+  else if (c === 'n') { DEMO_SPD = 2; DEMO_PAUSE = false; cmd('xcd_2'); }
+  if (curModal === 'mdSettings' && setTab === 'demo') showSetTab('demo');
 }
 function stopRecord() { clearTimeout(REC_TM); if (REC) { cmd('stop'); REC = ''; } }
 function onConnectEvt(addr, inGame) {
@@ -1607,7 +1621,7 @@ function openAvatars() {
 
 /* ============================================================ SOZLAMALAR */
 var DEF = {
-  name: '', tag: 'X | ', net: 'fast', dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, buykeys: 0, queue: 1, reconn: 1, demo: 0,
+  name: '', tag: 'X | ', net: 'fast', dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, buykeys: 0, queue: 1, reconn: 1, demo: 1, dmig: 0,
   sens: 2.5, zoom: 1.2, raw: 1, filter: 0, inv: 0,
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1, micwarm: 1, micfix: 0,
   fps: 100, showfps: 0, uisnd: 1, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
@@ -1643,6 +1657,7 @@ function loadSettings() {
   cmd('host_framerate 0');                         // demo tezligi oldingi ishga tushishdan qolib ketgan bo'lsa
   /* "Avto grafika" (bekor qilindi) grafikani pasaytirib yuborgan o'yinchilarda - to'liq grafikani qaytaramiz */
   /* eski PRO CFG soya va dinamik yorug'likni o'chirgan edi - bir marta qaytaramiz (yangi PRO CFG grafikaga tegmaydi) */
+  if (!S.dmig) { S.demo = 1; S.dmig = 1; DB.set = S; }   // demo avtomatik yozish hammaga yoqiladi (bir marta; keyin o'chirsa - o'chiq qoladi)
   if (S.pro && !S.pmig) { S.shadows = 1; S.dyn = 1; S.pmig = 1; S.gfxc = ''; DB.set = S; }
   /* detal teksturalar (devorlarga naqsh) va baland gamma xaritalarni g'alati va og'ir ko'rsatdi - bir marta CS 1.6 holatiga */
   if (!S.gmig) {
@@ -2348,7 +2363,7 @@ function openSettings(tab) {
   seedFromGame();
   E = copy(S);
   openModal('mdSettings');
-  showSetTab(tab || setTab);
+  showSetTab(tab || (DEMO_PLAY ? 'demo' : setTab));   // demo ko'rilayotganda sozlamalar pult bilan ochiladi
 }
 function showSetTab(tab) {
   var nm = $('fName'); if (nm && E) E.name = nm.value.replace(/["\\;]/g, '').slice(0, 28);
@@ -2390,7 +2405,6 @@ var PANES = {
       '<div class="mut" style="margin:10px 0 14px;font-size:12px">' + esc(T('g_net_note')) + '</div>' + tg('reconn', 'g_reconn') + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('g_server')) + '</div>' +
       tg('queue', 'g_queue', 'g_queue2') + tg('mp3off', 'g_mp3', 'g_mp32') + tg('hand', 'g_hand') + tg('fastsw', 'g_fast') +
-      '<div class="ph2 m">' + esc(T('g_demo')) + '</div>' + tg('demo', 'g_rec', 'g_rec2') +
       '<div class="ph2 m">Discord</div>' + tg('drpc', 'g_drpc', 'g_drpc2') + tg('drpcs', 'g_drpcs') + tg('drpcj', 'g_drpcj') + '</div>';
   },
   keys: function () {
@@ -2442,10 +2456,6 @@ var PANES = {
       if (x[4] !== lastG) { lastG = x[4]; st += '<div class="stg">' + esc(T('sg_' + lastG)) + '</div>'; }
       st += '<div class="rowb sty"><b>' + esc(T(x[1])) + '</b><small>' + esc(T(x[2])) + '</small><a class="btn" data-style="' + x[0] + '">' + esc(T('st_apply')) + '</a></div>';
     });
-    var dm = '';
-    each(DB.demos || [], function (d) {
-      dm += '<div class="dmr"><b>' + esc(d.s) + '</b><small>' + esc(fmtTime(d.t) + (d.m ? ' · ' + d.m : '') + ' · ' + d.n) + '</small><a class="btn" data-demo="' + esc(d.n) + '">▶ ' + esc(T('dm_play')) + '</a></div>';
-    });
     return '<div class="pane l"><div class="ph2">' + esc(T('pf_title')) + '</div>' + pr +
       '<div class="ph2 m">' + esc(T('cc_title')) + '</div>' +
       '<div class="fr"><div class="lb">' + esc(T('cc_game')) + '</div><div class="ct2 seg">' + games + '</div></div>' +
@@ -2454,11 +2464,25 @@ var PANES = {
       '<div class="ph2 m">' + esc(T('cf_title')) + '</div><div class="mut" style="font-size:12px;margin-bottom:8px">' + esc(T('cf_note')) + '</div>' +
       '<a class="btn" data-act="cfgshare" style="margin:0 8px 0 0">' + esc(T('cf_get')) + '</a><a class="btn" data-act="cfgload" style="margin:0 8px 0 0">' + esc(T('cf_load')) + '</a><a class="btn red" data-act="cfgtop">\u2605 ' + esc(T('ct_title')) + '</a>' +
       '<div id="cfgOut"></div></div>' +
-      '<div class="pane r"><div class="ph2">' + esc(T('st_title')) + '</div>' + st +
-      '<div class="ph2 m">' + esc(T('dm_title')) + '</div>' +
-      (S && S.demo ? '' : '<div class="mut" style="font-size:12px;margin-bottom:6px">' + esc(T('dm_off')) + '</div>') +
-      '<div class="mut" style="font-size:12px;margin-bottom:6px">' + esc(T('dm_keys')) + '</div>' +
-      '<div class="dml">' + (dm || '<div class="empty">' + esc(T('dm_none')) + '</div>') + '</div></div>';
+      '<div class="pane r"><div class="ph2">' + esc(T('st_title')) + '</div>' + st + '</div>';
+  },
+  demo: function () {                            // Demo: pleyer pulti, avtomatik yozish, ro'yxat
+    var cur = null, dm = '';
+    each(DB.demos || [], function (d) {
+      if (d.n === DEMO_CUR) cur = d;
+      dm += '<div class="dmr' + (d.n === DEMO_CUR ? ' on' : '') + '"><b>' + esc(d.s) + '</b><small>' + esc(fmtTime(d.t) + (d.m ? ' \u00b7 ' + d.m : '') + ' \u00b7 ' + d.n) + '</small>' +
+        '<a class="btn red" data-demo="' + esc(d.n) + '">' + ico('play') + ' ' + esc(T('dm_play')) + '</a></div>';
+    });
+    var st = !DEMO_PLAY ? T('dm_idle') : DEMO_PAUSE ? T('dm_paused') : DEMO_SP[DEMO_SPD] + 'x';
+    var b = function (c, i, title) { return '<a class="btn dpb' + (DEMO_PLAY ? '' : ' dis') + '" data-dctl="' + c + '" title="' + esc(T(title)) + '">' + ico(i) + '</a>'; };
+    return '<div class="pane l"><div class="ph2">' + esc(T('dm_player')) + '</div>' +
+      '<div class="dpl"><div class="dpscr">' + ico('film') + '<b>' + esc(cur ? cur.s : DEMO_CUR || T('dm_pick')) + '</b><small>' + esc(cur ? fmtTime(cur.t) + (cur.m ? ' \u00b7 ' + cur.m : '') : '') + '</small>' +
+      '<span class="dpst">' + esc(st) + '</span></div>' +
+      '<div class="dpc">' + b('dn', 'rew', 'dm_slow') + b('p', DEMO_PAUSE ? 'play' : 'pause', 'dm_pause') + b('n', 'play', 'dm_norm') + b('up', 'ff', 'dm_fast') + b('stop', 'stop', 'dm_stop') + '</div></div>' +
+      '<div class="mut" style="font-size:12px;margin:10px 0">' + esc(T('dm_keys')) + '</div>' +
+      tg('demo', 'g_rec', 'g_rec2') + '</div>' +
+      '<div class="pane r"><div class="ph2">' + esc(T('dm_title')) + '</div>' +
+      '<div class="dml dml2">' + (dm || '<div class="empty">' + esc(T(S && S.demo ? 'dm_none' : 'dm_off')) + '</div>') + '</div></div>';
   },
   cont: function () {                             // Kontent: spray, skrinshotlar, mavzu, paketlar
     if (PACKS === null) loadPacks();
@@ -3129,7 +3153,7 @@ setInterval(function () { if (!CLK_N || !feat('clicks')) return; var c = CLK; CL
 
 /* ---- menyu ovozlari: o'yin sound/xclient/*.wav ni chaladi (XCLauncher.exe ularni o'yin papkasiga qo'yadi) ---- */
 var SFX_ATTR = ['data-act', 'data-tab', 'data-hsub', 'data-seg', 'data-tg', 'data-otg', 'data-ohud', 'data-dd', 'data-ddv', 'data-xchk', 'data-pack',
-  'data-sort', 'data-flt', 'data-theme', 'data-daymode', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec', 'data-avpre'];
+  'data-sort', 'data-flt', 'data-theme', 'data-daymode', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-dctl', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec', 'data-avpre'];
 var SFX_QUIET = false, sfxLast = null, sfxT = 0;
 function sfx(n) {
   if (!S || S.uisnd === 0 || !hasApi()) return;
@@ -3232,6 +3256,7 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-frcmp'))) { openCompare(el.getAttribute('data-frcmp')); return; }
   if ((el = closest(t, 'data-clkick'))) { clanCall('clan_kick', { who: el.getAttribute('data-clkick') }); return; }
   if ((el = closest(t, 'data-copyip'))) { copyIp(el.getAttribute('data-copyip'), el.parentNode.querySelector('input')); return; }
+  if ((el = closest(t, 'data-dctl'))) { demoCtl(el.getAttribute('data-dctl')); return; }
   if ((el = closest(t, 'data-demo'))) { closeModal(); demoPlay(el.getAttribute('data-demo')); return; }
   if ((el = closest(t, 'data-hsub'))) { HSUB = el.getAttribute('data-hsub'); showSetTab('hud'); return; }
   if ((el = closest(t, 'data-xchk'))) {
@@ -3305,6 +3330,7 @@ document.onkeydown = function (e) {
   if (curModal === 'mdSide' && k === 13 && $('chatIn')) { chatSend(); return false; }
   if (curModal === 'mdSide' && k === 13 && $('frIn')) { act('fradd'); return false; }
   if (k === 27 && curModal) { closeModal(); return false; }
+  if (k >= 112 && k <= 123 && k !== 116) { if (e.preventDefault) e.preventDefault(); return false; }   // F1-F12 menyuda hech narsa qilmasin (brauzer tugmalari)
   if (k === 116 || (k === 82 && e.ctrlKey)) { if (e.preventDefault) e.preventDefault(); toast(T('sh_menu'), 3500); return false; }   // F5 menyuni qayta yuklamasin (skrinshot - o'yin ichida)
 };
 $('askYes').onclick = function () { askDone(true); };

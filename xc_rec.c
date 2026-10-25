@@ -8,6 +8,7 @@
  * ===================================================================== */
 #define COBJMACROS
 #include <d3d11.h>
+#include <d3d10.h>
 #include <dxgi1_2.h>
 #include <mfapi.h>
 #include <mfidl.h>
@@ -20,7 +21,8 @@
 #pragma comment(lib, "mfuuid.lib")
 #endif
 
-#define REC_FPS      30
+#define REC_FPS      30             /* protsessor bilan siqilganda */
+#define REC_FPS_GPU  60             /* videokarta bilan siqilganda - silliq va FPS ga ta'sir qilmaydi */
 #define REC_MAX_W    1920
 #define REC_MAX_H    1080
 #define REC_MAX_SEC  (60 * 60)          /* bir video eng ko'pi 1 soat - disk to'lib qolmasin */
@@ -42,11 +44,14 @@ typedef HRESULT (WINAPI *t_MFCreateSample)(IMFSample **);
 typedef HRESULT (WINAPI *t_MFCreateMemoryBuffer)(DWORD, IMFMediaBuffer **);
 typedef HRESULT (WINAPI *t_MFCreateAttributes)(IMFAttributes **, UINT32);
 typedef HRESULT (WINAPI *t_MFCreateSinkWriterFromURL)(LPCWSTR, IMFByteStream *, IMFAttributes *, IMFSinkWriter **);
+typedef HRESULT (WINAPI *t_MFCreateDXGIDeviceManager)(UINT *, IMFDXGIDeviceManager **);
+typedef HRESULT (WINAPI *t_MFCreateDXGISurfaceBuffer)(REFIID, IUnknown *, UINT, BOOL, IMFMediaBuffer **);
 
 static struct {
     t_D3D11CreateDevice D3D11CreateDevice; t_CreateDXGIFactory1 CreateDXGIFactory1;
     t_MFStartup MFStartup; t_MFShutdown MFShutdown; t_MFCreateMediaType MFCreateMediaType; t_MFCreateSample MFCreateSample;
     t_MFCreateMemoryBuffer MFCreateMemoryBuffer; t_MFCreateAttributes MFCreateAttributes; t_MFCreateSinkWriterFromURL MFCreateSinkWriterFromURL;
+    t_MFCreateDXGIDeviceManager MFCreateDXGIDeviceManager; t_MFCreateDXGISurfaceBuffer MFCreateDXGISurfaceBuffer;   /* Windows 8+; bo'lmasa - protsessor yo'li */
 } rf;
 
 static BOOL rec_load(void)
@@ -65,6 +70,8 @@ static BOOL rec_load(void)
     rf.MFCreateMemoryBuffer = (t_MFCreateMemoryBuffer)GetProcAddress(mfp, "MFCreateMemoryBuffer");
     rf.MFCreateAttributes = (t_MFCreateAttributes)GetProcAddress(mfp, "MFCreateAttributes");
     rf.MFCreateSinkWriterFromURL = (t_MFCreateSinkWriterFromURL)GetProcAddress(mfrw, "MFCreateSinkWriterFromURL");
+    rf.MFCreateDXGIDeviceManager = (t_MFCreateDXGIDeviceManager)GetProcAddress(mfp, "MFCreateDXGIDeviceManager");
+    rf.MFCreateDXGISurfaceBuffer = (t_MFCreateDXGISurfaceBuffer)GetProcAddress(mfp, "MFCreateDXGISurfaceBuffer");
     if (!rf.D3D11CreateDevice || !rf.CreateDXGIFactory1 || !rf.MFStartup || !rf.MFShutdown || !rf.MFCreateMediaType || !rf.MFCreateSample
         || !rf.MFCreateMemoryBuffer || !rf.MFCreateAttributes || !rf.MFCreateSinkWriterFromURL) return FALSE;
     st = 1;
@@ -82,7 +89,9 @@ static int g_rec_saved = 0;
 /* ---- tasvir: o'yin turgan monitorni Desktop Duplication bilan olish ---- */
 typedef struct {
     ID3D11Device *dev; ID3D11DeviceContext *ctx; IDXGIOutputDuplication *dup; IDXGIOutput1 *out1;
-    ID3D11Texture2D *stg; UINT sw, sh;          /* manba (monitor) o'lchami */
+    ID3D11Texture2D *stg[2]; int si, sfull[2];  /* protsessor yo'li: ikki navbatli nusxa - videokartani kutib qolmaslik uchun */
+    BOOL gpu, sizechg; ID3D11Texture2D *gtex;   /* videokarta yo'li: oxirgi kadr videokarta xotirasida */
+    UINT fps, sw, sh;                           /* manba (monitor) o'lchami */
     UINT tw, th; BYTE *frame;                   /* video o'lchami va oxirgi kadr (BGRA, tepadan pastga) */
     int *xmap, *ymap; UINT mw, mh;              /* manba -> video (kattalashtirish/kichraytirish) */
 } Cap;
@@ -98,7 +107,7 @@ static void cap_maps(Cap *c, UINT sw, UINT sh)
     c->mw = sw; c->mh = sh;
 }
 
-static BOOL cap_open(Cap *c, HWND game)
+static BOOL cap_open(Cap *c, HWND game, BOOL gpu)
 {
     IDXGIFactory1 *fac = NULL; IDXGIAdapter1 *ad = NULL, *best_ad = NULL; IDXGIOutput *out = NULL, *best = NULL;
     RECT wr; POINT pt = { 0, 0 };
@@ -120,7 +129,13 @@ static BOOL cap_open(Cap *c, HWND game)
     }
     SREL(fac);
     if (!best) { SREL(best_ad); return FALSE; }
-    HRESULT hr = rf.D3D11CreateDevice((IDXGIAdapter *)best_ad, D3D_DRIVER_TYPE_UNKNOWN, NULL, 0, NULL, 0, D3D11_SDK_VERSION, &c->dev, NULL, &c->ctx);
+    UINT fl = D3D11_CREATE_DEVICE_BGRA_SUPPORT | (gpu ? D3D11_CREATE_DEVICE_VIDEO_SUPPORT : 0);
+    HRESULT hr = rf.D3D11CreateDevice((IDXGIAdapter *)best_ad, D3D_DRIVER_TYPE_UNKNOWN, NULL, fl, NULL, 0, D3D11_SDK_VERSION, &c->dev, NULL, &c->ctx);
+    if (SUCCEEDED(hr) && gpu) {            /* siqgich boshqa oqimda shu qurilmadan foydalanadi */
+        ID3D10Multithread *mt = NULL;
+        if (SUCCEEDED(ID3D11DeviceContext_QueryInterface(c->ctx, &IID_ID3D10Multithread, (void **)&mt))) { ID3D10Multithread_SetMultithreadProtected(mt, TRUE); SREL(mt); }
+        else hr = E_FAIL;
+    }
     SREL(best_ad);
     if (SUCCEEDED(hr)) hr = IDXGIOutput_QueryInterface(best, &IID_IDXGIOutput1, (void **)&c->out1);
     SREL(best);
@@ -130,6 +145,12 @@ static BOOL cap_open(Cap *c, HWND game)
     IDXGIOutputDuplication_GetDesc(c->dup, &dd);
     c->sw = dd.ModeDesc.Width; c->sh = dd.ModeDesc.Height;
     if (c->sw < 64 || c->sh < 64) return FALSE;
+    c->gpu = gpu; c->fps = gpu ? REC_FPS_GPU : REC_FPS;
+    if (gpu) {                              /* asl o'lchamda, kichraytirmasdan - eng tiniq */
+        if ((c->sw | c->sh) & 1 || c->sw > 4096 || c->sh > 2304) return FALSE;
+        c->tw = c->sw; c->th = c->sh;
+        return TRUE;
+    }
     double k = 1.0;
     if (c->sw > REC_MAX_W || c->sh > REC_MAX_H) { double kx = (double)REC_MAX_W / c->sw, ky = (double)REC_MAX_H / c->sh; k = kx < ky ? kx : ky; }
     c->tw = ((UINT)(c->sw * k)) & ~1u; c->th = ((UINT)(c->sh * k)) & ~1u;
@@ -147,39 +168,69 @@ static void cap_reopen(Cap *c)
     }
 }
 
-/* yangi kadr bo'lsa c->frame ga yoziladi; bo'lmasa oldingisi qoladi (video baribir tekis 30 kadr) */
-static void cap_grab(Cap *c)
+static void cap_cpu_copy(Cap *c, ID3D11Texture2D *stg)
+{
+    D3D11_TEXTURE2D_DESC td; D3D11_MAPPED_SUBRESOURCE m;
+    ID3D11Texture2D_GetDesc(stg, &td);
+    if (FAILED(ID3D11DeviceContext_Map(c->ctx, (ID3D11Resource *)stg, 0, D3D11_MAP_READ, 0, &m))) return;
+    const BYTE *src = (const BYTE *)m.pData;
+    if (td.Width >= c->tw && td.Height >= c->th && td.Width - c->tw <= 1 && td.Height - c->th <= 1) {
+        for (UINT y = 0; y < c->th; y++) memcpy(c->frame + (size_t)y * c->tw * 4, src + (size_t)y * m.RowPitch, (size_t)c->tw * 4);
+    } else {
+        cap_maps(c, td.Width, td.Height);
+        if (c->xmap) for (UINT y = 0; y < c->th; y++) {
+            const BYTE *row = src + (size_t)c->ymap[y] * m.RowPitch;
+            DWORD *dst = (DWORD *)(c->frame + (size_t)y * c->tw * 4);
+            for (UINT x = 0; x < c->tw; x++) dst[x] = *(const DWORD *)(row + c->xmap[x]);
+        }
+    }
+    ID3D11DeviceContext_Unmap(c->ctx, (ID3D11Resource *)stg, 0);
+}
+
+static ID3D11Texture2D *tex_like(Cap *c, const D3D11_TEXTURE2D_DESC *td, BOOL staging)
+{
+    D3D11_TEXTURE2D_DESC d = *td; ID3D11Texture2D *t = NULL;
+    d.MipLevels = 1; d.ArraySize = 1; d.SampleDesc.Count = 1; d.SampleDesc.Quality = 0; d.MiscFlags = 0;
+    if (staging) { d.Usage = D3D11_USAGE_STAGING; d.BindFlags = 0; d.CPUAccessFlags = D3D11_CPU_ACCESS_READ; }
+    else { d.Usage = D3D11_USAGE_DEFAULT; d.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET; d.CPUAccessFlags = 0; }
+    return SUCCEEDED(ID3D11Device_CreateTexture2D(c->dev, &d, NULL, &t)) ? t : NULL;
+}
+
+/* yangi kadr bo'lsa olinadi (videokarta yo'lida - c->gtex, protsessor yo'lida - c->frame); bo'lmasa oldingisi qoladi */
+static void cap_grab(Cap *c, UINT wait_ms)
 {
     if (!c->dup) { cap_reopen(c); if (!c->dup) return; }
     DXGI_OUTDUPL_FRAME_INFO fi; IDXGIResource *res = NULL; ID3D11Texture2D *tex = NULL;
-    HRESULT hr = IDXGIOutputDuplication_AcquireNextFrame(c->dup, 0, &fi, &res);
-    if (hr == DXGI_ERROR_WAIT_TIMEOUT) return;
+    HRESULT hr = IDXGIOutputDuplication_AcquireNextFrame(c->dup, wait_ms, &fi, &res);
+    if (hr == DXGI_ERROR_WAIT_TIMEOUT) {
+        /* protsessor yo'li: oldingi nusxa tayyor bo'lsa - endi o'qiymiz (bir kadr kechikish, lekin o'yin kutib qolmaydi) */
+        if (!c->gpu) { int p = c->si ^ 1; if (c->sfull[p]) { cap_cpu_copy(c, c->stg[p]); c->sfull[p] = 0; } }
+        return;
+    }
     if (FAILED(hr)) { cap_reopen(c); return; }
-    if (fi.LastPresentTime.QuadPart && SUCCEEDED(IDXGIResource_QueryInterface(res, &IID_ID3D11Texture2D, (void **)&tex))) {
+    BOOL first = c->gpu ? !c->gtex : !c->sfull[0] && !c->sfull[1];
+    if ((fi.LastPresentTime.QuadPart || first) && SUCCEEDED(IDXGIResource_QueryInterface(res, &IID_ID3D11Texture2D, (void **)&tex))) {
         D3D11_TEXTURE2D_DESC td; ID3D11Texture2D_GetDesc(tex, &td);
-        if (c->stg) { D3D11_TEXTURE2D_DESC sd; ID3D11Texture2D_GetDesc(c->stg, &sd); if (sd.Width != td.Width || sd.Height != td.Height || sd.Format != td.Format) SREL(c->stg); }
-        if (!c->stg) {
-            D3D11_TEXTURE2D_DESC sd = td;
-            sd.Usage = D3D11_USAGE_STAGING; sd.BindFlags = 0; sd.CPUAccessFlags = D3D11_CPU_ACCESS_READ; sd.MiscFlags = 0; sd.MipLevels = 1; sd.ArraySize = 1;
-            sd.SampleDesc.Count = 1; sd.SampleDesc.Quality = 0;
-            ID3D11Device_CreateTexture2D(c->dev, &sd, NULL, &c->stg);
-        }
-        if (c->stg && (td.Format == DXGI_FORMAT_B8G8R8A8_UNORM || td.Format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB)) {
-            ID3D11DeviceContext_CopyResource(c->ctx, (ID3D11Resource *)c->stg, (ID3D11Resource *)tex);
-            D3D11_MAPPED_SUBRESOURCE m;
-            if (SUCCEEDED(ID3D11DeviceContext_Map(c->ctx, (ID3D11Resource *)c->stg, 0, D3D11_MAP_READ, 0, &m))) {
-                const BYTE *src = (const BYTE *)m.pData;
-                if (td.Width >= c->tw && td.Height >= c->th && td.Width - c->tw <= 1 && td.Height - c->th <= 1) {
-                    for (UINT y = 0; y < c->th; y++) memcpy(c->frame + (size_t)y * c->tw * 4, src + (size_t)y * m.RowPitch, (size_t)c->tw * 4);
-                } else {
-                    cap_maps(c, td.Width, td.Height);
-                    if (c->xmap) for (UINT y = 0; y < c->th; y++) {
-                        const BYTE *row = src + (size_t)c->ymap[y] * m.RowPitch;
-                        DWORD *dst = (DWORD *)(c->frame + (size_t)y * c->tw * 4);
-                        for (UINT x = 0; x < c->tw; x++) dst[x] = *(const DWORD *)(row + c->xmap[x]);
-                    }
+        if (td.Format == DXGI_FORMAT_B8G8R8A8_UNORM || td.Format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB) {
+            if (c->gpu) {
+                if (td.Width != c->tw || td.Height != c->th) c->sizechg = TRUE;     /* o'yin o'lchamni almashtirdi - shu video saqlanadi */
+                else {
+                    /* har kadr yangi tekstura: siqgich oldingisini hali o'qiyotgan bo'lishi mumkin (namuna o'z havolasini ushlaydi) */
+                    ID3D11Texture2D *t = tex_like(c, &td, FALSE);
+                    if (t) { ID3D11DeviceContext_CopyResource(c->ctx, (ID3D11Resource *)t, (ID3D11Resource *)tex); SREL(c->gtex); c->gtex = t; }
                 }
-                ID3D11DeviceContext_Unmap(c->ctx, (ID3D11Resource *)c->stg, 0);
+            } else {
+                int i = c->si;
+                if (c->stg[i]) { D3D11_TEXTURE2D_DESC sd; ID3D11Texture2D_GetDesc(c->stg[i], &sd); if (sd.Width != td.Width || sd.Height != td.Height || sd.Format != td.Format) { SREL(c->stg[i]); c->sfull[i] = 0; } }
+                if (!c->stg[i]) c->stg[i] = tex_like(c, &td, TRUE);
+                if (c->stg[i]) {
+                    ID3D11DeviceContext_CopyResource(c->ctx, (ID3D11Resource *)c->stg[i], (ID3D11Resource *)tex);
+                    c->sfull[i] = 1;
+                    int p = i ^ 1;
+                    if (c->sfull[p]) { cap_cpu_copy(c, c->stg[p]); c->sfull[p] = 0; }
+                    else if (first) { cap_cpu_copy(c, c->stg[i]); c->sfull[i] = 0; }   /* birinchi kadr darhol */
+                    c->si = p;
+                }
             }
         }
         SREL(tex);
@@ -190,7 +241,7 @@ static void cap_grab(Cap *c)
 
 static void cap_close(Cap *c)
 {
-    SREL(c->stg); SREL(c->dup); SREL(c->out1); SREL(c->ctx); SREL(c->dev);
+    SREL(c->stg[0]); SREL(c->stg[1]); SREL(c->gtex); SREL(c->dup); SREL(c->out1); SREL(c->ctx); SREL(c->dev);
     free(c->frame); free(c->xmap); free(c->ymap);
     ZeroMemory(c, sizeof(*c));
 }
@@ -244,23 +295,26 @@ typedef struct { IMFSinkWriter *w; DWORD vs, as; BOOL audio; } Enc;
 static IMFMediaType *mt_new(void) { IMFMediaType *t = NULL; return SUCCEEDED(rf.MFCreateMediaType(&t)) ? t : NULL; }
 #define PACK2(a, b) (((UINT64)(a) << 32) | (UINT32)(b))
 
-static BOOL enc_open(Enc *e, const wchar_t *path, const Cap *c, const Aud *a, BOOL hw)
+/* mgr - videokarta yo'li (teksturalar to'g'ridan-to'g'ri siqgichga); hw - videokarta siqgichi (protsessor yo'lida ham) */
+static BOOL enc_open(Enc *e, const wchar_t *path, const Cap *c, const Aud *a, BOOL hw, IMFDXGIDeviceManager *mgr)
 {
     IMFAttributes *at = NULL; IMFMediaType *t = NULL;
-    HRESULT hr = rf.MFCreateAttributes(&at, 2);
-    if (SUCCEEDED(hr)) { IMFAttributes_SetUINT32(at, &MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, hw ? 1 : 0); IMFAttributes_SetGUID(at, &MF_TRANSCODE_CONTAINERTYPE, &MFTranscodeContainerType_MPEG4); }
+    HRESULT hr = rf.MFCreateAttributes(&at, 3);
+    if (SUCCEEDED(hr) && mgr) IMFAttributes_SetUnknown(at, &MF_SINK_WRITER_D3D_MANAGER, (IUnknown *)mgr);
+    if (SUCCEEDED(hr)) { IMFAttributes_SetUINT32(at, &MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, hw || mgr ? 1 : 0); IMFAttributes_SetGUID(at, &MF_TRANSCODE_CONTAINERTYPE, &MFTranscodeContainerType_MPEG4); }
     if (SUCCEEDED(hr)) hr = rf.MFCreateSinkWriterFromURL(path, NULL, at, &e->w);
     SREL(at);
     if (FAILED(hr)) return FALSE;
-    UINT32 br = (UINT32)((ULONGLONG)c->tw * c->th * REC_FPS / 6);   /* ~10 Mbit/s 1080p30 da */
-    if (br > 12000000) br = 12000000;
-    if (br < 2000000) br = 2000000;
+    /* tiniq: 1080p60 ~25 Mbit/s, 1080p30 ~16 Mbit/s (YouTube tavsiyasidan yuqori) */
+    UINT32 br = (UINT32)((ULONGLONG)c->tw * c->th * c->fps / 5);
+    if (br > 50000000) br = 50000000;
+    if (br < 6000000) br = 6000000;
     /* tasvir: chiqish H.264, kirish RGB32 (tepadan pastga) - rang o'zgartirgichni Sink Writer o'zi qo'yadi */
     hr = (t = mt_new()) ? S_OK : E_FAIL;
     if (SUCCEEDED(hr)) {
         IMFMediaType_SetGUID(t, &MF_MT_MAJOR_TYPE, &MFMediaType_Video); IMFMediaType_SetGUID(t, &MF_MT_SUBTYPE, &MFVideoFormat_H264);
         IMFMediaType_SetUINT32(t, &MF_MT_AVG_BITRATE, br); IMFMediaType_SetUINT32(t, &MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
-        IMFMediaType_SetUINT64(t, &MF_MT_FRAME_SIZE, PACK2(c->tw, c->th)); IMFMediaType_SetUINT64(t, &MF_MT_FRAME_RATE, PACK2(REC_FPS, 1));
+        IMFMediaType_SetUINT64(t, &MF_MT_FRAME_SIZE, PACK2(c->tw, c->th)); IMFMediaType_SetUINT64(t, &MF_MT_FRAME_RATE, PACK2(c->fps, 1));
         IMFMediaType_SetUINT64(t, &MF_MT_PIXEL_ASPECT_RATIO, PACK2(1, 1));
         hr = IMFSinkWriter_AddStream(e->w, t, &e->vs);
     }
@@ -269,7 +323,7 @@ static BOOL enc_open(Enc *e, const wchar_t *path, const Cap *c, const Aud *a, BO
     if (SUCCEEDED(hr)) {
         IMFMediaType_SetGUID(t, &MF_MT_MAJOR_TYPE, &MFMediaType_Video); IMFMediaType_SetGUID(t, &MF_MT_SUBTYPE, &MFVideoFormat_RGB32);
         IMFMediaType_SetUINT32(t, &MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
-        IMFMediaType_SetUINT64(t, &MF_MT_FRAME_SIZE, PACK2(c->tw, c->th)); IMFMediaType_SetUINT64(t, &MF_MT_FRAME_RATE, PACK2(REC_FPS, 1));
+        IMFMediaType_SetUINT64(t, &MF_MT_FRAME_SIZE, PACK2(c->tw, c->th)); IMFMediaType_SetUINT64(t, &MF_MT_FRAME_RATE, PACK2(c->fps, 1));
         IMFMediaType_SetUINT64(t, &MF_MT_PIXEL_ASPECT_RATIO, PACK2(1, 1));
         IMFMediaType_SetUINT32(t, &MF_MT_DEFAULT_STRIDE, c->tw * 4);
         hr = IMFSinkWriter_SetInputMediaType(e->w, e->vs, t, NULL);
@@ -309,6 +363,29 @@ static BOOL enc_write(Enc *e, DWORD stream, const void *data, DWORD bytes, LONGL
     if (SUCCEEDED(hr)) hr = IMFSinkWriter_WriteSample(e->w, stream, s);
     SREL(s); SREL(b);
     return SUCCEEDED(hr);
+}
+
+/* videokarta yo'li: tekstura nusxalanmasdan siqgichga beriladi */
+static BOOL enc_write_tex(Enc *e, ID3D11Texture2D *tex, LONGLONG t, LONGLONG dur)
+{
+    IMFMediaBuffer *b = NULL; IMF2DBuffer *b2 = NULL; IMFSample *s = NULL; DWORD len = 0;
+    HRESULT hr = rf.MFCreateDXGISurfaceBuffer(&IID_ID3D11Texture2D, (IUnknown *)tex, 0, FALSE, &b);
+    if (SUCCEEDED(hr)) hr = IMFMediaBuffer_QueryInterface(b, &IID_IMF2DBuffer, (void **)&b2);
+    if (SUCCEEDED(hr)) hr = IMF2DBuffer_GetContiguousLength(b2, &len);
+    if (SUCCEEDED(hr)) hr = IMFMediaBuffer_SetCurrentLength(b, len);
+    if (SUCCEEDED(hr)) hr = rf.MFCreateSample(&s);
+    if (SUCCEEDED(hr)) hr = IMFSample_AddBuffer(s, b);
+    if (SUCCEEDED(hr)) hr = IMFSample_SetSampleTime(s, t);
+    if (SUCCEEDED(hr)) hr = IMFSample_SetSampleDuration(s, dur);
+    if (SUCCEEDED(hr)) hr = IMFSinkWriter_WriteSample(e->w, e->vs, s);
+    SREL(s); SREL(b2); SREL(b);
+    return SUCCEEDED(hr);
+}
+
+static BOOL enc_frame(Enc *e, Cap *c, LONGLONG t, LONGLONG dur)
+{
+    if (c->gpu) return c->gtex ? enc_write_tex(e, c->gtex, t, dur) : TRUE;   /* hali kadr yo'q - o'tkazib yuboramiz */
+    return enc_write(e, e->vs, c->frame, c->tw * c->th * 4, t, dur);
 }
 
 static short f2s(float v) { v *= 32767.0f; return (short)(v > 32767.0f ? 32767 : v < -32768.0f ? -32768 : v); }
@@ -362,6 +439,7 @@ static DWORD WINAPI rec_thread(LPVOID unused)
     ZeroMemory(&c, sizeof(c)); ZeroMemory(&a, sizeof(a)); ZeroMemory(&e, sizeof(e));
     wchar_t dir[MAX_PATH], path[MAX_PATH] = L"";
     BOOL mf = FALSE, ok = FALSE;
+    IMFDXGIDeviceManager *mgr = NULL;   /* videokarta yo'li: yozuvchi yopilguncha yashashi kerak */
     CoInitializeEx(NULL, COINIT_MULTITHREADED);
     if (!rec_load() || FAILED(rf.MFStartup(0x00020070 /* MF_VERSION */, 0))) goto done;
     mf = TRUE;
@@ -371,16 +449,30 @@ static DWORD WINAPI rec_thread(LPVOID unused)
     SYSTEMTIME st; GetLocalTime(&st);
     _snwprintf(path, MAX_PATH, L"%s\\xc_%04u%02u%02u_%02u%02u%02u.mp4", dir, st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
     path[MAX_PATH - 1] = 0;
-    if (!cap_open(&c, g_rec_wnd)) goto done;
     aud_open(&a);                       /* ovoz bo'lmasa ham video yoziladi */
-    BOOL hw = TRUE;
-    if (!enc_open(&e, path, &c, &a, TRUE)) { hw = FALSE; if (!enc_open(&e, path, &c, &a, FALSE)) goto done; }
-    /* videokarta siqgichi birinchi kadrni qabul qilmasa - oddiy (protsessor) siqgich bilan qaytadan */
-    cap_grab(&c);
-    if (!enc_write(&e, e.vs, c.frame, c.tw * c.th * 4, 0, 10000000 / REC_FPS)) {
-        if (!hw) goto done;
-        IMFSinkWriter_Finalize(e.w); SREL(e.w); DeleteFileW(path);
-        if (!enc_open(&e, path, &c, &a, FALSE) || !enc_write(&e, e.vs, c.frame, c.tw * c.th * 4, 0, 10000000 / REC_FPS)) goto done;
+    /* 1) videokarta yo'li: kadr videokarta xotirasidan chiqmaydi - o'yin FPS iga ta'sir qilmaydi, 60 kadr, asl o'lcham.
+     * 2) bo'lmasa (eski videokarta/drayver, Windows 7) - protsessor yo'li: 30 kadr, 1080p gacha. */
+    UINT tok = 0;
+    BOOL started = FALSE;
+    if (rf.MFCreateDXGIDeviceManager && rf.MFCreateDXGISurfaceBuffer && cap_open(&c, g_rec_wnd, TRUE)
+        && SUCCEEDED(rf.MFCreateDXGIDeviceManager(&tok, &mgr)) && SUCCEEDED(IMFDXGIDeviceManager_ResetDevice(mgr, (IUnknown *)c.dev, tok))
+        && enc_open(&e, path, &c, &a, TRUE, mgr)) {
+        cap_grab(&c, 200);
+        started = c.gtex && enc_frame(&e, &c, 0, 10000000 / c.fps);
+    }
+    if (!started) {
+        if (e.w) { IMFSinkWriter_Finalize(e.w); SREL(e.w); }
+        DeleteFileW(path);
+        cap_close(&c);
+        if (!cap_open(&c, g_rec_wnd, FALSE)) { SREL(mgr); goto done; }
+        BOOL hw = TRUE;
+        if (!enc_open(&e, path, &c, &a, TRUE, NULL)) { hw = FALSE; if (!enc_open(&e, path, &c, &a, FALSE, NULL)) { SREL(mgr); goto done; } }
+        cap_grab(&c, 200);
+        if (!enc_frame(&e, &c, 0, 10000000 / c.fps)) {             /* videokarta siqgichi qabul qilmasa - protsessor siqgichi */
+            if (!hw) { SREL(mgr); goto done; }
+            IMFSinkWriter_Finalize(e.w); SREL(e.w); DeleteFileW(path);
+            if (!enc_open(&e, path, &c, &a, FALSE, NULL) || !enc_frame(&e, &c, 0, 10000000 / c.fps)) { SREL(mgr); goto done; }
+        }
     }
     rec_beep(1);                       /* ovoz signali videoga tushmasin - undan keyin to'plangan ovoz tashlanadi */
     /* siqgich ochilguncha (1 soniyagacha) to'plangan ovozni tashlaymiz - aks holda ovoz tasvirdan oldinda bo'ladi */
@@ -393,17 +485,17 @@ static DWORD WINAPI rec_thread(LPVOID unused)
 
     LARGE_INTEGER f, t0, now;
     QueryPerformanceFrequency(&f); QueryPerformanceCounter(&t0);
-    const LONGLONG fdur = 10000000 / REC_FPS;
+    const LONGLONG fdur = 10000000 / c.fps;
     ULONGLONG k = 1;                   /* 0-kadr yuqorida yozildi */
-    DWORD fbytes = c.tw * c.th * 4;
     while (g_rec_run) {
         QueryPerformanceCounter(&now);
         ULONGLONG el = (ULONGLONG)((now.QuadPart - t0.QuadPart) * 10000000.0 / f.QuadPart);   /* 100 ns */
         if (el >= (ULONGLONG)REC_MAX_SEC * 10000000ULL) break;
         if (el >= k * fdur) {
-            cap_grab(&c);
-            if (el > (k + REC_FPS) * fdur) k = el / fdur;      /* kompyuter qotib qolgan bo'lsa - kadrlarni to'plamasdan davom etamiz */
-            if (!enc_write(&e, e.vs, c.frame, fbytes, (LONGLONG)(k * fdur), fdur)) break;
+            cap_grab(&c, 0);
+            if (c.sizechg) break;                               /* o'yin o'lchami o'zgardi - shu joygacha saqlanadi */
+            if (el > (k + c.fps) * fdur) k = el / fdur;         /* kompyuter qotib qolgan bo'lsa - kadrlarni to'plamasdan davom etamiz */
+            if (!enc_frame(&e, &c, (LONGLONG)(k * fdur), fdur)) break;
             k++;
         }
         if (a.cc) aud_pump(&a, &e, el * a.out_rate / 10000000ULL);
@@ -413,6 +505,7 @@ static DWORD WINAPI rec_thread(LPVOID unused)
     }
 done:
     if (e.w) { if (FAILED(IMFSinkWriter_Finalize(e.w))) ok = FALSE; SREL(e.w); }
+    SREL(mgr);
     aud_close(&a); cap_close(&c);
     if (mf) rf.MFShutdown();
     CoUninitialize();

@@ -1139,6 +1139,37 @@ static void clean_hpk(void)
     } while (FindNextFileW(h, &fd));
     FindClose(h);
 }
+/* Menyu har o'yinni demo qilib yozadi (cstrike\\xc_*.dem) - disk to'lmasin: eng yangi 40 tasi qoladi, 30 kundan eskisi o'chiriladi */
+#define DEMO_KEEP 40
+#define DEMO_DAYS 30
+typedef struct { wchar_t n[64]; ULONGLONG t; } DemoF;
+static int demo_cmp(const void *a, const void *b) { ULONGLONG x = ((const DemoF *)a)->t, y = ((const DemoF *)b)->t; return x < y ? 1 : x > y ? -1 : 0; }
+static void prune_demos(void)
+{
+    wchar_t pat[MAX_PATH], p[MAX_PATH];
+    path_join(pat, g_dir, L"cstrike\\xc_*.dem");
+    DemoF *l = (DemoF *)malloc(sizeof(DemoF) * 1000); int n = 0;
+    if (!l) return;
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(pat, &fd);
+    if (h != INVALID_HANDLE_VALUE) {
+        do {
+            if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || wcslen(fd.cFileName) >= 64 || n >= 1000) continue;
+            lstrcpynW(l[n].n, fd.cFileName, 64); l[n].t = ((ULONGLONG)fd.ftLastWriteTime.dwHighDateTime << 32) | fd.ftLastWriteTime.dwLowDateTime; n++;
+        } while (FindNextFileW(h, &fd));
+        FindClose(h);
+    }
+    qsort(l, n, sizeof(DemoF), demo_cmp);
+    FILETIME now; GetSystemTimeAsFileTime(&now);
+    ULONGLONG cut = (((ULONGLONG)now.dwHighDateTime << 32) | now.dwLowDateTime) - (ULONGLONG)DEMO_DAYS * 24 * 3600 * 10000000ULL;
+    for (int i = 0; i < n; i++) {
+        if (i < DEMO_KEEP && l[i].t >= cut) continue;
+        wchar_t sub[MAX_PATH]; _snwprintf(sub, MAX_PATH, L"cstrike\\%s", l[i].n); sub[MAX_PATH - 1] = 0;
+        path_join(p, g_dir, sub);
+        DeleteFileW(p);
+    }
+    free(l);
+}
 static void install_spray(void)
 {
     wchar_t dst[16][MAX_PATH], tmp[MAX_PATH];
@@ -1774,6 +1805,7 @@ static DWORD WINAPI worker(LPVOID unused)
     if (o_clean) { status(L"Kesh tozalanmoqda...", 1); clean_cache(); }
     else auto_clean_cache();
     clean_hpk();
+    prune_demos();
     if (o_ok) {                                   /* internet bo'lmasa paketlarga tegmaymiz */
         install_spray();
         apply_packs();
