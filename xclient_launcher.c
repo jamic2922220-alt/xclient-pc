@@ -1676,6 +1676,8 @@ static BOOL handle_running_game(void)
     return go;
 }
 
+#include "xc_rec.c"   /* F10: o'yinni MP4 qilib yozish */
+
 static void run_game(void)
 {
     wchar_t exe[MAX_PATH], cmd[1024];
@@ -1727,7 +1729,9 @@ static void run_game(void)
         /* O'yin yopilgach skrinshotlarni (F5) darhol galereyaga yuklaymiz - keyingi ishga tushishni kutmasdan.
          * fetch_opts qayta: menyuda o'yin paytida yoqilgan "galereyaga yuklash" ham hisobga olinadi va
          * sayt shu kompyuterni yana taniydi (shot_up 30 daqiqalik IP tekshiruvi). */
+        rec_session_begin(pi.dwProcessId);
         WaitForSingleObject(pi.hProcess, INFINITE);
+        rec_session_end();
         fetch_opts();
         if (o_ok && o_shots) upload_shots();
         CloseHandle(pi.hProcess);

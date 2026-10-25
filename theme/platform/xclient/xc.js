@@ -985,7 +985,7 @@ function demoPlay(nm) {
   cmd('xcd_2');
   cmd('bind F6 xcd_p'); cmd('bind F7 xcd_dn'); cmd('bind F8 xcd_up'); cmd('bind F9 xcd_2');
   DEMO_PLAY = true;
-  cmd('echo X CLIENT demo: F6 pauza, F7 sekinroq, F8 tezroq, F9 oddiy tezlik. Video: Win+Alt+R');
+  cmd('echo X CLIENT demo: F6 pauza, F7 sekinroq, F8 tezroq, F9 oddiy tezlik, F10 video yozish');
   cmd('playdemo ' + nm);
 }
 function demoEnd() {
