@@ -822,7 +822,8 @@ static void ensure_launcher_cfg(void)
     mkdirs_for(p);
     FILE *f = _wfopen(p, L"wb");
     if (!f) return;
-    fprintf(f, "// X CLIENT\nscr_drawversion \"0\"\n");
+    /* spray: o'zimiznikini serverga yuborish va boshqalarnikini olish - menyuda o'chirib qo'yilgan yoki sborka o'zgartirgan bo'lsa ham */
+    fprintf(f, "// X CLIENT\nscr_drawversion \"0\"\ncl_allowupload \"1\"\ncl_allowdownload \"1\"\n");
     fclose(f);
 }
 
@@ -1114,6 +1115,29 @@ static BOOL spray_same(const wchar_t *p)
     }
     WIN32_FILE_ATTRIBUTE_DATA fa;
     return GetFileAttributesExW(p, GetFileExInfoStandard, &fa) && fa.nFileSizeLow == (DWORD)o_sprays;
+}
+/* custom.hpk - o'yinning spray keshi (o'yinchi spreylari). Kattalashib ketsa buziladi: spraylar boshqa rasm bo'lib
+ * yoki umuman ko'rinmaydi. 5 MB dan oshsa o'chiriladi - o'yin uni o'zi qayta yaratadi. */
+#define HPK_MAX_BYTES (5u * 1024 * 1024)
+static void clean_hpk(void)
+{
+    wchar_t pat[MAX_PATH], p[MAX_PATH];
+    path_join(pat, g_dir, L"cstrike*");
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(pat, &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || (fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) continue;
+        wchar_t sub[MAX_PATH];
+        _snwprintf(sub, MAX_PATH, L"%s\\custom.hpk", fd.cFileName); sub[MAX_PATH - 1] = 0;
+        path_join(p, g_dir, sub);
+        WIN32_FILE_ATTRIBUTE_DATA fa;
+        if (GetFileAttributesExW(p, GetFileExInfoStandard, &fa) && (fa.nFileSizeHigh || fa.nFileSizeLow > HPK_MAX_BYTES)) {
+            SetFileAttributesW(p, FILE_ATTRIBUTE_NORMAL);
+            DeleteFileW(p);
+        }
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
 }
 static void install_spray(void)
 {
@@ -1745,6 +1769,7 @@ static DWORD WINAPI worker(LPVOID unused)
     if (o_start >= 0) set_autostart(o_start);
     if (o_clean) { status(L"Kesh tozalanmoqda...", 1); clean_cache(); }
     else auto_clean_cache();
+    clean_hpk();
     if (o_ok) {                                   /* internet bo'lmasa paketlarga tegmaymiz */
         install_spray();
         apply_packs();

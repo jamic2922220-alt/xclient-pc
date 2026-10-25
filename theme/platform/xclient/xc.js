@@ -1609,6 +1609,8 @@ function loadSettings() {
   if (!(S.mixa >= 0.1)) S.mixa = 0.1;              // 0.05 (eski PRO CFG) - ovoz buferi juda kichik: FPS tushsa ovoz qotib takrorlanadi va uziladi
   /* pritsel otganda kattalashmaydi - hech qaysi CFG da (egasining talabi); saqlangan eski 1 lar ham 0 bo'ladi */
   S.xdyn = 0; cmd('cl_dynamiccrosshair 0');
+  /* spray: o'zimiznikini yuborish va boshqalarnikini ko'rish doim yoqiq (X CLIENT spreyi hamma serverda ko'rinsin) */
+  S.spray = 1; S.dl = 1; cmd('cl_allowupload 1'); cmd('cl_allowdownload 1');
   /* "Avto grafika" (bekor qilindi) grafikani pasaytirib yuborgan o'yinchilarda - to'liq grafikani qaytaramiz */
   /* eski PRO CFG soya va dinamik yorug'likni o'chirgan edi - bir marta qaytaramiz (yangi PRO CFG grafikaga tegmaydi) */
   if (S.pro && !S.pmig) { S.shadows = 1; S.dyn = 1; S.pmig = 1; S.gfxc = ''; DB.set = S; }
