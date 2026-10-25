@@ -362,7 +362,7 @@ var STATE_SYNCED = false, STATE_TM = 0;
 function stateData() {
   var h = [];
   each((DB.hist || []).slice(0, 50), function (x) { h.push({ ip: x.ip, name: x.name, map: x.map, t: x.t, d: x.d, k: x.k, x: x.x }); });
-  return { token: DB.forget ? '' : (DB.token || ''), fav: DB.fav.slice(0, 100), hist: h, binds: DB.binds || null, binds2: DB.binds2 || null, lang: DB.lang || '', wnSeen: DB.wnSeen || '', dnd: DB.dnd ? 1 : 0, acx: DB.acx ? 1 : 0, pxx: DB.pxx || 0 };
+  return { token: DB.forget ? '' : (DB.token || ''), fav: DB.fav.slice(0, 100), hist: h, binds: DB.binds || null, binds2: DB.binds2 || null, lang: DB.lang || '', wnSeen: DB.wnSeen || '', dnd: DB.dnd ? 1 : 0, acx: DB.acx ? 1 : 0, pxx: DB.pxx || 0, demos: (DB.demos || []).slice(0, 40) };
 }
 function statePush() {
   if (!PCID || !STATE_SYNCED) return;
@@ -382,6 +382,7 @@ function stateSync() {
     if (DB.dnd == null && st.dnd) { DB.dnd = 1; ch = true; }
     if (!DB.acx && st.acx) { DB.acx = 1; ch = true; }
     if (!DB.pxx && st.pxx) { DB.pxx = st.pxx; ch = true; }
+    if ((!DB.demos || !DB.demos.length) && st.demos && st.demos.length) { DB.demos = st.demos; ch = true; }   // demolar ro'yxati qayta kirganda yo'qolmasin
     STATE_SYNCED = true;
     if (!DB.token && st.token) {
       DB.token = st.token;
@@ -979,13 +980,15 @@ var DEMO_SP = [0.25, 0.5, 1, 2, 4, 8];
 function demoPlay(nm) {
   nm = String(nm || '').replace(/[^\w\-]/g, '');
   if (!nm) return;
-  var f = 1 / Math.max(30, Math.min(1000, Number(S && S.fps) || 100)), sp = DEMO_SP;
+  var f = 1 / Math.max(30, Math.min(1000, Number(S && S.fps) || 100)), sp = DEMO_SP, vol = S && S.vol != null ? S.vol : 0.8;
   for (var i = 0; i < sp.length; i++) {
     var hf = sp[i] === 1 ? 0 : Math.round(f * sp[i] * 1e6) / 1e6;
-    cmd('alias xcd_' + i + ' "host_framerate ' + hf + '; alias xcd_up xcd_' + Math.min(i + 1, sp.length - 1) + '; alias xcd_dn xcd_' + Math.max(i - 1, 0) +
+    /* 1x dan boshqa tezlikda ovoz o'chiriladi: o'yin ovozi vaqtga bog'langan - pauza/sekinda oxirgi tovush takrorlanib qoladi */
+    var snd = sp[i] === 1 ? 'volume ' + vol : 'volume 0; stopsound';
+    cmd('alias xcd_' + i + ' "host_framerate ' + hf + '; ' + snd + '; alias xcd_up xcd_' + Math.min(i + 1, sp.length - 1) + '; alias xcd_dn xcd_' + Math.max(i - 1, 0) +
       '; alias xcd_p xcd_pz; alias xcd_back xcd_' + i + '; echo X CLIENT demo: ' + sp[i] + 'x"');
   }
-  cmd('alias xcd_pz "host_framerate 0.000001; alias xcd_p xcd_back; echo X CLIENT demo: pauza (F6 - davom)"');
+  cmd('alias xcd_pz "host_framerate 0.000001; volume 0; stopsound; alias xcd_p xcd_back; echo X CLIENT demo: pauza (F6 - davom)"');
   cmd('xcd_2');
   cmd('bind F6 xcd_p'); cmd('bind F7 xcd_dn'); cmd('bind F8 xcd_up'); cmd('bind F9 xcd_2');
   DEMO_PLAY = true; DEMO_CUR = nm; DEMO_SPD = 2; DEMO_PAUSE = false;
@@ -995,6 +998,7 @@ function demoPlay(nm) {
 function demoEnd() {
   cmd('host_framerate 0');
   if (!DEMO_PLAY) return;
+  cmd('volume ' + (S && S.vol != null ? S.vol : 0.8));
   DEMO_PLAY = false; DEMO_PAUSE = false;
   for (var i = 0; i < DEMO_KEYS.length; i++) cmd('unbind ' + DEMO_KEYS[i]);
   applyBinds();
@@ -2473,6 +2477,11 @@ var PANES = {
       dm += '<div class="dmr' + (d.n === DEMO_CUR ? ' on' : '') + '"><b>' + esc(d.s) + '</b><small>' + esc(fmtTime(d.t) + (d.m ? ' \u00b7 ' + d.m : '') + ' \u00b7 ' + d.n) + '</small>' +
         '<a class="btn red" data-demo="' + esc(d.n) + '">' + ico('play') + ' ' + esc(T('dm_play')) + '</a></div>';
     });
+    var vq = OPTS && OPTS.vq || 'mid', vqs = '';
+    each([['hi', 'vq_hi', 'vq_hi2'], ['mid', 'vq_mid', 'vq_mid2'], ['low', 'vq_low', 'vq_low2']], function (o) {
+      vqs += '<a class="' + (vq === o[0] ? 'on' : '') + '" data-ovq="' + o[0] + '">' + esc(T(o[1])) + '<small>' + esc(T(o[2])) + '</small></a>';
+    });
+    vqs = '<div class="big vqb">' + vqs + '</div>';
     var st = !DEMO_PLAY ? T('dm_idle') : DEMO_PAUSE ? T('dm_paused') : DEMO_SP[DEMO_SPD] + 'x';
     var b = function (c, i, title) { return '<a class="btn dpb' + (DEMO_PLAY ? '' : ' dis') + '" data-dctl="' + c + '" title="' + esc(T(title)) + '">' + ico(i) + '</a>'; };
     return '<div class="pane l"><div class="ph2">' + esc(T('dm_player')) + '</div>' +
@@ -2481,7 +2490,8 @@ var PANES = {
       '<div class="dpc">' + b('dn', 'rew', 'dm_slow') + b('p', DEMO_PAUSE ? 'play' : 'pause', 'dm_pause') + b('n', 'play', 'dm_norm') + b('up', 'ff', 'dm_fast') + b('stop', 'stop', 'dm_stop') + '</div></div>' +
       '<div class="mut" style="font-size:12px;margin:10px 0">' + esc(T('dm_keys')) + '</div>' +
       tg('demo', 'g_rec', 'g_rec2') + '</div>' +
-      '<div class="pane r"><div class="ph2">' + esc(T('dm_title')) + '</div>' +
+      '<div class="pane r"><div class="ph2">' + esc(T('vq_title')) + '</div>' + vqs +
+      '<div class="ph2 m">' + esc(T('dm_title')) + '</div>' +
       '<div class="dml dml2">' + (dm || '<div class="empty">' + esc(T(S && S.demo ? 'dm_none' : 'dm_off')) + '</div>') + '</div></div>';
   },
   cont: function () {                             // Kontent: spray, skrinshotlar, mavzu, paketlar
@@ -3153,7 +3163,7 @@ setInterval(function () { if (!CLK_N || !feat('clicks')) return; var c = CLK; CL
 
 /* ---- menyu ovozlari: o'yin sound/xclient/*.wav ni chaladi (XCLauncher.exe ularni o'yin papkasiga qo'yadi) ---- */
 var SFX_ATTR = ['data-act', 'data-tab', 'data-hsub', 'data-seg', 'data-tg', 'data-otg', 'data-ohud', 'data-dd', 'data-ddv', 'data-xchk', 'data-pack',
-  'data-sort', 'data-flt', 'data-theme', 'data-daymode', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-dctl', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec', 'data-avpre'];
+  'data-sort', 'data-flt', 'data-theme', 'data-daymode', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-dctl', 'data-ovq', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec', 'data-avpre'];
 var SFX_QUIET = false, sfxLast = null, sfxT = 0;
 function sfx(n) {
   if (!S || S.uisnd === 0 || !hasApi()) return;
@@ -3256,6 +3266,7 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-frcmp'))) { openCompare(el.getAttribute('data-frcmp')); return; }
   if ((el = closest(t, 'data-clkick'))) { clanCall('clan_kick', { who: el.getAttribute('data-clkick') }); return; }
   if ((el = closest(t, 'data-copyip'))) { copyIp(el.getAttribute('data-copyip'), el.parentNode.querySelector('input')); return; }
+  if ((el = closest(t, 'data-ovq'))) { OPTS = OPTS || {}; OPTS.vq = el.getAttribute('data-ovq'); saveOpts(T('vq_ok')); showSetTab('demo'); return; }
   if ((el = closest(t, 'data-dctl'))) { demoCtl(el.getAttribute('data-dctl')); return; }
   if ((el = closest(t, 'data-demo'))) { closeModal(); demoPlay(el.getAttribute('data-demo')); return; }
   if ((el = closest(t, 'data-hsub'))) { HSUB = el.getAttribute('data-hsub'); showSetTab('hud'); return; }

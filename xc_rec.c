@@ -80,6 +80,16 @@ static BOOL rec_load(void)
 
 #define SREL(p) do { if (p) { (p)->lpVtbl->Release(p); (p) = NULL; } } while (0)
 
+/* sifat (menyu > Demo > Video sifati): 2 - yuqori (videokarta, 60 kadr, asl o'lcham), 1 - o'rtacha (videokarta, 30 kadr),
+ * 0 - kichik (720p, 30 kadr, kam bitreyt - Telegramga yuborish uchun) */
+static int g_vq = 1;
+static void rec_quality(void)
+{
+    char url[200];
+    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=vq&d=%s", g_id); url[sizeof(url) - 1] = 0;
+    char *r = http_get(url, NULL);
+    if (r) { g_vq = !strncmp(r, "hi", 2) ? 2 : !strncmp(r, "low", 3) ? 0 : 1; free(r); }   /* internet bo'lmasa - oldingi tanlov */
+}
 static volatile LONG g_rec_run = 0;     /* 1 - yozilyapti; 0 ga tushsa yozuv oqimi faylni yopadi */
 static HANDLE g_rec_th = NULL;
 static HWND g_rec_wnd = NULL;
@@ -145,14 +155,15 @@ static BOOL cap_open(Cap *c, HWND game, BOOL gpu)
     IDXGIOutputDuplication_GetDesc(c->dup, &dd);
     c->sw = dd.ModeDesc.Width; c->sh = dd.ModeDesc.Height;
     if (c->sw < 64 || c->sh < 64) return FALSE;
-    c->gpu = gpu; c->fps = gpu ? REC_FPS_GPU : REC_FPS;
+    c->gpu = gpu; c->fps = gpu && g_vq == 2 ? REC_FPS_GPU : REC_FPS;
     if (gpu) {                              /* asl o'lchamda, kichraytirmasdan - eng tiniq */
         if ((c->sw | c->sh) & 1 || c->sw > 4096 || c->sh > 2304) return FALSE;
         c->tw = c->sw; c->th = c->sh;
         return TRUE;
     }
     double k = 1.0;
-    if (c->sw > REC_MAX_W || c->sh > REC_MAX_H) { double kx = (double)REC_MAX_W / c->sw, ky = (double)REC_MAX_H / c->sh; k = kx < ky ? kx : ky; }
+    UINT mw = g_vq ? REC_MAX_W : 1280, mh = g_vq ? REC_MAX_H : 720;
+    if (c->sw > mw || c->sh > mh) { double kx = (double)mw / c->sw, ky = (double)mh / c->sh; k = kx < ky ? kx : ky; }
     c->tw = ((UINT)(c->sw * k)) & ~1u; c->th = ((UINT)(c->sh * k)) & ~1u;
     c->frame = (BYTE *)calloc((size_t)c->tw * c->th, 4);
     return c->frame != NULL;
@@ -306,9 +317,10 @@ static BOOL enc_open(Enc *e, const wchar_t *path, const Cap *c, const Aud *a, BO
     SREL(at);
     if (FAILED(hr)) return FALSE;
     /* tiniq: 1080p60 ~25 Mbit/s, 1080p30 ~16 Mbit/s (YouTube tavsiyasidan yuqori) */
-    UINT32 br = (UINT32)((ULONGLONG)c->tw * c->th * c->fps / 5);
+    /* 1080p60 ~25 Mbit/s (yuqori), 1080p30 ~8 Mbit/s (o'rtacha), 720p30 ~2.3 Mbit/s (kichik) */
+    UINT32 br = (UINT32)((ULONGLONG)c->tw * c->th * c->fps / (g_vq == 2 ? 5 : g_vq == 1 ? 8 : 12));
     if (br > 50000000) br = 50000000;
-    if (br < 6000000) br = 6000000;
+    if (br < 1500000) br = 1500000;
     /* tasvir: chiqish H.264, kirish RGB32 (tepadan pastga) - rang o'zgartirgichni Sink Writer o'zi qo'yadi */
     hr = (t = mt_new()) ? S_OK : E_FAIL;
     if (SUCCEEDED(hr)) {
@@ -454,7 +466,8 @@ static DWORD WINAPI rec_thread(LPVOID unused)
      * 2) bo'lmasa (eski videokarta/drayver, Windows 7) - protsessor yo'li: 30 kadr, 1080p gacha. */
     UINT tok = 0;
     BOOL started = FALSE;
-    if (rf.MFCreateDXGIDeviceManager && rf.MFCreateDXGISurfaceBuffer && cap_open(&c, g_rec_wnd, TRUE)
+    rec_quality();
+    if (g_vq && rf.MFCreateDXGIDeviceManager && rf.MFCreateDXGISurfaceBuffer && cap_open(&c, g_rec_wnd, TRUE)   /* kichik sifat - kichraytirish kerak: protsessor yo'li */
         && SUCCEEDED(rf.MFCreateDXGIDeviceManager(&tok, &mgr)) && SUCCEEDED(IMFDXGIDeviceManager_ResetDevice(mgr, (IUnknown *)c.dev, tok))
         && enc_open(&e, path, &c, &a, TRUE, mgr)) {
         cap_grab(&c, 200);

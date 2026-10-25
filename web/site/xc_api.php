@@ -457,6 +457,14 @@ if ($a === 'menuver') {
     echo ($b !== '' && is_file(__DIR__ . '/rel/' . $b . '/index.html') && is_beta_tester()) ? $b : $st;
     exit;
 }
+/* launcher: F10 bosilganda video sifatini so'raydi (o'yin paytida menyuda o'zgartirilgan bo'lishi mumkin). Maxfiy emas - kalitsiz */
+if ($a === 'vq') {
+    header('Content-Type: text/plain'); header('Cache-Control: no-store');
+    $d = strtolower(p('d'));
+    $o = preg_match('/^[a-z0-9]{8,40}$/', $d) ? rd('dev/' . $d, array()) : array();
+    echo isset($o['vq']) && in_array($o['vq'], array('hi', 'mid', 'low'), true) ? $o['vq'] : 'mid';
+    exit;
+}
 daily_report();
 tg_bot_poll();
 
@@ -1485,6 +1493,7 @@ case 'opts_done':
         if (!is_array($in)) fail('bad', 'bad');
         foreach (array('beta', 'auto', 'start', 'win', 'clean', 'verify', 'prio', 'shots') as $k) if (isset($in[$k])) $o[$k] = $in[$k] ? 1 : 0;
         if (isset($in['packs'])) $o['packs'] = preg_match('/^[a-z0-9_,\-]{0,200}$/', $in['packs']) ? $in['packs'] : '';
+        if (isset($in['vq'])) $o['vq'] = in_array($in['vq'], array('hi', 'mid', 'low'), true) ? $in['vq'] : 'mid';   // F10 video sifati
         if (isset($in['hud'])) $o['hud'] = in_array((int)$in['hud'], array(100, 150, 200)) ? (int)$in['hud'] : 100;   // HUD kattaligi, %
         if (isset($in['res'])) $o['res'] = preg_match('/^\d{3,4}x\d{3,4}$/', $in['res']) ? $in['res'] : '';
         wr('dev/' . $d, $o);
@@ -1536,7 +1545,14 @@ case 'dstate':
                 't' => (float)(isset($h['t']) ? $h['t'] : 0), 'd' => (int)(isset($h['d']) ? $h['d'] : 0), 'k' => (int)(isset($h['k']) ? $h['k'] : 0), 'x' => (int)(isset($h['x']) ? $h['x'] : 0));
         $tok = isset($in['token']) && is_string($in['token']) && preg_match('/^[a-f0-9]{40}$/', $in['token']) ? $in['token'] : '';
         $st = array('token' => $tok, 'fav' => array_slice($fav, 0, 100), 'hist' => $hist, 'binds' => $kv(isset($in['binds']) ? $in['binds'] : null), 'binds2' => $kv(isset($in['binds2']) ? $in['binds2'] : null),
-            'lang' => isset($in['lang']) && is_string($in['lang']) && preg_match('/^[a-z]{2,3}$/', $in['lang']) ? $in['lang'] : '', 'wnSeen' => isset($in['wnSeen']) && is_string($in['wnSeen']) ? substr($in['wnSeen'], 0, 40) : '');
+            'lang' => isset($in['lang']) && is_string($in['lang']) && preg_match('/^[a-z]{2,3}$/', $in['lang']) ? $in['lang'] : '', 'wnSeen' => isset($in['wnSeen']) && is_string($in['wnSeen']) ? substr($in['wnSeen'], 0, 40) : '',
+            'dnd' => empty($in['dnd']) ? 0 : 1, 'acx' => empty($in['acx']) ? 0 : 1, 'pxx' => isset($in['pxx']) ? (int)$in['pxx'] : 0);
+        /* demolar ro'yxati (fayllar o'yin papkasida; menyu ularni o'zi ko'ra olmaydi) - o'yin brauzeri xotirasi tozalansa yo'qolmasin */
+        $dm = array();
+        foreach ((isset($in['demos']) && is_array($in['demos']) ? array_slice($in['demos'], 0, 40) : array()) as $x)
+            if (is_array($x) && isset($x['n']) && is_string($x['n']) && preg_match('/^[\w\-]{1,40}$/', $x['n']))
+                $dm[] = array('n' => $x['n'], 's' => clean_str(isset($x['s']) ? (string)$x['s'] : '', 64), 'm' => clean_str(isset($x['m']) ? (string)$x['m'] : '', 32), 't' => (float)(isset($x['t']) ? $x['t'] : 0));
+        $st['demos'] = $dm;
         $o['st'] = $st;
         wr('dev/' . $d, $o);
     }

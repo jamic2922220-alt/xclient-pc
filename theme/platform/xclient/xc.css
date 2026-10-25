@@ -828,6 +828,8 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .dpc .dpb { display: inline-block; width: 52px; height: 40px; line-height: 40px; padding: 0; margin: 0 4px; text-align: center; }
 .dpc .dpb .ico { width: 18px; height: 18px; vertical-align: middle; }
 .dpc .dpb.dis { opacity: .45; }
-.dml.dml2 { height: 520px; }
+.dml.dml2 { height: 330px; }
 .dmr.on b { color: #ff3b3b; }
 .dmr .btn .ico { vertical-align: -2px; }
+.big.vqb a { display: block; width: auto; height: auto; padding: 6px 12px; margin: 0 0 6px; font-size: 14px; }
+.big.vqb a small { display: inline; margin: 0 0 0 8px; }
