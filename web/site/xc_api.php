@@ -490,7 +490,8 @@ if ($a === 'vq') {
     header('Content-Type: text/plain'); header('Cache-Control: no-store');
     $d = strtolower(p('d'));
     $o = preg_match('/^[a-z0-9]{8,40}$/', $d) ? rd('dev/' . $d, array()) : array();
-    echo isset($o['vq']) && in_array($o['vq'], array('hi', 'mid', 'low'), true) ? $o['vq'] : 'mid';
+    // "sifat mikrofon bufer": eski launcher faqat birinchi so'zni o'qiydi
+    echo (isset($o['vq']) && in_array($o['vq'], array('hi', 'mid', 'low'), true) ? $o['vq'] : 'mid'), ' ', empty($o['mic']) ? 0 : 1, ' ', isset($o['rb']) && !$o['rb'] ? 0 : 1;
     exit;
 }
 daily_report();
@@ -1536,6 +1537,7 @@ case 'opts_done':
         if (!is_array($in)) fail('bad', 'bad');
         foreach (array('beta', 'auto', 'start', 'win', 'clean', 'verify', 'prio', 'shots') as $k) if (isset($in[$k])) $o[$k] = $in[$k] ? 1 : 0;
         if (isset($in['packs'])) $o['packs'] = preg_match('/^[a-z0-9_,\-]{0,200}$/', $in['packs']) ? $in['packs'] : '';
+        foreach (array('mic', 'rb') as $k) if (isset($in[$k])) $o[$k] = $in[$k] ? 1 : 0;   // videoda mikrofon, "oxirgi 30 soniya"
         if (isset($in['vq'])) $o['vq'] = in_array($in['vq'], array('hi', 'mid', 'low'), true) ? $in['vq'] : 'mid';   // F10 video sifati
         if (isset($in['hud'])) $o['hud'] = in_array((int)$in['hud'], array(100, 150, 200)) ? (int)$in['hud'] : 100;   // HUD kattaligi, %
         if (isset($in['res'])) $o['res'] = preg_match('/^\d{3,4}x\d{3,4}$/', $in['res']) ? $in['res'] : '';
@@ -1574,9 +1576,13 @@ case 'vcmd':
     $o = rd('dev/' . $d, array());
     if (!dev_ok($d, $o)) fail('nolaunch', 'XCLauncher.exe topilmadi');
     $c = p('c'); $n = vid_name(p('n'));
-    if (!in_array($c, array('open', 'del', 'folder'), true) || ($c !== 'folder' && $n === '')) fail('bad', 'bad');
+    if (!in_array($c, array('open', 'del', 'folder', 'trim', 'clip', 'opt'), true) || (in_array($c, array('open', 'del', 'trim'), true) && $n === '')) fail('bad', 'bad');
+    $ta = max(0, min(86400, (int)p('ta'))); $tb = max(0, min(86400, (int)p('tb')));
+    if ($c === 'trim' && $tb <= $ta) fail('bad', 'bad');
+    if ($c === 'clip' && rl_count('vclip' . $d, 60) >= 3) out(array('ok' => true));   // avtomatik klip - daqiqasiga 3 tadan ko'p emas
+    if ($c === 'clip') rl_add('vclip' . $d, 60);
     $q = isset($o['vc']) && is_array($o['vc']) ? $o['vc'] : array();
-    $q[] = $c . ' ' . ($n !== '' ? $n : '-');
+    $q[] = $c . ' ' . ($n !== '' ? $n : '-') . ($c === 'trim' ? ' ' . $ta . ' ' . $tb : '');
     $o['vc'] = array_slice($q, -5);
     if ($c === 'del' && isset($o['vids'])) $o['vids'] = array_values(array_filter($o['vids'], function ($x) use ($n) { return isset($x['n']) && $x['n'] !== $n; }));
     wr('dev/' . $d, $o);

@@ -844,4 +844,7 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .ph2 .vfold .ico, .dmr .vdel .ico { vertical-align: -2px; }
 .dmr .vdel { right: 118px; padding: 0 10px; }
 .dmr b, .dmr small { margin-right: 170px; }
-.dml.dml2 { height: 470px; }
+.dml.dml2 { height: 420px; }
+.dmr .vcut { position: absolute; top: 6px; right: 164px; margin: 0; height: 30px; line-height: 28px; padding: 0 10px; }
+.dmr .vcut .ico { vertical-align: -2px; }
+.dmr b, .dmr small { margin-right: 216px; }
