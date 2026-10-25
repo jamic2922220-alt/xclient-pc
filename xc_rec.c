@@ -444,6 +444,87 @@ static void rec_beep(int kind)          /* 1 - boshlandi, 0 - saqlandi, -1 - xat
     else { Beep(400, 300); }
 }
 
+/* ---- ekrandagi belgi: yozilyapti / saqlandi / xato. Videoga tushmaydi (WDA_EXCLUDEFROMCAPTURE, Windows 10 2004+);
+ *      eski Windows'da "REC" faqat 3 soniya ko'rinadi. Oyna fokusni olmaydi va sichqonchani o'tkazadi - o'yin yig'ilib qolmaydi. ---- */
+#define WM_REC_STATE (WM_APP + 2)
+static HWND g_ov = NULL;
+static int g_ov_mode = 0;                /* 0 - yashirin, 1 - yozilyapti, 2 - saqlandi, 3 - xato */
+static DWORD g_ov_t0 = 0;
+static BOOL g_ov_excl = FALSE;          /* videodan chiqarib bo'ldimi */
+
+static LRESULT CALLBACK ov_proc(HWND h, UINT m, WPARAM w, LPARAM l)
+{
+    if (m == WM_PAINT) {
+        PAINTSTRUCT ps; HDC dc = BeginPaint(h, &ps); RECT r; GetClientRect(h, &r);
+        HBRUSH bg = CreateSolidBrush(RGB(22, 10, 13)), red = CreateSolidBrush(g_ov_mode == 2 ? RGB(46, 204, 113) : RGB(255, 59, 59));
+        FillRect(dc, &r, bg);
+        RECT b = r; FrameRect(dc, &b, red); InflateRect(&b, -1, -1); FrameRect(dc, &b, red);
+        HGDIOBJ ob = SelectObject(dc, red); HGDIOBJ op = SelectObject(dc, GetStockObject(NULL_PEN));
+        if (g_ov_mode == 1 && (GetTickCount() / 500) % 2 == 0) Ellipse(dc, 16, r.bottom / 2 - 8, 32, r.bottom / 2 + 8);   /* miltillovchi nuqta */
+        SelectObject(dc, op); SelectObject(dc, ob);
+        HFONT f = CreateFontW(22, 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+        HGDIOBJ of = SelectObject(dc, f);
+        SetBkMode(dc, TRANSPARENT); SetTextColor(dc, RGB(255, 255, 255));
+        BOOL ru = !strcmp(g_lang, "ru");
+        wchar_t t[160];
+        if (g_ov_mode == 1) {
+            DWORD s = (GetTickCount() - g_ov_t0) / 1000;
+            _snwprintf(t, 160, ru ? L"REC  %02lu:%02lu   \u00b7   F10 \u2014 \u0441\u0442\u043e\u043f" : L"REC  %02lu:%02lu   \u00b7   F10 \u2014 to\u2018xtatish", s / 60, s % 60);
+        } else if (g_ov_mode == 2) lstrcpynW(t, ru ? L"\u2713  \u0412\u0438\u0434\u0435\u043e \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u043e" : L"\u2713  Video saqlandi", 160);
+        else lstrcpynW(t, ru ? L"\u2716  \u0412\u0438\u0434\u0435\u043e \u043d\u0435 \u0437\u0430\u043f\u0438\u0441\u0430\u043b\u043e\u0441\u044c" : L"\u2716  Video yozilmadi", 160);
+        t[159] = 0;
+        RECT tr = r; tr.left = g_ov_mode == 1 ? 42 : 18;
+        DrawTextW(dc, t, -1, &tr, DT_SINGLELINE | DT_VCENTER | DT_LEFT | DT_NOPREFIX);
+        SelectObject(dc, of); DeleteObject(f); DeleteObject(bg); DeleteObject(red);
+        EndPaint(h, &ps);
+        return 0;
+    }
+    if (m == WM_TIMER) {
+        if (w == 1) InvalidateRect(h, NULL, FALSE);                                   /* vaqt va nuqta */
+        if (w == 2) { KillTimer(h, 2); ShowWindow(h, SW_HIDE); if (g_ov_mode != 1) KillTimer(h, 1); }
+        return 0;
+    }
+    if (m == WM_NCHITTEST) return HTTRANSPARENT;
+    return DefWindowProcW(h, m, w, l);
+}
+
+static void ov_show(int mode)
+{
+    if (!g_ov) {
+        WNDCLASSW wc = { 0 }; wc.lpfnWndProc = ov_proc; wc.hInstance = GetModuleHandleW(NULL); wc.lpszClassName = L"XCRecOverlay"; wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+        RegisterClassW(&wc);
+        g_ov = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_TRANSPARENT, wc.lpszClassName, L"", WS_POPUP,
+                               0, 0, 10, 10, NULL, NULL, wc.hInstance, NULL);
+        if (!g_ov) return;
+        SetLayeredWindowAttributes(g_ov, 0, 235, LWA_ALPHA);
+        typedef BOOL (WINAPI *t_SWDA)(HWND, DWORD);
+        t_SWDA swda = (t_SWDA)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowDisplayAffinity");
+        g_ov_excl = swda && swda(g_ov, 0x11 /* WDA_EXCLUDEFROMCAPTURE */);
+    }
+    g_ov_mode = mode;
+    if (mode == 1) g_ov_t0 = GetTickCount();
+    /* o'yin turgan monitorning tepasida, o'rtada */
+    MONITORINFO mi = { sizeof(mi) };
+    HMONITOR mon = MonitorFromWindow(g_rec_wnd ? g_rec_wnd : GetForegroundWindow(), MONITOR_DEFAULTTOPRIMARY);
+    GetMonitorInfoW(mon, &mi);
+    int W = mode == 1 ? 380 : 330, H = 46;
+    int x = (mi.rcMonitor.left + mi.rcMonitor.right - W) / 2, y = mi.rcMonitor.top + 28;
+    SetWindowRgn(g_ov, CreateRoundRectRgn(0, 0, W + 1, H + 1, 12, 12), FALSE);
+    SetWindowPos(g_ov, HWND_TOPMOST, x, y, W, H, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    InvalidateRect(g_ov, NULL, TRUE);
+    KillTimer(g_ov, 2);
+    if (mode == 1) { SetTimer(g_ov, 1, 500, NULL); if (!g_ov_excl) SetTimer(g_ov, 2, 3000, NULL); }   /* videoga tushadigan bo'lsa - qisqa */
+    else { KillTimer(g_ov, 1); SetTimer(g_ov, 2, 3500, NULL); }
+}
+
+static void ov_close(void)
+{
+    if (g_ov) { DestroyWindow(g_ov); g_ov = NULL; }
+    g_ov_mode = 0;
+}
+
+static DWORD g_hk_tid = 0, g_game_pid = 0;
+
 static DWORD WINAPI rec_thread(LPVOID unused)
 {
     (void)unused;
@@ -495,6 +576,7 @@ static DWORD WINAPI rec_thread(LPVOID unused)
         IAudioCaptureClient_ReleaseBuffer(a.cc, fr);
     }
     ok = TRUE;
+    PostThreadMessageW(g_hk_tid, WM_REC_STATE, 1, 0);   /* ekranda REC */
 
     LARGE_INTEGER f, t0, now;
     QueryPerformanceFrequency(&f); QueryPerformanceCounter(&t0);
@@ -523,8 +605,8 @@ done:
     if (mf) rf.MFShutdown();
     CoUninitialize();
     InterlockedExchange(&g_rec_run, 0);
-    if (ok) { lstrcpynW(g_rec_last, path, MAX_PATH); g_rec_saved++; rec_beep(0); }
-    else { if (path[0]) DeleteFileW(path); rec_beep(-1); }
+    if (ok) { lstrcpynW(g_rec_last, path, MAX_PATH); g_rec_saved++; PostThreadMessageW(g_hk_tid, WM_REC_STATE, 2, 0); rec_beep(0); }
+    else { if (path[0]) DeleteFileW(path); PostThreadMessageW(g_hk_tid, WM_REC_STATE, 3, 0); rec_beep(-1); }
     return 0;
 }
 
@@ -543,7 +625,6 @@ static void rec_toggle(HWND game)
 
 /* F10: RegisterHotKey (klaviatura kuzatuvchisi emas) - faqat o'yin oynasi oldinda bo'lsa ishlaydi.
  * Tugma o'yinga bormaydi (F10 ba'zi sozlamalarda "quit prompt"). */
-static DWORD g_hk_tid = 0, g_game_pid = 0;
 static HANDLE g_hk_th = NULL;
 
 static DWORD WINAPI rec_hotkey_thread(LPVOID unused)
@@ -553,6 +634,8 @@ static DWORD WINAPI rec_hotkey_thread(LPVOID unused)
     PeekMessageW(&m, NULL, WM_USER, WM_USER, PM_NOREMOVE);              /* navbat yaratilsin */
     BOOL reg = RegisterHotKey(NULL, 0xC10, 0x4000 /* MOD_NOREPEAT */, REC_HOTKEY);
     while (GetMessageW(&m, NULL, 0, 0) > 0) {
+        if (m.hwnd) { TranslateMessage(&m); DispatchMessageW(&m); continue; }   /* ekrandagi belgi oynasi */
+        if (m.message == WM_REC_STATE) { ov_show((int)m.wParam); continue; }
         if (m.message == WM_HOTKEY && m.wParam == 0xC10) {
             HWND fg = GetForegroundWindow(); DWORD pid = 0;
             GetWindowThreadProcessId(fg, &pid);
@@ -560,6 +643,7 @@ static DWORD WINAPI rec_hotkey_thread(LPVOID unused)
         }
     }
     if (reg) UnregisterHotKey(NULL, 0xC10);
+    ov_close();
     return 0;
 }
 

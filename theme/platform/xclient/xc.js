@@ -313,7 +313,7 @@ function fxLoop() {
  * xc_api.php ga yoziladi va XClient.exe ularni keyingi ishga tushishda bajaradi. */
 function qparam(k) { var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search || ''); return m ? decodeURIComponent(m[1]) : ''; }
 var PCID = /^[a-z0-9]{8,40}$/.test(qparam('xc')) ? qparam('xc') : '';   // kompyuter id (DB.pcid) va uning maxfiy kaliti (DB.pck) load() dan keyin olinadi
-var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '', hud: 100 }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
+var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '', hud: 100, vq: 'mid', dmf: null }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
 var OPTS_TRY = 0;
 /* To'liq X CLIENT menyusi faqat XCLauncher.exe orqali ochilganda. Menyu saytda turadi va boshqa boost-top sborkalari ham
  * uni ochadi - ularda "sodda rejim": tezkor o'yin, serverlar, sozlamalar + X CLIENT ni yuklab olish kartasi.
@@ -1003,9 +1003,30 @@ function demoEnd() {
   for (var i = 0; i < DEMO_KEYS.length; i++) cmd('unbind ' + DEMO_KEYS[i]);
   applyBinds();
 }
+/* demolar ro'yxati: launcher haqiqiy fayllarni beradi (OPTS.dmf) - o'chirilganlar chiqmaydi, menyu yozib ulgurmaganlari ham ko'rinadi.
+ * Launcher eski bo'lsa (dmf yo'q) - menyu o'zi eslab qolgan ro'yxat */
+var MENU_T0 = now(), DEMO_SEL = '';
+function demoItems() {
+  var db = DB.demos || [], f = OPTS && OPTS.dmf;
+  if (!f || typeof f.length !== 'number') return db;
+  var by = {}, out = [], seen = {};
+  each(db, function (d) { by[d.n] = d; });
+  each(f, function (n) {
+    if (seen[n]) return; seen[n] = 1;
+    var m = /^xc_(\d{4})(\d\d)(\d\d)_(\d\d)(\d\d)(\d\d)$/.exec(n);
+    out.push(by[n] || { n: n, s: 'Demo', m: '', t: m ? new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime() : 0 });
+  });
+  each(db, function (d) { if (!seen[d.n] && d.t >= MENU_T0 - 60000) { out.unshift(d); seen[d.n] = 1; } });   // shu safar yozilgan - launcher hali bilmaydi
+  out.sort(function (a, b) { return (b.t || 0) - (a.t || 0); });
+  return out;
+}
 /* Demo bo'limidagi pult: menyu tugmalari F6-F9 bilan bir xil aliaslarni chaqiradi */
 function demoCtl(c) {
-  if (!DEMO_PLAY) { toast(T('dm_first'), 3500); return; }
+  if (!DEMO_PLAY) {                                  // to'xtatilgan: ▶ - tanlangan (yoki eng yangi) demoni ochadi
+    var it = demoItems(), nm = DEMO_SEL || (it[0] && it[0].n);
+    if ((c === 'n' || c === 'p') && nm) { closeModal(); demoPlay(nm); return; }
+    toast(T(it.length ? 'dm_first' : 'dm_none'), 3500); return;
+  }
   if (c === 'stop') { cmd('disconnect'); demoEnd(); }
   else if (c === 'p') { cmd('xcd_p'); DEMO_PAUSE = !DEMO_PAUSE; }
   else if (c === 'dn') { DEMO_SPD = Math.max(0, DEMO_SPD - 1); DEMO_PAUSE = false; cmd('xcd_' + DEMO_SPD); }
@@ -2471,10 +2492,10 @@ var PANES = {
       '<div class="pane r"><div class="ph2">' + esc(T('st_title')) + '</div>' + st + '</div>';
   },
   demo: function () {                            // Demo: pleyer pulti, avtomatik yozish, ro'yxat
-    var cur = null, dm = '';
-    each(DB.demos || [], function (d) {
-      if (d.n === DEMO_CUR) cur = d;
-      dm += '<div class="dmr' + (d.n === DEMO_CUR ? ' on' : '') + '"><b>' + esc(d.s) + '</b><small>' + esc(fmtTime(d.t) + (d.m ? ' \u00b7 ' + d.m : '') + ' \u00b7 ' + d.n) + '</small>' +
+    var cur = null, dm = '', items = demoItems(), pick = DEMO_PLAY ? DEMO_CUR : DEMO_SEL || (items[0] && items[0].n) || '';
+    each(items, function (d) {
+      if (d.n === pick) cur = d;
+      dm += '<div class="dmr' + (d.n === pick ? ' on' : '') + '" data-dsel="' + esc(d.n) + '"><b>' + esc(d.s) + '</b><small>' + esc(fmtTime(d.t) + (d.m ? ' \u00b7 ' + d.m : '') + ' \u00b7 ' + d.n) + '</small>' +
         '<a class="btn red" data-demo="' + esc(d.n) + '">' + ico('play') + ' ' + esc(T('dm_play')) + '</a></div>';
     });
     var vq = OPTS && OPTS.vq || 'mid', vqs = '';
@@ -2483,12 +2504,13 @@ var PANES = {
     });
     vqs = '<div class="big vqb">' + vqs + '</div>';
     var st = !DEMO_PLAY ? T('dm_idle') : DEMO_PAUSE ? T('dm_paused') : DEMO_SP[DEMO_SPD] + 'x';
-    var b = function (c, i, title) { return '<a class="btn dpb' + (DEMO_PLAY ? '' : ' dis') + '" data-dctl="' + c + '" title="' + esc(T(title)) + '">' + ico(i) + '</a>'; };
+    var b = function (c, i, title) { return '<a class="btn dpb' + (DEMO_PLAY || (cur && (c === 'n' || c === 'p')) ? '' : ' dis') + '" data-dctl="' + c + '" title="' + esc(T(title)) + '">' + ico(i) + '</a>'; };
     return '<div class="pane l"><div class="ph2">' + esc(T('dm_player')) + '</div>' +
-      '<div class="dpl"><div class="dpscr">' + ico('film') + '<b>' + esc(cur ? cur.s : DEMO_CUR || T('dm_pick')) + '</b><small>' + esc(cur ? fmtTime(cur.t) + (cur.m ? ' \u00b7 ' + cur.m : '') : '') + '</small>' +
+      '<div class="dpl"><div class="dpscr">' + ico('film') + '<b>' + esc(cur ? cur.s : pick || T(items.length ? 'dm_pick' : 'dm_none')) + '</b><small>' + esc(cur ? (cur.t ? fmtTime(cur.t) : '') + (cur.m ? ' \u00b7 ' + cur.m : '') + ' \u00b7 ' + cur.n : '') + '</small>' +
       '<span class="dpst">' + esc(st) + '</span></div>' +
       '<div class="dpc">' + b('dn', 'rew', 'dm_slow') + b('p', DEMO_PAUSE ? 'play' : 'pause', 'dm_pause') + b('n', 'play', 'dm_norm') + b('up', 'ff', 'dm_fast') + b('stop', 'stop', 'dm_stop') + '</div></div>' +
-      '<div class="mut" style="font-size:12px;margin:10px 0">' + esc(T('dm_keys')) + '</div>' +
+      '<div class="f10box"><b>' + esc(T('f10_t')) + '</b>' + esc(T('f10_1')) + '<br>' + esc(T('f10_2')) + '<br>' + esc(T('f10_3')) + '</div>' +
+      '<div class="mut" style="font-size:12px;margin:8px 0 10px">' + esc(T('dm_keys2')) + '</div>' +
       tg('demo', 'g_rec', 'g_rec2') + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('vq_title')) + '</div>' + vqs +
       '<div class="ph2 m">' + esc(T('dm_title')) + '</div>' +
@@ -3163,7 +3185,7 @@ setInterval(function () { if (!CLK_N || !feat('clicks')) return; var c = CLK; CL
 
 /* ---- menyu ovozlari: o'yin sound/xclient/*.wav ni chaladi (XCLauncher.exe ularni o'yin papkasiga qo'yadi) ---- */
 var SFX_ATTR = ['data-act', 'data-tab', 'data-hsub', 'data-seg', 'data-tg', 'data-otg', 'data-ohud', 'data-dd', 'data-ddv', 'data-xchk', 'data-pack',
-  'data-sort', 'data-flt', 'data-theme', 'data-daymode', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-dctl', 'data-ovq', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec', 'data-avpre'];
+  'data-sort', 'data-flt', 'data-theme', 'data-daymode', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-dctl', 'data-ovq', 'data-dsel', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec', 'data-avpre'];
 var SFX_QUIET = false, sfxLast = null, sfxT = 0;
 function sfx(n) {
   if (!S || S.uisnd === 0 || !hasApi()) return;
@@ -3269,6 +3291,7 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-ovq'))) { OPTS = OPTS || {}; OPTS.vq = el.getAttribute('data-ovq'); saveOpts(T('vq_ok')); showSetTab('demo'); return; }
   if ((el = closest(t, 'data-dctl'))) { demoCtl(el.getAttribute('data-dctl')); return; }
   if ((el = closest(t, 'data-demo'))) { closeModal(); demoPlay(el.getAttribute('data-demo')); return; }
+  if ((el = closest(t, 'data-dsel'))) { DEMO_SEL = el.getAttribute('data-dsel'); showSetTab('demo'); return; }   // qatorni bosish - pleyerda tanlash (▶ tugmasi yuqorida ushlanadi)
   if ((el = closest(t, 'data-hsub'))) { HSUB = el.getAttribute('data-hsub'); showSetTab('hud'); return; }
   if ((el = closest(t, 'data-xchk'))) {
     var xk = el.getAttribute('data-xchk'), XT = { dot: 3, t: 1, circle: 2 };
@@ -3371,6 +3394,7 @@ step('loadSettings();', function () { loadSettings(); });
 step('loadBinds();', function () { loadBinds(); binAliases(); });
 step('seedFromGame();', function () { seedFromGame(); });
 // saqlangan sozlamalar har ochilishda qayta qo'yiladi: sborkaning userconfig.cfg / eski xclient_launcher.cfg ularni o'zgartirib yuboradi
+step('f10', function () { var used = false; for (var a in BINDS) if (BINDS.hasOwnProperty(a) && BINDS[a] === 'F10') used = true; if (!used) { cmd('alias xc_f10 "echo X CLIENT: F10 - video (launcher)"'); cmd('bind F10 xc_f10'); } });   // launcher F10 ni ushlay olmasa ham o'yinda "quit prompt" chiqmasin
 step('reapply', function () { if (DB.set) { var ra = function () { applySettings(S); applyBinds(); }; setTimeout(ra, 2500); setTimeout(ra, 12000); } });
 step('fit();', function () { fit(); });
 step('window.onresize = fit;', function () { window.onresize = fit; });

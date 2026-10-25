@@ -970,13 +970,15 @@ static void hw_query(char *out, size_t cap)
         GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), ew, g_chan, ek, (g_lang[0] >= 'a' && g_lang[0] <= 'z') ? g_lang : ""); out[cap - 1] = 0;
 }
 static unsigned cache_mb(void);
+static void demo_list(char *out, size_t cap);
 static void fetch_opts(void)
 {
-    char url[1200], hw[800];
+    char url[2400], hw[800], dm[1000];
     char v[48];
     url_escape(v, sizeof(v), g_version[0] ? g_version : "1.0");
     hw_query(hw, sizeof(hw));
-    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=hello&d=%s&v=%s&cache=%u%s", g_id, v, cache_mb(), hw); url[sizeof(url) - 1] = 0;
+    demo_list(dm, sizeof(dm));                    /* menyu demolar ro'yxatini haqiqiy fayllardan ko'rsatadi */
+    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=hello&d=%s&v=%s&cache=%u%s%s", g_id, v, cache_mb(), hw, dm); url[sizeof(url) - 1] = 0;
     char *r = http_get(url, NULL);
     if (!r || !strstr(r, "\"ok\":true")) { free(r); return; }
     o_beta = jint(r, "beta", -1); o_auto = jint(r, "auto", 1); o_start = jint(r, "start", -1);
@@ -1168,6 +1170,37 @@ static void prune_demos(void)
         path_join(p, g_dir, sub);
         DeleteFileW(p);
     }
+    free(l);
+}
+/* "&dm=xc_20261025_143012,xc_..." - eng yangi 40 ta demo (prune_demos dan keyin) */
+static void demo_list(char *out, size_t cap)
+{
+    wchar_t pat[MAX_PATH];
+    out[0] = 0;
+    path_join(pat, g_dir, L"cstrike\\xc_*.dem");
+    DemoF *l = (DemoF *)malloc(sizeof(DemoF) * 200); int n = 0;
+    if (!l) return;
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(pat, &fd);
+    if (h != INVALID_HANDLE_VALUE) {
+        do {
+            if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || wcslen(fd.cFileName) >= 44 || n >= 200 || fd.nFileSizeLow < 1024) continue;
+            lstrcpynW(l[n].n, fd.cFileName, 64); l[n].t = ((ULONGLONG)fd.ftLastWriteTime.dwHighDateTime << 32) | fd.ftLastWriteTime.dwLowDateTime; n++;
+        } while (FindNextFileW(h, &fd));
+        FindClose(h);
+    }
+    qsort(l, n, sizeof(DemoF), demo_cmp);
+    size_t len = 0;
+    for (int i = 0, k = 0; i < n && k < DEMO_KEEP; i++) {
+        char a[48]; int j = 0, bad = 0;
+        for (const wchar_t *c = l[i].n; *c && *c != L'.' && j < 47; c++) { if ((*c >= L'a' && *c <= L'z') || (*c >= L'A' && *c <= L'Z') || (*c >= L'0' && *c <= L'9') || *c == L'_' || *c == L'-') a[j++] = (char)*c; else bad = 1; }
+        a[j] = 0;
+        if (bad || !j || len + j + 6 >= cap) continue;
+        len += _snprintf(out + len, cap - len, "%s%s", k ? "," : "&dm=", a);
+        k++;
+    }
+    if (!len) lstrcpynA(out, "&dm=", (int)cap);   /* demo yo'q - menyu ham bo'sh ko'rsatsin */
+    out[cap - 1] = 0;
     free(l);
 }
 static void install_spray(void)
@@ -1799,13 +1832,13 @@ static DWORD WINAPI worker(LPVOID unused)
 
     if (fresh) { g_fresh = TRUE; status(L"O‘rnatilmoqda...", 1); api_call("install", NULL); }
 
+    prune_demos();                                /* ro'yxat saytga to'g'ri ketsin - o'chiriladiganlar oldin o'chadi */
     fetch_opts();
     if (o_beta >= 0) { lstrcpynA(g_chan, o_beta ? "beta" : "stable", sizeof(g_chan)); ini_save(); }
     if (o_start >= 0) set_autostart(o_start);
     if (o_clean) { status(L"Kesh tozalanmoqda...", 1); clean_cache(); }
     else auto_clean_cache();
     clean_hpk();
-    prune_demos();
     if (o_ok) {                                   /* internet bo'lmasa paketlarga tegmaymiz */
         install_spray();
         apply_packs();

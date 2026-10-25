@@ -833,3 +833,7 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .dmr .btn .ico { vertical-align: -2px; }
 .big.vqb a { display: block; width: auto; height: auto; padding: 6px 12px; margin: 0 0 6px; font-size: 14px; }
 .big.vqb a small { display: inline; margin: 0 0 0 8px; }
+.f10box { margin-top: 12px; padding: 10px 12px; background: #2a1216; border: 1px solid #e5484d; border-radius: 4px; font-size: 13px; line-height: 19px; color: #f2e6e8; }
+.f10box b { display: block; font-size: 16px; color: #ff5a5f; letter-spacing: 1px; margin-bottom: 4px; }
+.dmr { cursor: pointer; }
+.dmr.on { background: #1d1216; }

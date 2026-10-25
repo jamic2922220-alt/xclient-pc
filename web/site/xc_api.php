@@ -1463,6 +1463,11 @@ case 'opts_done':
             $o['scr'] = p('res');
         }
         if (p('os') !== '') $o['os'] = clean_str(p('os'), 80);
+        if (isset($_GET['dm']) || isset($_POST['dm'])) {     // launcher: cstrike\xc_*.dem fayllari (eng yangisi birinchi) - menyudagi demolar ro'yxati
+            $dmf = array();
+            foreach (explode(',', (string)p('dm')) as $x) if (preg_match('/^[\w\-]{1,40}$/', $x) && count($dmf) < 40) $dmf[] = $x;
+            $o['dmf'] = $dmf;
+        }
         if (preg_match('/^(ru|uz|en)$/', p('lang'))) $o['ilang'] = p('lang');      // o'rnatuvchida tanlangan til
         if (p('ch') !== '') $o['ch'] = preg_replace('/[^a-z]/', '', p('ch'));
         if (p('pt') !== '') $o['pt'] = clean_str(p('pt'), 60);
