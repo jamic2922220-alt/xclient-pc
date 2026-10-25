@@ -975,7 +975,7 @@ function voiceWarm() {
 /* Demo ko'rish boshqaruvi: F6 pauza, F7 sekinroq, F8 tezroq, F9 oddiy tezlik. Tezlik host_framerate bilan
  * (har kadr demo vaqtini belgilangan miqdorda suradi; 1/fps_max = oddiy tezlik). Tugmalar faqat demo paytida bog'lanadi,
  * tugagach (yoki serverga ulanganda) host_framerate 0 va o'yinchining tugmalari qaytariladi - onlayn o'yinga ta'sir qilmasin. */
-var DEMO_PLAY = false, DEMO_KEYS = ['F6', 'F7', 'F8', 'F9'], DEMO_CUR = '', DEMO_SPD = 2, DEMO_PAUSE = false;
+var DEMO_END_T = 0, DEMO_PLAY = false, DEMO_KEYS = ['F6', 'F7', 'F8', 'F9'], DEMO_CUR = '', DEMO_SPD = 2, DEMO_PAUSE = false;
 var DEMO_SP = [0.25, 0.5, 1, 2, 4, 8];
 function demoPlay(nm) {
   nm = String(nm || '').replace(/[^\w\-]/g, '');
@@ -991,17 +991,20 @@ function demoPlay(nm) {
   cmd('alias xcd_pz "host_framerate 0.000001; volume 0; stopsound; alias xcd_p xcd_back; echo X CLIENT demo: pauza (F6 - davom)"');
   cmd('xcd_2');
   cmd('bind F6 xcd_p'); cmd('bind F7 xcd_dn'); cmd('bind F8 xcd_up'); cmd('bind F9 xcd_2');
+  if (QUEUE_IP) stopQueue();                         // navbat demo paytida serverga ulab yubormasin
   DEMO_PLAY = true; DEMO_CUR = nm; DEMO_SPD = 2; DEMO_PAUSE = false;
   cmd('echo X CLIENT demo: F6 pauza, F7 sekinroq, F8 tezroq, F9 oddiy tezlik, F10 video yozish');
+  cmd('mp3 stop'); MUSIC_ON = false;
   cmd('playdemo ' + nm);
 }
 function demoEnd() {
   cmd('host_framerate 0');
   if (!DEMO_PLAY) return;
   cmd('volume ' + (S && S.vol != null ? S.vol : 0.8));
-  DEMO_PLAY = false; DEMO_PAUSE = false;
+  DEMO_PLAY = false; DEMO_PAUSE = false; DEMO_END_T = now();
   for (var i = 0; i < DEMO_KEYS.length; i++) cmd('unbind ' + DEMO_KEYS[i]);
   applyBinds();
+  setTimeout(musicSync, 1500);
 }
 /* demolar ro'yxati: launcher haqiqiy fayllarni beradi (OPTS.dmf) - o'chirilganlar chiqmaydi, menyu yozib ulgurmaganlari ham ko'rinadi.
  * Launcher eski bo'lsa (dmf yo'q) - menyu o'zi eslab qolgan ro'yxat */
@@ -1038,7 +1041,9 @@ function stopRecord() { clearTimeout(REC_TM); if (REC) { cmd('stop'); REC = ''; 
 function onConnectEvt(addr, inGame) {
   addr = normIp(addr);
   if (!addr) return;
-  if (!DEMO_PLAY) cmd('host_framerate 0');          // demo o'zi ham ulanish hodisasini berishi mumkin - demo paytida tegmaymiz (serverga ulanish 'Connecting to' bilan ushlanadi)
+  /* demo ham "ulanish" hodisasini beradi (yozilgan server manzili bilan) - bu o'yin emas: statistika, demo yozish, musiqa o'chirish kerak emas */
+  if (DEMO_PLAY) return;
+  cmd('host_framerate 0');          // demo o'zi ham ulanish hodisasini berishi mumkin - demo paytida tegmaymiz (serverga ulanish 'Connecting to' bilan ushlanadi)
   if (QUEUE_IP && addr !== QUEUE_IP && addr !== CONNECTED) stopQueue();   // hozirgi serverning o'z hodisalari (xarita almashishi) bekor qilmaydi   // boshqa serverga (konsol, o'yin ro'yxati) kirildi - navbat bekor
   if (addr !== CONNECTED) { CONNECTED = addr; MUSIC_ON = null; if (!inGame) applyPw(addr); startGame(addr); musicSync();   // serverda mp3 chalinmasin: o'yin ovozlarini bo'g'adi
     pingPresence(); renderAll(); sparks(); voiceWarm(); }
@@ -1054,7 +1059,9 @@ function onDisconnectEvt() {
   // o'yinchi o'zi menyudan chiqmagan bo'lsa (menyu yopiq) - qayta ulanamiz
   var shown = false;
   shown = uiShown();
-  if (S.reconn && was && !shown) setTimeout(function () { if (!CONNECTED) cmd('retry'); }, 3000);
+  /* demo ochilganda ham o'yin serverdan uziladi - bu tarmoq uzilishi emas: qayta ulanmaymiz (aks holda 3 soniyada demo yopilardi) */
+  var demo = DEMO_PLAY || now() - DEMO_END_T < 8000;
+  if (S.reconn && was && !shown && !demo) setTimeout(function () { if (!CONNECTED && !DEMO_PLAY) cmd('retry'); }, 3000);
 }
 /* konsoldan o'ldirish/o'lish hisobi: "Player1 killed Player2 with ak47" */
 var MYNAME = '', CONLOG = [];
@@ -3072,7 +3079,7 @@ function act(a) {
 /* ---- menyu musiqasi: CS ning o'z menyu kuyi (media/gamestartup.mp3), faqat serverda bo'lmaganda ---- */
 var MUSIC_ON = null;                             // null - noma'lum: oldingi sahifa (menyu yangilangan) qoldirgan musiqa ham o'chirilsin
 function musicSync() {
-  var want = !!(S && S.mmusic && !CONNECTED && hasApi());
+  var want = !!(S && S.mmusic && !CONNECTED && !DEMO_PLAY && hasApi());   // demo ko'rilayotganda menyu musiqasi chalinmasin
   if (want && !MUSIC_ON) { cmd('mp3volume ' + (S.mp3off ? 0 : S.mus)); cmd('mp3 loop ' + (/^[\w\/.\-]+\.mp3$/.test(DB.mtrack || '') ? DB.mtrack : 'media/gamestartup.mp3')); MUSIC_ON = true; }
   else if (!want && MUSIC_ON !== false) { cmd('mp3 stop'); MUSIC_ON = false; }
 }

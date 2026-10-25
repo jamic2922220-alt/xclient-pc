@@ -16,6 +16,7 @@
 #include <mferror.h>
 #include <mmdeviceapi.h>
 #include <audioclient.h>
+#include <strmif.h>
 #ifdef _MSC_VER
 #pragma comment(lib, "dxguid.lib")
 #pragma comment(lib, "mfuuid.lib")
@@ -32,6 +33,10 @@ static const GUID XC_CLSID_MMDevEnum   = { 0xBCDE0395, 0xE52F, 0x467C, { 0x8E, 0
 static const GUID XC_IID_IMMDevEnum    = { 0xA95664D2, 0x9614, 0x4F35, { 0xA7, 0x46, 0xDE, 0x8D, 0xB6, 0x36, 0x17, 0xE6 } };
 static const GUID XC_IID_IAudioClient  = { 0x1CB9AD4C, 0xDBFA, 0x4C32, { 0xB1, 0x78, 0xC2, 0xF5, 0x68, 0xA7, 0x03, 0xB2 } };
 static const GUID XC_IID_IAudioCapture = { 0xC8ADBD64, 0xE71E, 0x48A0, { 0xA4, 0xDE, 0x18, 0x5C, 0x39, 0x5C, 0xD3, 0x17 } };
+/* siqgich sozlamalari (codecapi.h): o'zgaruvchan bitreyt - jim sahnada kam joy, harakatda ko'proq */
+static const GUID XC_IID_ICodecAPI     = { 0x901DB4C7, 0x31CE, 0x41A2, { 0x85, 0xDC, 0x8F, 0xA0, 0xBF, 0x41, 0xB8, 0xDA } };
+static const GUID XC_CAPI_RateControl  = { 0x1C0608E9, 0x370C, 0x4710, { 0x8A, 0x58, 0xCB, 0x61, 0x81, 0xC4, 0x24, 0x23 } };
+static const GUID XC_CAPI_MeanBitRate  = { 0xF7222374, 0x2144, 0x4815, { 0xB5, 0x50, 0xA3, 0x7F, 0x8E, 0x12, 0xEE, 0x52 } };
 static const GUID XC_SUBTYPE_FLOAT     = { 0x00000003, 0x0000, 0x0010, { 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71 } };
 
 typedef HRESULT (WINAPI *t_D3D11CreateDevice)(IDXGIAdapter *, D3D_DRIVER_TYPE, HMODULE, UINT, const D3D_FEATURE_LEVEL *, UINT, UINT,
@@ -318,9 +323,11 @@ static BOOL enc_open(Enc *e, const wchar_t *path, const Cap *c, const Aud *a, BO
     if (FAILED(hr)) return FALSE;
     /* tiniq: 1080p60 ~25 Mbit/s, 1080p30 ~16 Mbit/s (YouTube tavsiyasidan yuqori) */
     /* 1080p60 ~25 Mbit/s (yuqori), 1080p30 ~8 Mbit/s (o'rtacha), 720p30 ~2.3 Mbit/s (kichik) */
-    UINT32 br = (UINT32)((ULONGLONG)c->tw * c->th * c->fps / (g_vq == 2 ? 5 : g_vq == 1 ? 8 : 12));
+    /* High profil + o'zgaruvchan bitreyt: CS 1.6 tasviri oddiy - kamroq bitreytda ham tiniq.
+     * 1080p60 ~15 Mbit/s (~110 MB/daq), 1080p30 ~5 Mbit/s (~40 MB/daq), 720p30 ~1.7 Mbit/s (~13 MB/daq) */
+    UINT32 br = (UINT32)((ULONGLONG)c->tw * c->th * c->fps / (g_vq == 2 ? 8 : g_vq == 1 ? 12 : 16));
     if (br > 50000000) br = 50000000;
-    if (br < 1500000) br = 1500000;
+    if (br < 1200000) br = 1200000;
     /* tasvir: chiqish H.264, kirish RGB32 (tepadan pastga) - rang o'zgartirgichni Sink Writer o'zi qo'yadi */
     hr = (t = mt_new()) ? S_OK : E_FAIL;
     if (SUCCEEDED(hr)) {
@@ -328,7 +335,9 @@ static BOOL enc_open(Enc *e, const wchar_t *path, const Cap *c, const Aud *a, BO
         IMFMediaType_SetUINT32(t, &MF_MT_AVG_BITRATE, br); IMFMediaType_SetUINT32(t, &MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
         IMFMediaType_SetUINT64(t, &MF_MT_FRAME_SIZE, PACK2(c->tw, c->th)); IMFMediaType_SetUINT64(t, &MF_MT_FRAME_RATE, PACK2(c->fps, 1));
         IMFMediaType_SetUINT64(t, &MF_MT_PIXEL_ASPECT_RATIO, PACK2(1, 1));
+        IMFMediaType_SetUINT32(t, &MF_MT_MPEG2_PROFILE, 100 /* eAVEncH264VProfile_High */);
         hr = IMFSinkWriter_AddStream(e->w, t, &e->vs);
+        if (FAILED(hr)) { IMFMediaType_DeleteItem(t, &MF_MT_MPEG2_PROFILE); hr = IMFSinkWriter_AddStream(e->w, t, &e->vs); }   /* High ni bilmaydigan siqgich */
     }
     SREL(t);
     if (SUCCEEDED(hr)) hr = (t = mt_new()) ? S_OK : E_FAIL;
@@ -341,6 +350,15 @@ static BOOL enc_open(Enc *e, const wchar_t *path, const Cap *c, const Aud *a, BO
         hr = IMFSinkWriter_SetInputMediaType(e->w, e->vs, t, NULL);
     }
     SREL(t);
+    if (SUCCEEDED(hr)) {                    /* bo'lmasa - siqgichning o'z rejimi (o'rtacha bitreyt baribir shu) */
+        ICodecAPI *api = NULL;
+        if (SUCCEEDED(IMFSinkWriter_GetServiceForStream(e->w, e->vs, &GUID_NULL, &XC_IID_ICodecAPI, (void **)&api)) && api) {
+            VARIANT v; ZeroMemory(&v, sizeof(v)); v.vt = VT_UI4;   /* VariantInit emas - oleaut32 kerak bo'lmasin */
+            v.ulVal = 2;  ICodecAPI_SetValue(api, &XC_CAPI_RateControl, &v);   /* eAVEncCommonRateControlMode_UnconstrainedVBR */
+            v.ulVal = br; ICodecAPI_SetValue(api, &XC_CAPI_MeanBitRate, &v);
+            SREL(api);
+        }
+    }
     /* ovoz: AAC 192 kbit/s; kirish 16 bit stereo PCM. Ovoz qo'shilmasa ham video yoziladi */
     e->audio = FALSE;
     if (SUCCEEDED(hr) && a->cc) {
