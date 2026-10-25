@@ -1077,7 +1077,8 @@ function onConsole(txt) {
   var r = /Recording to (\S+?)(?:\.dem)?\.?\s*$/i.exec(txt);
   if (r && REC && r[1].indexOf(REC) === 0) demoAdd(REC);
   else if (REC && /(can'?t|cannot|not) record|must be connected/i.test(txt)) { REC = ''; if (S.demo && CONNECTED) startRecord(10000); }   // erta bo'ldi - keyinroq qayta
-  if (DEMO_PLAY) { var dm = /Completed demo|couldn'?t open|ERROR: couldn|^\s*Connecting to/i.exec(txt); if (dm) demoEnd(dm[0]); }   // tugadi yoki serverga ulanyapti - oddiy tezlik
+  /* demo tugadi yoki serverga ulanyapti - oddiy tezlik. Faqat aniq qatorlar: "Couldn't open file overviews/..." (radar xaritasi) demo xatosi emas */
+  if (DEMO_PLAY) { var dm = /^\s*Completed demo|^\s*ERROR: couldn'?t open\.?\s*$|^\s*Connecting to/i.exec(txt); if (dm) demoEnd(dm[0]); }
   if (/\b(wrote|writing|saved)\b.*\.(bmp|tga|jpg|png)\b/i.test(txt)) toast(T('sh_saved'), 2500);   // F5: skrinshot saqlandi
   if (!CUR || !MYNAME) return;
   var m = /^(.+?) killed (.+?) with ([\w\-]+)/.exec(txt.replace(/^\s+/, ''));
