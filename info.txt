@@ -1,0 +1,10 @@
+innoextract: innoextract 1.9
+-rw-r--r-- 1 runner runner 238932805 Oct 26 03:57 g.exe
+g.exe: PE32 executable (GUI) Intel 80386, for MS Windows, 11 sections
+Warning: Unexpected setup loader revision: 2
+Warning: Setup loader checksum mismatch!
+Could not determine setup data version!
+If you are sure the setup file is not corrupted, consider 
+filing a bug report at https://innoextract.constexpr.org/issues
+Done with 1 error and 2 warnings.
+rc=2
