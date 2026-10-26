@@ -1056,6 +1056,8 @@ static DWORD WINAPI rec_hotkey_thread(LPVOID unused)
     return 0;
 }
 
+#include "xc_edit.c"   /* video muharriri (menyu > Demo > ✂) */
+
 /* o'yin paytida menyudagi "Videolarim" tugmalari: sayt navbatidan buyruqlarni olib bajaradi (har 4 soniya) */
 static HANDLE g_vp_th = NULL, g_vp_stop = NULL;
 static void vid_exec(const char *line)
@@ -1076,6 +1078,7 @@ static void vid_exec(const char *line)
     _snwprintf(f, MAX_PATH - 2, L"%s\\%s.mp4", dir, wn); f[MAX_PATH - 3] = 0;
     if (GetFileAttributesW(f) == INVALID_FILE_ATTRIBUTES) return;
     if (!strcmp(c, "open")) ShellExecuteW(NULL, L"open", f, NULL, NULL, SW_SHOWNORMAL);
+    else if (!strcmp(c, "edit")) editor_open(f);
     else if (!strcmp(c, "del")) {                      /* Savatga - adashib o'chirilsa qaytarish mumkin */
         size_t L = wcslen(f); f[L + 1] = 0;
         SHFILEOPSTRUCTW op = { 0 }; op.wFunc = FO_DELETE; op.pFrom = f;

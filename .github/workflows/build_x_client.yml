@@ -13,14 +13,41 @@ on:
         description: "X-Client-Setup.exe ni ham yangilash (odatda YO'Q: Setup barqaror qoladi - SmartScreen obro'si yo'qolmasin; launcher o'zi yangilanadi)"
         default: false
         type: boolean
+      extract:
+        description: "Faqat sborkadan xarita va overview namunalarini chiqarish (radar xaritasi sinovi uchun; reliz qilinmaydi)"
+        default: false
+        type: boolean
 
 env:
   CHANNEL: ${{ github.event.inputs.channel || 'beta' }}
   XC_VERSION: 1.0.${{ github.run_number }}
 
 jobs:
+  extract:
+    name: Xarita namunalari (radar sinovi)
+    if: ${{ github.event.inputs.extract == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sborkadan .bsp va overviews
+        shell: bash
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq innoextract >/dev/null
+          curl -fsSL --retry 3 -o g.exe "https://cssborka.uz/uploads/files/1791198609_6ac38591b615c_CS_1_6_boost-top_PRO_2_5_3.exe"
+          innoextract -s -d out g.exe || true
+          mkdir -p pick
+          (find out -iname '*.bsp' | sort; echo ---; find out -ipath '*overview*' | sort) > pick/list.txt
+          for m in de_dust2 de_inferno de_nuke cs_assault; do f=$(find out -iname "$m.bsp" | head -1); [ -n "$f" ] && cp "$f" pick/; done
+          find out -ipath '*overviews*' \( -iname 'de_dust2.*' -o -iname 'de_inferno.*' -o -iname 'de_nuke.*' \) -exec cp {} pick/ \;
+          ls -la pick
+      - uses: actions/upload-artifact@v4
+        with:
+          name: maps
+          path: pick
+          retention-days: 3
+
   windows:
     name: Windows klient
+    if: ${{ github.event.inputs.extract != 'true' }}
     runs-on: windows-latest
     permissions:
       contents: write
