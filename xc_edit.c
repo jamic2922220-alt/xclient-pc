@@ -13,11 +13,14 @@ typedef HRESULT (WINAPI *t_MFPCreateMediaPlayer)(LPCWSTR, BOOL, MFP_CREATION_OPT
 #define ED_TH 72
 #define WM_ED_THUMBS (WM_APP + 11)
 
+#define ED_MAXCUT 32
 typedef struct {
-    HWND wnd, video, tl, play, save, cancel, info;
+    HWND wnd, video, tl, play, save, cancel, info, cut, del;
     IMFPMediaPlayer *mp;
     wchar_t path[MAX_PATH];
     LONGLONG dur, a, b, pos;            /* 100 ns: davomiylik, boshlanish, oxiri, hozirgi joy */
+    LONGLONG cuts[ED_MAXCUT]; int ncuts; /* qaychi: kesilgan joylar (o'sib boradi) */
+    unsigned long long removed;         /* o'chirilgan bo'laklar (bo'lak i = cuts[i-1]..cuts[i]) */
     int drag;                           /* 0 - yo'q, 1 - boshlanish, 2 - oxiri, 3 - hozirgi joy */
     BOOL playing, saving;
     HBITMAP thumbs;                     /* ED_THUMBS ta kadrcha yonma-yon (ED_TW*ED_THUMBS x ED_TH) */
@@ -121,14 +124,57 @@ static void ed_seek(Ed *e, LONGLONG t)
     e->pos = t;
 }
 
+/* bo'laklar: qaychi joylari videoni bo'laklarga ajratadi; o'chirilgani saqlanmaydi */
+static int ed_seg(Ed *e, LONGLONG t) { int i = 0; while (i < e->ncuts && e->cuts[i] <= t) i++; return i; }
+static LONGLONG ed_s0(Ed *e, int i) { return i ? e->cuts[i - 1] : 0; }
+static LONGLONG ed_s1(Ed *e, int i) { return i < e->ncuts ? e->cuts[i] : e->dur; }
+static BOOL ed_isrm(Ed *e, int i) { return (e->removed >> i) & 1; }
+static LONGLONG ed_kept(Ed *e)            /* saqlanadigan uzunlik: [a,b] ichidagi o'chirilmagan bo'laklar */
+{
+    LONGLONG s = 0;
+    for (int i = 0; i <= e->ncuts; i++) {
+        if (ed_isrm(e, i)) continue;
+        LONGLONG x = ed_s0(e, i) > e->a ? ed_s0(e, i) : e->a, y = ed_s1(e, i) < e->b ? ed_s1(e, i) : e->b;
+        if (y > x) s += y - x;
+    }
+    return s;
+}
+
 static void ed_info(Ed *e)
 {
-    wchar_t a[24], b[24], t[160];
+    wchar_t a[24], b[24], t[200];
     ed_fmt(a, 24, e->a); ed_fmt(b, 24, e->b);
-    unsigned len = (unsigned)((e->b - e->a) / 10000000);
-    _snwprintf(t, 160, ed_ru() ? L"Выбрано: %s — %s   (%u с)" : L"Tanlangan: %s — %s   (%u soniya)", a, b, len);
-    t[159] = 0;
+    unsigned len = (unsigned)(ed_kept(e) / 10000000);
+    if (e->removed) _snwprintf(t, 200, ed_ru() ? L"Выбрано: %s — %s   (%u с, без вырезанных кусков)" : L"Tanlangan: %s — %s   (%u soniya, kesilgan bo‘laklarsiz)", a, b, len);
+    else _snwprintf(t, 200, ed_ru() ? L"Выбрано: %s — %s   (%u с)" : L"Tanlangan: %s — %s   (%u soniya)", a, b, len);
+    t[199] = 0;
     SetWindowTextW(e->info, t);
+}
+
+static void ed_cut(Ed *e)                 /* qaychi: hozirgi joyda kesish */
+{
+    if (e->dur <= 0 || e->ncuts >= ED_MAXCUT || e->pos < 5000000 || e->pos > e->dur - 5000000) return;
+    int i = ed_seg(e, e->pos);
+    if ((i && e->pos - e->cuts[i - 1] < 5000000) || (i < e->ncuts && e->cuts[i] - e->pos < 5000000)) return;   /* juda yaqin - yarim soniyadan qisqa bo'lak bo'lmasin */
+    for (int k = e->ncuts; k > i; k--) e->cuts[k] = e->cuts[k - 1];
+    e->cuts[i] = e->pos; e->ncuts++;
+    /* bo'lak i ikkiga bo'lindi: undan keyingi o'chirish belgilari bittaga suriladi, ikkala yarim ham avvalgi holatni oladi */
+    unsigned long long lowmask = (i ? ((1ULL << i) - 1) : 0), low = e->removed & lowmask, hi = e->removed & ~lowmask;
+    e->removed = low | (hi << 1) | (ed_isrm(e, i) ? (1ULL << i) : 0);
+    ed_info(e); InvalidateRect(e->tl, NULL, FALSE);
+}
+
+static void ed_toggle_rm(Ed *e)           /* hozirgi joydagi bo'lakni o'chirish / qaytarish */
+{
+    if (e->dur <= 0) return;
+    if (!e->ncuts) {
+        MessageBoxW(e->wnd, ed_ru() ? L"Сначала разрежьте видео: поставьте белую линию в начало ненужного куска и нажмите «Разрезать», затем в конец куска и снова «Разрезать». Потом выберите кусок и нажмите «Удалить кусок»."
+                                    : L"Avval videoni qirqing: oq chiziqni keraksiz bo‘lak boshiga qo‘yib «Qirqish», keyin oxiriga qo‘yib yana «Qirqish» ni bosing. So‘ng o‘sha bo‘lakka oq chiziqni qo‘yib «Bo‘lakni o‘chirish» ni bosing.",
+                    L"X CLIENT", MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+    e->removed ^= 1ULL << ed_seg(e, e->pos);
+    ed_info(e); InvalidateRect(e->tl, NULL, FALSE);
 }
 
 static LRESULT CALLBACK ed_tl_proc(HWND h, UINT m, WPARAM w, LPARAM l)
@@ -153,7 +199,24 @@ static LRESULT CALLBACK ed_tl_proc(HWND h, UINT m, WPARAM w, LPARAM l)
         HDC sh = CreateCompatibleDC(dc); HBITMAP sb = CreateCompatibleBitmap(dc, 1, 1); HGDIOBJ os = SelectObject(sh, sb); SetPixel(sh, 0, 0, RGB(0, 0, 0));
         if (xa > tr.left) GdiAlphaBlend(dc, tr.left, tr.top, xa - tr.left, tr.bottom - tr.top, sh, 0, 0, 1, 1, bf);
         if (xb < tr.right) GdiAlphaBlend(dc, xb, tr.top, tr.right - xb, tr.bottom - tr.top, sh, 0, 0, 1, 1, bf);
+        /* o'chirilgan bo'laklar - qizg'ish va qoraytirilgan, qirqish joylari - qizil chiziq */
+        for (int i = 0; i <= e->ncuts; i++) {
+            if (!ed_isrm(e, i)) continue;
+            int x0 = ed_x(e, &tr, ed_s0(e, i)), x1 = ed_x(e, &tr, ed_s1(e, i));
+            if (x1 > x0) {
+                GdiAlphaBlend(dc, x0, tr.top, x1 - x0, tr.bottom - tr.top, sh, 0, 0, 1, 1, bf);
+                HPEN rp2 = CreatePen(PS_SOLID, 3, RGB(229, 72, 77)); HGDIOBJ op2 = SelectObject(dc, rp2);
+                MoveToEx(dc, x0 + 4, tr.top + 4, NULL); LineTo(dc, x1 - 4, tr.bottom - 4);
+                MoveToEx(dc, x0 + 4, tr.bottom - 4, NULL); LineTo(dc, x1 - 4, tr.top + 4);
+                SelectObject(dc, op2); DeleteObject(rp2);
+            }
+        }
         SelectObject(sh, os); DeleteObject(sb); DeleteDC(sh);
+        {
+            HBRUSH cb = CreateSolidBrush(RGB(229, 72, 77));
+            for (int i = 0; i < e->ncuts; i++) { int x = ed_x(e, &tr, e->cuts[i]); RECT rc = { x - 1, tr.top - 6, x + 2, tr.bottom + 6 }; FillRect(dc, &rc, cb); }
+            DeleteObject(cb);
+        }
         /* sariq ramka va tutqichlar */
         HBRUSH yb = CreateSolidBrush(RGB(255, 176, 32));
         RECT r1 = { xa, tr.top - 2, xb, tr.top + 1 }, r2 = { xa, tr.bottom - 1, xb, tr.bottom + 2 };
@@ -213,17 +276,29 @@ static void ed_toggle(Ed *e)
 {
     if (!e->mp) return;
     if (e->playing) { IMFPMediaPlayer_Pause(e->mp); e->playing = FALSE; }
-    else { if (e->pos >= e->b - 200000 || e->pos < e->a) ed_seek(e, e->a); IMFPMediaPlayer_Play(e->mp); e->playing = TRUE; }
+    else {
+        if (e->pos >= e->b - 200000 || e->pos < e->a) ed_seek(e, e->a);
+        int s = ed_seg(e, e->pos); if (ed_isrm(e, s)) ed_seek(e, ed_s1(e, s));   /* o'chirilgan bo'lak ko'rsatilmaydi */
+        IMFPMediaPlayer_Play(e->mp); e->playing = TRUE;
+    }
     InvalidateRect(e->play, NULL, FALSE);
 }
 
 static DWORD WINAPI ed_save_thread(LPVOID p)
 {
     Ed *e = (Ed *)p;
-    wchar_t out[MAX_PATH]; const wchar_t *src[1] = { e->path }; LONGLONG dur = 0; BOOL ok = FALSE;
+    wchar_t out[MAX_PATH]; LONGLONG dur = 0; BOOL ok = FALSE;
+    RemuxPart parts[ED_MAXCUT + 1]; int np = 0;
+    for (int i = 0; i <= e->ncuts; i++) {                 /* [a,b] ichidagi o'chirilmagan bo'laklar ketma-ket */
+        if (ed_isrm(e, i)) continue;
+        LONGLONG x = ed_s0(e, i) > e->a ? ed_s0(e, i) : e->a, y = ed_s1(e, i) < e->b ? ed_s1(e, i) : e->b;
+        if (y - x < 2000000) continue;
+        if (np && parts[np - 1].to >= x - 1000) { parts[np - 1].to = y; continue; }   /* qo'shni bo'laklar - bitta */
+        parts[np].src = e->path; parts[np].from = x; parts[np].to = y; np++;
+    }
     CoInitializeEx(NULL, COINIT_MULTITHREADED);
-    if (SUCCEEDED(rf.MFStartup(0x00020070, 0))) {
-        ok = vid_newpath(out) && remux(src, 1, out, e->a, e->b, &dur);
+    if (np && SUCCEEDED(rf.MFStartup(0x00020070, 0))) {
+        ok = vid_newpath(out) && remux_parts(parts, np, out, &dur);
         rf.MFShutdown();
     }
     if (ok) vid_report(out, (unsigned)(dur / 10000000));
@@ -241,7 +316,9 @@ static LRESULT CALLBACK ed_proc(HWND h, UINT m, WPARAM w, LPARAM l)
         int W = LOWORD(l), H = HIWORD(l);
         MoveWindow(e->video, 16, 16, W - 32, H - 210, TRUE);
         MoveWindow(e->play, 16, H - 184, 64, 40, TRUE);
-        MoveWindow(e->info, 96, H - 176, W - 112, 26, TRUE);
+        MoveWindow(e->cut, 92, H - 184, 150, 40, TRUE);
+        MoveWindow(e->del, 252, H - 184, 210, 40, TRUE);
+        MoveWindow(e->info, 478, H - 176, W - 494, 26, TRUE);
         MoveWindow(e->tl, 16, H - 136, W - 32, 82, TRUE);
         MoveWindow(e->cancel, W - 300, H - 46, 136, 36, TRUE);
         MoveWindow(e->save, W - 152, H - 46, 136, 36, TRUE);
@@ -259,6 +336,7 @@ static LRESULT CALLBACK ed_proc(HWND h, UINT m, WPARAM w, LPARAM l)
             PropVariantClear(&pv); PropVariantInit(&pv);
             if (e->playing && !e->drag && SUCCEEDED(IMFPMediaPlayer_GetPosition(e->mp, &GUID_NULL, &pv)) && pv.vt == VT_I8) {
                 e->pos = pv.hVal.QuadPart;
+                { int s = ed_seg(e, e->pos); if (ed_isrm(e, s) && e->pos < e->b) ed_seek(e, ed_s1(e, s)); }   /* o'chirilgan bo'lakdan sakrab o'tadi */
                 if (e->pos >= e->b) { IMFPMediaPlayer_Pause(e->mp); e->playing = FALSE; InvalidateRect(e->play, NULL, FALSE); ed_seek(e, e->b); }   /* tanlangan qism oxirida to'xtaydi */
             }
             PropVariantClear(&pv);
@@ -272,6 +350,8 @@ static LRESULT CALLBACK ed_proc(HWND h, UINT m, WPARAM w, LPARAM l)
     case WM_COMMAND:
         if (!e) break;
         if ((HWND)l == e->play) ed_toggle(e);
+        else if ((HWND)l == e->cut) ed_cut(e);
+        else if ((HWND)l == e->del) ed_toggle_rm(e);
         else if ((HWND)l == e->cancel) DestroyWindow(h);
         else if ((HWND)l == e->save && !e->saving && e->dur > 0) {
             e->saving = TRUE;
@@ -291,6 +371,8 @@ static LRESULT CALLBACK ed_proc(HWND h, UINT m, WPARAM w, LPARAM l)
         return 0;
     case WM_KEYDOWN:
         if (e && w == VK_SPACE) { ed_toggle(e); return 0; }
+        if (e && w == 'C') { ed_cut(e); return 0; }
+        if (e && w == VK_DELETE) { ed_toggle_rm(e); return 0; }
         break;
     case WM_CLOSE:
         if (e && e->saving) return 0;                   /* saqlanayotganda yopilmasin */
@@ -392,6 +474,8 @@ static DWORD WINAPI ed_thread(LPVOID p)
     e->play = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 0, 0, 10, 10, e->wnd, NULL, hi, NULL);
     e->info = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_LEFT, 0, 0, 10, 10, e->wnd, NULL, hi, NULL);
     e->tl = CreateWindowW(L"XCEdTimeline", L"", WS_CHILD | WS_VISIBLE, 0, 0, 10, 10, e->wnd, NULL, hi, NULL);
+    e->cut = CreateWindowW(L"BUTTON", ru ? L"Разрезать (C)" : L"Qirqish (C)", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 0, 0, 10, 10, e->wnd, NULL, hi, NULL);
+    e->del = CreateWindowW(L"BUTTON", ru ? L"Удалить кусок (Del)" : L"Bo‘lakni o‘chirish (Del)", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 0, 0, 10, 10, e->wnd, NULL, hi, NULL);
     e->cancel = CreateWindowW(L"BUTTON", ru ? L"Отмена" : L"Bekor qilish", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 0, 0, 10, 10, e->wnd, NULL, hi, NULL);
     e->save = CreateWindowW(L"BUTTON", ru ? L"Сохранить" : L"Saqlash", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 0, 0, 10, 10, e->wnd, NULL, hi, NULL);
     SendMessageW(e->play, WM_SETFONT, (WPARAM)e->big, TRUE); SendMessageW(e->info, WM_SETFONT, (WPARAM)e->big, TRUE);
@@ -399,13 +483,19 @@ static DWORD WINAPI ed_thread(LPVOID p)
     if (FAILED(create(e->path, FALSE, MFP_OPTION_NONE, NULL, e->video, &e->mp))) e->mp = NULL;
     RECT cr; GetClientRect(e->wnd, &cr); SendMessageW(e->wnd, WM_SIZE, 0, MAKELPARAM(cr.right, cr.bottom));
     SetTimer(e->wnd, 1, 50, NULL);
+    /* o'yin ustida ko'rinsin: o'yin yig'iladi, oyna bir lahza "eng ustida" bo'lib oldinga chiqadi */
+    HWND game = game_window();
+    if (game) ShowWindowAsync(game, SW_MINIMIZE);
     ShowWindow(e->wnd, SW_SHOWNORMAL);
-    SetForegroundWindow(e->wnd);
+    win_to_front(e->wnd);
     MSG m;
     while (GetMessageW(&m, NULL, 0, 0) > 0) {
-        if (m.message == WM_KEYDOWN && m.wParam == VK_SPACE) { HWND top = GetAncestor(m.hwnd, GA_ROOT); SendMessageW(top, WM_KEYDOWN, VK_SPACE, 0); continue; }   /* tugmalar ustida ham */
+        if (m.message == WM_KEYDOWN && (m.wParam == VK_SPACE || m.wParam == 'C' || m.wParam == VK_DELETE)) {   /* tugmalar ustida ham */
+            HWND top = GetAncestor(m.hwnd, GA_ROOT); SendMessageW(top, WM_KEYDOWN, m.wParam, 0); continue;
+        }
         TranslateMessage(&m); DispatchMessageW(&m);
     }
+    if (game && IsWindow(game)) { ShowWindowAsync(game, SW_RESTORE); win_to_front(game); }   /* muharrir yopildi - o'yinga qaytamiz */
 out:
     CoUninitialize();
     free(path);

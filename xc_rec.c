@@ -596,8 +596,10 @@ static void aud_pump(Aud *a, Enc *e, ULONGLONG want)
 }
 
 /* ---- qayta siqmasdan birlashtirish / kesish (Source Reader -> Sink Writer, "passthrough"): bir necha soniyada tayyor, sifat yo'qolmaydi.
- *      from/to (100 ns) - faqat bitta manbada (kesish); boshlanish eng yaqin oldingi kalit kadrdan (har 2 soniyada). ---- */
-static BOOL remux(const wchar_t *const *src, int n, const wchar_t *dst, LONGLONG from, LONGLONG to, LONGLONG *outdur)
+ *      Har bo'lakda from/to (100 ns, 0 - cheklovsiz): boshlanish eng yaqin oldingi kalit kadrdan (har 2 soniyada).
+ *      Bir videoning bir necha bo'lagi ketma-ket qo'yilsa - o'rtasidagi qism kesib tashlanadi (muharrirdagi qaychi). ---- */
+typedef struct { const wchar_t *src; LONGLONG from, to; } RemuxPart;
+static BOOL remux_parts(const RemuxPart *parts, int n, const wchar_t *dst, LONGLONG *outdur)
 {
     IMFAttributes *at = NULL; IMFSinkWriter *w = NULL;
     DWORD ov = 0, oa = 0; BOOL haveA = FALSE, began = FALSE, ok = FALSE;
@@ -610,7 +612,8 @@ static BOOL remux(const wchar_t *const *src, int n, const wchar_t *dst, LONGLONG
     if (FAILED(hr)) return FALSE;
     for (int i = 0; i < n; i++) {
         IMFSourceReader *r = NULL;
-        if (FAILED(rf.MFCreateSourceReaderFromURL(src[i], NULL, &r))) continue;
+        LONGLONG from = parts[i].from, to = parts[i].to;
+        if (FAILED(rf.MFCreateSourceReaderFromURL(parts[i].src, NULL, &r))) continue;
         /* oqimlar: birinchi video va birinchi ovoz */
         int vi = -1, ai = -1;
         for (DWORD si = 0; si < 8; si++) {
@@ -664,6 +667,13 @@ static BOOL remux(const wchar_t *const *src, int n, const wchar_t *dst, LONGLONG
     if (outdur) *outdur = off;
     if (!ok) DeleteFileW(dst);
     return ok;
+}
+static BOOL remux(const wchar_t *const *src, int n, const wchar_t *dst, LONGLONG from, LONGLONG to, LONGLONG *outdur)
+{
+    RemuxPart p[16];
+    if (n < 1 || n > 16) return FALSE;
+    for (int i = 0; i < n; i++) { p[i].src = src[i]; p[i].from = n == 1 ? from : 0; p[i].to = n == 1 ? to : 0; }
+    return remux_parts(p, n, dst, outdur);
 }
 
 static void rec_beep(int kind)          /* 1 - boshlandi, 0 - saqlandi, -1 - xato */
@@ -1056,6 +1066,45 @@ static DWORD WINAPI rec_hotkey_thread(LPVOID unused)
     return 0;
 }
 
+/* o'yin oynasi (shu jarayonning eng katta ko'rinadigan oynasi) */
+typedef struct { DWORD pid; HWND best; LONG area; } GameFind;
+static BOOL CALLBACK game_enum(HWND h, LPARAM l)
+{
+    GameFind *g = (GameFind *)l; DWORD pid = 0; RECT r;
+    GetWindowThreadProcessId(h, &pid);
+    if (pid == g->pid && IsWindowVisible(h) && GetWindowRect(h, &r)) {
+        LONG a = (r.right - r.left) * (r.bottom - r.top);
+        if (a > g->area) { g->area = a; g->best = h; }
+    }
+    return TRUE;
+}
+static HWND game_window(void)
+{
+    GameFind g = { g_game_pid, NULL, 0 };
+    if (!g.pid) return NULL;
+    EnumWindows(game_enum, (LPARAM)&g);
+    return g.best;
+}
+/* oynani oldinga: Windows boshqa dasturga oldinga chiqishni man qiladi - qisqa "eng ustida" + kirish navbatini ulash */
+static void win_to_front(HWND w)
+{
+    HWND fg = GetForegroundWindow();
+    DWORD me = GetCurrentThreadId(), ft = fg ? GetWindowThreadProcessId(fg, NULL) : 0;
+    if (ft && ft != me) AttachThreadInput(ft, me, TRUE);
+    SetWindowPos(w, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+    SetWindowPos(w, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+    BringWindowToTop(w); SetForegroundWindow(w); SetActiveWindow(w);
+    if (ft && ft != me) AttachThreadInput(ft, me, FALSE);
+}
+/* menyudan video/papka ochilganda: o'yin yig'iladi, ochilgan dastur oldinga chiqa oladi */
+static void game_minimize_for_shell(void)
+{
+    HWND g = game_window();
+    if (g) ShowWindowAsync(g, SW_MINIMIZE);
+    AllowSetForegroundWindow(ASFW_ANY);
+    Sleep(300);
+}
+
 #include "xc_edit.c"   /* video muharriri (menyu > Demo > ✂) */
 
 /* o'yin paytida menyudagi "Videolarim" tugmalari: sayt navbatidan buyruqlarni olib bajaradi (har 4 soniya) */
@@ -1072,12 +1121,12 @@ static void vid_exec(const char *line)
     }
     wchar_t dir[MAX_PATH], f[MAX_PATH], wn[24];
     if (!vid_dir(dir)) return;
-    if (!strcmp(c, "folder")) { ShellExecuteW(NULL, L"open", dir, NULL, NULL, SW_SHOWNORMAL); return; }
+    if (!strcmp(c, "folder")) { game_minimize_for_shell(); ShellExecuteW(NULL, L"open", dir, NULL, NULL, SW_SHOWNORMAL); return; }
     if (!vid_name_ok(n)) return;                       /* faqat o'zimiz yozgan nomlar - boshqa fayllarga tegilmaydi */
     MultiByteToWideChar(CP_UTF8, 0, n, -1, wn, 24);
     _snwprintf(f, MAX_PATH - 2, L"%s\\%s.mp4", dir, wn); f[MAX_PATH - 3] = 0;
     if (GetFileAttributesW(f) == INVALID_FILE_ATTRIBUTES) return;
-    if (!strcmp(c, "open")) ShellExecuteW(NULL, L"open", f, NULL, NULL, SW_SHOWNORMAL);
+    if (!strcmp(c, "open")) { game_minimize_for_shell(); ShellExecuteW(NULL, L"open", f, NULL, NULL, SW_SHOWNORMAL); }
     else if (!strcmp(c, "edit")) editor_open(f);
     else if (!strcmp(c, "del")) {                      /* Savatga - adashib o'chirilsa qaytarish mumkin */
         size_t L = wcslen(f); f[L + 1] = 0;

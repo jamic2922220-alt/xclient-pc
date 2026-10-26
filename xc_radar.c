@@ -11,7 +11,7 @@
 
 #define RAD_W 1024
 #define RAD_H 768
-#define RAD_VER "X CLIENT auto v1"
+#define RAD_VER "X CLIENT auto v2"   /* v2: qora fon, oq-kulrang xarita, A/B harflari (o'yinchilar yuborgan videodagi uslub) */
 
 typedef struct { float x, y, z; } RV;
 typedef struct { int first, n; float z; int water; } RPoly;
@@ -22,23 +22,32 @@ static int rad_rd16(const unsigned char *p) { return (short)(p[0] | p[1] << 8); 
 
 static int rad_cmp(const void *a, const void *b) { float x = ((const RPoly *)a)->z, y = ((const RPoly *)b)->z; return x < y ? -1 : x > y; }
 
-/* spawn nuqtalari balandligi (info_player_start / info_player_deathmatch) */
-static int rad_spawns(const char *e, size_t n, float *zmin, float *zmax)
+/* spawn nuqtalari balandligi (info_player_start / info_player_deathmatch), CT spawn o'rtasi va bomba joylari (A/B harflari uchun) */
+typedef struct { int nct; float ctx, cty; int nb; float bx[4], by[4]; int bmodel[4]; } RadEnt;
+static int rad_spawns(const char *e, size_t n, float *zmin, float *zmax, RadEnt *re)
 {
     int cnt = 0; *zmin = 1e9f; *zmax = -1e9f;
+    memset(re, 0, sizeof(*re));
     for (size_t i = 0; i < n; i++) {
         if (e[i] != '{') continue;
         size_t j = i; while (j < n && e[j] != '}') j++;
-        BOOL sp = FALSE; float oz = 0; BOOL haveo = FALSE;
+        BOOL sp = FALSE, ct = FALSE, bomb = FALSE, haveo = FALSE; float ox = 0, oy = 0, oz = 0; int model = -1;
         for (size_t k = i; k + 12 < j; k++) {
-            if (!strncmp(e + k, "\"info_player_start\"", 19) || !strncmp(e + k, "\"info_player_deathmatch\"", 24)) sp = TRUE;
+            if (!strncmp(e + k, "\"info_player_start\"", 19)) sp = ct = TRUE;
+            if (!strncmp(e + k, "\"info_player_deathmatch\"", 24)) sp = TRUE;
+            if (!strncmp(e + k, "\"func_bomb_target\"", 18) || !strncmp(e + k, "\"info_bomb_target\"", 18)) bomb = TRUE;
             if (!strncmp(e + k, "\"origin\"", 8)) {
                 const char *q = memchr(e + k + 8, '"', j - k - 8);
-                float ox, oy;
                 if (q && sscanf(q + 1, "%f %f %f", &ox, &oy, &oz) == 3) haveo = TRUE;
+            }
+            if (!strncmp(e + k, "\"model\"", 7)) {
+                const char *q = memchr(e + k + 7, '"', j - k - 7);
+                if (q && q[1] == '*') model = atoi(q + 2);
             }
         }
         if (sp && haveo) { if (oz < *zmin) *zmin = oz; if (oz > *zmax) *zmax = oz; cnt++; }
+        if (ct && haveo) { re->ctx += ox; re->cty += oy; re->nct++; }
+        if (bomb && re->nb < 4 && (haveo || model > 0)) { re->bx[re->nb] = ox; re->by[re->nb] = oy; re->bmodel[re->nb] = model; re->nb++; }
         i = j;
     }
     return cnt;
@@ -83,8 +92,13 @@ static BOOL radar_gen(const unsigned char *b, size_t len, const char *map, unsig
     if (ll[14] < 64 || ntex < 0 || ntex > 100000 || ll[2] < 4 + ntex * 4) return FALSE;
     int ff = rad_rd32(models + 56), nf = rad_rd32(models + 60);   /* 0-model (dunyo): firstface, numfaces */
     if (ff < 0 || nf <= 0 || ff + nf > nfaces) return FALSE;
-    float szmin, szmax;
-    int nsp = rad_spawns((const char *)b + lo[0], ll[0], &szmin, &szmax);
+    float szmin, szmax; RadEnt re;
+    int nsp = rad_spawns((const char *)b + lo[0], ll[0], &szmin, &szmax, &re);
+    int nmodels = ll[14] / 64;
+    for (int i = 0; i < re.nb; i++) if (re.bmodel[i] > 0 && re.bmodel[i] < nmodels) {   /* brush entity: model chegaralari o'rtasi */
+        const unsigned char *md = models + re.bmodel[i] * 64;
+        re.bx[i] = (rad_rdf(md) + rad_rdf(md + 12)) / 2; re.by[i] = (rad_rdf(md + 4) + rad_rdf(md + 16)) / 2;
+    }
     RPoly *pl = (RPoly *)malloc(sizeof(RPoly) * nf);
     RV *pv = (RV *)malloc(sizeof(RV) * (size_t)nse);
     if (!pl || !pv) { free(pl); free(pv); return FALSE; }
@@ -152,7 +166,31 @@ static BOOL radar_gen(const unsigned char *b, size_t len, const char *map, unsig
             for (int k = 0; k < 4; k++) if (!img[nb[k]] || abs((int)hm[nb[k]] - h) > 18) { out[i] = (unsigned char)(img[i] + 100); break; }
         }
     }
-    /* BMP: 8 bit, palitra; 0 - fon (sof yashil, radar uni shaffof ko'radi), 1..100 - balandlik, 101..200 - chegara, 201 - suv */
+    /* A/B harflari: CT spawn'ga yaqinroq bomba joyi - A (de_dust2, inferno, nuke ... da shunday) */
+    if (out && re.nb >= 1 && re.nb <= 2) {
+        static const unsigned char gA[9] = { 0x1C, 0x36, 0x63, 0x63, 0x7F, 0x63, 0x63, 0x63, 0x63 }, gB[9] = { 0x7E, 0x63, 0x63, 0x63, 0x7E, 0x63, 0x63, 0x63, 0x7E };
+        int ia = 0;
+        if (re.nb == 2 && re.nct) {
+            float cx = re.ctx / re.nct, cy = re.cty / re.nct;
+            float d0 = (re.bx[0] - cx) * (re.bx[0] - cx) + (re.by[0] - cy) * (re.by[0] - cy), d1 = (re.bx[1] - cx) * (re.bx[1] - cx) + (re.by[1] - cy) * (re.by[1] - cy);
+            ia = d1 < d0 ? 1 : 0;
+        }
+        for (int s2 = 0; s2 < re.nb; s2++) {
+            const unsigned char *g = (s2 == ia) ? gA : gB;
+            int cx = (int)(512 - (re.by[s2] - oy) / u), cy = (int)(384 - (re.bx[s2] - ox) / u), sc = 4;
+            for (int gy = 0; gy < 9; gy++) for (int gx = 0; gx < 7; gx++) {
+                if (!(g[gy] & (0x40 >> gx))) continue;
+                for (int dy = -1; dy <= sc; dy++) for (int dx = -1; dx <= sc; dx++) {   /* qora hoshiya bilan */
+                    int X = cx - 14 + gx * sc + dx, Y = cy - 18 + gy * sc + dy;
+                    if (X < 0 || Y < 0 || X >= RAD_W || Y >= RAD_H) continue;
+                    BOOL in = dx >= 0 && dy >= 0 && dx < sc && dy < sc;
+                    if (in) out[Y * RAD_W + X] = 202;
+                    else if (out[Y * RAD_W + X] != 202) out[Y * RAD_W + X] = 203;
+                }
+            }
+        }
+    }
+    /* BMP: 8 bit, palitra. 0 - qora fon; 1..100 - oq-kulrang (baland joy oqroq), 101..200 - devor chizig'i, 201 - suv, 202 - sariq harf, 203 - harf hoshiyasi */
     size_t sz = 54 + 1024 + (size_t)RAD_W * RAD_H;
     unsigned char *bm = out ? (unsigned char *)calloc(sz, 1) : NULL;
     if (bm) {
@@ -167,14 +205,15 @@ static BOOL radar_gen(const unsigned char *b, size_t len, const char *map, unsig
         v32 = RAD_W * RAD_H; memcpy(bm + 34, &v32, 4);
         v32 = 256; memcpy(bm + 46, &v32, 4); memcpy(bm + 50, &v32, 4);
         unsigned char *pal = bm + 54;                              /* B G R 0 */
-        pal[1] = 255;                                              /* 0: yashil */
         for (int i = 1; i <= 100; i++) {
             float t = (i - 1) / 99.0f;
-            int R = (int)(70 + 150 * t), G = (int)(64 + 130 * t), B = (int)(56 + 100 * t);
+            int R = (int)(118 + 120 * t), G = (int)(118 + 120 * t), B = (int)(126 + 116 * t);
             pal[i * 4] = (unsigned char)B; pal[i * 4 + 1] = (unsigned char)G; pal[i * 4 + 2] = (unsigned char)R;
             pal[(i + 100) * 4] = (unsigned char)(B / 3); pal[(i + 100) * 4 + 1] = (unsigned char)(G / 3); pal[(i + 100) * 4 + 2] = (unsigned char)(R / 3);
         }
-        pal[201 * 4] = 160; pal[201 * 4 + 1] = 110; pal[201 * 4 + 2] = 60;
+        pal[201 * 4] = 170; pal[201 * 4 + 1] = 130; pal[201 * 4 + 2] = 90;
+        pal[202 * 4] = 40; pal[202 * 4 + 1] = 200; pal[202 * 4 + 2] = 255;
+        pal[203 * 4] = 10; pal[203 * 4 + 1] = 10; pal[203 * 4 + 2] = 10;
         for (int r = 0; r < RAD_H; r++) memcpy(bm + 54 + 1024 + (size_t)(RAD_H - 1 - r) * RAD_W, out + r * RAD_W, RAD_W);   /* pastdan tepaga */
         _snprintf(txt, txtcap, "// overview description file for %s.bsp (%s)\r\n\r\nglobal\r\n{\r\n\tZOOM\t%.3f\r\n\tORIGIN\t%.0f\t%.0f\t%.0f\r\n\tROTATED\t0\r\n}\r\n\r\nlayer\r\n{\r\n\tIMAGE\t\"overviews/%s.bmp\"\r\n\tHEIGHT\t%.0f\r\n}\r\n",
                   map, RAD_VER, zoom, ox, oy, zlo, map, zlo);
@@ -188,22 +227,40 @@ static BOOL radar_gen(const unsigned char *b, size_t len, const char *map, unsig
 #ifndef XC_RADAR_TEST
 /* ---- launcher: overview'i yo'q xaritalar (cstrike\maps, serverdan yuklanganlar) uchun fonda yasash ---- */
 #define RAD_MAX_PER_RUN 60
+/* hammasi bir xil uslubda bo'lsin (o'yinchilar so'ragan oq-kulrang radar): cstrike\overviews da joriy versiyamiz bo'lmasa - chizamiz.
+ * Valve/sborka overview'i bo'lsa, oldin xc_backup\ovr\cstrike\overviews ga saqlanadi (o'chirishda o'rnatuvchi qaytaradi).
+ * cstrike_downloads dagi server overview'lariga tegilmaydi - cstrike papkasi undan oldin o'qiladi. */
 static BOOL rad_has(const wchar_t *map)
 {
-    static const wchar_t *dirs[] = { L"cstrike", L"cstrike_downloads", L"cstrike_addon", L"cstrike_russian", L"cstrike_hd" };
-    for (int i = 0; i < 5; i++) {
-        wchar_t sub[MAX_PATH], p[MAX_PATH];
-        _snwprintf(sub, MAX_PATH, L"%s\\overviews\\%s.txt", dirs[i], map); sub[MAX_PATH - 1] = 0;
-        path_join(p, g_dir, sub);
-        HANDLE f = CreateFileW(p, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
-        if (f == INVALID_HANDLE_VALUE) continue;
-        char head[160] = ""; DWORD got = 0;
-        ReadFile(f, head, sizeof(head) - 1, &got, NULL); CloseHandle(f);
-        head[got] = 0;
-        if (strstr(head, "X CLIENT auto v") && !strstr(head, RAD_VER)) return FALSE;   /* eski versiyamiz - qayta chizamiz */
-        return TRUE;                                                                   /* Valve / server / bizning joriy */
+    wchar_t sub[MAX_PATH], p[MAX_PATH];
+    _snwprintf(sub, MAX_PATH, L"cstrike\\overviews\\%s.txt", map); sub[MAX_PATH - 1] = 0;
+    path_join(p, g_dir, sub);
+    HANDLE f = CreateFileW(p, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+    if (f == INVALID_HANDLE_VALUE) return FALSE;
+    char head[160] = ""; DWORD got = 0;
+    ReadFile(f, head, sizeof(head) - 1, &got, NULL); CloseHandle(f);
+    head[got] = 0;
+    return strstr(head, RAD_VER) != NULL;
+}
+
+static void rad_backup(const wchar_t *map)
+{
+    static const wchar_t *ext[] = { L"txt", L"bmp", L"tga" };
+    for (int i = 0; i < 3; i++) {
+        wchar_t sub[MAX_PATH], src[MAX_PATH], dst[MAX_PATH];
+        _snwprintf(sub, MAX_PATH, L"cstrike\\overviews\\%s.%s", map, ext[i]); sub[MAX_PATH - 1] = 0; path_join(src, g_dir, sub);
+        if (GetFileAttributesW(src) == INVALID_FILE_ATTRIBUTES) continue;
+        if (i == 0) {                                       /* o'zimizniki bo'lsa (eski versiya) - saqlash shart emas */
+            HANDLE f = CreateFileW(src, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+            char head[160] = ""; DWORD got = 0;
+            if (f != INVALID_HANDLE_VALUE) { ReadFile(f, head, sizeof(head) - 1, &got, NULL); CloseHandle(f); }
+            head[got] = 0;
+            if (strstr(head, "X CLIENT auto v")) return;
+        }
+        _snwprintf(sub, MAX_PATH, L"xc_backup\\ovr\\cstrike\\overviews\\%s.%s", map, ext[i]); sub[MAX_PATH - 1] = 0; path_join(dst, g_dir, sub);
+        mkdirs_for(dst);
+        CopyFileW(src, dst, TRUE);                          /* bor bo'lsa - birinchi (asl) nusxa qoladi */
     }
-    return FALSE;
 }
 
 static BOOL rad_write(const wchar_t *dst, const void *data, size_t n)   /* vaqtinchalik fayl + almashtirish: o'yin yarim faylni o'qimasin */
@@ -270,6 +327,7 @@ static DWORD WINAPI radar_thread(LPVOID unused)
     int done = 0;
     for (int i = 0; i < n && done < RAD_MAX_PER_RUN; i++) {
         if (rad_has(l[i].map)) continue;
+        rad_backup(l[i].map);
         rad_one(l[i].path, l[i].map);
         done++;
     }
