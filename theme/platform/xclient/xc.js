@@ -2646,7 +2646,8 @@ var PANES = {
         seg('rbg', 'h_rbg', [[0, 'h_rbg0'], [1, 'h_rbg1']]) + tg('rround', 'h_rround') + '</div>' +
         '<div class="pane r hp"><div class="ph2">&nbsp;</div>' +
         tg('rrot', 'h_rrot') + tg('rfull', 'h_rfull') + tg('rtracks', 'h_rtracks') + tg('rallies', 'h_rallies', 'h_rallies2') +
-        tg('rnames', 'h_rnames') + sl('rns', 'h_rns', 0.6, 2, 0.1) + tg('rhp', 'h_rhp') + sl('rhs', 'h_rhs', 0.3, 4, 0.1) + '</div>';
+        tg('rnames', 'h_rnames') + sl('rns', 'h_rns', 0.6, 2, 0.1) + tg('rhp', 'h_rhp') + sl('rhs', 'h_rhs', 0.3, 4, 0.1) +
+        '<div class="hfoot"><span class="mut">' + esc(T('h_cs2b')) + '</span><a class="btn" data-act="rcs2">' + esc(T('h_cs2')) + '</a></div></div>';
     }
     if (HSUB === 'misc') {
       var hz = '';
@@ -3075,6 +3076,11 @@ function act(a) {
     showSetTab('pro'); return toast(T('pr_fpsok'), 5000);
   }
   if (a === 'vmdef') { each(['vmx', 'vmy', 'vmz', 'vmshift', 'lagst', 'lagsc', 'lagsp', 'camint', 'vmfov', 'bob'], function (k) { E[k] = DEF[k]; }); return showSetTab('hud'); }
+  if (a === 'rcs2') {                          // CS2 radari kabi: katta, aylanadigan, uzoqroq xarita, Tab da butun xarita
+    var r2 = { rmode: 1, rscale: 135, rmap: 0.6, ropac: 90, rbg: 0, rround: 0, rrot: 1, rfull: 1, rtracks: 0, rallies: 1, rnames: 0, rhp: 0 };
+    for (var rk in r2) if (r2.hasOwnProperty(rk)) E[rk] = r2[rk];
+    toast(T('h_cs2ok'), 5000); a = 'save';
+  }
   if (a === 'camdef') { each(['bobst', 'bobv', 'bobl', 'boblow', 'bobcam', 'roll', 'rollspd', 'fovlerp', 'camsc'], function (k) { E[k] = DEF[k]; }); return showSetTab('hud'); }
   if (a === 'xdef') { each(['xp', 'xt', 'xs', 'xc', 'xtr', 'xdyn', 'xthick', 'xgap', 'xout'], function (k) { E[k] = DEF[k]; }); return showSetTab('hud'); }
   if (a === 'xpick') return ask(T('hx_colask'), function (v) {
