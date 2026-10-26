@@ -1726,6 +1726,7 @@ static BOOL handle_running_game(void)
 }
 
 #include "xc_rec.c"   /* F10: o'yinni MP4 qilib yozish */
+#include "xc_radar.c" /* radar xaritasi: overview'i yo'q xaritalar uchun */
 
 static void run_game(void)
 {
@@ -1818,6 +1819,7 @@ static DWORD WINAPI worker(LPVOID unused)
     if (fresh) { g_fresh = TRUE; status(L"O‘rnatilmoqda...", 1); api_call("install", NULL); }
 
     prune_demos();                                /* ro'yxat saytga to'g'ri ketsin - o'chiriladiganlar oldin o'chadi */
+    radar_start();                                /* fonda: overview'i yo'q xaritalarga radar rasmi */
     fetch_opts();
     if (o_beta >= 0) { lstrcpynA(g_chan, o_beta ? "beta" : "stable", sizeof(g_chan)); ini_save(); }
     if (o_start >= 0) set_autostart(o_start);
