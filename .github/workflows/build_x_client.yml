@@ -27,6 +27,8 @@ jobs:
     name: Xarita namunalari (radar sinovi)
     if: ${{ github.event.inputs.extract == 'true' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Sborkadan .bsp va overviews
         shell: bash
@@ -43,11 +45,14 @@ jobs:
           find out -ipath '*overviews*' \( -iname 'de_dust2.*' -o -iname 'de_inferno.*' -o -iname 'de_nuke.*' \) -exec cp {} pick/ \;
           ls -la pick
           exit 0
-      - uses: actions/upload-artifact@v4
-        with:
-          name: maps
-          path: pick
-          retention-days: 3
+      - name: Natijani vaqtinchalik tmp-maps tarmog'iga
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd pick && git init -q && git checkout -q -b tmp-maps && git add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "sample maps (temporary)"
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" tmp-maps
 
   windows:
     name: Windows klient
