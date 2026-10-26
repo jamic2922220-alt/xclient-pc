@@ -1576,7 +1576,7 @@ case 'vcmd':
     $o = rd('dev/' . $d, array());
     if (!dev_ok($d, $o)) fail('nolaunch', 'XCLauncher.exe topilmadi');
     $c = p('c'); $n = vid_name(p('n'));
-    if (!in_array($c, array('open', 'del', 'folder', 'trim', 'clip', 'opt'), true) || (in_array($c, array('open', 'del', 'trim'), true) && $n === '')) fail('bad', 'bad');
+    if (!in_array($c, array('open', 'del', 'folder', 'trim', 'clip', 'opt', 'edit'), true) || (in_array($c, array('open', 'del', 'trim', 'edit'), true) && $n === '')) fail('bad', 'bad');
     $ta = max(0, min(86400, (int)p('ta'))); $tb = max(0, min(86400, (int)p('tb')));
     if ($c === 'trim' && $tb <= $ta) fail('bad', 'bad');
     if ($c === 'clip' && rl_count('vclip' . $d, 60) >= 3) out(array('ok' => true));   // avtomatik klip - daqiqasiga 3 tadan ko'p emas

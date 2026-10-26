@@ -1037,7 +1037,7 @@ function vidCmd(c, n, extra, quiet) {
     if (!r.ok) { if (!quiet) toast(r.msg || 'Xato', 3500); return; }
     if (r.vids) OPTS.vids = r.vids;
     if (c === 'trim') { setTimeout(function () { VIDS_T = 0; vidsRefresh(); }, 8000); setTimeout(function () { VIDS_T = 0; vidsRefresh(); }, 20000); }
-    if (!quiet) toast(T({ del: 'vd_deleted', open: 'vd_opening', folder: 'vd_opening2', trim: 'vd_trimming', opt: 'vb_saved' }[c] || 'saved'), 5000);
+    if (!quiet) toast(T({ del: 'vd_deleted', open: 'vd_opening', folder: 'vd_opening2', trim: 'vd_trimming', opt: 'vb_saved', edit: 'vd_editing' }[c] || 'saved'), 5000);
     if (curModal === 'mdSettings' && setTab === 'demo') $('setBody').innerHTML = PANES.demo();
   });
 }
@@ -3354,15 +3354,7 @@ document.onclick = function (e) {
     api('opts_set', { d: PCID, o: JSON.stringify(OPTS) }, function (r) { if (r.ok) vidCmd('opt', '', null, false); else toast(r.msg || 'Xato', 3500); });   // launcher darhol qo'llaydi
     return;
   }
-  if ((el = closest(t, 'data-vtrim'))) {
-    var tn = el.getAttribute('data-vtrim'), ts = +el.getAttribute('data-vsec') || 0;
-    ask(T('vd_trimq') + (ts ? ' (' + Math.floor(ts / 60) + ':' + pad(ts % 60) + ')' : ''), function (a1, b1) {
-      var ta = mmss(a1), tb = mmss(b1);
-      if (ta < 0 || tb <= ta || (ts && ta >= ts)) { toast(T('vd_trimbad'), 4000); return; }
-      vidCmd('trim', tn, { ta: ta, tb: ts ? Math.min(tb, ts) : tb });
-    }, true, false, false);
-    return;
-  }
+  if ((el = closest(t, 'data-vtrim'))) { vidCmd('edit', el.getAttribute('data-vtrim')); return; }   // launcher muharrir oynasini ochadi (o'yin yig'iladi)
   if ((el = closest(t, 'data-dctl'))) { demoCtl(el.getAttribute('data-dctl')); return; }
   if ((el = closest(t, 'data-demo'))) { closeModal(); demoPlay(el.getAttribute('data-demo')); return; }
   if ((el = closest(t, 'data-dsel'))) { DEMO_SEL = el.getAttribute('data-dsel'); showSetTab('demo'); return; }   // qatorni bosish - pleyerda tanlash (▶ tugmasi yuqorida ushlanadi)
