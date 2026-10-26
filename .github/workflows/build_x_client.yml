@@ -31,14 +31,18 @@ jobs:
       - name: Sborkadan .bsp va overviews
         shell: bash
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq innoextract >/dev/null
-          curl -fsSL --retry 3 -o g.exe "https://cssborka.uz/uploads/files/1791198609_6ac38591b615c_CS_1_6_boost-top_PRO_2_5_3.exe"
-          innoextract -s -d out g.exe || true
+          set +e +o pipefail
           mkdir -p pick
+          sudo apt-get update -qq && sudo apt-get install -y -qq innoextract >/dev/null
+          echo "innoextract: $(innoextract --version | head -1)" > pick/info.txt
+          curl -fsSL --retry 3 -o g.exe "https://cssborka.uz/uploads/files/1791198609_6ac38591b615c_CS_1_6_boost-top_PRO_2_5_3.exe"
+          ls -la g.exe >> pick/info.txt; file g.exe >> pick/info.txt
+          innoextract -s -d out g.exe >> pick/info.txt 2>&1; echo "rc=$?" >> pick/info.txt
           (find out -iname '*.bsp' | sort; echo ---; find out -ipath '*overview*' | sort) > pick/list.txt
           for m in de_dust2 de_inferno de_nuke cs_assault; do f=$(find out -iname "$m.bsp" | head -1); [ -n "$f" ] && cp "$f" pick/; done
           find out -ipath '*overviews*' \( -iname 'de_dust2.*' -o -iname 'de_inferno.*' -o -iname 'de_nuke.*' \) -exec cp {} pick/ \;
           ls -la pick
+          exit 0
       - uses: actions/upload-artifact@v4
         with:
           name: maps
