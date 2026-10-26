@@ -55,6 +55,7 @@ var NC = window.nextclient || null;
 function hasApi() { return !!(NC && typeof NC.exec === 'function'); }
 function hasMM() { return !!(NC && NC.matchmaking && NC.matchmaking.getServerInfo); }
 function canRead() { return !!(NC && typeof NC.getCvarValue === 'function'); }
+function radarNC() { if (!canRead()) return true; var v = readCvar('hud_radar_scale'); return v != null && v !== ''; }   // xaritali radar sozlamalari o'yinda bormi
 function readCvar(n) { if (!canRead()) return null; try { var v = NC.getCvarValue(n); return v == null ? null : String(v); } catch (e) { return null; } }
 function cmd(c) {
   dbg('exec: ' + c);
@@ -2638,6 +2639,10 @@ var PANES = {
         sl('roll', 'hc_roll', 0, 5, 0.5) + sl('rollspd', 'hc_rollspd', 50, 400, 10) + sl('fovlerp', 'hc_fov', 0, 0.5, 0.05) + sl('camsc', 'hc_camsc', 0, 2, 0.1) +
         '<div class="mut" style="font-size:12px;margin-top:4px">' + esc(T('hc_roll2')) + '<br>' + esc(T('hc_fov2')) + '</div>' +
         '<div class="hfoot"><span class="mut">' + esc(T('hw_note')) + '</span><a class="btn" data-act="camdef">' + esc(T('hx_std')) + '</a></div></div>';
+    }
+    if (HSUB === 'radar' && !radarNC()) {          // bu NextClient versiyasida xaritali radar (hud_radar_*) yo'q - faqat CS 1.6 radari
+      return sub + '<div class="pane l hp"><div class="ph2">' + esc(T('hx_radar')) + '</div>' + tg('radar', 'h_radar') +
+        '<div class="mut" style="font-size:12px;margin-top:6px">' + esc(T('h_rnone')) + '</div></div>';
     }
     if (HSUB === 'radar') {
       return sub + '<div class="pane l hp"><div class="ph2">' + esc(T('hx_radar')) + '</div>' +
