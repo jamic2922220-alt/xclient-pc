@@ -335,9 +335,46 @@ static DWORD WINAPI radar_thread(LPVOID unused)
     return 0;
 }
 
+/* 1.0.87 da chizilgan overview'lar ba'zi o'yinchilarda radarni butunlay yo'qotdi - sababi aniqlanguncha:
+ * bizning fayllarimiz o'chiriladi, Valve/sborka asl fayllari xc_backup\ovr dan qaytariladi, yangi chizish to'xtatilgan. */
+static DWORD WINAPI radar_undo_thread(LPVOID unused)
+{
+    (void)unused;
+    wchar_t pat[MAX_PATH], p[MAX_PATH], sub[MAX_PATH];
+    path_join(pat, g_dir, L"cstrike\\overviews\\*.txt");
+    WIN32_FIND_DATAW fd; HANDLE h = FindFirstFileW(pat, &fd);
+    if (h != INVALID_HANDLE_VALUE) {
+        do {
+            _snwprintf(sub, MAX_PATH, L"cstrike\\overviews\\%s", fd.cFileName); sub[MAX_PATH - 1] = 0; path_join(p, g_dir, sub);
+            HANDLE f = CreateFileW(p, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+            char head[160] = ""; DWORD got = 0;
+            if (f != INVALID_HANDLE_VALUE) { ReadFile(f, head, sizeof(head) - 1, &got, NULL); CloseHandle(f); }
+            head[got] = 0;
+            if (!strstr(head, "X CLIENT auto v")) continue;
+            DeleteFileW(p);
+            size_t L = wcslen(p);
+            if (L > 4) { lstrcpyW(p + L - 4, L".bmp"); DeleteFileW(p); }
+        } while (FindNextFileW(h, &fd));
+        FindClose(h);
+    }
+    /* asl nusxalar */
+    path_join(pat, g_dir, L"xc_backup\\ovr\\cstrike\\overviews\\*.*");
+    h = FindFirstFileW(pat, &fd);
+    if (h != INVALID_HANDLE_VALUE) {
+        do {
+            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+            wchar_t src[MAX_PATH];
+            _snwprintf(sub, MAX_PATH, L"xc_backup\\ovr\\cstrike\\overviews\\%s", fd.cFileName); sub[MAX_PATH - 1] = 0; path_join(src, g_dir, sub);
+            _snwprintf(sub, MAX_PATH, L"cstrike\\overviews\\%s", fd.cFileName); sub[MAX_PATH - 1] = 0; path_join(p, g_dir, sub);
+            if (CopyFileW(src, p, FALSE)) DeleteFileW(src);
+        } while (FindNextFileW(h, &fd));
+        FindClose(h);
+    }
+    return 0;
+}
+
 static void radar_start(void)
 {
-    HANDLE th = CreateThread(NULL, 0, radar_thread, NULL, 0, NULL);
-    if (th) CloseHandle(th);
+    radar_undo_thread(NULL);            /* tez (bir necha fayl) - o'yin ochilishidan oldin tugasin; radar_thread vaqtincha o'chirilgan */
 }
 #endif
