@@ -92,6 +92,7 @@ static BOOL rec_load(void)
 
 /* sifat (menyu > Demo > Video sifati): 2 - yuqori (videokarta, 60 kadr, asl o'lcham), 1 - o'rtacha (videokarta, 30 kadr),
  * 0 - kichik (720p, 30 kadr, kam bitreyt - Telegramga yuborish uchun) */
+static int g_buf_fail = 0;                    /* bufer necha marta ochilmadi (4 dan keyin - bu kompyuterda F9 yo'q) */
 static int g_vq = 1, g_mic = 0, g_rb = 1;   /* g_mic - mikrofon ovozi videoda; g_rb - "oxirgi 30 soniya" (F9) */
 static void rec_quality(void)
 {
@@ -711,6 +712,8 @@ static LRESULT CALLBACK ov_proc(HWND h, UINT m, WPARAM w, LPARAM l)
             _snwprintf(t, 160, ru ? L"REC  %02lu:%02lu   \u00b7   F10 \u2014 \u0441\u0442\u043e\u043f" : L"REC  %02lu:%02lu   \u00b7   F10 \u2014 to\u2018xtatish", s / 60, s % 60);
         } else if (g_ov_mode == 4) lstrcpynW(t, ru ? L"\u2713  \u041a\u043b\u0438\u043f \u0441\u043e\u0445\u0440\u0430\u043d\u0451\u043d \u2014 \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0435 30 \u0441" : L"\u2713  Klip saqlandi \u2014 oxirgi 30 soniya", 160);
         else if (g_ov_mode == 5) lstrcpynW(t, ru ? L"F9: \u0432\u043a\u043b\u044e\u0447\u0438\u0442\u0435 \u00ab\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0435 30 \u0441\u0435\u043a\u0443\u043d\u0434\u00bb \u0432 \u043c\u0435\u043d\u044e \u2192 \u0414\u0435\u043c\u043e" : L"F9: menyu \u2192 Demo \u2192 \u00abOxirgi 30 soniya\u00bb ni yoqing", 160);
+        else if (g_ov_mode == 7) lstrcpynW(t, ru ? L"F9 \u043d\u0435 \u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442 \u043d\u0430 \u044d\u0442\u043e\u043c \u041f\u041a (\u0432\u0438\u0434\u0435\u043e\u043a\u0430\u0440\u0442\u0430) \u2014 \u0437\u0430\u043f\u0438\u0441\u044b\u0432\u0430\u0439\u0442\u0435 F10" : L"F9 bu kompyuterda ishlamaydi (videokarta) \u2014 F10 bilan yozing", 160);
+        else if (g_ov_mode == 8) lstrcpynW(t, ru ? L"F9 \u0435\u0449\u0451 \u0433\u043e\u0442\u043e\u0432\u0438\u0442\u0441\u044f \u2014 \u043d\u0430\u0436\u043c\u0438\u0442\u0435 \u0447\u0435\u0440\u0435\u0437 \u043f\u0430\u0440\u0443 \u0441\u0435\u043a\u0443\u043d\u0434" : L"F9 hali tayyorlanmoqda \u2014 birozdan keyin bosing", 160);
         else if (g_ov_mode == 6) lstrcpynW(t, ru ? L"\u2713  \u0412\u0438\u0434\u0435\u043e \u043e\u0431\u0440\u0435\u0437\u0430\u043d\u043e" : L"\u2713  Video kesildi", 160);
         else if (g_ov_mode == 2) lstrcpynW(t, ru ? L"\u2713  \u0412\u0438\u0434\u0435\u043e \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u043e" : L"\u2713  Video saqlandi", 160);
         else lstrcpynW(t, ru ? L"\u2716  \u0412\u0438\u0434\u0435\u043e \u043d\u0435 \u0437\u0430\u043f\u0438\u0441\u0430\u043b\u043e\u0441\u044c" : L"\u2716  Video yozilmadi", 160);
@@ -749,7 +752,7 @@ static void ov_show(int mode)
     MONITORINFO mi = { sizeof(mi) };
     HMONITOR mon = MonitorFromWindow(g_rec_wnd ? g_rec_wnd : GetForegroundWindow(), MONITOR_DEFAULTTOPRIMARY);
     GetMonitorInfoW(mon, &mi);
-    int W = mode == 1 ? 380 : mode == 4 ? 440 : mode == 5 ? 600 : 330, H = 46;
+    int W = mode == 1 ? 380 : mode == 4 ? 440 : mode == 5 || mode == 7 || mode == 8 ? 600 : 330, H = 46;
     int x = (mi.rcMonitor.left + mi.rcMonitor.right - W) / 2, y = mi.rcMonitor.top + 28;
     SetWindowRgn(g_ov, CreateRoundRectRgn(0, 0, W + 1, H + 1, 12, 12), FALSE);
     SetWindowPos(g_ov, HWND_TOPMOST, x, y, W, H, SWP_NOACTIVATE | SWP_SHOWWINDOW);
@@ -771,7 +774,7 @@ static DWORD g_hk_tid = 0, g_game_pid = 0;
 static BOOL rec_begin(Cap *c, Aud *a, Enc *e, const wchar_t *path, IMFDXGIDeviceManager **mgr, BOOL gpu_only)
 {
     UINT tok = 0;
-    if (g_vq && rf.MFCreateDXGIDeviceManager && rf.MFCreateDXGISurfaceBuffer && cap_open(c, g_rec_wnd, TRUE)
+    if ((g_vq || gpu_only) && rf.MFCreateDXGIDeviceManager && rf.MFCreateDXGISurfaceBuffer && cap_open(c, g_rec_wnd, TRUE)
         && SUCCEEDED(rf.MFCreateDXGIDeviceManager(&tok, mgr)) && SUCCEEDED(IMFDXGIDeviceManager_ResetDevice(*mgr, (IUnknown *)c->dev, tok))
         && enc_open(e, path, c, a, TRUE, *mgr)) {
         cap_grab(c, 200);
@@ -780,14 +783,14 @@ static BOOL rec_begin(Cap *c, Aud *a, Enc *e, const wchar_t *path, IMFDXGIDevice
     if (e->w) { IMFSinkWriter_Finalize(e->w); SREL(e->w); }
     DeleteFileW(path);
     cap_close(c); SREL(*mgr);
-    if (gpu_only) return FALSE;
     if (!cap_open(c, g_rec_wnd, FALSE)) return FALSE;
     BOOL hw = TRUE;
-    if (!enc_open(e, path, c, a, TRUE, NULL)) { hw = FALSE; if (!enc_open(e, path, c, a, FALSE, NULL)) return FALSE; }
+    /* gpu_only (F9 buferi): videokarta siqgichi bo'lmasa - protsessor siqgichi doimiy ishlab FPS ni tushirmasin */
+    if (!enc_open(e, path, c, a, TRUE, NULL)) { hw = FALSE; if (gpu_only || !enc_open(e, path, c, a, FALSE, NULL)) { cap_close(c); return FALSE; } }
     cap_grab(c, 200);
     if (enc_frame(e, c, 0, 10000000 / c->fps)) return TRUE;
     IMFSinkWriter_Finalize(e->w); SREL(e->w); DeleteFileW(path);
-    if (!hw) return FALSE;
+    if (!hw || gpu_only) { cap_close(c); return FALSE; }
     return enc_open(e, path, c, a, FALSE, NULL) && enc_frame(e, c, 0, 10000000 / c->fps);
 }
 
@@ -879,7 +882,11 @@ static DWORD WINAPI buf_thread(LPVOID unused)
     for (int i = 0; i < BUF_SEGS; i++) { _snwprintf(seg[i], MAX_PATH, L"%s\\s%d.mp4", g_buf_dir, i); seg[i][MAX_PATH - 1] = 0; }
     aud_open(&a);
     if (g_mic) mic_open(&a);
-    if (!rec_begin(&c, &a, &e, seg[0], &mgr, TRUE)) { g_buf_want = FALSE; goto done; }   /* videokarta yo'li yo'q - bufer ishlamaydi (protsessorni band qilmaymiz) */
+    if (!rec_begin(&c, &a, &e, seg[0], &mgr, TRUE)) {   /* videokarta siqgichi yo'q yoki o'yin hali to'liq ochilmagan - birozdan keyin yana */
+        if (++g_buf_fail < 4) PostThreadMessageW(g_hk_tid, WM_REC_STATE, 102, 0);
+        goto done;
+    }
+    g_buf_fail = 0;
     aud_drain(&a);
     LARGE_INTEGER f, t0, now;
     QueryPerformanceFrequency(&f); QueryPerformanceCounter(&t0);
@@ -1036,7 +1043,7 @@ static DWORD WINAPI rec_hotkey_thread(LPVOID unused)
     BOOL reg9 = RegisterHotKey(NULL, 0xC09, 0x4000, VK_F9);
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     rec_quality();                                                      /* bufer yoqilganmi (menyu > Demo) */
-    g_buf_want = g_rb;
+    g_buf_want = g_rb; g_buf_fail = 0;
     SetTimer(NULL, 0, 8000, NULL);                                      /* o'yin ochilib, to'liq ekranga o'tgach - bufer */
     while (GetMessageW(&m, NULL, 0, 0) > 0) {
         if (m.hwnd) { TranslateMessage(&m); DispatchMessageW(&m); continue; }   /* ekrandagi belgi oynasi */
@@ -1044,6 +1051,7 @@ static DWORD WINAPI rec_hotkey_thread(LPVOID unused)
         if (m.message == WM_REC_STATE) {
             if (m.wParam == 100) buf_start();
             else if (m.wParam == 101) SetTimer(NULL, 0, 3000, NULL);
+            else if (m.wParam == 102) SetTimer(NULL, 0, 15000, NULL);   /* bufer ochilmadi - 15 soniyadan keyin yana */
             else ov_show((int)m.wParam);
             continue;
         }
@@ -1055,7 +1063,7 @@ static DWORD WINAPI rec_hotkey_thread(LPVOID unused)
             if (m.wParam == 0xC10) rec_toggle(fg);
             else if (m.wParam == 0xC09) {
                 if (g_buf_run) { InterlockedExchange(&g_clip_req, 1); Beep(1400, 60); }
-                else if (!g_rec_run) ov_show(5);
+                else if (!g_rec_run) ov_show(!g_rb ? 5 : g_buf_fail >= 4 ? 7 : 8);   /* yoqilgan, lekin bu kompyuterda ishlamadi / o'chirilgan */
             }
         }
     }

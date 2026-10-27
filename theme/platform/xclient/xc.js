@@ -952,6 +952,7 @@ function startGame(ip) {
   if (h && h.ip === ip && now() - h.t < 90000) { CUR = h; return; }
   var s = srv(ip);
   CUR = { ip: ip, name: s.name || ip, map: s.map || '', t: now(), d: 0, k: 0, x: 0 };
+  XP0 = ME ? ME.xp : null;
   DB.hist.unshift(CUR);
   if (DB.hist.length > 300) DB.hist.length = 300;
   persist(); renderSoon(); cloudSave();
@@ -1100,6 +1101,9 @@ function onDisconnectEvt() {
   setTimeout(musicSync, 500);
   if (CUR) { CUR.d = Math.round((now() - CUR.t) / 1000); persist(); cloudSave(); sendStat(CUR); }
   stopRecord();
+  var fin = CUR;
+  if (fin && !DEMO_PLAY) { VIDS_T = 0; setTimeout(vidsRefresh, 2000); }
+  if (fin && !DEMO_PLAY) setTimeout(function () { if (!CONNECTED && !DEMO_PLAY) gameSummary(fin); }, 5000);   // qayta ulanish bo'lmasa - xulosa
   CUR = null;                                        // demo ko'rganda konsoldagi kill'lar oxirgi o'yinga qo'shilmasin
   CONNECTED = ''; renderAll(); pingPresence(); sparks();
   // o'yinchi o'zi menyudan chiqmagan bo'lsa (menyu yopiq) - qayta ulanamiz
@@ -1121,11 +1125,17 @@ function onConsole(txt) {
   if (DEMO_PLAY) { var dm = /^\s*Completed demo|^\s*ERROR: couldn'?t open\.?\s*$|^\s*Connecting to/i.exec(txt); if (dm) demoEnd(dm[0]); }
   if (/\b(wrote|writing|saved)\b.*\.(bmp|tga|jpg|png)\b/i.test(txt)) toast(T('sh_saved'), 2500);   // F5: skrinshot saqlandi
   if (!CUR || !MYNAME) return;
-  var m = /^(.+?) killed (.+?) with ([\w\-]+)/.exec(txt.replace(/^\s+/, ''));
+  /* "A killed B with ak47", "*** A killed B with a headshot from ak47 ***", "A + C killed B with m4a1" (C - yordam bergan) */
+  var m = /^(.+?) killed (.+?) with (a headshot from )?([\w\-]+)/.exec(txt.replace(/^\s*(\*\*\*\s*)?/, ''));
   if (!m) return;
-  if (m[1] === MYNAME && m[2] !== MYNAME) { autoClipKill();
-    CUR.k = (CUR.k || 0) + 1; CUR.w = CUR.w || {}; CUR.w[m[3]] = (CUR.w[m[3]] || 0) + 1; persist(); }
-  else if (m[2] === MYNAME) { CUR.x = (CUR.x || 0) + 1; persist(); }
+  var kp = m[1].split(' + '), killer = kp.length === 2 && kp[0] !== MYNAME && m[1] !== MYNAME ? kp[0] : m[1];
+  if (m[1] !== MYNAME && kp.length === 2 && kp[0] === MYNAME) killer = MYNAME;
+  if (killer === MYNAME && m[2] !== MYNAME) { autoClipKill();
+    CUR.k = (CUR.k || 0) + 1; CUR.w = CUR.w || {}; CUR.w[m[4]] = (CUR.w[m[4]] || 0) + 1;
+    if (m[3]) CUR.h = (CUR.h || 0) + 1;
+    CUR.s = (CUR.s || 0) + 1; if (CUR.s > (CUR.bs || 0)) CUR.bs = CUR.s; persist(); }
+  else if (m[2] === MYNAME) { CUR.x = (CUR.x || 0) + 1; CUR.s = 0; persist(); }
+  else if (kp.length === 2 && kp[1] === MYNAME) { CUR.a = (CUR.a || 0) + 1; persist(); }
 }
 function bestServer() {
   var best = null;
@@ -1200,6 +1210,7 @@ function renderAnn() {
   el.style.display = '';
 }
 function renderBar() {
+  each(['miResume', 'miPlist', 'miDisc'], function (id) { var e = $(id); if (e) e.style.display = CONNECTED ? '' : 'none'; });   // serverda: o'yinga qaytish, o'yinchilar, chiqish - menyuning tepasida
   var on = 0, cnt = 0;
   for (var ip in SRV) if (SRV[ip].ok) { cnt++; on += SRV[ip].pl || 0; }
   $('bOnline').innerHTML = on; $('bServers').innerHTML = cnt || MASTER.length;
@@ -2323,6 +2334,30 @@ function duelResult(d) {
   openSide('duelres', T('du_title'), '<div class="dures ' + d.win + '"><b>' + esc(T(k)) + '</b><div class="dusc">' + d.me_k + ' : ' + d.op_k + '</div><span>' + esc(T('du_vs').replace('{n}', d.opn)) + '</span><p>' + esc(T(k + '2')) + '</p></div>');
   if (d.win === 'me') sfx('save');
 }
+/* ---- o'yin xulosasi: serverdan chiqqanda (2+ daqiqa o'ynalgan bo'lsa) ---- */
+var XP0 = null;
+function gameSummary(g) {
+  if (!g || DB.dnd || DB.gsum === 0 || (g.d || 0) < 120 || (g.k || 0) + (g.x || 0) < 2) return;
+  if (curModal && curModal !== 'mdSide') return;                // o'yinchi boshqa oynada - xalaqit bermaymiz
+  var kd = g.x ? (g.k / g.x).toFixed(2) : String(g.k || 0), hs = g.k ? Math.round((g.h || 0) * 100 / g.k) : 0;
+  var fav = '', fn = 0; for (var w in g.w || {}) if (g.w.hasOwnProperty(w) && g.w[w] > fn) { fn = g.w[w]; fav = w; }
+  var clips = 0;
+  each(OPTS && OPTS.vids || [], function (v) {
+    var m = /^xc_(\d{4})(\d\d)(\d\d)_(\d\d)(\d\d)(\d\d)$/.exec(v.n || '');
+    if (m && new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime() >= g.t - 60000) clips++;
+  });
+  var xp = ME && XP0 != null && ME.xp >= XP0 ? ME.xp - XP0 : 0;
+  var row = function (l, v) { return '<div class="kv"><span>' + esc(T(l)) + '</span><b>' + esc(String(v)) + '</b></div>'; };
+  var h = '<div class="ydc gsum"><div class="gsh">' + esc(g.name || g.ip) + (g.map ? ' \u00b7 ' + esc(g.map) : '') + ' \u00b7 ' + esc(fmtHours(g.d)) + '</div>' +
+    '<div class="ydg"><div><b>' + (g.k || 0) + '</b><span>' + esc(T('ks_k')) + '</span></div><div><b>' + (g.x || 0) + '</b><span>' + esc(T('ks_d')) + '</span></div>' +
+    '<div><b>' + kd + '</b><span>K/D</span></div><div><b>' + hs + '%</b><span>' + esc(T('gs_hs')) + '</span></div></div>' +
+    '<div class="stmore">' + row('gs_streak', g.bs || 0) + row('gs_hsn', g.h || 0) + (g.a ? row('gs_assist', g.a) : '') + (fav ? row('gs_fav', fav + ' (' + fn + ')') : '') +
+    (xp ? row('gs_xp', '+' + xp + ' XP') : '') + (clips ? row('gs_clips', clips) : '') + '</div>' +
+    '<p class="mut">' + esc(T((g.k || 0) >= 25 || kd >= 2 ? 'gs_great' : (g.k || 0) >= 10 ? 'gs_good' : 'gs_ok')) + '</p>' +
+    (clips ? '<a class="btn red" data-act="gsvids">' + ico('play') + ' ' + esc(T('gs_vids')) + '</a> ' : '') +
+    '<a class="btn" data-act="gsoff">' + esc(T('gs_off')) + '</a></div>';
+  openSide('gsum', T('gs_title'), h);
+}
 /* ---- "Kechagi o'yiningiz": kun boshida qisqa xulosa ---- */
 function showYesterday(y) {
   var kd = y.d ? (y.k / y.d).toFixed(2) : String(y.k);
@@ -2566,7 +2601,7 @@ var PANES = {
     });
     return '<div class="pane l"><div class="f10box big2"><b>' + esc(T('f10_t')) + '</b>' + esc(T('f10_1')) + '<br>' + esc(T('f10_2')) + '<br>' + esc(T('f9_1')) + '<br>' + esc(T('f10_3')) + '</div>' +
       '<div class="ph2 m">' + esc(T('vq_title')) + '</div><div class="big vqb">' + vqs + '</div>' +
-      vtg('rb', OPTS && OPTS.rb, 'vb_rb', 'vb_rb2') + vtg('acl', DB.acl !== 0, 'vb_acl', 'vb_acl2') + vtg('mic', OPTS && OPTS.mic, 'vb_mic', 'vb_mic2') + '</div>' +
+      vtg('rb', OPTS && OPTS.rb, 'vb_rb', 'vb_rb2') + vtg('acl', DB.acl !== 0, 'vb_acl', 'vb_acl2') + vtg('mic', OPTS && OPTS.mic, 'vb_mic', 'vb_mic2') + vtg('gsum', DB.gsum !== 0, 'gs_tg', 'gs_tg2') + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('vd_title')) + ' <a class="btn vfold" data-vfold="1">' + ico('folder') + ' ' + esc(T('vd_folder')) + '</a></div>' +
       '<div class="dml dml2">' + (rows || '<div class="empty">' + esc(T(PCID ? 'vd_none' : 'sy_nolaunch')) + '</div>') + '</div>' +
       '<div class="mut" style="font-size:12px;margin-top:8px">' + esc(T('vd_note')) + '</div></div>';
@@ -2971,6 +3006,9 @@ function act(a) {
   if (a === 'fbsend') return sendFeedback();
   if (a === 'settings') return openSettings();
   if (a === 'quit') return cmd('quit');
+  if (a === 'resume') { closeModal(); return cmd('gameui_hide'); }
+  if (a === 'dconn') { closeModal(); return cmd('disconnect'); }
+  if (a === 'plist') { if (!CONNECTED) return; openServers('hist'); srvSel = CONNECTED; loadPlayers(CONNECTED); query(CONNECTED, true); return renderServers(); }
   if (a === 'close') return closeModal();
   if (a === 'guest') { DB.guest = 1; persist(); return closeModal(); }
   if (a === 'dologin') return doLogin();
@@ -3081,6 +3119,8 @@ function act(a) {
     showSetTab('pro'); return toast(T('pr_fpsok'), 5000);
   }
   if (a === 'vmdef') { each(['vmx', 'vmy', 'vmz', 'vmshift', 'lagst', 'lagsc', 'lagsp', 'camint', 'vmfov', 'bob'], function (k) { E[k] = DEF[k]; }); return showSetTab('hud'); }
+  if (a === 'gsoff') { DB.gsum = 0; persist(); closeModal(); return toast(T('gs_offok'), 5000); }
+  if (a === 'gsvids') { closeModal(); return openSettings('demo'); }
   if (a === 'rcs2') {                          // CS2 radari kabi: katta, aylanadigan, uzoqroq xarita, Tab da butun xarita
     var r2 = { rmode: 1, rscale: 135, rmap: 0.6, ropac: 90, rbg: 0, rround: 0, rrot: 1, rfull: 1, rtracks: 0, rallies: 1, rnames: 0, rhp: 0 };
     for (var rk in r2) if (r2.hasOwnProperty(rk)) E[rk] = r2[rk];
@@ -3359,6 +3399,7 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-vfold'))) { vidCmd('folder', ''); return; }
   if ((el = closest(t, 'data-vopt'))) {
     var vk = el.getAttribute('data-vopt');
+    if (vk === 'gsum') { DB.gsum = DB.gsum === 0 ? 1 : 0; persist(); showSetTab('demo'); return; }
     if (vk === 'acl') { DB.acl = DB.acl === 0 ? 1 : 0; persist(); showSetTab('demo'); return; }
     OPTS[vk] = OPTS[vk] ? 0 : 1; showSetTab('demo');
     if (!PCID) { toast(T('sy_nolaunch'), 4000); return; }

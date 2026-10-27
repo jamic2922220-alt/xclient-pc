@@ -775,6 +775,8 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .ydg div { float: left; width: 25%; padding: 14px 4px; background: #15111a; border: 1px solid #2a2026; }
 .ydg b { display: block; font-size: 24px; } .ydg span { font-size: 11px; color: #8f8590; text-transform: uppercase; }
 .ydc p { font-size: 16px; }
+.gsh { font-size: 13px; color: #8f8590; margin-bottom: 12px; }
+.gsum .stmore { text-align: left; margin-bottom: 10px; } .gsum .btn { margin-top: 6px; }
 
 /* jonli (animatsiyali) profil ramkalari: ikki qavat halqa, ranglar almashib "nafas oladi" */
 @-webkit-keyframes k_avr { 0% { -webkit-box-shadow: 0 0 0 3px #ff3b3b, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #ff9a39, 0 0 14px 4px rgba(255,59,59,.45); } 50% { -webkit-box-shadow: 0 0 0 4px #ff9a39, 0 0 0 7px rgba(14,10,16,.95), 0 0 0 10px #ff3b3b, 0 0 30px 10px rgba(255,59,59,.45); } 100% { -webkit-box-shadow: 0 0 0 3px #ff3b3b, 0 0 0 6px rgba(14,10,16,.95), 0 0 0 8px #ff9a39, 0 0 14px 4px rgba(255,59,59,.45); } }
