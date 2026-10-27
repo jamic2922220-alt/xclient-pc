@@ -139,6 +139,8 @@ function ico(n) {
     rew: '<polygon points="11 19 2 12 11 5 11 19" fill="currentColor"/><polygon points="22 19 13 12 22 5 22 19" fill="currentColor"/>', ff: '<polygon points="13 19 22 12 13 5 13 19" fill="currentColor"/><polygon points="2 19 11 12 2 5 2 19" fill="currentColor"/>',
     cut: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.1" y2="15.9"/><line x1="14.5" y1="14.5" x2="20" y2="20"/><line x1="8.1" y1="8.1" x2="12" y2="12"/>',
     trash: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/>', folder: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+    share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/>',
+    link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
     stop: '<rect x="5" y="5" width="14" height="14" fill="currentColor"/>', film: '<rect x="2" y="4" width="20" height="16" rx="2"/><line x1="7" y1="4" x2="7" y2="20"/><line x1="17" y1="4" x2="17" y2="20"/><line x1="2" y1="12" x2="22" y2="12"/>', user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' };
   return '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' + (P[n] || '') + '</svg>';
 }
@@ -2596,6 +2598,9 @@ var PANES = {
       if (v.q) info.push(T('vq_' + v.q));
       rows += '<div class="dmr"><b>' + esc(fmtTime(t)) + ' · ' + esc(m[3] + '.' + m[2] + '.' + m[1]) + '</b><small>' + esc(info.join(' · ')) + '</small>' +
         '<a class="btn vdel" data-vdel="' + esc(v.n) + '" title="' + esc(T('vd_del')) + '">' + ico('trash') + '</a>' +
+        (v.sh && /^[a-f0-9]{12}$/.test(v.sh) ? '<a class="btn vsh on" data-vlink="' + esc(v.sh) + '" title="' + esc(T('vs_copy')) + '">' + ico('link') + '</a>' :
+          v.sh === 'q' || /^\d+$/.test(v.sh || '') ? '<span class="btn vsh wait">' + (v.sh === 'q' ? '\u2026' : v.sh + '%') + '</span>' :
+          '<a class="btn vsh" data-vshare="' + esc(v.n) + '" title="' + esc(T('vs_share')) + '">' + ico('share') + '</a>') +
         '<a class="btn vcut" data-vtrim="' + esc(v.n) + '" data-vsec="' + sec + '" title="' + esc(T('vd_trim')) + '">' + ico('cut') + '</a>' +
         '<a class="btn red" data-vopen="' + esc(v.n) + '">' + ico('play') + ' ' + esc(T('vd_open')) + '</a></div>';
     });
@@ -3290,7 +3295,7 @@ setInterval(function () { if (!CLK_N || !feat('clicks')) return; var c = CLK; CL
 
 /* ---- menyu ovozlari: o'yin sound/xclient/*.wav ni chaladi (XCLauncher.exe ularni o'yin papkasiga qo'yadi) ---- */
 var SFX_ATTR = ['data-act', 'data-tab', 'data-hsub', 'data-seg', 'data-tg', 'data-otg', 'data-ohud', 'data-dd', 'data-ddv', 'data-xchk', 'data-pack',
-  'data-sort', 'data-flt', 'data-theme', 'data-daymode', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-dctl', 'data-ovq', 'data-dsel', 'data-vopen', 'data-vdel', 'data-vfold', 'data-vopt', 'data-vtrim', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec', 'data-avpre'];
+  'data-sort', 'data-flt', 'data-theme', 'data-daymode', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-dctl', 'data-ovq', 'data-dsel', 'data-vopen', 'data-vdel', 'data-vfold', 'data-vopt', 'data-vtrim', 'data-vshare', 'data-vlink', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec', 'data-avpre'];
 var SFX_QUIET = false, sfxLast = null, sfxT = 0;
 function sfx(n) {
   if (!S || S.uisnd === 0 || !hasApi()) return;
@@ -3397,6 +3402,19 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-vopen'))) { vidCmd('open', el.getAttribute('data-vopen')); return; }
   if ((el = closest(t, 'data-vdel'))) { var vn = el.getAttribute('data-vdel'); ask(T('vd_delq'), function () { vidCmd('del', vn); }, false, false, true); return; }
   if ((el = closest(t, 'data-vfold'))) { vidCmd('folder', ''); return; }
+  if ((el = closest(t, 'data-vshare'))) {          // klipni saytga va Telegram kanalga
+    var vsn = el.getAttribute('data-vshare');
+    if (!ME) return toast(T('vs_login'), 5000);
+    return ask(T('vs_ask'), function () {
+      vidCmd('share', vsn, { srv: CONNECTED ? (srv(CONNECTED).name || CONNECTED) : '' }, true);
+      toast(T('vs_wait'), 7000);
+      each([6000, 20000, 45000, 90000, 150000], function (ms) { setTimeout(function () { VIDS_T = 0; vidsRefresh(); }, ms); });
+    }, false, false, true);
+  }
+  if ((el = closest(t, 'data-vlink'))) {
+    var url = 'https://mmb.boost-top.com/clips.php?v=' + el.getAttribute('data-vlink');
+    copyIp(url, null); return;
+  }
   if ((el = closest(t, 'data-vopt'))) {
     var vk = el.getAttribute('data-vopt');
     if (vk === 'gsum') { DB.gsum = DB.gsum === 0 ? 1 : 0; persist(); showSetTab('demo'); return; }

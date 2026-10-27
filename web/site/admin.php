@@ -298,9 +298,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         foreach ((array)pp('ids', array()) as $id) { $id = preg_replace('/[^0-9\-]/', '', (string)$id); if ($id !== '') @unlink(XC_DIR . '/feedback/' . $id . '.php'); }
         go('?p=fb');
     }
+    if ($act === 'clip_del') {                           // klipni o'chirish (nomaqbul video)
+        $id = preg_replace('/[^a-f0-9]/', '', (string)pp('id'));
+        if ($id !== '') { $l = array(); foreach (rd('clips', array()) as $c) if ($c['id'] !== $id) $l[] = $c; wr('clips', $l); @unlink(__DIR__ . '/clips/' . $id . '.mp4'); flash("Klip o'chirildi"); }
+        go('?p=clips');
+    }
     if ($act === 'tg_save') {
         if (pp('token') !== '' || pp('tg_del') === '1') $CFG['tg_token'] = preg_replace('/[^A-Za-z0-9:_\-]/', '', pp('token'));   // bo'sh qoldirilsa - eskisi qoladi
         $CFG['tg_chat'] = preg_replace('/[^0-9\-@A-Za-z_]/', '', pp('chat'));
+        $CFG['tg_clips'] = preg_replace('/[^0-9\-@A-Za-z_]/', '', pp('clips'));
         $CFG['tg_ev'] = array(); foreach (array('install', 'account', 'report', 'daily', 'feedback') as $e) $CFG['tg_ev'][$e] = pp('ev_' . $e) ? 1 : 0;
         $CFG['tg_bot'] = pp('tg_bot') ? 1 : 0;
         if ($CFG['tg_bot'] && $CFG['tg_token']) { $me = json_decode((string)@file_get_contents('https://api.telegram.org/bot' . $CFG['tg_token'] . '/getMe', false, stream_context_create(array('http' => array('timeout' => 5)))), true);
@@ -383,7 +389,7 @@ if ($P === 'installs' && g('csv')) {
 
 /* ---------- sahifa ---------- */
 $NAV = array('dash' => array('Infopanel', '⌂'), 'online' => array('Onlayn', '●'), 'players' => array("O'yinchilar", '☺'), 'installs' => array("O'rnatishlar", '↓'), 'accounts' => array('Akkauntlar', '✉'),
-    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'stats' => array('Statistika', '★'), 'churn' => array('Ketganlar', '↘'), 'fb' => array('Fikrlar', '✎'), 'clicks' => array('Tugmalar', '⊙'), 'menuver' => array('Menyu versiyalari', '⇅'), 'feat' => array('Funksiyalar', '◧'), 'speed' => array('Tezlik', '⚡'), 'promo' => array('Reklama', '$'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
+    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'stats' => array('Statistika', '★'), 'churn' => array('Ketganlar', '↘'), 'fb' => array('Fikrlar', '✎'), 'clips' => array('Kliplar', '▶'), 'clicks' => array('Tugmalar', '⊙'), 'menuver' => array('Menyu versiyalari', '⇅'), 'feat' => array('Funksiyalar', '◧'), 'speed' => array('Tezlik', '⚡'), 'promo' => array('Reklama', '$'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
 $devCount = count((array)glob(XC_DIR . '/dev/*.php')); $ncCount = count((array)glob(XC_DIR . '/nc/*.php')); $accCount = count((array)glob(XC_DIR . '/users/*.php')); $repCount = count((array)glob(XC_DIR . '/reports/*.php'));
 $fbCount = count((array)glob(XC_DIR . '/feedback/*.php'));
 $badge = array('players' => $devCount + $ncCount, 'installs' => $devCount, 'accounts' => $accCount, 'reports' => $repCount, 'fb' => $fbCount);
@@ -817,6 +823,14 @@ if ($P === 'fb') {
     echo '</table>' . ($l ? '<button class="btn" style="margin-top:10px">Belgilanganlarni o\'chirish</button>' : '') . '</form></div>';
 }
 
+if ($P === 'clips') {
+    $l = rd('clips', array()); $mb = 0; foreach ($l as $c) $mb += $c['mb'];
+    echo '<h1>Kliplar</h1><div class="panel"><div class="ph">O\'yinchilar ulashgan kliplar: ' . count($l) . ' ta · ' . round($mb) . ' MB <a class="btn r" href="clips.php" target="_blank">Sahifani ochish</a></div><table class="list"><tr><th>Vaqt</th><th>O\'yinchi</th><th>Server</th><th>Hajm</th><th></th></tr>';
+    foreach ($l as $c) echo '<tr><td>' . dt($c['t']) . '</td><td><b>' . h($c['name']) . '</b> <span class="mut small">' . h($c['login']) . '</span></td><td>' . h($c['srv']) . '</td><td>' . h($c['mb']) . ' MB</td><td class="r"><a class="lnk" href="clips.php?v=' . h($c['id']) . '" target="_blank">▶ Ko\'rish</a> <form method="post" class="inl" onsubmit="return confirm(\'O\\\'chirilsinmi?\')">' . csrf_in() . '<input type="hidden" name="act" value="clip_del"><input type="hidden" name="id" value="' . h($c['id']) . '"><button class="lnk red">O\'chirish</button></form></td></tr>';
+    if (!$l) echo '<tr><td colspan="5" class="mut">Hali yo\'q. O\'yinchilar menyu → Demo → "Ulashish" orqali yuboradi. Eng ko\'pi 300 ta saqlanadi, eskilari o\'zi o\'chadi.</td></tr>';
+    echo '</table></div>';
+}
+
 if ($P === 'tg') {
     $ev = isset($CFG['tg_ev']) ? $CFG['tg_ev'] : array('install' => 1, 'account' => 1, 'report' => 1);
     $ck = function ($k, $t) use ($ev) { return '<label class="chk"><input type="checkbox" name="ev_' . $k . '" value="1"' . (!empty($ev[$k]) ? ' checked' : '') . '> ' . $t . '</label>'; };
@@ -825,6 +839,7 @@ if ($P === 'tg') {
         . (!empty($CFG['tg_token']) ? '<label class="chk"><input type="checkbox" name="tg_del" value="1"> Tokenni o\'chirish</label>' : '')
         . '<label>Chat ID (siz yoki guruh)</label><input name="chat" value="' . h(isset($CFG['tg_chat']) ? $CFG['tg_chat'] : '') . '" placeholder="123456789 yoki -100...">'
         . $ck('install', 'Yangi X CLIENT o\'rnatish') . $ck('account', 'Yangi akkaunt') . $ck('report', 'Xatolik haqida xabar') . $ck('daily', 'Kunlik hisobot (har kuni 9:00 dan keyin) va hafta chempioni') . $ck('feedback', 'Menyudan taklif / shikoyat')
+        . '<div class="ph" style="margin-top:14px">Kliplar kanali</div><label>O\'yinchilar ulashgan kliplar shu kanalga tushadi (botni kanalga admin qiling)</label><input name="clips" value="' . h(isset($CFG['tg_clips']) ? $CFG['tg_clips'] : '') . '" placeholder="@kanal_nomi yoki -100... (bo\'sh - yubormaydi)">'
         . '<div class="ph" style="margin-top:14px">O\'yinchilar uchun bot</div><label class="chk"><input type="checkbox" name="tg_bot" value="1"' . (!empty($CFG['tg_bot']) ? ' checked' : '') . '> O\'yinchilar shu botga akkauntini ulaydi: /me, /friends, /top, /online' . (!empty($CFG['tg_botname']) ? ' (@' . h($CFG['tg_botname']) . ')' : '') . '</label>'
         . '<button class="btn red">Saqlash</button></form><form method="post" style="margin-top:10px">' . csrf_in() . '<input type="hidden" name="act" value="tg_test"><button class="btn">Sinov xabarini yuborish</button></form></div>'
         . '<div class="panel"><div class="ph">Qanday ulash</div><ol class="help"><li>Telegram\'da <b>@BotFather</b> ga yozing → <b>/newbot</b> → bot nomini bering. U <b>token</b> beradi.</li><li>Yaratilgan botingizga <b>/start</b> yozing.</li><li><b>@userinfobot</b> ga yozing - u sizning <b>Chat ID</b> raqamingizni beradi.</li><li>Ikkalasini shu yerga yozib, Saqlash va "Sinov xabari"ni bosing.</li></ol></div></div>';

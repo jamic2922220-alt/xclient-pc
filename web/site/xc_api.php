@@ -494,6 +494,77 @@ if ($a === 'vq') {
     echo (isset($o['vq']) && in_array($o['vq'], array('hi', 'mid', 'low'), true) ? $o['vq'] : 'mid'), ' ', empty($o['mic']) ? 0 : 1, ' ', isset($o['rb']) && !$o['rb'] ? 0 : 1;
     exit;
 }
+/* ---- klip ulashish: menyu 'share' buyrug'i chipta (tk) yaratadi, launcher videoni bo'laklab yuklaydi ----
+ * clipup   - launcher: ?a=clipup&tk=..&off=N, tana - xom baytlar (2 MB gacha). Javob: "ok N" (fayl hajmi) yoki "off N" (shu joydan davom eting)
+ * clipdone - launcher: hammasi yuklandi -> clips/<id>.mp4, ro'yxatga, Telegram kanalga */
+define('CLIP_MAX', 60 * 1024 * 1024);
+define('CLIP_DIR', __DIR__ . '/clips');
+function clip_dir_ok() {
+    if (!is_dir(CLIP_DIR)) @mkdir(CLIP_DIR, 0755, true);
+    if (!is_file(CLIP_DIR . '/.htaccess')) @file_put_contents(CLIP_DIR . '/.htaccess', "Options -Indexes\n<FilesMatch \"\\.(php\\d?|phtml|phar|html?|svg|js)$\">\nRequire all denied\n</FilesMatch>\n");
+    if (!is_file(CLIP_DIR . '/index.html')) @file_put_contents(CLIP_DIR . '/index.html', '');
+    return is_writable(CLIP_DIR);
+}
+function clip_ticket($tk) { $s = rd('shares', array()); return preg_match('/^[a-f0-9]{32}$/', $tk) && isset($s[$tk]) && time() - $s[$tk]['t'] < 7200 ? $s[$tk] : null; }
+function clip_mark($d, $n, $v) {                         // kompyuter video ro'yxatida: 'sh' - 'q' (navbatda), '45' (%), yoki klip id
+    $o = rd('dev/' . $d, array());
+    if (empty($o['vids'])) return;
+    foreach ($o['vids'] as &$x) if (isset($x['n']) && $x['n'] === $n) $x['sh'] = $v;
+    unset($x); wr('dev/' . $d, $o);
+}
+function clip_url($id) { return 'https://mmb.boost-top.com/clips.php?v=' . $id; }
+function tg_clip($c) {
+    $cf = xc_cfg(); if (empty($cf['tg_token']) || empty($cf['tg_clips'])) return;
+    $cap = "\xF0\x9F\x8E\xAC " . $c['name'] . ($c['srv'] !== '' ? ' \xC2\xB7 ' . $c['srv'] : '') . "\n" . clip_url($c['id']) . "\n#xclient";
+    $f = CLIP_DIR . '/' . $c['id'] . '.mp4';
+    if (function_exists('curl_init') && class_exists('CURLFile') && filesize($f) < 48 * 1024 * 1024) {
+        $ch = curl_init('https://api.telegram.org/bot' . $cf['tg_token'] . '/sendVideo');
+        curl_setopt_array($ch, array(CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 120,
+            CURLOPT_POSTFIELDS => array('chat_id' => $cf['tg_clips'], 'caption' => $cap, 'supports_streaming' => 'true', 'video' => new CURLFile($f, 'video/mp4', $c['id'] . '.mp4'))));
+        $r = json_decode((string)curl_exec($ch), true); curl_close($ch);
+        if (!empty($r['ok'])) return;
+    }
+    tg_send($cf['tg_clips'], $cap);                       // katta fayl yoki curl yo'q - havola bilan
+}
+if ($a === 'clipup' || $a === 'clipdone') {
+    header('Content-Type: text/plain'); header('Cache-Control: no-store');
+    $tk = strtolower(p('tk'));
+    $t = clip_ticket($tk);
+    if (!$t) { echo 'gone'; exit; }
+    @mkdir(XC_DIR . '/up', 0755, true);
+    $part = XC_DIR . '/up/' . $tk . '.part';
+    $have = is_file($part) ? filesize($part) : 0;
+    if ($a === 'clipup') {
+        $off = (int)p('off');
+        if ($off !== $have) { echo 'off ', $have; exit; }
+        $data = file_get_contents('php://input', false, null, 0, 2 * 1024 * 1024 + 1);
+        if ($data === false || $data === '' || strlen($data) > 2 * 1024 * 1024) { echo 'bad'; exit; }
+        if ($have + strlen($data) > CLIP_MAX) { echo 'big'; exit; }
+        if (file_put_contents($part, $data, FILE_APPEND | LOCK_EX) === false) { echo 'disk'; exit; }
+        clearstatcache(); $have = filesize($part);
+        $tot = max(1, (int)p('tot'));
+        lock(); clip_mark($t['d'], $t['n'], (string)min(99, (int)($have * 100 / $tot))); unlock();
+        echo 'ok ', $have; exit;
+    }
+    $hd = $have > 4096 ? file_get_contents($part, false, null, 4, 4) : '';
+    if ($hd !== 'ftyp' || !clip_dir_ok()) { @unlink($part); lock(); $s = rd('shares', array()); unset($s[$tk]); wr('shares', $s); clip_mark($t['d'], $t['n'], 'x'); unlock(); echo 'bad'; exit; }
+    $id = substr($tk, 0, 12);
+    if (!@rename($part, CLIP_DIR . '/' . $id . '.mp4')) { echo 'disk'; exit; }
+    $dv = rd('dev/' . $t['d'], array()); $u = user($t['login']); $sec = 0;
+    foreach ((array)(isset($dv['vids']) ? $dv['vids'] : array()) as $x) if (isset($x['n']) && $x['n'] === $t['n']) $sec = (int)$x['sec'];
+    $c = array('id' => $id, 'login' => $t['login'], 'name' => $u ? $u['name'] : $t['login'], 't' => time(), 'mb' => round($have / 1048576, 1), 'sec' => $sec, 'srv' => clean_str($t['srv'], 64));
+    lock();
+    $s = rd('shares', array()); unset($s[$tk]); wr('shares', $s);
+    $l = rd('clips', array()); array_unshift($l, $c);
+    foreach (array_slice($l, 300) as $old) @unlink(CLIP_DIR . '/' . $old['id'] . '.mp4');   // eng eskilari o'chadi (disk to'lmasin)
+    wr('clips', array_slice($l, 0, 300));
+    clip_mark($t['d'], $t['n'], $id);
+    unlock();
+    echo 'ok ', $id;
+    if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
+    tg_clip($c);
+    exit;
+}
 daily_report();
 tg_bot_poll();
 
@@ -1440,6 +1511,11 @@ case 'top':                                              // haftaning eng faol o
     wr('topcache', array('t' => time(), 'top' => $top, 'online' => $online, 'users' => $users));
     out(array('ok' => true, 'top' => $top, 'online' => $online, 'users' => $users));
 
+case 'clips':                                            // ulashilgan kliplar (clips.php sahifasi)
+    $l = rd('clips', array()); $out = array();
+    foreach (array_slice($l, 0, 60) as $c) $out[] = array('id' => $c['id'], 'name' => $c['name'], 't' => $c['t'], 'sec' => $c['sec'], 'srv' => $c['srv']);
+    out(array('ok' => true, 'clips' => $out));
+
 case 'news':                                             // turnirlar / e'lonlar: xc_news.json (qo'lda tahrirlanadi)
     $f = __DIR__ . '/xc_news.json';
     $j = is_file($f) ? json_decode(file_get_contents($f), true) : null;
@@ -1576,13 +1652,26 @@ case 'vcmd':
     $o = rd('dev/' . $d, array());
     if (!dev_ok($d, $o)) fail('nolaunch', 'XCLauncher.exe topilmadi');
     $c = p('c'); $n = vid_name(p('n'));
-    if (!in_array($c, array('open', 'del', 'folder', 'trim', 'clip', 'opt', 'edit'), true) || (in_array($c, array('open', 'del', 'trim', 'edit'), true) && $n === '')) fail('bad', 'bad');
+    if (!in_array($c, array('open', 'del', 'folder', 'trim', 'clip', 'opt', 'edit', 'share'), true) || (in_array($c, array('open', 'del', 'trim', 'edit', 'share'), true) && $n === '')) fail('bad', 'bad');
+    $tk = '';
+    if ($c === 'share') {                                 // ulashish: faqat akkaunt bilan, kuniga 10 ta
+        unlock(); $su = auth(); lock(); $o = rd('dev/' . $d, array());
+        if (rl_count('share' . $su['login'], 86400) >= 10) fail('limit', 'Bugun 10 ta klip ulashildi - ertaga yana');
+        rl_add('share' . $su['login'], 86400);
+        $tk = function_exists('random_bytes') ? bin2hex(random_bytes(16)) : md5(uniqid(mt_rand(), true) . client_ip());
+        $sh = rd('shares', array());
+        foreach ($sh as $k => $x) if (time() - $x['t'] > 7200) { unset($sh[$k]); @unlink(XC_DIR . '/up/' . $k . '.part'); }
+        $sh[$tk] = array('d' => $d, 'n' => $n, 'login' => $su['login'], 't' => time(), 'srv' => clean_str(p('srv'), 64));
+        wr('shares', $sh);
+        if (isset($o['vids'])) foreach ($o['vids'] as &$vx) if (isset($vx['n']) && $vx['n'] === $n) $vx['sh'] = 'q';
+        unset($vx);
+    }
     $ta = max(0, min(86400, (int)p('ta'))); $tb = max(0, min(86400, (int)p('tb')));
     if ($c === 'trim' && $tb <= $ta) fail('bad', 'bad');
     if ($c === 'clip' && rl_count('vclip' . $d, 60) >= 3) out(array('ok' => true));   // avtomatik klip - daqiqasiga 3 tadan ko'p emas
     if ($c === 'clip') rl_add('vclip' . $d, 60);
     $q = isset($o['vc']) && is_array($o['vc']) ? $o['vc'] : array();
-    $q[] = $c . ' ' . ($n !== '' ? $n : '-') . ($c === 'trim' ? ' ' . $ta . ' ' . $tb : '');
+    $q[] = $c . ' ' . ($n !== '' ? $n : '-') . ($c === 'trim' ? ' ' . $ta . ' ' . $tb : '') . ($c === 'share' ? ' ' . $tk : '');
     $o['vc'] = array_slice($q, -5);
     if ($c === 'del' && isset($o['vids'])) $o['vids'] = array_values(array_filter($o['vids'], function ($x) use ($n) { return isset($x['n']) && $x['n'] !== $n; }));
     wr('dev/' . $d, $o);

@@ -714,6 +714,8 @@ static LRESULT CALLBACK ov_proc(HWND h, UINT m, WPARAM w, LPARAM l)
         else if (g_ov_mode == 5) lstrcpynW(t, ru ? L"F9: \u0432\u043a\u043b\u044e\u0447\u0438\u0442\u0435 \u00ab\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0435 30 \u0441\u0435\u043a\u0443\u043d\u0434\u00bb \u0432 \u043c\u0435\u043d\u044e \u2192 \u0414\u0435\u043c\u043e" : L"F9: menyu \u2192 Demo \u2192 \u00abOxirgi 30 soniya\u00bb ni yoqing", 160);
         else if (g_ov_mode == 7) lstrcpynW(t, ru ? L"F9 \u043d\u0435 \u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442 \u043d\u0430 \u044d\u0442\u043e\u043c \u041f\u041a (\u0432\u0438\u0434\u0435\u043e\u043a\u0430\u0440\u0442\u0430) \u2014 \u0437\u0430\u043f\u0438\u0441\u044b\u0432\u0430\u0439\u0442\u0435 F10" : L"F9 bu kompyuterda ishlamaydi (videokarta) \u2014 F10 bilan yozing", 160);
         else if (g_ov_mode == 8) lstrcpynW(t, ru ? L"F9 \u0435\u0449\u0451 \u0433\u043e\u0442\u043e\u0432\u0438\u0442\u0441\u044f \u2014 \u043d\u0430\u0436\u043c\u0438\u0442\u0435 \u0447\u0435\u0440\u0435\u0437 \u043f\u0430\u0440\u0443 \u0441\u0435\u043a\u0443\u043d\u0434" : L"F9 hali tayyorlanmoqda \u2014 birozdan keyin bosing", 160);
+        else if (g_ov_mode == 9) lstrcpynW(t, ru ? L"\u2713  \u041a\u043b\u0438\u043f \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d" : L"\u2713  Klip saytga joylandi", 160);
+        else if (g_ov_mode == 10) lstrcpynW(t, ru ? L"\u2716  \u041a\u043b\u0438\u043f \u043d\u0435 \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u043b\u0441\u044f" : L"\u2716  Klip yuklanmadi", 160);
         else if (g_ov_mode == 6) lstrcpynW(t, ru ? L"\u2713  \u0412\u0438\u0434\u0435\u043e \u043e\u0431\u0440\u0435\u0437\u0430\u043d\u043e" : L"\u2713  Video kesildi", 160);
         else if (g_ov_mode == 2) lstrcpynW(t, ru ? L"\u2713  \u0412\u0438\u0434\u0435\u043e \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u043e" : L"\u2713  Video saqlandi", 160);
         else lstrcpynW(t, ru ? L"\u2716  \u0412\u0438\u0434\u0435\u043e \u043d\u0435 \u0437\u0430\u043f\u0438\u0441\u0430\u043b\u043e\u0441\u044c" : L"\u2716  Video yozilmadi", 160);
@@ -1117,10 +1119,68 @@ static void game_minimize_for_shell(void)
 
 /* o'yin paytida menyudagi "Videolarim" tugmalari: sayt navbatidan buyruqlarni olib bajaradi (har 4 soniya) */
 static HANDLE g_vp_th = NULL, g_vp_stop = NULL;
+/* ---- klipni ulashish: saytga 2 MB lik bo'laklar bilan (uzilsa - shu joydan davom) ---- */
+static volatile LONG g_share_busy = 0;
+typedef struct { wchar_t f[MAX_PATH]; char tk[40]; } ShareJob;
+static char *share_post(const char *path, const void *data, DWORD len)
+{
+    for (int sec = g_https_bad ? 0 : 1; sec >= 0; sec--) {
+        HINTERNET c = InternetConnectA(g_net, "mmb.boost-top.com", sec ? INTERNET_DEFAULT_HTTPS_PORT : INTERNET_DEFAULT_HTTP_PORT, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
+        if (!c) continue;
+        HINTERNET r = HttpOpenRequestA(c, "POST", path, NULL, NULL, NULL, INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_NO_UI | (sec ? INTERNET_FLAG_SECURE : 0), 0);
+        char *out = NULL;
+        if (r && HttpSendRequestA(r, "Content-Type: application/octet-stream\r\n", (DWORD)-1L, (LPVOID)data, len)) {
+            out = (char *)calloc(1, 257);
+            DWORD got, n = 0;
+            while (out && n < 256 && InternetReadFile(r, out + n, 256 - n, &got) && got) n += got;
+        }
+        if (r) InternetCloseHandle(r);
+        InternetCloseHandle(c);
+        if (out) return out;
+        if (sec) g_https_bad = TRUE;
+    }
+    return NULL;
+}
+static DWORD WINAPI share_thread(LPVOID arg)
+{
+    ShareJob *j = (ShareJob *)arg;
+    BOOL ok = FALSE;
+    HANDLE h = CreateFileW(j->f, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
+    BYTE *buf = (BYTE *)malloc(2 * 1024 * 1024);
+    LARGE_INTEGER sz; sz.QuadPart = 0;
+    if (h != INVALID_HANDLE_VALUE && buf && GetFileSizeEx(h, &sz) && sz.QuadPart > 0 && sz.QuadPart <= 60LL * 1024 * 1024) {
+        LONGLONG off = 0; int fails = 0;
+        while (off < sz.QuadPart && fails < 5) {
+            LARGE_INTEGER pos; pos.QuadPart = off;
+            DWORD want = (DWORD)(sz.QuadPart - off > 2 * 1024 * 1024 ? 2 * 1024 * 1024 : sz.QuadPart - off), got = 0;
+            if (!SetFilePointerEx(h, pos, NULL, FILE_BEGIN) || !ReadFile(h, buf, want, &got, NULL) || got != want) break;
+            char path[200];
+            _snprintf(path, sizeof(path), "/xc_api.php?a=clipup&tk=%s&off=%lld&tot=%lld", j->tk, off, sz.QuadPart); path[sizeof(path) - 1] = 0;
+            char *r = share_post(path, buf, got);
+            long long n = -1;
+            if (r && (sscanf(r, "ok %lld", &n) == 1 || sscanf(r, "off %lld", &n) == 1) && n >= 0 && n <= sz.QuadPart) { off = n; fails = 0; }
+            else if (r && (!strncmp(r, "gone", 4) || !strncmp(r, "big", 3))) { free(r); break; }
+            else { fails++; Sleep(2000 * fails); }
+            free(r);
+        }
+        if (off == sz.QuadPart) {
+            char path[160];
+            _snprintf(path, sizeof(path), "/xc_api.php?a=clipdone&tk=%s", j->tk); path[sizeof(path) - 1] = 0;
+            for (int i = 0; i < 3 && !ok; i++) { char *r = share_post(path, "", 0); ok = r && !strncmp(r, "ok ", 3); if (r && !strncmp(r, "bad", 3)) i = 3; free(r); if (!ok) Sleep(2000); }
+        }
+    }
+    if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+    free(buf); free(j);
+    if (g_hk_tid) PostThreadMessageW(g_hk_tid, WM_REC_STATE, ok ? 9 : 10, 0);
+    InterlockedDecrement(&g_share_busy);
+    return 0;
+}
+
 static void vid_exec(const char *line)
 {
-    char c[8] = "", n[24] = ""; int fa = 0, fb = 0;
+    char c[8] = "", n[24] = "", tk[40] = ""; int fa = 0, fb = 0;
     if (sscanf(line, "%7s %23s %d %d", c, n, &fa, &fb) < 1) return;
+    if (!strcmp(c, "share")) sscanf(line, "%*s %*s %39s", tk);
     if (!strcmp(c, "clip")) { if (g_buf_run) InterlockedExchange(&g_clip_req, 1); return; }   /* menyu: avtomatik klip (3+ kill) */
     if (!strcmp(c, "opt")) {                           /* menyuda bufer/mikrofon o'zgardi */
         rec_quality(); g_buf_want = g_rb;
@@ -1136,6 +1196,14 @@ static void vid_exec(const char *line)
     if (GetFileAttributesW(f) == INVALID_FILE_ATTRIBUTES) return;
     if (!strcmp(c, "open")) { game_minimize_for_shell(); ShellExecuteW(NULL, L"open", f, NULL, NULL, SW_SHOWNORMAL); }
     else if (!strcmp(c, "edit")) editor_open(f);
+    else if (!strcmp(c, "share") && strlen(tk) == 32 && strspn(tk, "0123456789abcdef") == 32) {
+        ShareJob *j = (ShareJob *)calloc(1, sizeof(ShareJob));
+        if (!j) return;
+        lstrcpynW(j->f, f, MAX_PATH); lstrcpynA(j->tk, tk, sizeof(j->tk));
+        InterlockedIncrement(&g_share_busy);
+        HANDLE th = CreateThread(NULL, 0, share_thread, j, 0, NULL);
+        if (th) CloseHandle(th); else { InterlockedDecrement(&g_share_busy); free(j); }
+    }
     else if (!strcmp(c, "del")) {                      /* Savatga - adashib o'chirilsa qaytarish mumkin */
         size_t L = wcslen(f); f[L + 1] = 0;
         SHFILEOPSTRUCTW op = { 0 }; op.wFunc = FO_DELETE; op.pFrom = f;
@@ -1185,6 +1253,7 @@ static void rec_session_end(void)
     InterlockedExchange(&g_rec_run, 0);
     if (g_rec_th) { WaitForSingleObject(g_rec_th, 30000); CloseHandle(g_rec_th); g_rec_th = NULL; }
     for (int i = 0; i < 300 && g_clip_busy > 0; i++) Sleep(100);        /* klip birlashtirilayotgan bo'lsa - kutamiz */
+    for (int i = 0; i < 6000 && g_share_busy > 0; i++) Sleep(100);      /* klip saytga yuklanayotgan bo'lsa - 10 daqiqagacha */
     if (g_hk_th) { PostThreadMessageW(g_hk_tid, WM_QUIT, 0, 0); WaitForSingleObject(g_hk_th, 3000); CloseHandle(g_hk_th); g_hk_th = NULL; }
     if (g_buf_dir[0]) {                                                  /* vaqtinchalik bo'laklar */
         for (int i = 0; i < BUF_SEGS; i++) { wchar_t p[MAX_PATH]; _snwprintf(p, MAX_PATH, L"%s\\s%d.mp4", g_buf_dir, i); p[MAX_PATH - 1] = 0; DeleteFileW(p); }
