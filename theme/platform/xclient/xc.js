@@ -1042,7 +1042,7 @@ function vidCmd(c, n, extra, quiet) {
     if (!r.ok) { if (!quiet) toast(r.msg || 'Xato', 3500); return; }
     if (r.vids) OPTS.vids = r.vids;
     if (c === 'trim') { setTimeout(function () { VIDS_T = 0; vidsRefresh(); }, 8000); setTimeout(function () { VIDS_T = 0; vidsRefresh(); }, 20000); }
-    if (!quiet) toast(T({ del: 'vd_deleted', open: 'vd_opening', folder: 'vd_opening2', trim: 'vd_trimming', opt: 'vb_saved', edit: 'vd_editing' }[c] || 'saved'), 5000);
+    if (!quiet) toast(T({ del: 'vd_deleted', open: 'vd_opening', folder: 'vd_opening2', trim: 'vd_trimming', opt: 'vb_saved', edit: 'vd_editing', share: 'vs_wait' }[c] || 'saved'), c === 'share' ? 7000 : 5000);
     if (curModal === 'mdSettings' && setTab === 'demo') $('setBody').innerHTML = PANES.demo();
   });
 }
@@ -2338,7 +2338,7 @@ function duelResult(d) {
   if (d.win === 'me') sfx('save');
 }
 /* ---- o'yin xulosasi: serverdan chiqqanda (2+ daqiqa o'ynalgan bo'lsa) ---- */
-var XP0 = null;
+var XP0 = null, GS_LAST = null;
 function gameSummary(g) {
   if (!g || DB.dnd || DB.gsum === 0 || (g.d || 0) < 120 || (g.k || 0) + (g.x || 0) < 2) return;
   if (curModal && curModal !== 'mdSide') return;                // o'yinchi boshqa oynada - xalaqit bermaymiz
@@ -2357,8 +2357,10 @@ function gameSummary(g) {
     '<div class="stmore">' + row('gs_streak', g.bs || 0) + row('gs_hsn', g.h || 0) + (g.a ? row('gs_assist', g.a) : '') + (fav ? row('gs_fav', fav + ' (' + fn + ')') : '') +
     (xp ? row('gs_xp', '+' + xp + ' XP') : '') + (clips ? row('gs_clips', clips) : '') + '</div>' +
     '<p class="mut">' + esc(T((g.k || 0) >= 25 || kd >= 2 ? 'gs_great' : (g.k || 0) >= 10 ? 'gs_good' : 'gs_ok')) + '</p>' +
+    (ME ? '<a class="btn red" data-act="gsshare">' + ico('share') + ' ' + esc(T('gs_share')) + '</a> ' : '') +
     (clips ? '<a class="btn red" data-act="gsvids">' + ico('play') + ' ' + esc(T('gs_vids')) + '</a> ' : '') +
     '<a class="btn" data-act="gsoff">' + esc(T('gs_off')) + '</a></div>';
+  GS_LAST = g;
   openSide('gsum', T('gs_title'), h);
 }
 /* ---- "Kechagi o'yiningiz": kun boshida qisqa xulosa ---- */
@@ -2592,6 +2594,7 @@ var PANES = {
       vqs += '<a class="' + (vq === o[0] ? 'on' : '') + '" data-ovq="' + o[0] + '">' + esc(T(o[1])) + '<small>' + esc(T(o[2])) + '</small></a>';
     });
     each(vids, function (v) {
+      if ((v.sh === 'q' || /^\d+$/.test(v.sh || '')) && (!v.sht || now() / 1000 - v.sht > 1800)) v.sh = '';   // 30 daqiqa siljimagan yuklash - qayta ulashish mumkin
       var m = /^xc_(\d{4})(\d\d)(\d\d)_(\d\d)(\d\d)(\d\d)$/.exec(v.n || ''); if (!m) return;
       var t = new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime(), sec = v.sec | 0;
       var info = [(v.mb | 0) + ' MB'];
@@ -3125,6 +3128,15 @@ function act(a) {
     showSetTab('pro'); return toast(T('pr_fpsok'), 5000);
   }
   if (a === 'vmdef') { each(['vmx', 'vmy', 'vmz', 'vmshift', 'lagst', 'lagsc', 'lagsp', 'camint', 'vmfov', 'bob'], function (k) { E[k] = DEF[k]; }); return showSetTab('hud'); }
+  if (a === 'gsshare') {                         // xulosa kartasi: saytdagi o'yin yozuvidan chiziladi, Telegram kanalga ham tushadi
+    var gl = GS_LAST, gb = document.querySelector('[data-act="gsshare"]'); if (!gl || !ME) return;
+    if (gb) gb.style.visibility = 'hidden';
+    return api('gsshare', { sid: gl.t, ip: gl.ip, map: gl.map || '', h: gl.h || 0, bs: gl.bs || 0, as: gl.a || 0 }, function (r) {
+      if (gb) gb.style.visibility = '';
+      if (!r.ok) return toast(r.msg || T('lg_neterr'), 5000);
+      copyIp(r.url, null); toast(T('gs_shared'), 6000);
+    });
+  }
   if (a === 'gsoff') { DB.gsum = 0; persist(); closeModal(); return toast(T('gs_offok'), 5000); }
   if (a === 'gsvids') { closeModal(); return openSettings('demo'); }
   if (a === 'rcs2') {                          // CS2 radari kabi: katta, aylanadigan, uzoqroq xarita, Tab da butun xarita
@@ -3407,8 +3419,7 @@ document.onclick = function (e) {
     var vsn = el.getAttribute('data-vshare');
     if (!ME) return toast(T('vs_login'), 5000);
     return ask(T('vs_ask'), function () {
-      vidCmd('share', vsn, { srv: CONNECTED ? (srv(CONNECTED).name || CONNECTED) : '' }, true);
-      toast(T('vs_wait'), 7000);
+      vidCmd('share', vsn, { srv: CONNECTED ? (srv(CONNECTED).name || CONNECTED) : '' });   // xato bo'lsa (kunlik chegara, qayta kirish) - sababi ko'rinadi
       each([6000, 20000, 45000, 90000, 150000], function (ms) { setTimeout(function () { VIDS_T = 0; vidsRefresh(); }, ms); });
     }, false, false, true);
   }

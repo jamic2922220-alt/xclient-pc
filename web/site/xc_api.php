@@ -509,13 +509,13 @@ function clip_ticket($tk) { $s = rd('shares', array()); return preg_match('/^[a-
 function clip_mark($d, $n, $v) {                         // kompyuter video ro'yxatida: 'sh' - 'q' (navbatda), '45' (%), yoki klip id
     $o = rd('dev/' . $d, array());
     if (empty($o['vids'])) return;
-    foreach ($o['vids'] as &$x) if (isset($x['n']) && $x['n'] === $n) $x['sh'] = $v;
+    foreach ($o['vids'] as &$x) if (isset($x['n']) && $x['n'] === $n) { $x['sh'] = $v; $x['sht'] = time(); }
     unset($x); wr('dev/' . $d, $o);
 }
 function clip_url($id) { return 'https://mmb.boost-top.com/clips.php?v=' . $id; }
 function tg_clip($c) {
     $cf = xc_cfg(); if (empty($cf['tg_token']) || empty($cf['tg_clips'])) return;
-    $cap = "\xF0\x9F\x8E\xAC " . $c['name'] . ($c['srv'] !== '' ? ' \xC2\xB7 ' . $c['srv'] : '') . "\n" . clip_url($c['id']) . "\n#xclient";
+    $cap = "\xF0\x9F\x8E\xAC " . $c['name'] . ($c['srv'] !== '' ? " \xC2\xB7 " . $c['srv'] : '') . "\n" . clip_url($c['id']) . "\n#xclient";
     $f = CLIP_DIR . '/' . $c['id'] . '.mp4';
     if (function_exists('curl_init') && class_exists('CURLFile') && filesize($f) < 48 * 1024 * 1024) {
         $ch = curl_init('https://api.telegram.org/bot' . $cf['tg_token'] . '/sendVideo');
@@ -536,11 +536,17 @@ if ($a === 'clipup' || $a === 'clipdone') {
     $have = is_file($part) ? filesize($part) : 0;
     if ($a === 'clipup') {
         $off = (int)p('off');
-        if ($off !== $have) { echo 'off ', $have; exit; }
         $data = file_get_contents('php://input', false, null, 0, 2 * 1024 * 1024 + 1);
-        if ($data === false || $data === '' || strlen($data) > 2 * 1024 * 1024) { echo 'bad'; exit; }
-        if ($have + strlen($data) > CLIP_MAX) { echo 'big'; exit; }
-        if (file_put_contents($part, $data, FILE_APPEND | LOCK_EX) === false) { echo 'disk'; exit; }
+        $cl = isset($_SERVER['CONTENT_LENGTH']) ? (int)$_SERVER['CONTENT_LENGTH'] : -1;
+        if ($data === false || $data === '' || strlen($data) > 2 * 1024 * 1024 || ($cl >= 0 && $cl !== strlen($data))) { echo 'bad'; exit; }   // uzilib kelgan bo'lak - yozmaymiz
+        /* bitta bo'lak ikki marta kelsa (launcher qayta yubordi) - faqat bittasi yozilsin: tekshirish va yozish bitta qulf ostida */
+        $fh = fopen($part, 'c+'); if (!$fh) { echo 'disk'; exit; }
+        flock($fh, LOCK_EX); clearstatcache(); $have = filesize($part);
+        if ($off !== $have) { flock($fh, LOCK_UN); fclose($fh); echo 'off ', $have; exit; }
+        if ($have + strlen($data) > CLIP_MAX) { flock($fh, LOCK_UN); fclose($fh); echo 'big'; exit; }
+        fseek($fh, 0, SEEK_END); $wok = fwrite($fh, $data) === strlen($data); fflush($fh);
+        flock($fh, LOCK_UN); fclose($fh);
+        if (!$wok) { echo 'disk'; exit; }
         clearstatcache(); $have = filesize($part);
         $tot = max(1, (int)p('tot'));
         lock(); clip_mark($t['d'], $t['n'], (string)min(99, (int)($have * 100 / $tot))); unlock();
@@ -1516,6 +1522,38 @@ case 'top':                                              // haftaning eng faol o
     wr('topcache', array('t' => time(), 'top' => $top, 'online' => $online, 'users' => $users));
     out(array('ok' => true, 'top' => $top, 'online' => $online, 'users' => $users));
 
+/* o'yin xulosasini ulashish: raqamlar saytdagi o'yin yozuvidan (stat), kartani gcard.php chizadi, Telegram kanalga rasm bo'lib tushadi */
+case 'gsshare':
+    lock();
+    $u = auth();
+    $sid = preg_replace('/[^0-9]/', '', p('sid'));
+    $g = isset($u['ss'][$sid]) ? $u['ss'][$sid] : null;
+    if (!$g) fail('nogame', 'Bu o\'yin hali saytga yetib kelmagan - birozdan keyin urinib ko\'ring');
+    if (rl_count('gss' . strtolower($u['login']), 86400) >= 10) fail('limit', 'Bugun 10 marta ulashildi - ertaga yana');
+    rl_add('gss' . strtolower($u['login']), 86400);
+    $k = (int)$g['k'];
+    $w = isset($g['w']) && is_array($g['w']) ? $g['w'] : array(); arsort($w); $fav = $w ? (string)key($w) : '';
+    $ip = p('ip'); $sv = isset($u['st']['srv'][$ip]) ? $u['st']['srv'][$ip]['n'] : '';
+    $id = substr(sha1(strtolower($u['login']) . ':' . $sid), 0, 12);
+    $rec = array('login' => $u['login'], 'name' => $u['name'], 'k' => $k, 'd' => (int)$g['d'], 't' => (int)$g['t'],
+        'h' => max(0, min($k, (int)p('h'))), 'bs' => max(0, min($k, (int)p('bs'))), 'a' => max(0, min(200, (int)p('as'))),
+        'fav' => preg_replace('/[^a-z0-9_\-]/', '', $fav), 'srv' => clean_str($sv, 64), 'map' => preg_replace('/[^A-Za-z0-9_\-.]/', '', substr(p('map'), 0, 32)), 'ts' => time());
+    @mkdir(XC_DIR . '/gs', 0755, true);
+    wr('gs/' . $id, $rec); @unlink(XC_DIR . '/gcards/' . $id . '.png');
+    cap_dir(XC_DIR . '/gs', 3000);
+    unlock();
+    $img = 'https://mmb.boost-top.com/gcard.php?g=' . $id;
+    $cf = xc_cfg();
+    if (!empty($cf['tg_token']) && !empty($cf['tg_clips'])) {
+        $kd = $rec['d'] ? round($k / $rec['d'], 2) : $k;
+        $cap = "\xF0\x9F\x8E\xAE " . $rec['name'] . ": " . $k . " kill \xC2\xB7 K/D " . $kd . ($rec['srv'] !== '' ? " \xC2\xB7 " . $rec['srv'] : '') . "\n#xclient";
+        $ctx = stream_context_create(array('http' => array('method' => 'POST', 'timeout' => 20, 'ignore_errors' => true, 'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
+            'content' => http_build_query(array('chat_id' => $cf['tg_clips'], 'photo' => $img . '&v=' . time(), 'caption' => $cap)))));
+        $r = json_decode((string)@file_get_contents('https://api.telegram.org/bot' . $cf['tg_token'] . '/sendPhoto', false, $ctx), true);
+        if (empty($r['ok'])) tg_send($cf['tg_clips'], $cap . "\n" . $img);
+    }
+    out(array('ok' => true, 'url' => $img));
+
 case 'clips':                                            // ulashilgan kliplar (clips.php sahifasi)
     $l = rd('clips', array()); $out = array();
     foreach (array_slice($l, 0, 60) as $c) $out[] = array('id' => $c['id'], 'name' => $c['name'], 't' => $c['t'], 'sec' => $c['sec'], 'srv' => $c['srv']);
@@ -1668,7 +1706,7 @@ case 'vcmd':
         foreach ($sh as $k => $x) if (time() - $x['t'] > 7200) { unset($sh[$k]); @unlink(XC_DIR . '/up/' . $k . '.part'); }
         $sh[$tk] = array('d' => $d, 'n' => $n, 'login' => $su['login'], 't' => time(), 'srv' => clean_str(p('srv'), 64));
         wr('shares', $sh);
-        if (isset($o['vids'])) foreach ($o['vids'] as &$vx) if (isset($vx['n']) && $vx['n'] === $n) $vx['sh'] = 'q';
+        if (isset($o['vids'])) foreach ($o['vids'] as &$vx) if (isset($vx['n']) && $vx['n'] === $n) { $vx['sh'] = 'q'; $vx['sht'] = time(); }
         unset($vx);
     }
     $ta = max(0, min(86400, (int)p('ta'))); $tb = max(0, min(86400, (int)p('tb')));

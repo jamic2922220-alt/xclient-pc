@@ -785,14 +785,14 @@ static BOOL rec_begin(Cap *c, Aud *a, Enc *e, const wchar_t *path, IMFDXGIDevice
     if (e->w) { IMFSinkWriter_Finalize(e->w); SREL(e->w); }
     DeleteFileW(path);
     cap_close(c); SREL(*mgr);
+    if (gpu_only) return FALSE;                /* F9 buferi butun o'yin davomida ishlaydi - protsessor orqali kadr nusxalash FPS ni tushiradi */
     if (!cap_open(c, g_rec_wnd, FALSE)) return FALSE;
     BOOL hw = TRUE;
-    /* gpu_only (F9 buferi): videokarta siqgichi bo'lmasa - protsessor siqgichi doimiy ishlab FPS ni tushirmasin */
-    if (!enc_open(e, path, c, a, TRUE, NULL)) { hw = FALSE; if (gpu_only || !enc_open(e, path, c, a, FALSE, NULL)) { cap_close(c); return FALSE; } }
+    if (!enc_open(e, path, c, a, TRUE, NULL)) { hw = FALSE; if (!enc_open(e, path, c, a, FALSE, NULL)) { cap_close(c); return FALSE; } }
     cap_grab(c, 200);
     if (enc_frame(e, c, 0, 10000000 / c->fps)) return TRUE;
     IMFSinkWriter_Finalize(e->w); SREL(e->w); DeleteFileW(path);
-    if (!hw || gpu_only) { cap_close(c); return FALSE; }
+    if (!hw) { cap_close(c); return FALSE; }
     return enc_open(e, path, c, a, FALSE, NULL) && enc_frame(e, c, 0, 10000000 / c->fps);
 }
 
@@ -876,7 +876,7 @@ static DWORD WINAPI buf_thread(LPVOID unused)
     int ci = 0; BOOL mf = FALSE, restart = FALSE;
     ZeroMemory(sdur, sizeof(sdur)); ZeroMemory(sok, sizeof(sok));
     CoInitializeEx(NULL, COINIT_MULTITHREADED);
-    if (!rec_load() || FAILED(rf.MFStartup(0x00020070, 0))) { g_buf_want = FALSE; goto done; }
+    if (!rec_load() || FAILED(rf.MFStartup(0x00020070, 0))) { g_buf_want = FALSE; g_buf_fail = 99; goto done; }   /* Media Foundation yo'q (Windows N) */
     mf = TRUE;
     if (!GetTempPathW(MAX_PATH - 20, g_buf_dir)) goto done;
     wcscat(g_buf_dir, L"XClientBuf");
@@ -885,7 +885,8 @@ static DWORD WINAPI buf_thread(LPVOID unused)
     aud_open(&a);
     if (g_mic) mic_open(&a);
     if (!rec_begin(&c, &a, &e, seg[0], &mgr, TRUE)) {   /* videokarta siqgichi yo'q yoki o'yin hali to'liq ochilmagan - birozdan keyin yana */
-        if (++g_buf_fail < 4) PostThreadMessageW(g_hk_tid, WM_REC_STATE, 102, 0);
+        g_buf_fail++;                                    /* o'yin uzoq yuklansa ham - urinishda davom etamiz (oraliq uzayadi) */
+        PostThreadMessageW(g_hk_tid, WM_REC_STATE, 102, 0);
         goto done;
     }
     g_buf_fail = 0;
@@ -1053,7 +1054,7 @@ static DWORD WINAPI rec_hotkey_thread(LPVOID unused)
         if (m.message == WM_REC_STATE) {
             if (m.wParam == 100) buf_start();
             else if (m.wParam == 101) SetTimer(NULL, 0, 3000, NULL);
-            else if (m.wParam == 102) SetTimer(NULL, 0, 15000, NULL);   /* bufer ochilmadi - 15 soniyadan keyin yana */
+            else if (m.wParam == 102) SetTimer(NULL, 0, g_buf_fail < 4 ? 15000 : 60000, NULL);   /* bufer ochilmadi - 15 soniya, keyin har daqiqa */
             else ov_show((int)m.wParam);
             continue;
         }
@@ -1125,7 +1126,8 @@ static volatile LONG g_share_busy = 0;
 typedef struct { wchar_t f[MAX_PATH]; char tk[40]; } ShareJob;
 static char *share_post(const char *path, const void *data, DWORD len)
 {
-    for (int sec = g_https_bad ? 0 : 1; sec >= 0; sec--) {
+    static BOOL no_tls = FALSE;                /* faqat ulashish uchun: bitta bo'lak uzilgani launcherning boshqa so'rovlarini http ga o'tkazmasin */
+    for (int sec = (g_https_bad || no_tls) ? 0 : 1; sec >= 0; sec--) {
         HINTERNET c = InternetConnectA(g_net, "mmb.boost-top.com", sec ? INTERNET_DEFAULT_HTTPS_PORT : INTERNET_DEFAULT_HTTP_PORT, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
         if (!c) continue;
         HINTERNET r = HttpOpenRequestA(c, "POST", path, NULL, NULL, NULL, INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_NO_UI | (sec ? INTERNET_FLAG_SECURE : 0), 0);
@@ -1138,7 +1140,7 @@ static char *share_post(const char *path, const void *data, DWORD len)
         if (r) InternetCloseHandle(r);
         InternetCloseHandle(c);
         if (out) return out;
-        if (sec) g_https_bad = TRUE;
+        if (sec && !r) no_tls = TRUE;          /* so'rov ochilmadi (eski Windows / sertifikat) - keyingi bo'laklar http bilan */
     }
     return NULL;
 }
@@ -1254,7 +1256,7 @@ static void rec_session_end(void)
     InterlockedExchange(&g_rec_run, 0);
     if (g_rec_th) { WaitForSingleObject(g_rec_th, 30000); CloseHandle(g_rec_th); g_rec_th = NULL; }
     for (int i = 0; i < 300 && g_clip_busy > 0; i++) Sleep(100);        /* klip birlashtirilayotgan bo'lsa - kutamiz */
-    for (int i = 0; i < 6000 && g_share_busy > 0; i++) Sleep(100);      /* klip saytga yuklanayotgan bo'lsa - 10 daqiqagacha */
+    for (int i = 0; i < 1800 && g_share_busy > 0; i++) Sleep(100);      /* klip saytga yuklanayotgan bo'lsa - 3 daqiqagacha (qolganini menyu 30 daqiqadan keyin qayta ulashishga beradi) */
     if (g_hk_th) { PostThreadMessageW(g_hk_tid, WM_QUIT, 0, 0); WaitForSingleObject(g_hk_th, 3000); CloseHandle(g_hk_th); g_hk_th = NULL; }
     if (g_buf_dir[0]) {                                                  /* vaqtinchalik bo'laklar */
         for (int i = 0; i < BUF_SEGS; i++) { wchar_t p[MAX_PATH]; _snwprintf(p, MAX_PATH, L"%s\\s%d.mp4", g_buf_dir, i); p[MAX_PATH - 1] = 0; DeleteFileW(p); }
