@@ -560,8 +560,13 @@ if ($a === 'clipup' || $a === 'clipdone') {
     wr('clips', array_slice($l, 0, 300));
     clip_mark($t['d'], $t['n'], $id);
     unlock();
-    echo 'ok ', $id;
-    if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
+    /* launcherga javobni darhol beramiz - Telegram'ga yuborish (2 daqiqagacha) kutdirmasin, aks holda launcher "yuklanmadi" deb o'ylaydi */
+    ignore_user_abort(true);
+    $ans = 'ok ' . $id;
+    header('Connection: close'); header('Content-Length: ' . strlen($ans));
+    echo $ans;
+    if (function_exists('fastcgi_finish_request')) fastcgi_finish_request(); else { while (ob_get_level() > 0) @ob_end_flush(); flush(); }
+    @set_time_limit(180);
     tg_clip($c);
     exit;
 }

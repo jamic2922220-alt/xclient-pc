@@ -55,7 +55,8 @@ var NC = window.nextclient || null;
 function hasApi() { return !!(NC && typeof NC.exec === 'function'); }
 function hasMM() { return !!(NC && NC.matchmaking && NC.matchmaking.getServerInfo); }
 function canRead() { return !!(NC && typeof NC.getCvarValue === 'function'); }
-function radarNC() { if (!canRead()) return true; var v = readCvar('hud_radar_scale'); return v != null && v !== ''; }   // xaritali radar sozlamalari o'yinda bormi
+function ncHas(cv) { if (!canRead()) return true; var v = readCvar(cv); return v != null && v !== ''; }   // NextClient 2.5 da yo'q, 2.6 da bor sozlamalar
+function radarNC() { return ncHas('hud_radar_scale'); }   // xaritali radar sozlamalari o'yinda bormi
 function readCvar(n) { if (!canRead()) return null; try { var v = NC.getCvarValue(n); return v == null ? null : String(v); } catch (e) { return null; } }
 function cmd(c) {
   dbg('exec: ' + c);
@@ -2523,7 +2524,7 @@ var PANES = {
       '<div class="mut" style="margin:10px 0 14px;font-size:12px">' + esc(T('g_net_note')) + '</div>' + tg('reconn', 'g_reconn') + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('g_server')) + '</div>' +
       tg('queue', 'g_queue', 'g_queue2') + tg('mp3off', 'g_mp3', 'g_mp32') + tg('hand', 'g_hand') + tg('fastsw', 'g_fast') +
-      '<div class="ph2 m">Discord</div>' + tg('drpc', 'g_drpc', 'g_drpc2') + tg('drpcs', 'g_drpcs') + tg('drpcj', 'g_drpcj') + '</div>';
+      (ncHas('cl_discordrpc') ? '<div class="ph2 m">Discord</div>' + tg('drpc', 'g_drpc', 'g_drpc2') + tg('drpcs', 'g_drpcs') + tg('drpcj', 'g_drpcj') : '') + '</div>';
   },
   keys: function () {
     var rows = '';
@@ -3011,9 +3012,9 @@ function act(a) {
   if (a === 'fbsend') return sendFeedback();
   if (a === 'settings') return openSettings();
   if (a === 'quit') return cmd('quit');
-  if (a === 'resume') { closeModal(); return cmd('gameui_hide'); }
+  if (a === 'resume') { closeModal(); return cmd('cancelselect'); }   // NextClient'ning o'z "ResumeGame" tugmasi ham shu buyruqni yuboradi
   if (a === 'dconn') { closeModal(); return cmd('disconnect'); }
-  if (a === 'plist') { if (!CONNECTED) return; openServers('hist'); srvSel = CONNECTED; loadPlayers(CONNECTED); query(CONNECTED, true); return renderServers(); }
+  if (a === 'plist') { if (!CONNECTED) return; openServers('history'); srvSel = CONNECTED; loadPlayers(CONNECTED); query(CONNECTED, true); return renderServers(); }
   if (a === 'close') return closeModal();
   if (a === 'guest') { DB.guest = 1; persist(); return closeModal(); }
   if (a === 'dologin') return doLogin();

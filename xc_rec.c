@@ -1119,7 +1119,8 @@ static void game_minimize_for_shell(void)
 
 /* o'yin paytida menyudagi "Videolarim" tugmalari: sayt navbatidan buyruqlarni olib bajaradi (har 4 soniya) */
 static HANDLE g_vp_th = NULL, g_vp_stop = NULL;
-/* ---- klipni ulashish: saytga 2 MB lik bo'laklar bilan (uzilsa - shu joydan davom) ---- */
+/* ---- klipni ulashish: saytga 900 KB lik bo'laklar bilan (ko'p hostinglarda so'rov chegarasi 1 MB; uzilsa - shu joydan davom) ---- */
+#define SHARE_CHUNK (900 * 1024)
 static volatile LONG g_share_busy = 0;
 typedef struct { wchar_t f[MAX_PATH]; char tk[40]; } ShareJob;
 static char *share_post(const char *path, const void *data, DWORD len)
@@ -1146,13 +1147,13 @@ static DWORD WINAPI share_thread(LPVOID arg)
     ShareJob *j = (ShareJob *)arg;
     BOOL ok = FALSE;
     HANDLE h = CreateFileW(j->f, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
-    BYTE *buf = (BYTE *)malloc(2 * 1024 * 1024);
+    BYTE *buf = (BYTE *)malloc(SHARE_CHUNK);
     LARGE_INTEGER sz; sz.QuadPart = 0;
     if (h != INVALID_HANDLE_VALUE && buf && GetFileSizeEx(h, &sz) && sz.QuadPart > 0 && sz.QuadPart <= 60LL * 1024 * 1024) {
-        LONGLONG off = 0; int fails = 0;
-        while (off < sz.QuadPart && fails < 5) {
+        LONGLONG off = 0; int fails = 0, guard = 0;
+        while (off < sz.QuadPart && fails < 5 && guard++ < 400) {   /* 60 MB / 900 KB = 69 bo'lak - qayta yuborishlar bilan ham yetadi */
             LARGE_INTEGER pos; pos.QuadPart = off;
-            DWORD want = (DWORD)(sz.QuadPart - off > 2 * 1024 * 1024 ? 2 * 1024 * 1024 : sz.QuadPart - off), got = 0;
+            DWORD want = (DWORD)(sz.QuadPart - off > SHARE_CHUNK ? SHARE_CHUNK : sz.QuadPart - off), got = 0;
             if (!SetFilePointerEx(h, pos, NULL, FILE_BEGIN) || !ReadFile(h, buf, want, &got, NULL) || got != want) break;
             char path[200];
             _snprintf(path, sizeof(path), "/xc_api.php?a=clipup&tk=%s&off=%lld&tot=%lld", j->tk, off, sz.QuadPart); path[sizeof(path) - 1] = 0;
