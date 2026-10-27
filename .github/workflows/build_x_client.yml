@@ -105,11 +105,13 @@ jobs:
 
       - name: O'rnatuvchi (X-Client-Setup.exe)
         shell: cmd
+        timeout-minutes: 25
+        continue-on-error: true   # Setup yig'ilmasa ham launcher yangilanishi panelga e'lon qilinsin
         run: |
           copy /Y own\installer.nsi . && copy /Y own\xclient.ico .
           if not exist "%ProgramFiles(x86)%\NSIS\makensis.exe" choco install nsis -y --no-progress
           rem CS 1.6 (boost-top PRO) o'rnatuvchisi ham ichiga qo'shiladi - yuklab bo'lmasa, faqat launcher
-          curl -fsSL --retry 3 -o game_setup.exe "https://cssborka.uz/uploads/files/1791198609_6ac38591b615c_CS_1_6_boost-top_PRO_2_5_3.exe" || del game_setup.exe
+          curl -fsSL --retry 3 --connect-timeout 30 --max-time 900 -o game_setup.exe "https://cssborka.uz/uploads/files/1791198609_6ac38591b615c_CS_1_6_boost-top_PRO_2_5_3.exe" || del game_setup.exe
           if exist game_setup.exe ( "%ProgramFiles(x86)%\NSIS\makensis.exe" /V2 /DSRC=full /DVER=%XC_VERSION% /DCHAN=%CHANNEL% /DGAME=game_setup.exe installer.nsi ) else ( echo ::warning::CS 1.6 o'rnatuvchisi yuklanmadi - Setup faqat launcher bilan && "%ProgramFiles(x86)%\NSIS\makensis.exe" /V2 /DSRC=full /DVER=%XC_VERSION% /DCHAN=%CHANNEL% installer.nsi )
           for %%F in (X-Client-Setup.exe) do echo Setup hajmi: %%~zF bayt
           if defined SIGN_PFX_B64 ( signtool sign /f sign.pfx /p "%SIGN_PASS%" /fd sha256 /tr http://timestamp.digicert.com /td sha256 /d "X CLIENT" X-Client-Setup.exe || exit /b 1 )
