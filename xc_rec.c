@@ -1177,6 +1177,10 @@ static DWORD WINAPI share_thread(LPVOID arg)
         }
     }
     if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+    if (!ok) {                                           /* menyu "..." da qolib ketmasin - saytga aytamiz */
+        char path[120]; _snprintf(path, sizeof(path), "/xc_api.php?a=clipfail&tk=%s", j->tk); path[sizeof(path) - 1] = 0;
+        free(share_post(path, "", 0));
+    }
     free(buf); free(j);
     if (g_hk_tid) PostThreadMessageW(g_hk_tid, WM_REC_STATE, ok ? 9 : 10, 0);
     InterlockedDecrement(&g_share_busy);

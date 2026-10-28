@@ -145,6 +145,7 @@ function ico(n) {
     trash: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/>', folder: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
     share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/>',
     link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
+    key: '<circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3L20 3M16 7l3 3M14 9l2 2"/>',
     stop: '<rect x="5" y="5" width="14" height="14" fill="currentColor"/>', film: '<rect x="2" y="4" width="20" height="16" rx="2"/><line x1="7" y1="4" x2="7" y2="20"/><line x1="17" y1="4" x2="17" y2="20"/><line x1="2" y1="12" x2="22" y2="12"/>', user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' };
   return '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' + (P[n] || '') + '</svg>';
 }
@@ -944,10 +945,37 @@ function connect(ip) {
  * Boshqa serverga ulanganda maydon tozalanadi - parol begona serverlarga yuborilmasin */
 var PW_SET = {};
 function srvPw(ip) { var r = null; each(DB.pw || [], function (x) { if (x.ip === ip) r = x; }); return r; }
+/* VIP/admin kirish: AMX Mod X serverlari o'yinchini nik (login) + setinfo _pw (parol) bo'yicha taniydi.
+ * Saqlangan serverga kirganda ikkalasi o'zi qo'yiladi; boshqa serverga o'tganda parol olib tashlanadi, nik odatdagisiga qaytadi */
+var PW_NAME = false;
 function applyPw(ip) {
   var p = srvPw(ip);
   for (var f in PW_SET) if (PW_SET.hasOwnProperty(f) && (!p || p.f !== f)) { cmd('setinfo ' + f + ' ""'); delete PW_SET[f]; }
   if (p) { cmd('setinfo ' + p.f + ' ' + q(p.pw)); PW_SET[p.f] = 1; }
+  if (p && p.login) { cmd('name ' + q(p.login)); MYNAME = p.login; PW_NAME = true; }
+  else if (PW_NAME && S && S.name) { cmd('name ' + q(fullName(S))); MYNAME = fullName(S); PW_NAME = false; }
+}
+var PW_IP = '';
+function openPw(ip) {
+  var p = srvPw(ip) || {}; PW_IP = ip;
+  openSide('srvpw', T('pw_title'), '<div class="pwbox"><b class="pws">' + esc(srv(ip).name || ip) + '</b>' +
+    '<p>' + esc(T('pw_help')) + '</p>' +
+    '<div class="lbl">' + esc(T('pw_login')) + '</div><input class="tx big" id="pwL" maxlength="31" value="' + esc(p.login || '') + '" placeholder="' + esc(T('pw_loginph')) + '">' +
+    '<div class="lbl">' + esc(T('pw_pass')) + '</div><input class="tx big" id="pwP" type="password" maxlength="40" value="' + esc(p.pw || '') + '">' +
+    '<div class="lbl sm">' + esc(T('pw_field')) + '</div><input class="tx" id="pwF" maxlength="20" value="' + esc(p.f || '_pw') + '" style="width:140px">' +
+    '<div class="pwbt"><a class="btn red" data-act="pwsave">' + esc(T('pw_save')) + '</a>' + (p.pw ? ' <a class="btn" data-act="pwdel">' + esc(T('pw_delb')) + '</a>' : '') + '</div>' +
+    '<p class="mut">' + esc(T('pw_note')) + '</p></div>');
+  setTimeout(function () { try { $(p.login ? 'pwP' : 'pwL').focus(); } catch (e) {} }, 50);
+}
+function pwSave(ip, del) {
+  DB.pw = (DB.pw || []).filter(function (x) { return x.ip !== ip; });
+  var pw = del ? '' : String($('pwP').value || '').replace(/["\\;]/g, '').slice(0, 40);
+  var lg = del ? '' : String($('pwL').value || '').replace(/["\\;\n]/g, '').replace(/^\s+|\s+$/g, '').slice(0, 31);
+  var fld = del ? '' : String($('pwF').value || '').replace(/[^\w]/g, '') || '_pw';
+  if (pw) DB.pw.push({ ip: ip, f: fld, pw: pw, login: lg });
+  persist(); cloudSave(); toast(T(pw ? 'pw_saved' : 'pw_del'), 6000);
+  if (CONNECTED === ip) { applyPw(ip); if (pw) toast(T('pw_reconn'), 7000); }
+  openServers(srvTab); srvSel = ip; renderServers();
 }
 function doConnect(ip) {
   applyPw(ip);
@@ -1528,7 +1556,7 @@ function renderInfo() {
     (/^[\w\-.]{2,40}$/.test(mapn) ? '<img src="map.php?m=' + encodeURIComponent(mapn.toLowerCase()) + '" alt="" onerror="this.style.display=\'none\'">' : '') +
     '<span>' + esc(mapn || '?') + '</span></div>' +
     '<h3>' + flagOf(srvSel) + esc(s.name || (h && h.name) || srvSel) + '</h3><div class="ip"><input class="ipin" readonly value="' + esc(srvSel) + '"><a class="cpy" data-copyip="' + esc(srvSel) + '">' + esc(T('ip_copy')) + '</a></div>' +
-      '<a class="pwl" data-act="srvpw">' + esc(srvPw(srvSel) ? T('pw_set') : T('pw_add')) + '</a>' +
+      (function () { var pp = srvPw(srvSel); return '<a class="btn pwb' + (pp ? ' on' : '') + '" data-act="srvpw">' + ico('key') + ' ' + esc(pp ? T('pw_on').replace('{n}', pp.login || T('pw_mynick')) : T('pw_add')) + '</a>'; })() +
     '<div class="ln">' + esc(T('ph_players')) + ' <b>' + (s.ok ? s.pl + '/' + s.max : '-') + '</b><span class="r ' + pc + '">' + (s.ok ? '\u25cf ' + s.ping + ' ms' : esc(T('offline'))) + '</span></div>' +
     histBars(srvSel) +
     '<div class="ph">' + esc(T('ph_players')) + '</div><div class="pls">' + ph + '</div>' +
@@ -2609,7 +2637,7 @@ var PANES = {
         '<a class="btn vdel" data-vdel="' + esc(v.n) + '" title="' + esc(T('vd_del')) + '">' + ico('trash') + '</a>' +
         (v.sh && /^[a-f0-9]{12}$/.test(v.sh) ? '<a class="btn vsh on" data-vlink="' + esc(v.sh) + '" title="' + esc(T('vs_copy')) + '">' + ico('link') + '</a>' :
           v.sh === 'q' || /^\d+$/.test(v.sh || '') ? '<span class="btn vsh wait">' + (v.sh === 'q' ? '\u2026' : v.sh + '%') + '</span>' :
-          '<a class="btn vsh" data-vshare="' + esc(v.n) + '" title="' + esc(T('vs_share')) + '">' + ico('share') + '</a>') +
+          '<a class="btn vsh' + (v.sh === 'x' ? ' err' : '') + '" data-vshare="' + esc(v.n) + '" data-vmb="' + (v.mb | 0) + '" title="' + esc(T(v.sh === 'x' ? 'vs_fail' : 'vs_share')) + '">' + ico('share') + '</a>') +
         '<a class="btn vcut" data-vtrim="' + esc(v.n) + '" data-vsec="' + sec + '" title="' + esc(T('vd_trim')) + '">' + ico('cut') + '</a>' +
         '<a class="btn red" data-vopen="' + esc(v.n) + '">' + ico('play') + ' ' + esc(T('vd_open')) + '</a></div>';
     });
@@ -3175,17 +3203,8 @@ function act(a) {
   if (a === 'qstop') { stopQueue(); return toast(T('q_stopped')); }
   if (a === 'ref') return openRef();
   if (a === 'refset') return ask(T('rf_ask'), function (c) { api('ref_set', { code: c }, function (r) { if (!r.ok) return toast(r.msg || 'Xato'); ME = r.me; toast(T('rf_ok'), 5000); openRef(); renderBar(); }); });
-  if (a === 'srvpw') {
-    if (!srvSel) return;
-    var ip0 = srvSel, cur = srvPw(ip0);
-    return ask(T('pw_ask').replace('{s}', srv(ip0).name || ip0), function (pw, fld) {
-      fld = String(fld || '').replace(/[^\w]/g, '') || '_pw';
-      DB.pw = (DB.pw || []).filter(function (x) { return x.ip !== ip0; });
-      if (pw) DB.pw.push({ ip: ip0, f: fld, pw: String(pw).replace(/["\\;]/g, '').slice(0, 40) });
-      persist(); cloudSave(); renderInfo(); toast(pw ? T('pw_saved') : T('pw_del'));
-      if (CONNECTED === ip0) applyPw(ip0);
-    }, true, true);
-  }
+  if (a === 'srvpw') { if (srvSel) openPw(srvSel); return; }
+  if (a === 'pwsave' || a === 'pwdel') { if (PW_IP) pwSave(PW_IP, a === 'pwdel'); return; }
   if (a === 'clan') return openClan();
   if (a === 'clancreate') return ask(T('cl_ask'), function (n, t) { clanCall('clan_create', { name: n, tag: t }); }, true);
   if (a === 'clanjoin') return ask(T('cl_askcode'), function (c) { clanCall('clan_join', { code: c }); });
@@ -3435,6 +3454,8 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-vshare'))) {          // klipni saytga va Telegram kanalga
     var vsn = el.getAttribute('data-vshare');
     if (!ME) return toast(T('vs_login'), 5000);
+    var vmb = Number(el.getAttribute('data-vmb')) || 0;
+    if (vmb > 60) return toast(T('vs_big').replace('{n}', vmb), 8000);   // ulashish chegarasi 60 MB (Telegram 50 MB)
     return ask(T('vs_ask'), function () {
       vidCmd('share', vsn, { srv: CONNECTED ? (srv(CONNECTED).name || CONNECTED) : '' });   // xato bo'lsa (kunlik chegara, qayta kirish) - sababi ko'rinadi
       each([6000, 20000, 45000, 90000, 150000], function (ms) { setTimeout(function () { VIDS_T = 0; vidsRefresh(); }, ms); });
