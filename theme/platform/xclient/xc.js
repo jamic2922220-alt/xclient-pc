@@ -971,11 +971,11 @@ function pwSave(ip, del) {
   DB.pw = (DB.pw || []).filter(function (x) { return x.ip !== ip; });
   var pw = del ? '' : String($('pwP').value || '').replace(/["\\;]/g, '').slice(0, 40);
   var lg = del ? '' : String($('pwL').value || '').replace(/["\\;\n]/g, '').replace(/^\s+|\s+$/g, '').slice(0, 31);
-  var fld = del ? '' : String($('pwF').value || '').replace(/[^\w]/g, '') || '_pw';
+  var old = srvPw(ip), fe = $('pwF'), fld = del ? '' : (fe ? String(fe.value || '').replace(/[^\w]/g, '') : '') || (old && old.f) || '_pw';
   if (pw) DB.pw.push({ ip: ip, f: fld, pw: pw, login: lg });
   persist(); cloudSave(); toast(T(pw ? 'pw_saved' : 'pw_del'), 6000);
   if (CONNECTED === ip) { applyPw(ip); if (pw) toast(T('pw_reconn'), 7000); }
-  openServers(srvTab); srvSel = ip; renderServers();
+  if (curModal === 'mdServers') renderInfo(); else { openServers(srvTab); srvSel = ip; renderServers(); }
 }
 function doConnect(ip) {
   applyPw(ip);
@@ -1544,8 +1544,23 @@ function sendStats() {
   });
   if (list.length) api('srvstat', { s: JSON.stringify(list) });
 }
+/* VIP/admin kirish: server oynasida doim ochiq login va parol joyi */
+function pwInline(ip) {
+  var p = srvPw(ip) || {}; PW_IP = ip;
+  return '<div class="pwin"><div class="pwh">' + ico('key') + ' ' + esc(T('pw_title')) + (p.pw ? '<span class="gr"> \u2713 ' + esc(T('pw_ok')) + '</span>' : '') + '</div>' +
+    '<input class="tx" id="pwL" maxlength="31" value="' + esc(p.login || '') + '" placeholder="' + esc(T('pw_login')) + '">' +
+    '<input class="tx" id="pwP" type="password" maxlength="40" value="' + esc(p.pw || '') + '" placeholder="' + esc(T('pw_pass')) + '">' +
+    '<a class="btn red" data-act="pwsave">' + esc(T('pw_save')) + '</a>' + (p.pw ? '<a class="btn" data-act="pwdel">' + esc(T('pw_delb')) + '</a>' : '') +
+    '<div class="pwt">' + esc(T('pw_short')) + ' <a data-act="srvpw">' + esc(T('pw_more')) + '</a></div></div>';
+}
 function renderInfo() {
   var box = $('srvInfo');
+  /* ro'yxat har necha soniyada yangilanadi - yozilayotgan login/parol o'chib ketmasin */
+  var ae = document.activeElement, keep = PW_IP === srvSel && $('pwL') ? { l: $('pwL').value, p: $('pwP').value, f: ae && (ae.id === 'pwL' || ae.id === 'pwP') ? ae.id : '' } : null;
+  renderInfo2(box);
+  if (keep && $('pwL')) { $('pwL').value = keep.l; $('pwP').value = keep.p; if (keep.f) try { var fe = $(keep.f); fe.focus(); fe.selectionStart = fe.selectionEnd = fe.value.length; } catch (e) {} }
+}
+function renderInfo2(box) {
   if (!srvSel) { box.innerHTML = '<div class="empty">' + esc(T('empty_list')) + '</div>'; return; }
   var s = srv(srvSel), pl = PLAYERS[srvSel], ph = '', h = histOf(srvSel);
   if (pl && pl.length) each(pl.slice(0, 40), function (p) { ph += '<div class="pl">' + esc(clean(p.name) || '...') + '<span>' + (p.score || 0) + ' \u00b7 ' + fmtShort(p.timePlayedSeconds) + '</span></div>'; });
@@ -1556,7 +1571,7 @@ function renderInfo() {
     (/^[\w\-.]{2,40}$/.test(mapn) ? '<img src="map.php?m=' + encodeURIComponent(mapn.toLowerCase()) + '" alt="" onerror="this.style.display=\'none\'">' : '') +
     '<span>' + esc(mapn || '?') + '</span></div>' +
     '<h3>' + flagOf(srvSel) + esc(s.name || (h && h.name) || srvSel) + '</h3><div class="ip"><input class="ipin" readonly value="' + esc(srvSel) + '"><a class="cpy" data-copyip="' + esc(srvSel) + '">' + esc(T('ip_copy')) + '</a></div>' +
-      (function () { var pp = srvPw(srvSel); return '<a class="btn pwb' + (pp ? ' on' : '') + '" data-act="srvpw">' + ico('key') + ' ' + esc(pp ? T('pw_on').replace('{n}', pp.login || T('pw_mynick')) : T('pw_add')) + '</a>'; })() +
+      pwInline(srvSel) +
     '<div class="ln">' + esc(T('ph_players')) + ' <b>' + (s.ok ? s.pl + '/' + s.max : '-') + '</b><span class="r ' + pc + '">' + (s.ok ? '\u25cf ' + s.ping + ' ms' : esc(T('offline'))) + '</span></div>' +
     histBars(srvSel) +
     '<div class="ph">' + esc(T('ph_players')) + '</div><div class="pls">' + ph + '</div>' +
@@ -2627,7 +2642,7 @@ var PANES = {
       vqs += '<a class="' + (vq === o[0] ? 'on' : '') + '" data-ovq="' + o[0] + '">' + esc(T(o[1])) + '<small>' + esc(T(o[2])) + '</small></a>';
     });
     each(vids, function (v) {
-      if ((v.sh === 'q' || /^\d+$/.test(v.sh || '')) && (!v.sht || now() / 1000 - v.sht > 1800)) v.sh = '';   // 30 daqiqa siljimagan yuklash - qayta ulashish mumkin
+      if ((v.sh === 'q' || /^\d+$/.test(v.sh || '')) && (!v.sht || now() / 1000 - v.sht > 1800 || (v.mb | 0) > 60)) v.sh = '';   // 30 daqiqa siljimagan yuklash - qayta ulashish mumkin
       var m = /^xc_(\d{4})(\d\d)(\d\d)_(\d\d)(\d\d)(\d\d)$/.exec(v.n || ''); if (!m) return;
       var t = new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime(), sec = v.sec | 0;
       var info = [(v.mb | 0) + ' MB'];

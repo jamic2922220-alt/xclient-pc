@@ -858,3 +858,11 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .dmr .vsh { position: absolute; top: 6px; right: 210px; margin: 0; height: 30px; line-height: 28px; padding: 0 10px; min-width: 38px; text-align: center; }
 .dmr .vsh .ico { vertical-align: -2px; } .dmr .vsh.err { color: #ff6b6b; border-color: #6b2c2c; } .dmr .vsh.on { color: #4cd964; border-color: #2c6b3a; } .dmr .vsh.wait { color: #8f8590; cursor: default; font-size: 12px; }
 .dmr b, .dmr small { margin-right: 262px; }
+
+/* VIP/admin kirish - server oynasida doim ochiq */
+.pwin { margin: 10px 0 6px; padding: 10px; border: 1px solid #3a2e34; background: #120e15; }
+.pwin .pwh { font-size: 12px; letter-spacing: 1px; color: #ff6a5a; text-transform: uppercase; margin-bottom: 8px; }
+.pwin .pwh .gr { text-transform: none; letter-spacing: 0; }
+.pwin .tx { display: block; height: 34px; margin-bottom: 6px; }
+.pwin .btn { display: inline-block; height: 32px; line-height: 30px; padding: 0 14px; margin: 2px 6px 0 0; font-size: 13px; }
+.pwin .pwt { font-size: 11px; color: #8f8590; margin-top: 8px; line-height: 15px; } .pwin .pwt a { color: #ffb4a0; cursor: pointer; }
