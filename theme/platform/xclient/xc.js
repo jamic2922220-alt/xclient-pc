@@ -3560,6 +3560,7 @@ document.addEventListener('mousewheel', function (e) { if (!KEYWAIT) return; e.p
 document.oncontextmenu = function () { return !KEYWAIT; };
 document.onkeydown = function (e) {
   var k = e.keyCode;
+  if (k === 27 && !KEYWAIT) cmd('hideconsole');   // ochiq qolgan konsol ESC da menyu bilan birga chiqmasin (~ bilan ochish ishlayveradi)
   if (KEYWAIT) { finishWait(k === 27 ? '' : keyName(e)); return false; }
   if ($('mdAsk').className === 'modal on') { if (k === 13) askDone(true); if (k === 27) askDone(false); return; }
   if (curModal === 'mdLogin' && k === 13) { doLogin(); return false; }
@@ -3634,8 +3635,10 @@ if (NC) {
     if (NC.addEventListener) {
       NC.addEventListener('connect', function (e) { onConnectEvt(e && e.detail && e.detail.address, false); });
       NC.addEventListener('putinserver', function (e) { onConnectEvt(e && e.detail && e.detail.address, true); });
-      NC.addEventListener('disconnect', function () { onDisconnectEvt(); });
+      NC.addEventListener('disconnect', function () { onDisconnectEvt(); cmd('hideconsole'); });
     }
+    /* CS 1.6: bir marta ochilgan konsol yopilmaguncha har ESC da (bosh menyuda) qayta chiqadi - NextClient faqat o'yinga qaytganda yopadi */
+    setTimeout(function () { cmd('hideconsole'); }, 1500);
     if (NC.connectedHost) onConnectEvt(NC.connectedHost, true);
   } catch (e) {}
   try {
