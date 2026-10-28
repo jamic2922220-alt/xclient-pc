@@ -1547,11 +1547,11 @@ function sendStats() {
 /* VIP/admin kirish: server oynasida doim ochiq login va parol joyi */
 function pwInline(ip) {
   var p = srvPw(ip) || {}; PW_IP = ip;
-  return '<div class="pwin"><div class="pwh">' + ico('key') + ' ' + esc(T('pw_title')) + (p.pw ? '<span class="gr"> \u2713 ' + esc(T('pw_ok')) + '</span>' : '') + '</div>' +
+  return '<div class="pwin" title="' + esc(T('pw_short')) + '"><div class="pwh"><a data-act="srvpw">?</a>' + ico('key') + ' ' + esc(T('pw_title')) + (p.pw ? '<span class="gr"> \u2713 ' + esc(T('pw_ok')) + '</span>' : '') + '</div>' +
     '<input class="tx" id="pwL" maxlength="31" value="' + esc(p.login || '') + '" placeholder="' + esc(T('pw_login')) + '">' +
     '<input class="tx" id="pwP" type="password" maxlength="40" value="' + esc(p.pw || '') + '" placeholder="' + esc(T('pw_pass')) + '">' +
     '<a class="btn red" data-act="pwsave">' + esc(T('pw_save')) + '</a>' + (p.pw ? '<a class="btn" data-act="pwdel">' + esc(T('pw_delb')) + '</a>' : '') +
-    '<div class="pwt">' + esc(T('pw_short')) + ' <a data-act="srvpw">' + esc(T('pw_more')) + '</a></div></div>';
+    '</div>';
 }
 function renderInfo() {
   var box = $('srvInfo');
