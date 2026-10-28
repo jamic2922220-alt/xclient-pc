@@ -955,6 +955,7 @@ static BOOL vid_newpath(wchar_t *path)
 }
 
 /* menyudagi "Videolarim" ro'yxatiga */
+static void vthumb_start(DWORD delay);   /* xc_edit.c: menyudagi jonli ko'rinish */
 static void vid_report(const wchar_t *path, unsigned sec)
 {
     WIN32_FILE_ATTRIBUTE_DATA fa; char url[300], nm[24] = "";
@@ -966,6 +967,7 @@ static void vid_report(const wchar_t *path, unsigned sec)
     _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=vadd&d=%s&n=%s&mb=%u&sec=%u&q=%s", g_id, nm, (unsigned)mb, sec, g_vq == 2 ? "hi" : g_vq ? "mid" : "low");
     url[sizeof(url) - 1] = 0;
     free(http_get(url, NULL));
+    vthumb_start(3000);
 }
 
 /* ---- "oxirgi 30 soniya" buferi: o'yin davomida videokartada 10 soniyalik bo'laklar (vaqtinchalik papkada, eng ko'pi 6 ta).
@@ -1404,6 +1406,7 @@ static void rec_session_begin(DWORD game_pid)
     if (g_vp_stop) g_vp_th = CreateThread(NULL, 0, vid_poll_thread, NULL, 0, NULL);
     g_game_pid = game_pid; g_rec_saved = 0; g_rec_last[0] = 0; g_rec_wnd = NULL;
     g_hk_th = CreateThread(NULL, 0, rec_hotkey_thread, NULL, 0, &g_hk_tid);
+    vthumb_start(30000);                 /* hali ko'rinishi yo'q videolar (oldingilari ham) - o'yin yuklangach, fonda */
 }
 
 /* o'yin yopildi: yozilayotgan bo'lsa saqlaymiz; yangi video bo'lsa papkani ochib, faylni belgilaymiz */

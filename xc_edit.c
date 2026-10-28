@@ -37,16 +37,19 @@ static void ed_fmt(wchar_t *o, size_t n, LONGLONG t)
 
 /* ---- kadrchalar: Source Reader (RGB32 ga aylantirib) - har 1/12 qismdan bittadan, fon oqimida ---- */
 typedef struct { Ed *e; wchar_t path[MAX_PATH]; LONGLONG dur; HWND wnd; } ThumbJob;
-static DWORD WINAPI ed_thumb_thread(LPVOID p)
+/* videodan n ta kadrcha (har biri tw x th) - bitta yonma-yon rasm. dur 0 bo'lsa videoning o'zidan olinadi. MFStartup - chaqiruvchida */
+static HBITMAP strip_make(const wchar_t *path, LONGLONG dur, int n, int tw, int th, int *pdone)
 {
-    ThumbJob *j = (ThumbJob *)p;
     IMFAttributes *at = NULL; IMFSourceReader *r = NULL; IMFMediaType *t = NULL;
     HBITMAP bmp = NULL; int done = 0;
-    CoInitializeEx(NULL, COINIT_MULTITHREADED);
-    if (FAILED(rf.MFStartup(0x00020070, 0))) goto out0;
     if (FAILED(rf.MFCreateAttributes(&at, 1))) goto out;
     IMFAttributes_SetUINT32(at, &MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING, TRUE);
-    if (FAILED(rf.MFCreateSourceReaderFromURL(j->path, at, &r))) goto out;
+    if (FAILED(rf.MFCreateSourceReaderFromURL(path, at, &r))) goto out;
+    if (dur <= 0) {
+        PROPVARIANT dv; ZeroMemory(&dv, sizeof(dv));
+        if (FAILED(IMFSourceReader_GetPresentationAttribute(r, MF_SOURCE_READER_MEDIASOURCE, &MF_PD_DURATION, &dv)) || !dv.uhVal.QuadPart) goto out;
+        dur = (LONGLONG)dv.uhVal.QuadPart;
+    }
     IMFSourceReader_SetStreamSelection(r, MF_SOURCE_READER_ALL_STREAMS, FALSE);
     IMFSourceReader_SetStreamSelection(r, MF_SOURCE_READER_FIRST_VIDEO_STREAM, TRUE);
     if (!(t = mt_new())) goto out;
@@ -60,13 +63,13 @@ static DWORD WINAPI ed_thumb_thread(LPVOID p)
     SREL(t);
     if (!fw || !fh) goto out;
     HDC sdc = GetDC(NULL), mdc = CreateCompatibleDC(sdc);
-    bmp = CreateCompatibleBitmap(sdc, ED_TW * ED_THUMBS, ED_TH);
+    bmp = CreateCompatibleBitmap(sdc, tw * n, th);
     ReleaseDC(NULL, sdc);
     HGDIOBJ ob = SelectObject(mdc, bmp);
-    PatBlt(mdc, 0, 0, ED_TW * ED_THUMBS, ED_TH, BLACKNESS);
+    PatBlt(mdc, 0, 0, tw * n, th, BLACKNESS);
     SetStretchBltMode(mdc, HALFTONE);
-    for (int i = 0; i < ED_THUMBS; i++) {
-        PROPVARIANT pv; ZeroMemory(&pv, sizeof(pv)); pv.vt = VT_I8; pv.hVal.QuadPart = j->dur * i / ED_THUMBS + j->dur / (ED_THUMBS * 2);
+    for (int i = 0; i < n; i++) {
+        PROPVARIANT pv; ZeroMemory(&pv, sizeof(pv)); pv.vt = VT_I8; pv.hVal.QuadPart = dur * i / n + dur / (n * 2);
         IMFSourceReader_SetCurrentPosition(r, &GUID_NULL, &pv);
         for (int tries = 0; tries < 90; tries++) {        /* kalit kadrdan kerakli joygacha */
             DWORD idx, fl; LONGLONG ts; IMFSample *s = NULL;
@@ -85,7 +88,7 @@ static DWORD WINAPI ed_thumb_thread(LPVOID p)
                     BYTE *base = line;
                     if (pitch > 0) bi.bmiHeader.biHeight = -(LONG)fh;
                     else { bi.bmiHeader.biWidth = -pitch / 4; bi.bmiHeader.biHeight = (LONG)fh; base = line + (LONG)(fh - 1) * pitch; }
-                    StretchDIBits(mdc, i * ED_TW, 0, ED_TW, ED_TH, 0, 0, fw, fh, base, &bi, DIB_RGB_COLORS, SRCCOPY);
+                    StretchDIBits(mdc, i * tw, 0, tw, th, 0, 0, fw, fh, base, &bi, DIB_RGB_COLORS, SRCCOPY);
                     done++;
                 }
                 if (locked2d) IMF2DBuffer_Unlock2D(b2); else if (raw) IMFMediaBuffer_Unlock(mb);
@@ -97,8 +100,16 @@ static DWORD WINAPI ed_thumb_thread(LPVOID p)
     SelectObject(mdc, ob); DeleteDC(mdc);
 out:
     SREL(t); SREL(r); SREL(at);
-    rf.MFShutdown();
-out0:
+    if (pdone) *pdone = done;
+    if (bmp && !done) { DeleteObject(bmp); bmp = NULL; }
+    return bmp;
+}
+static DWORD WINAPI ed_thumb_thread(LPVOID p)
+{
+    ThumbJob *j = (ThumbJob *)p;
+    HBITMAP bmp = NULL; int done = 0;
+    CoInitializeEx(NULL, COINIT_MULTITHREADED);
+    if (SUCCEEDED(rf.MFStartup(0x00020070, 0))) { bmp = strip_make(j->path, j->dur, ED_THUMBS, ED_TW, ED_TH, &done); rf.MFShutdown(); }
     CoUninitialize();
     if (bmp && done && IsWindow(j->wnd)) PostMessageW(j->wnd, WM_ED_THUMBS, (WPARAM)bmp, done);
     else if (bmp) DeleteObject(bmp);
@@ -106,7 +117,78 @@ out0:
     return 0;
 }
 
-/* ---- vaqt chizig'i ---- */
+/* ---- menyudagi "Mening videolarim" uchun jonli ko'rinish: 8 ta kadrcha (160x90) bitta JPEG, saytga yuboriladi.
+ * Menyu ularni ketma-ket almashtirib ko'rsatadi - video ro'yxatda o'ynab turgandek. Yuborilganlar Videolar\X CLIENT\.thumbs da belgilanadi */
+#define VTH_N 8
+#define VTH_W 160
+#define VTH_H 90
+int WINAPI GdipCreateBitmapFromHBITMAP(HBITMAP hbm, HPALETTE hpal, void **bitmap);
+static char *share_post(const char *path, const void *data, DWORD len);   /* xc_rec.c */
+static volatile LONG g_vth_run = 0;
+static BOOL vthumb_one(const wchar_t *dir, const wchar_t *mp4, const wchar_t *wname)
+{
+    wchar_t td[MAX_PATH], jp[MAX_PATH], mk[MAX_PATH];
+    _snwprintf(td, MAX_PATH, L"%s\\.thumbs", dir); td[MAX_PATH - 1] = 0;
+    _snwprintf(mk, MAX_PATH, L"%s\\%s.up", td, wname); mk[MAX_PATH - 1] = 0;
+    if (GetFileAttributesW(mk) != INVALID_FILE_ATTRIBUTES) return TRUE;   /* allaqachon yuborilgan */
+    if (CreateDirectoryW(td, NULL)) SetFileAttributesW(td, FILE_ATTRIBUTE_HIDDEN);
+    _snwprintf(jp, MAX_PATH, L"%s\\%s.jpg", td, wname); jp[MAX_PATH - 1] = 0;
+    int done = 0; BOOL ok = FALSE;
+    HBITMAP bmp = strip_make(mp4, 0, VTH_N, VTH_W, VTH_H, &done);
+    if (!bmp) return FALSE;
+    void *img = NULL;
+    if (GdipCreateBitmapFromHBITMAP(bmp, NULL, &img) == 0 && img) { ok = GdipSaveImageToFile(img, jp, &XC_JPEG, NULL) == 0; GdipDisposeImage(img); }
+    DeleteObject(bmp);
+    if (!ok) return FALSE;
+    long len = 0; char *jpg = read_all(jp, &len);
+    ok = FALSE;
+    if (jpg && len > 0 && len < 300000) {
+        char n8[48], path[200]; WideCharToMultiByte(CP_UTF8, 0, wname, -1, n8, sizeof(n8), NULL, NULL);
+        _snprintf(path, sizeof(path), "/xc_api.php?a=vthumb&d=%s&n=%s", g_id, n8); path[sizeof(path) - 1] = 0;
+        char *r = share_post(path, jpg, (DWORD)len);
+        ok = r && !strncmp(r, "ok", 2);
+        free(r);
+    }
+    free(jpg);
+    if (ok) { HANDLE f = CreateFileW(mk, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL); if (f != INVALID_HANDLE_VALUE) CloseHandle(f); }
+    return ok;
+}
+static DWORD WINAPI vthumb_thread(LPVOID delay)
+{
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_LOWEST);
+    Sleep((DWORD)(UINT_PTR)delay);                        /* o'yin yuklanib olsin */
+    CoInitializeEx(NULL, COINIT_MULTITHREADED);
+    ULONG_PTR tok = 0; XGdipStartupInput in = { 1, NULL, FALSE, FALSE };
+    wchar_t dir[MAX_PATH], pat[MAX_PATH];
+    if (vid_dir(dir) && GdiplusStartup(&tok, &in, NULL) == 0) {
+        if (rec_load() && SUCCEEDED(rf.MFStartup(0x00020070, 0))) {
+            _snwprintf(pat, MAX_PATH, L"%s\\xc_*.mp4", dir); pat[MAX_PATH - 1] = 0;
+            WIN32_FIND_DATAW fd; HANDLE h = FindFirstFileW(pat, &fd); int n = 0;
+            if (h != INVALID_HANDLE_VALUE) {
+                do {
+                    wchar_t f[MAX_PATH], wn[64]; size_t L = wcslen(fd.cFileName);
+                    if (L < 5 || L >= 60) continue;
+                    lstrcpynW(wn, fd.cFileName, (int)(L - 3));      /* .mp4 siz */
+                    _snwprintf(f, MAX_PATH, L"%s\\%s", dir, fd.cFileName); f[MAX_PATH - 1] = 0;
+                    vthumb_one(dir, f, wn);
+                } while (++n < 200 && FindNextFileW(h, &fd));
+                FindClose(h);
+            }
+            rf.MFShutdown();
+        }
+        GdiplusShutdown(tok);
+    }
+    CoUninitialize();
+    InterlockedExchange(&g_vth_run, 0);
+    return 0;
+}
+static void vthumb_start(DWORD delay)
+{
+    if (InterlockedExchange(&g_vth_run, 1)) return;      /* bittasi ishlayapti - u yangilarini ham topadi */
+    HANDLE th = CreateThread(NULL, 0, vthumb_thread, (LPVOID)(UINT_PTR)delay, 0, NULL);
+    if (th) CloseHandle(th); else InterlockedExchange(&g_vth_run, 0);
+}
+
 static RECT ed_track(HWND h) { RECT r; GetClientRect(h, &r); r.left += 14; r.right -= 14; r.top += 22; r.bottom -= 8; return r; }
 static int ed_x(Ed *e, RECT *tr, LONGLONG t) { return e->dur ? tr->left + (int)((tr->right - tr->left) * (double)t / e->dur) : tr->left; }
 static LONGLONG ed_t(Ed *e, RECT *tr, int x)

@@ -2658,7 +2658,9 @@ var PANES = {
       var info = [(v.mb | 0) + ' MB'];
       if (sec) info.push(Math.floor(sec / 60) + ':' + pad(sec % 60));
       if (v.q) info.push(T('vq_' + v.q));
-      rows += '<div class="dmr"><b>' + esc(fmtTime(t)) + ' · ' + esc(m[3] + '.' + m[2] + '.' + m[1]) + '</b><small>' + esc(info.join(' · ')) + '</small>' +
+      /* jonli ko'rinish: launcher yuborgan 8 kadr ketma-ket almashadi (yo'q bo'lsa - qora oyna) */
+      var thu = PCID && DB.pck ? 'xc_api.php?a=vth&d=' + encodeURIComponent(PCID) + '&k=' + encodeURIComponent(DB.pck) + '&n=' + encodeURIComponent(v.n) : '';
+      rows += '<div class="dmr th"><a class="vth" data-vopen="' + esc(v.n) + '"' + (thu ? ' style="background-image:url(\'' + thu + '\')"' : '') + '></a><b>' + esc(m[4] + ':' + m[5] + ' · ' + m[3] + '.' + m[2] + '.' + m[1]) + '</b><small>' + esc(info.join(' · ')) + '</small>' +
         '<a class="btn vdel" data-vdel="' + esc(v.n) + '" title="' + esc(T('vd_del')) + '">' + ico('trash') + '</a>' +
         (v.sh && /^[a-f0-9]{12}$/.test(v.sh) ? '<a class="btn vsh on" data-vlink="' + esc(v.sh) + '" title="' + esc(T('vs_copy')) + '">' + ico('link') + '</a>' :
           v.sh === 'q' || v.sh === 'c' || /^\d+$/.test(v.sh || '') ? '<span class="btn vsh wait" title="' + esc(T(v.sh === 'c' ? 'vs_comp' : 'vs_wait')) + '">' + (v.sh === 'q' ? '\u2026' : v.sh === 'c' ? '\u27f3' : v.sh + '%') + '</span>' :

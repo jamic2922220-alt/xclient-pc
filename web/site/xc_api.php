@@ -101,6 +101,13 @@ function rl_add($key, $win) {
     foreach ($x as $t) if (time() - $t < $win) $y[] = $t;
     $y[] = time(); wr($k, array_slice($y, -200));
 }
+/* istalgan turdagi fayllar uchun (jonli ko'rinish rasmlari) */
+function cap_dir_any($dir, $mask, $max) {
+    $all = (array)glob($dir . '/' . $mask);
+    if (count($all) <= $max) return;
+    usort($all, function ($a, $b) { return filemtime($a) - filemtime($b); });
+    foreach (array_slice($all, 0, count($all) - $max) as $f) @unlink($f);
+}
 /* papkadagi fayllar sonini cheklash: eng eskilarini o'chiradi */
 function cap_dir($dir, $max) {
     $all = (array)glob($dir . '/*.php');
@@ -527,6 +534,27 @@ function tg_clip($c) {
         if (!empty($r['ok'])) return;
     }
     tg_send($cf['tg_clips'], $cap);                       // katta fayl yoki curl yo'q - havola bilan
+}
+/* "Mening videolarim" dagi jonli ko'rinish: launcher 8 kadrli JPEG yuboradi (vthumb), menyu o'z kaliti bilan oladi (vth) */
+if ($a === 'vthumb' || $a === 'vth') {
+    $d = strtolower(p('d')); $n = vid_name(p('n'));
+    if (!preg_match('/^[a-z0-9]{8,40}$/', $d) || $n === '' || !is_file(XC_DIR . '/dev/' . $d . '.php')) { header('HTTP/1.1 404 Not Found'); exit; }
+    @mkdir(XC_DIR . '/vth', 0755, true);
+    $f = XC_DIR . '/vth/' . $d . '_' . $n . '.jpg';
+    if ($a === 'vthumb') {
+        header('Content-Type: text/plain');
+        if (rl_count('vth' . $d, 3600) >= 300) { echo 'limit'; exit; }
+        rl_add('vth' . $d, 3600);
+        $data = file_get_contents('php://input', false, null, 0, 300001);
+        if ($data === false || strlen($data) < 200 || strlen($data) > 300000 || substr($data, 0, 2) !== "\xFF\xD8") { echo 'bad'; exit; }
+        file_put_contents($f, $data, LOCK_EX);
+        cap_dir_any(XC_DIR . '/vth', '*.jpg', 20000);
+        echo 'ok'; exit;
+    }
+    $o = rd('dev/' . $d, array());
+    if (!dev_ok($d, $o) || !is_file($f)) { header('HTTP/1.1 404 Not Found'); exit; }
+    header('Content-Type: image/jpeg'); header('Cache-Control: private, max-age=604800');
+    readfile($f); exit;
 }
 if ($a === 'clipfail' || $a === 'clipstat') {                // launcher: yuklab bo'lmadi (x / l - juda uzun) yoki kichraytirilmoqda (c)
     header('Content-Type: text/plain'); header('Cache-Control: no-store');

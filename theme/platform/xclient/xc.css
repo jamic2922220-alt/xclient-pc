@@ -866,3 +866,12 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .pwin .tx { float: left; width: 49%; height: 28px; font-size: 13px; padding: 0 7px; margin-bottom: 6px; } .pwin #pwP { margin-left: 2%; }
 .pwin .btn { clear: both; float: left; height: 26px; line-height: 24px; padding: 0 12px; margin-right: 6px; font-size: 12px; }
 .pwin .btn + .btn { clear: none; }
+
+/* "Mening videolarim": jonli ko'rinish (8 kadr, 4 soniyada aylanadi) */
+.dmr.th { height: 78px; padding-left: 132px; padding-top: 18px; }
+.dmr.th .vth { position: absolute; left: 0; top: 6px; width: 120px; height: 66px; background: #08070a no-repeat 0 0; background-size: 960px 66px; border: 1px solid #2a2026; border-radius: 4px; cursor: pointer;
+  -webkit-animation: vthA 4s steps(8) infinite; animation: vthA 4s steps(8) infinite; }
+.dmr.th .vth:hover { border-color: #ff3b3b; }
+.dmr.th .btn { top: 22px; }
+@-webkit-keyframes vthA { from { background-position: 0 0; } to { background-position: -960px 0; } }
+@keyframes vthA { from { background-position: 0 0; } to { background-position: -960px 0; } }
