@@ -528,10 +528,11 @@ function tg_clip($c) {
     }
     tg_send($cf['tg_clips'], $cap);                       // katta fayl yoki curl yo'q - havola bilan
 }
-if ($a === 'clipfail') {                                    // launcher: yuklab bo'lmadi (fayl katta, internet) - menyu yana "Ulashish" ni ko'rsatsin
+if ($a === 'clipfail' || $a === 'clipstat') {                // launcher: yuklab bo'lmadi (x / l - juda uzun) yoki kichraytirilmoqda (c)
     header('Content-Type: text/plain'); header('Cache-Control: no-store');
     $tk = strtolower(p('tk')); $t = clip_ticket($tk);
-    if ($t) { lock(); $s = rd('shares', array()); unset($s[$tk]); wr('shares', $s); clip_mark($t['d'], $t['n'], 'x'); unlock(); @unlink(XC_DIR . '/up/' . $tk . '.part'); }
+    if ($t && $a === 'clipstat') { lock(); clip_mark($t['d'], $t['n'], p('s') === 'c' ? 'c' : 'q'); unlock(); }
+    elseif ($t) { lock(); $s = rd('shares', array()); unset($s[$tk]); wr('shares', $s); clip_mark($t['d'], $t['n'], p('r') === 'l' ? 'l' : 'x'); unlock(); @unlink(XC_DIR . '/up/' . $tk . '.part'); }
     echo 'ok'; exit;
 }
 if ($a === 'clipup' || $a === 'clipdone') {
@@ -1711,8 +1712,6 @@ case 'vcmd':
     if ($c === 'share') {                                 // ulashish: faqat akkaunt bilan, kuniga 10 ta
         unlock(); $su = auth(); lock(); $o = rd('dev/' . $d, array());
         if (rl_count('share' . $su['login'], 86400) >= 10) fail('limit', 'Bugun 10 ta klip ulashildi - ertaga yana');
-        foreach ((array)(isset($o['vids']) ? $o['vids'] : array()) as $vx0) if (isset($vx0['n']) && $vx0['n'] === $n && (int)$vx0['mb'] >= 60)
-            fail('big', 'Video ' . (int)$vx0['mb'] . ' MB - ulashish uchun 60 MB gacha. Qaychi bilan qisqartiring yoki "Kichik" sifatda yozing');
         rl_add('share' . $su['login'], 86400);
         $tk = function_exists('random_bytes') ? bin2hex(random_bytes(16)) : md5(uniqid(mt_rand(), true) . client_ip());
         $sh = rd('shares', array());

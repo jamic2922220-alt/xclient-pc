@@ -671,6 +671,135 @@ static BOOL remux_parts(const RemuxPart *parts, int n, const wchar_t *dst, LONGL
     if (!ok) DeleteFileW(dst);
     return ok;
 }
+/* ---- ulashish uchun kichraytirish: katta videoni sayt va Telegram'ga sig'adigan (45 MB gacha) qilib qayta siqish.
+ * Bitreyt video uzunligidan hisoblanadi; 720p (manba kichikroq bo'lsa - o'z o'lchami), 60 kadr bo'lsa 30 ga, ovoz AAC 128 kbit.
+ * Juda uzun video (sifatli sig'maydi) - XC_TC_LONG: o'yinchiga qaychi bilan qisqartirish aytiladi */
+#define XC_TC_OK 0
+#define XC_TC_FAIL 1
+#define XC_TC_LONG 2
+static int g_tc_err = 0;                       /* qaysi qadamda to'xtadi (diagnostika) */
+static int transcode_small(const wchar_t *src, const wchar_t *dst, ULONGLONG maxBytes, double kbps_scale)
+{
+    IMFAttributes *ra = NULL, *wa = NULL; IMFSourceReader *r = NULL; IMFSinkWriter *w = NULL;
+    IMFMediaType *nv = NULL, *ov = NULL, *iv = NULL, *oa = NULL, *ia = NULL, *cur = NULL;
+    int res = XC_TC_FAIL; DWORD sv = 0, sa = 0; BOOL haveA = FALSE, began = FALSE;
+    if (!rf.MFCreateSourceReaderFromURL || FAILED(rf.MFCreateAttributes(&ra, 2))) return XC_TC_FAIL;
+    IMFAttributes_SetUINT32(ra, &MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, TRUE);   /* Windows 8+: o'lchamni o'zgartirish */
+    if (FAILED(rf.MFCreateSourceReaderFromURL(src, ra, &r))) {
+        IMFAttributes_DeleteAllItems(ra); IMFAttributes_SetUINT32(ra, &MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING, TRUE);   /* Windows 7 */
+        if (FAILED(rf.MFCreateSourceReaderFromURL(src, ra, &r))) { g_tc_err = 1; goto done; }
+    }
+    PROPVARIANT pv; ZeroMemory(&pv, sizeof(pv));
+    if (FAILED(IMFSourceReader_GetPresentationAttribute(r, MF_SOURCE_READER_MEDIASOURCE, &MF_PD_DURATION, &pv))) { g_tc_err = 2; goto done; }
+    double dur = pv.uhVal.QuadPart / 1e7;
+    if (dur < 1) { g_tc_err = 3; goto done; }
+    UINT64 fs = 0, fr = 0;
+    if (FAILED(IMFSourceReader_GetNativeMediaType(r, MF_SOURCE_READER_FIRST_VIDEO_STREAM, 0, &nv))) { g_tc_err = 4; goto done; }
+    IMFMediaType_GetUINT64(nv, &MF_MT_FRAME_SIZE, &fs); IMFMediaType_GetUINT64(nv, &MF_MT_FRAME_RATE, &fr);
+    UINT32 sw = (UINT32)(fs >> 32), sh = (UINT32)fs, fn = (UINT32)(fr >> 32), fd = (UINT32)fr;
+    if (!sw || !sh) { g_tc_err = 5; goto done; }
+    double fps = fn && fd ? (double)fn / fd : 30.0;
+    /* bitreyt: 45 MB ning 92% i (konteyner uchun zaxira), ovoz 128 kbit */
+    double vbps = maxBytes * 8.0 * 0.92 / dur - 128000.0;
+    vbps *= kbps_scale;
+    if (vbps < 700000) { res = XC_TC_LONG; { g_tc_err = 6; goto done; } }   /* 720p da bundan past - xira bo'ladi */
+    if (vbps > 6000000) vbps = 6000000;
+    UINT32 th = sh > 720 ? 720 : sh;
+    if (vbps < 1400000 && th > 540) th = 540;
+    UINT32 tw = (UINT32)((double)sw * th / sh + 0.5) & ~1u; th &= ~1u;
+    BOOL halve = fps > 45 && vbps < 4500000;            /* 60 kadr - 30 ga: bir xil hajmda tiniqroq */
+    /* o'quvchi: NV12, kerakli o'lchamda (eski Windows o'lcham o'zgartira olmasa - asl o'lchamda) */
+    if (FAILED(rf.MFCreateMediaType(&iv))) { g_tc_err = 7; goto done; }
+    IMFMediaType_SetGUID(iv, &MF_MT_MAJOR_TYPE, &MFMediaType_Video); IMFMediaType_SetGUID(iv, &MF_MT_SUBTYPE, &MFVideoFormat_NV12);
+    IMFMediaType_SetUINT64(iv, &MF_MT_FRAME_SIZE, ((UINT64)tw << 32) | th);
+    if (FAILED(IMFSourceReader_SetCurrentMediaType(r, MF_SOURCE_READER_FIRST_VIDEO_STREAM, NULL, iv))) {
+        tw = sw & ~1u; th = sh & ~1u;
+        IMFMediaType_SetUINT64(iv, &MF_MT_FRAME_SIZE, ((UINT64)tw << 32) | th);
+        if (FAILED(IMFSourceReader_SetCurrentMediaType(r, MF_SOURCE_READER_FIRST_VIDEO_STREAM, NULL, iv))) { g_tc_err = 8; goto done; }
+    }
+    if (FAILED(IMFSourceReader_GetCurrentMediaType(r, MF_SOURCE_READER_FIRST_VIDEO_STREAM, &cur))) { g_tc_err = 9; goto done; }
+    /* yozuvchi */
+    if (FAILED(rf.MFCreateAttributes(&wa, 2))) { g_tc_err = 10; goto done; }
+    IMFAttributes_SetGUID(wa, &MF_TRANSCODE_CONTAINERTYPE, &MFTranscodeContainerType_MPEG4);
+    IMFAttributes_SetUINT32(wa, &MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, TRUE);
+    if (FAILED(rf.MFCreateSinkWriterFromURL(dst, NULL, wa, &w))) { g_tc_err = 11; goto done; }
+    if (FAILED(rf.MFCreateMediaType(&ov))) { g_tc_err = 12; goto done; }
+    IMFMediaType_SetGUID(ov, &MF_MT_MAJOR_TYPE, &MFMediaType_Video); IMFMediaType_SetGUID(ov, &MF_MT_SUBTYPE, &MFVideoFormat_H264);
+    IMFMediaType_SetUINT32(ov, &MF_MT_AVG_BITRATE, (UINT32)vbps);
+    IMFMediaType_SetUINT32(ov, &MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
+    IMFMediaType_SetUINT32(ov, &MF_MT_MPEG2_PROFILE, 77 /* eAVEncH264VProfile_Main */);   /* telefonlarda ham ochiladi */
+    IMFMediaType_SetUINT64(ov, &MF_MT_FRAME_SIZE, ((UINT64)tw << 32) | th);
+    { UINT32 on = halve ? fn : (fn ? fn : 30), od = halve ? fd * 2 : (fd ? fd : 1); IMFMediaType_SetUINT64(ov, &MF_MT_FRAME_RATE, ((UINT64)on << 32) | od); }
+    IMFMediaType_SetUINT64(ov, &MF_MT_PIXEL_ASPECT_RATIO, ((UINT64)1 << 32) | 1);
+    if (FAILED(IMFSinkWriter_AddStream(w, ov, &sv))) { g_tc_err = 13; goto done; }
+    {   /* siqgichga kiradigan format: NV12 (videokarta siqgichlari), bo'lmasa I420 / YUY2 (Microsoft dasturiy siqgichi) */
+        static const GUID *subs[3] = { &MFVideoFormat_NV12, &MFVideoFormat_I420, &MFVideoFormat_YUY2 };
+        BOOL inok = FALSE;
+        for (int si = 0; si < 3 && !inok; si++) {
+            if (si) {
+                SREL(cur);
+                IMFMediaType_SetGUID(iv, &MF_MT_SUBTYPE, subs[si]);
+                if (FAILED(IMFSourceReader_SetCurrentMediaType(r, MF_SOURCE_READER_FIRST_VIDEO_STREAM, NULL, iv))
+                    || FAILED(IMFSourceReader_GetCurrentMediaType(r, MF_SOURCE_READER_FIRST_VIDEO_STREAM, &cur))) continue;
+            }
+            IMFMediaType_SetUINT32(cur, &MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
+            IMFMediaType_SetUINT64(cur, &MF_MT_PIXEL_ASPECT_RATIO, ((UINT64)1 << 32) | 1);
+            IMFMediaType_SetUINT64(cur, &MF_MT_FRAME_SIZE, ((UINT64)tw << 32) | th);
+            { UINT32 on = fn ? fn : 30, od = fd ? fd : 1; if (halve) od *= 2; IMFMediaType_SetUINT64(cur, &MF_MT_FRAME_RATE, ((UINT64)on << 32) | od); }
+            inok = SUCCEEDED(IMFSinkWriter_SetInputMediaType(w, sv, cur, NULL));
+        }
+        if (!inok) { g_tc_err = 14; goto done; }
+    }
+    /* ovoz: PCM 16 bit -> AAC 128 kbit (bo'lmasa - ovozsiz) */
+    if (SUCCEEDED(rf.MFCreateMediaType(&ia))) {
+        IMFMediaType_SetGUID(ia, &MF_MT_MAJOR_TYPE, &MFMediaType_Audio); IMFMediaType_SetGUID(ia, &MF_MT_SUBTYPE, &MFAudioFormat_PCM);
+        IMFMediaType_SetUINT32(ia, &MF_MT_AUDIO_BITS_PER_SAMPLE, 16);
+        IMFMediaType *ca = NULL; UINT32 ch = 0, sr = 0;
+        if (SUCCEEDED(IMFSourceReader_SetCurrentMediaType(r, MF_SOURCE_READER_FIRST_AUDIO_STREAM, NULL, ia))
+            && SUCCEEDED(IMFSourceReader_GetCurrentMediaType(r, MF_SOURCE_READER_FIRST_AUDIO_STREAM, &ca))
+            && SUCCEEDED(IMFMediaType_GetUINT32(ca, &MF_MT_AUDIO_NUM_CHANNELS, &ch)) && SUCCEEDED(IMFMediaType_GetUINT32(ca, &MF_MT_AUDIO_SAMPLES_PER_SECOND, &sr))
+            && (sr == 44100 || sr == 48000) && ch >= 1 && ch <= 2 && SUCCEEDED(rf.MFCreateMediaType(&oa))) {
+            IMFMediaType_SetGUID(oa, &MF_MT_MAJOR_TYPE, &MFMediaType_Audio); IMFMediaType_SetGUID(oa, &MF_MT_SUBTYPE, &MFAudioFormat_AAC);
+            IMFMediaType_SetUINT32(oa, &MF_MT_AUDIO_BITS_PER_SAMPLE, 16); IMFMediaType_SetUINT32(oa, &MF_MT_AUDIO_SAMPLES_PER_SECOND, sr);
+            IMFMediaType_SetUINT32(oa, &MF_MT_AUDIO_NUM_CHANNELS, ch); IMFMediaType_SetUINT32(oa, &MF_MT_AUDIO_AVG_BYTES_PER_SECOND, 16000);
+            haveA = SUCCEEDED(IMFSinkWriter_AddStream(w, oa, &sa)) && SUCCEEDED(IMFSinkWriter_SetInputMediaType(w, sa, ca, NULL));
+        }
+        SREL(ca);
+    }
+    IMFSourceReader_SetStreamSelection(r, MF_SOURCE_READER_ALL_STREAMS, FALSE);
+    IMFSourceReader_SetStreamSelection(r, MF_SOURCE_READER_FIRST_VIDEO_STREAM, TRUE);
+    if (haveA) IMFSourceReader_SetStreamSelection(r, MF_SOURCE_READER_FIRST_AUDIO_STREAM, TRUE);
+    if (FAILED(IMFSinkWriter_BeginWriting(w))) { g_tc_err = 15; goto done; }
+    began = TRUE;
+    {
+        LONGLONG base = -1, nextv = 0, step = halve ? (LONGLONG)(2e7 / fps) : 0;
+        BOOL vend = FALSE, aend = !haveA, wrote = FALSE;
+        while (!vend || !aend) {
+            DWORD idx = 0, fl = 0; LONGLONG ts = 0; IMFSample *smp = NULL;
+            if (FAILED(IMFSourceReader_ReadSample(r, MF_SOURCE_READER_ANY_STREAM, 0, &idx, &fl, &ts, &smp))) break;
+            BOOL isv = idx == (DWORD)MF_SOURCE_READER_FIRST_VIDEO_STREAM || !haveA ? TRUE : FALSE;
+            { IMFMediaType *mt = NULL; GUID mj; if (SUCCEEDED(IMFSourceReader_GetCurrentMediaType(r, idx, &mt))) { if (SUCCEEDED(IMFMediaType_GetGUID(mt, &MF_MT_MAJOR_TYPE, &mj))) isv = IsEqualGUID(&mj, &MFMediaType_Video); SREL(mt); } }
+            if (fl & MF_SOURCE_READERF_ENDOFSTREAM) { if (isv) vend = TRUE; else aend = TRUE; }
+            if (!smp) continue;
+            if (base < 0) base = ts;
+            LONGLONG nt = ts - base;
+            if (nt < 0) { SREL(smp); continue; }
+            if (isv && step) {
+                if (nt + step / 4 < nextv) { SREL(smp); continue; }   /* har ikkinchi kadr */
+                nextv = nt + step; IMFSample_SetSampleDuration(smp, step);
+            }
+            IMFSample_SetSampleTime(smp, nt);
+            if (SUCCEEDED(IMFSinkWriter_WriteSample(w, isv ? sv : sa, smp))) wrote = TRUE;
+            SREL(smp);
+        }
+        if (wrote) res = XC_TC_OK;
+    }
+done:
+    if (began && FAILED(IMFSinkWriter_Finalize(w))) res = XC_TC_FAIL;
+    SREL(w); SREL(r); SREL(ra); SREL(wa); SREL(nv); SREL(ov); SREL(iv); SREL(oa); SREL(ia); SREL(cur);
+    if (res != XC_TC_OK) DeleteFileW(dst);
+    return res;
+}
 static BOOL remux(const wchar_t *const *src, int n, const wchar_t *dst, LONGLONG from, LONGLONG to, LONGLONG *outdur)
 {
     RemuxPart p[16];
@@ -1147,11 +1276,33 @@ static char *share_post(const char *path, const void *data, DWORD len)
     }
     return NULL;
 }
+#define SHARE_FIT (45ULL * 1024 * 1024)        /* Telegram bot 50 MB gacha videoni qabul qiladi - zaxira bilan */
 static DWORD WINAPI share_thread(LPVOID arg)
 {
     ShareJob *j = (ShareJob *)arg;
-    BOOL ok = FALSE;
-    HANDLE h = CreateFileW(j->f, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
+    BOOL ok = FALSE, longv = FALSE;
+    wchar_t tmp[MAX_PATH] = L"";
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);   /* o'yin paytida ham o'yindan oldin turmasin */
+    CoInitializeEx(NULL, COINIT_MULTITHREADED);
+    {   /* katta video: avval kichraytiramiz (720p, 45 MB gacha) - sayt va Telegram'ga sig'adi, xira bo'lmaydi */
+        WIN32_FILE_ATTRIBUTE_DATA fa;
+        if (GetFileAttributesExW(j->f, GetFileExInfoStandard, &fa) && (((ULONGLONG)fa.nFileSizeHigh << 32) | fa.nFileSizeLow) > SHARE_FIT) {
+            char path[120]; _snprintf(path, sizeof(path), "/xc_api.php?a=clipstat&tk=%s&s=c", j->tk); path[sizeof(path) - 1] = 0;
+            free(share_post(path, "", 0));
+            if (GetTempPathW(MAX_PATH - 40, tmp)) { size_t L = wcslen(tmp); _snwprintf(tmp + L, MAX_PATH - L, L"xc_share_%.8S.mp4", j->tk); tmp[MAX_PATH - 1] = 0; }
+            int tr = XC_TC_FAIL;
+            if (tmp[0] && rec_load() && SUCCEEDED(rf.MFStartup(0x00020070, 0))) {
+                tr = transcode_small(j->f, tmp, SHARE_FIT, 1.0);
+                WIN32_FILE_ATTRIBUTE_DATA ta;
+                if (tr == XC_TC_OK && GetFileAttributesExW(tmp, GetFileExInfoStandard, &ta) && (((ULONGLONG)ta.nFileSizeHigh << 32) | ta.nFileSizeLow) > SHARE_FIT + SHARE_FIT / 10)
+                    tr = transcode_small(j->f, tmp, SHARE_FIT, 0.75);          /* siqgich bitreytdan oshib ketdi - bir oz kamroq */
+                rf.MFShutdown();
+            }
+            if (tr == XC_TC_LONG) longv = TRUE;
+            if (tr != XC_TC_OK) tmp[0] = 0;
+        }
+    }
+    HANDLE h = longv ? INVALID_HANDLE_VALUE : CreateFileW(tmp[0] ? tmp : j->f, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
     BYTE *buf = (BYTE *)malloc(SHARE_CHUNK);
     LARGE_INTEGER sz; sz.QuadPart = 0;
     if (h != INVALID_HANDLE_VALUE && buf && GetFileSizeEx(h, &sz) && sz.QuadPart > 0 && sz.QuadPart <= 60LL * 1024 * 1024) {
@@ -1176,8 +1327,10 @@ static DWORD WINAPI share_thread(LPVOID arg)
         }
     }
     if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
-    if (!ok) {                                           /* menyu "..." da qolib ketmasin - saytga aytamiz */
-        char path[120]; _snprintf(path, sizeof(path), "/xc_api.php?a=clipfail&tk=%s", j->tk); path[sizeof(path) - 1] = 0;
+    if (tmp[0]) DeleteFileW(tmp);
+    CoUninitialize();
+    if (!ok) {                                           /* menyu "..." da qolib ketmasin - saytga aytamiz (l - juda uzun) */
+        char path[120]; _snprintf(path, sizeof(path), "/xc_api.php?a=clipfail&tk=%s%s", j->tk, longv ? "&r=l" : ""); path[sizeof(path) - 1] = 0;
         free(share_post(path, "", 0));
     }
     free(buf); free(j);

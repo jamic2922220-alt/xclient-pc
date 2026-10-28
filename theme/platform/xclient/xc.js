@@ -2652,7 +2652,7 @@ var PANES = {
       vqs += '<a class="' + (vq === o[0] ? 'on' : '') + '" data-ovq="' + o[0] + '">' + esc(T(o[1])) + '<small>' + esc(T(o[2])) + '</small></a>';
     });
     each(vids, function (v) {
-      if ((v.sh === 'q' || /^\d+$/.test(v.sh || '')) && (!v.sht || now() / 1000 - v.sht > 1800 || (v.mb | 0) >= 60)) v.sh = '';   // 30 daqiqa siljimagan yuklash - qayta ulashish mumkin
+      if ((v.sh === 'q' || v.sh === 'c' || /^\d+$/.test(v.sh || '')) && (!v.sht || now() / 1000 - v.sht > 1800 || ((v.mb | 0) >= 60 && !verGE(VERSION, '1.0.94')))) v.sh = '';   // 30 daqiqa siljimagan yuklash - qayta ulashish mumkin
       var m = /^xc_(\d{4})(\d\d)(\d\d)_(\d\d)(\d\d)(\d\d)$/.exec(v.n || ''); if (!m) return;
       var t = new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime(), sec = v.sec | 0;
       var info = [(v.mb | 0) + ' MB'];
@@ -2661,8 +2661,8 @@ var PANES = {
       rows += '<div class="dmr"><b>' + esc(fmtTime(t)) + ' · ' + esc(m[3] + '.' + m[2] + '.' + m[1]) + '</b><small>' + esc(info.join(' · ')) + '</small>' +
         '<a class="btn vdel" data-vdel="' + esc(v.n) + '" title="' + esc(T('vd_del')) + '">' + ico('trash') + '</a>' +
         (v.sh && /^[a-f0-9]{12}$/.test(v.sh) ? '<a class="btn vsh on" data-vlink="' + esc(v.sh) + '" title="' + esc(T('vs_copy')) + '">' + ico('link') + '</a>' :
-          v.sh === 'q' || /^\d+$/.test(v.sh || '') ? '<span class="btn vsh wait">' + (v.sh === 'q' ? '\u2026' : v.sh + '%') + '</span>' :
-          '<a class="btn vsh' + (v.sh === 'x' ? ' err' : '') + '" data-vshare="' + esc(v.n) + '" data-vmb="' + (v.mb | 0) + '" title="' + esc(T(v.sh === 'x' ? 'vs_fail' : 'vs_share')) + '">' + ico('share') + '</a>') +
+          v.sh === 'q' || v.sh === 'c' || /^\d+$/.test(v.sh || '') ? '<span class="btn vsh wait" title="' + esc(T(v.sh === 'c' ? 'vs_comp' : 'vs_wait')) + '">' + (v.sh === 'q' ? '\u2026' : v.sh === 'c' ? '\u27f3' : v.sh + '%') + '</span>' :
+          '<a class="btn vsh' + (v.sh === 'x' || v.sh === 'l' ? ' err' : '') + '" data-vshare="' + esc(v.n) + '" data-vmb="' + (v.mb | 0) + '" data-vsh="' + esc(v.sh || '') + '" title="' + esc(T(v.sh === 'l' ? 'vs_long' : v.sh === 'x' ? 'vs_fail' : 'vs_share')) + '">' + ico('share') + '</a>') +
         '<a class="btn vcut" data-vtrim="' + esc(v.n) + '" data-vsec="' + sec + '" title="' + esc(T('vd_trim')) + '">' + ico('cut') + '</a>' +
         '<a class="btn red" data-vopen="' + esc(v.n) + '">' + ico('play') + ' ' + esc(T('vd_open')) + '</a></div>';
     });
@@ -3480,7 +3480,9 @@ document.onclick = function (e) {
     var vsn = el.getAttribute('data-vshare');
     if (!ME) return toast(T('vs_login'), 5000);
     var vmb = Number(el.getAttribute('data-vmb')) || 0;
-    if (vmb >= 60) return toast(T('vs_big').replace('{n}', vmb), 8000);   // ulashish chegarasi 60 MB (Telegram 50 MB)
+    if (el.getAttribute('data-vsh') === 'l') return toast(T('vs_long'), 9000);   // oldingi urinish: juda uzun
+    if (vmb >= 60 && !verGE(VERSION, '1.0.94')) return toast(T('vs_big').replace('{n}', vmb), 8000);   // eski launcher kichraytira olmaydi
+    if (vmb > 45) toast(T('vs_bigok'), 7000);
     return ask(T('vs_ask'), function () {
       vidCmd('share', vsn, { srv: CONNECTED ? (srv(CONNECTED).name || CONNECTED) : '' });   // xato bo'lsa (kunlik chegara, qayta kirish) - sababi ko'rinadi
       each([6000, 20000, 45000, 90000, 150000], function (ms) { setTimeout(function () { VIDS_T = 0; vidsRefresh(); }, ms); });
