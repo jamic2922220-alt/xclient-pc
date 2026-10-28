@@ -103,10 +103,26 @@ jobs:
           mkdir -p full && cp -r dist/. full/ && rm -rf full/.git full/.gitignore full/manifest.txt full/XClient.exe
           7z a -tzip X-Client-CS16.zip ./full/* > /dev/null
 
+      # Setup'dan OLDIN: o'rnatuvchi yig'ilmasa (CS 1.6 yuklanmasa, imzo xatosi) ham launcher yangilanishi hammaga e'lon qilinadi
+      - name: Panelga xabar (hamma klientlar yangilanadi)
+        shell: bash
+        env:
+          XC_API: ${{ secrets.XCLIENT_API }}
+          XC_SECRET: ${{ secrets.XCLIENT_CI_SECRET }}
+          BASE: ${{ steps.dist.outputs.base }}
+        run: |
+          if [ -z "$XC_API" ] || [ -z "$XC_SECRET" ]; then echo "::warning::XCLIENT_API / XCLIENT_CI_SECRET yo'q - panelga yozilmadi"; exit 0; fi
+          sleep 20   # raw.githubusercontent yangi commitni ko'rishi uchun
+          curl -fsS -X POST -H "X-XClient-Secret: $XC_SECRET" \
+            --data-urlencode "channel=$CHANNEL" --data-urlencode "build=$GITHUB_RUN_NUMBER" \
+            --data-urlencode "version=$XC_VERSION" --data-urlencode "base=$BASE" \
+            --data-urlencode "manifest=$BASE/manifest.txt" \
+            --data-urlencode "notes=$(git -C own log -1 --pretty=%s)" \
+            "$XC_API?a=release"
+
       - name: O'rnatuvchi (X-Client-Setup.exe)
         shell: cmd
         timeout-minutes: 25
-        continue-on-error: true   # Setup yig'ilmasa ham launcher yangilanishi panelga e'lon qilinsin
         run: |
           copy /Y own\installer.nsi . && copy /Y own\xclient.ico .
           if not exist "%ProgramFiles(x86)%\NSIS\makensis.exe" choco install nsis -y --no-progress
@@ -127,22 +143,6 @@ jobs:
           gh release delete xclient-beta --repo "$GITHUB_REPOSITORY" --cleanup-tag -y || true
           gh release create xclient-beta X-Client-Setup.exe --repo "$GITHUB_REPOSITORY" --target "${{ github.sha }}" --prerelease \
             --title "X CLIENT $XC_VERSION (beta sinov)" --notes "Sinov versiyasi."
-
-      - name: Panelga xabar (hamma klientlar yangilanadi)
-        shell: bash
-        env:
-          XC_API: ${{ secrets.XCLIENT_API }}
-          XC_SECRET: ${{ secrets.XCLIENT_CI_SECRET }}
-          BASE: ${{ steps.dist.outputs.base }}
-        run: |
-          if [ -z "$XC_API" ] || [ -z "$XC_SECRET" ]; then echo "::warning::XCLIENT_API / XCLIENT_CI_SECRET yo'q - panelga yozilmadi"; exit 0; fi
-          sleep 20   # raw.githubusercontent yangi commitni ko'rishi uchun
-          curl -fsS -X POST -H "X-XClient-Secret: $XC_SECRET" \
-            --data-urlencode "channel=$CHANNEL" --data-urlencode "build=$GITHUB_RUN_NUMBER" \
-            --data-urlencode "version=$XC_VERSION" --data-urlencode "base=$BASE" \
-            --data-urlencode "manifest=$BASE/manifest.txt" \
-            --data-urlencode "notes=$(git -C own log -1 --pretty=%s)" \
-            "$XC_API?a=release"
 
       - name: Yuklab olish havolasi (GitHub Release, faqat stable)
         if: env.CHANNEL == 'stable'

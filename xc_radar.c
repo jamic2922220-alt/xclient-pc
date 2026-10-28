@@ -453,6 +453,6 @@ static void radar_skin(int style)
     WIN32_FIND_DATAW fd;
     HANDLE h = FindFirstFileW(pat, &fd);
     if (h == INVALID_HANDLE_VALUE) return;
-    do { if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && wcscmp(fd.cFileName, L"cstrike_downloads")) rsk_apply_one(fd.cFileName, style); } while (FindNextFileW(h, &fd));
+    do { if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && _wcsicmp(fd.cFileName, L"cstrike_downloads")) rsk_apply_one(fd.cFileName, style); } while (FindNextFileW(h, &fd));
     FindClose(h);
 }

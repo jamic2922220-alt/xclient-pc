@@ -996,6 +996,8 @@ static char *read_all(const wchar_t *path, long *len)
 static int  o_beta = -1, o_auto = 1, o_start = -1, o_win = 0, o_clean = 0, o_verify = 0;
 static int  o_rsk = 1;                          /* klassik radar foni: 0 asl, 1 qora kontrast (standart), 2 qora + halqalar */
 static void radar_skin(int style);              /* xc_radar.c */
+static int ini_int(const wchar_t *k);
+static void ini_set_int(const wchar_t *k, int v);
 /* oddiy kompyuter: 4 tadan kam yadro yoki 6 GB dan kam xotira - F9 buferi (butun o'yin davomida orqada yozish) o'zi yoqilmaydi */
 static BOOL pc_weak(void)
 {
@@ -1078,7 +1080,7 @@ static void fetch_opts(void)
     if (!r || !strstr(r, "\"ok\":true")) { free(r); return; }
     o_beta = jint(r, "beta", -1); o_auto = jint(r, "auto", 1); o_start = jint(r, "start", -1);
     o_win = jint(r, "win", 0); o_clean = jint(r, "clean", 0); o_verify = jint(r, "verify", 0);
-    o_rsk = jint(r, "rsk", 1);
+    o_rsk = jint(r, "rsk", 1); ini_set_int(L"rsk", o_rsk + 1);   /* +1: 0 - "hali yo'q" */
     o_prio = jint(r, "prio", 0); o_hud = jint(r, "hud", 100); o_shots = jint(r, "shots", 0); o_spray = jint(r, "spray", 0); o_sprays = jint(r, "sprays", 0);
     jstr(r, "packs", o_packs, sizeof(o_packs));
     jstr(r, "sprayh", o_sprayh, sizeof(o_sprayh));
@@ -1808,13 +1810,12 @@ static BOOL handle_running_game(void)
 #include "xc_rec.c"   /* F10: o'yinni MP4 qilib yozish */
 #include "xc_radar.c" /* radar xaritasi: overview'i yo'q xaritalar uchun */
 
-/* yuklangan fayllar (cstrike_downloads) - 30 kundan eskilari va hajmi: o'yin ochilgandan 30 soniya keyin, eng past ustuvorlikda.
+/* yuklangan fayllar (cstrike_downloads) - 30 kundan eskilari va hajmi: o'yin yopilgandan keyin (o'yin papkadan foydalanmayotganda).
  * Oldin o'yin ochilishidan OLDIN papka uch marta aylanib chiqilardi (minglab fayl - bir necha soniya) */
 static DWORD WINAPI cache_maint(LPVOID unused)
 {
     (void)unused;
-    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_IDLE);
-    Sleep(30000);
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
     auto_clean_cache();
     ini_set_int(L"cachemb", (int)cache_mb());
     return 0;
@@ -1832,6 +1833,7 @@ static void run_game(void)
     ensure_scheme();
     ensure_launcher_cfg();
     if (o_ok) hud_scale();
+    { int rs = ini_int(L"rsk"); if (!o_ok && rs > 0) o_rsk = rs - 1; }   /* sayt javob bermasa - oxirgi tanlov */
     radar_skin(o_rsk);
     path_join(exe, g_dir, L"cstrike.exe");
     if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) path_join(exe, g_dir, L"hl.exe");
@@ -1872,13 +1874,10 @@ static void run_game(void)
         /* O'yin yopilgach skrinshotlarni (F5) darhol galereyaga yuklaymiz - keyingi ishga tushishni kutmasdan.
          * fetch_opts qayta: menyuda o'yin paytida yoqilgan "galereyaga yuklash" ham hisobga olinadi va
          * sayt shu kompyuterni yana taniydi (shot_up 30 daqiqalik IP tekshiruvi). */
-        /* o'yin paytida launcher o'yindan oldin turmasin (oddiy kompyuterlarda qotmasin); F10 yozuvi o'z oqimida ustuvorligini oladi */
-        SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
-        { HANDLE th = CreateThread(NULL, 0, cache_maint, NULL, 0, NULL); if (th) CloseHandle(th); }
         rec_session_begin(pi.dwProcessId);
         WaitForSingleObject(pi.hProcess, INFINITE);
-        SetPriorityClass(GetCurrentProcess(), NORMAL_PRIORITY_CLASS);
         rec_session_end();
+        cache_maint(NULL);                           /* o'yin yopilgach: yuklangan fayllarni o'yin ishlatayotgan paytda o'chirmaymiz */
         fetch_opts();
         if (o_ok && o_shots) upload_shots();
         CloseHandle(pi.hProcess);

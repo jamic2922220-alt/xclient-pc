@@ -58,6 +58,7 @@ function canRead() { return !!(NC && typeof NC.getCvarValue === 'function'); }
 function ncHas(cv) { if (!canRead()) return true; var v = readCvar(cv); return v != null && v !== ''; }   // NextClient 2.5 da yo'q, 2.6 da bor sozlamalar
 function radarNC() { return ncHas('hud_radar_scale'); }
 /* oddiy kompyuter (launcher bilan bir xil qoida): F9 buferi o'yinchi o'zi yoqmasa - o'chiq */
+function verGE(a, b) { a = String(a || '0').split('.'); b = String(b).split('.'); for (var i = 0; i < 3; i++) { var x = +a[i] || 0, y = +b[i] || 0; if (x !== y) return x > y; } return true; }
 function pcWeak() { return !!(HW && ((HW.cpu && HW.cpu < 4) || (HW.ram && HW.ram < 6144))); }
 function rbOn() { return OPTS && OPTS.rbx ? !!OPTS.rb : !pcWeak(); }   // xaritali radar sozlamalari o'yinda bormi
 function readCvar(n) { if (!canRead()) return null; try { var v = NC.getCvarValue(n); return v == null ? null : String(v); } catch (e) { return null; } }
@@ -363,8 +364,8 @@ function loadOpts() {
     if (r.o.cachemb != null && !qparam('c')) CACHE_MB = r.o.cachemb;
     if (r.o.hw) { HW = r.o.hw; if (DB.fx == null && hwClass() === 'weak') { DB.fx = 0; persist(); sparks(); } }   // kuchsiz kompyuter - yengil menyu
     if (!DB.lang && /^(ru|uz|en)$/.test(r.o.ilang || '')) { DB.lang = r.o.ilang; setLang(DB.lang); persist(); }   // o'rnatishda tanlangan til
-    var rt = OPTS.rsk ? 1 : 0;                   // radar foni launcherda; cl_radartype unga mos bo'lsin (qora fonlar - to'liq radar)
-    if (S && S.radar !== rt) { S.radar = rt; DB.set = S; persist(); cmd('cl_radartype ' + rt); }
+    var rt = OPTS.rsk ? 1 : 0;                   // radar foni launcherda (1.0.91+); cl_radartype unga mos bo'lsin (qora fonlar - to'liq radar)
+    if (S && S.radar !== rt && verGE(r.o.ver, '1.0.91') && !radarNC()) { S.radar = rt; DB.set = S; persist(); cmd('cl_radartype ' + rt); }
     stateSync();
     if (curModal === 'mdSettings' && (setTab === 'pro' || setTab === 'cont')) showSetTab(setTab);
     if (curModal === 'mdSettings' && (setTab === 'system' || setTab === 'video')) showSetTab(setTab);
@@ -948,34 +949,42 @@ function srvPw(ip) { var r = null; each(DB.pw || [], function (x) { if (x.ip ===
 /* VIP/admin kirish: AMX Mod X serverlari o'yinchini nik (login) + setinfo _pw (parol) bo'yicha taniydi.
  * Saqlangan serverga kirganda ikkalasi o'zi qo'yiladi; boshqa serverga o'tganda parol olib tashlanadi, nik odatdagisiga qaytadi */
 var PW_NAME = false;
+function pwIsLogin(n) { var r = false; each(DB.pw || [], function (x) { if (x.login && x.login === n) r = true; }); return r; }
+/* VIP serverdan chiqildi (yoki menyu qayta yuklandi) - o'yindagi nik VIP login bo'lib qolgan bo'lsa, asl nikni qaytaramiz */
+function pwRestoreName() {
+  var nm = readCvar('name');
+  if ((PW_NAME || (nm && pwIsLogin(nm))) && S && S.name) { cmd('name ' + q(fullName(S))); MYNAME = fullName(S); }
+  PW_NAME = false;
+}
 function applyPw(ip) {
   var p = srvPw(ip);
   for (var f in PW_SET) if (PW_SET.hasOwnProperty(f) && (!p || p.f !== f)) { cmd('setinfo ' + f + ' ""'); delete PW_SET[f]; }
   if (p) { cmd('setinfo ' + p.f + ' ' + q(p.pw)); PW_SET[p.f] = 1; }
   if (p && p.login) { cmd('name ' + q(p.login)); MYNAME = p.login; PW_NAME = true; }
-  else if (PW_NAME && S && S.name) { cmd('name ' + q(fullName(S))); MYNAME = fullName(S); PW_NAME = false; }
+  else pwRestoreName();
 }
 var PW_IP = '';
 function openPw(ip) {
   var p = srvPw(ip) || {}; PW_IP = ip;
   openSide('srvpw', T('pw_title'), '<div class="pwbox"><b class="pws">' + esc(srv(ip).name || ip) + '</b>' +
     '<p>' + esc(T('pw_help')) + '</p>' +
-    '<div class="lbl">' + esc(T('pw_login')) + '</div><input class="tx big" id="pwL" maxlength="31" value="' + esc(p.login || '') + '" placeholder="' + esc(T('pw_loginph')) + '">' +
-    '<div class="lbl">' + esc(T('pw_pass')) + '</div><input class="tx big" id="pwP" type="password" maxlength="40" value="' + esc(p.pw || '') + '">' +
+    '<div class="lbl">' + esc(T('pw_login')) + '</div><input class="tx big" id="pwsL" maxlength="31" value="' + esc(p.login || '') + '" placeholder="' + esc(T('pw_loginph')) + '">' +
+    '<div class="lbl">' + esc(T('pw_pass')) + '</div><input class="tx big" id="pwsP" type="password" maxlength="40" value="' + esc(p.pw || '') + '">' +
     '<div class="lbl sm">' + esc(T('pw_field')) + '</div><input class="tx" id="pwF" maxlength="20" value="' + esc(p.f || '_pw') + '" style="width:140px">' +
     '<div class="pwbt"><a class="btn red" data-act="pwsave">' + esc(T('pw_save')) + '</a>' + (p.pw ? ' <a class="btn" data-act="pwdel">' + esc(T('pw_delb')) + '</a>' : '') + '</div>' +
     '<p class="mut">' + esc(T('pw_note')) + '</p></div>');
-  setTimeout(function () { try { $(p.login ? 'pwP' : 'pwL').focus(); } catch (e) {} }, 50);
+  setTimeout(function () { try { $(p.login ? 'pwsP' : 'pwsL').focus(); } catch (e) {} }, 50);
 }
 function pwSave(ip, del) {
+  var side = curModal === 'mdSide' && $('pwsP'), iL = $(side ? 'pwsL' : 'pwL'), iP = $(side ? 'pwsP' : 'pwP'), old = srvPw(ip);
   DB.pw = (DB.pw || []).filter(function (x) { return x.ip !== ip; });
-  var pw = del ? '' : String($('pwP').value || '').replace(/["\\;]/g, '').slice(0, 40);
-  var lg = del ? '' : String($('pwL').value || '').replace(/["\\;\n]/g, '').replace(/^\s+|\s+$/g, '').slice(0, 31);
-  var old = srvPw(ip), fe = $('pwF'), fld = del ? '' : (fe ? String(fe.value || '').replace(/[^\w]/g, '') : '') || (old && old.f) || '_pw';
+  var pw = del || !iP ? '' : String(iP.value || '').replace(/["\\;]/g, '').slice(0, 40);
+  var lg = del || !iL ? '' : String(iL.value || '').replace(/["\\;\n]/g, '').replace(/^\s+|\s+$/g, '').slice(0, 31);
+  var fe = side ? $('pwF') : null, fld = del ? '' : (fe ? String(fe.value || '').replace(/[^\w]/g, '') : '') || (old && old.f) || '_pw';
   if (pw) DB.pw.push({ ip: ip, f: fld, pw: pw, login: lg });
   persist(); cloudSave(); toast(T(pw ? 'pw_saved' : 'pw_del'), 6000);
   if (CONNECTED === ip) { applyPw(ip); if (pw) toast(T('pw_reconn'), 7000); }
-  if (curModal === 'mdServers') renderInfo(); else { openServers(srvTab); srvSel = ip; renderServers(); }
+  if (curModal === 'mdServers') { if (del && $('pwL')) { $('pwL').value = ''; $('pwP').value = ''; } renderInfo(); } else { openServers(srvTab); srvSel = ip; renderServers(); }
 }
 function doConnect(ip) {
   applyPw(ip);
@@ -1835,6 +1844,7 @@ function seedFromGame() {
   S.xc = String(S.xc).replace(/\s+/g, ' ');
   S.xp = presetOf(S);
   var nm = readCvar('name');
+  if (nm && pwIsLogin(nm)) nm = '';                  // VIP/admin login (applyPw qo'ygan) - o'yinchining o'z niki emas
   if (nm) { MYNAME = nm; var tm = /^(X \| |\[[A-Za-z0-9]{2,5}\] )/.exec(nm); S.tag = tm ? tm[1] : ''; S.name = nm.slice(S.tag.length); }
 }
 var NETS = { slow: [25000, 60, 60], mid: [50000, 101, 101], fast: [100000, 101, 105] };
@@ -2642,7 +2652,7 @@ var PANES = {
       vqs += '<a class="' + (vq === o[0] ? 'on' : '') + '" data-ovq="' + o[0] + '">' + esc(T(o[1])) + '<small>' + esc(T(o[2])) + '</small></a>';
     });
     each(vids, function (v) {
-      if ((v.sh === 'q' || /^\d+$/.test(v.sh || '')) && (!v.sht || now() / 1000 - v.sht > 1800 || (v.mb | 0) > 60)) v.sh = '';   // 30 daqiqa siljimagan yuklash - qayta ulashish mumkin
+      if ((v.sh === 'q' || /^\d+$/.test(v.sh || '')) && (!v.sht || now() / 1000 - v.sht > 1800 || (v.mb | 0) >= 60)) v.sh = '';   // 30 daqiqa siljimagan yuklash - qayta ulashish mumkin
       var m = /^xc_(\d{4})(\d\d)(\d\d)_(\d\d)(\d\d)(\d\d)$/.exec(v.n || ''); if (!m) return;
       var t = new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime(), sec = v.sec | 0;
       var info = [(v.mb | 0) + ' MB'];
@@ -3470,7 +3480,7 @@ document.onclick = function (e) {
     var vsn = el.getAttribute('data-vshare');
     if (!ME) return toast(T('vs_login'), 5000);
     var vmb = Number(el.getAttribute('data-vmb')) || 0;
-    if (vmb > 60) return toast(T('vs_big').replace('{n}', vmb), 8000);   // ulashish chegarasi 60 MB (Telegram 50 MB)
+    if (vmb >= 60) return toast(T('vs_big').replace('{n}', vmb), 8000);   // ulashish chegarasi 60 MB (Telegram 50 MB)
     return ask(T('vs_ask'), function () {
       vidCmd('share', vsn, { srv: CONNECTED ? (srv(CONNECTED).name || CONNECTED) : '' });   // xato bo'lsa (kunlik chegara, qayta kirish) - sababi ko'rinadi
       each([6000, 20000, 45000, 90000, 150000], function (ms) { setTimeout(function () { VIDS_T = 0; vidsRefresh(); }, ms); });
@@ -3635,10 +3645,10 @@ if (NC) {
     if (NC.addEventListener) {
       NC.addEventListener('connect', function (e) { onConnectEvt(e && e.detail && e.detail.address, false); });
       NC.addEventListener('putinserver', function (e) { onConnectEvt(e && e.detail && e.detail.address, true); });
-      NC.addEventListener('disconnect', function () { onDisconnectEvt(); cmd('hideconsole'); });
+      NC.addEventListener('disconnect', function () { onDisconnectEvt(); cmd('hideconsole'); setTimeout(function () { if (!CONNECTED) pwRestoreName(); }, 6000); });
     }
     /* CS 1.6: bir marta ochilgan konsol yopilmaguncha har ESC da (bosh menyuda) qayta chiqadi - NextClient faqat o'yinga qaytganda yopadi */
-    setTimeout(function () { cmd('hideconsole'); }, 1500);
+    setTimeout(function () { cmd('hideconsole'); if (!CONNECTED) pwRestoreName(); }, 1500);
     if (NC.connectedHost) onConnectEvt(NC.connectedHost, true);
   } catch (e) {}
   try {

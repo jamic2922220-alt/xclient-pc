@@ -104,7 +104,7 @@ static void rec_quality(void)
         char q[8]; int mic = 0, rb = 1, rsk = -1;
         /* rb: 0/1 - o'yinchi o'zi tanlagan, 2 - tanlamagan (avto: oddiy kompyuterda o'chiq) */
         if (sscanf(r, "%7s %d %d %d", q, &mic, &rb, &rsk) >= 2) { g_mic = mic ? 1 : 0; g_rb = rb == 2 ? !pc_weak() : rb ? 1 : 0; }
-        if (rsk >= 0 && rsk <= 2 && rsk != o_rsk) { o_rsk = rsk; radar_skin(rsk); }   /* menyuda radar foni almashdi - keyingi xaritadan ko'rinadi */
+        if (rsk >= 0 && rsk <= 2 && rsk != o_rsk) { o_rsk = rsk; ini_set_int(L"rsk", rsk + 1); radar_skin(rsk); }   /* menyuda radar foni almashdi - keyingi xaritadan ko'rinadi */
         free(r);
     }   /* internet bo'lmasa - oldingi tanlov */
 }
@@ -974,7 +974,6 @@ static DWORD WINAPI rec_thread(LPVOID unused)
     IMFDXGIDeviceManager *mgr = NULL;   /* videokarta yo'li: yozuvchi yopilguncha yashashi kerak */
     ULONGLONG k = 0;                   /* yozilgan kadrlar - davomiylik uchun */
     CoInitializeEx(NULL, COINIT_MULTITHREADED);
-    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);   /* launcher o'yin paytida past ustuvorlikda - F10 yozuvi kadr tashlamasin */
     if (!rec_load() || FAILED(rf.MFStartup(0x00020070 /* MF_VERSION */, 0))) goto done;
     mf = TRUE;
     rec_quality();
