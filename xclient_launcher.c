@@ -656,11 +656,81 @@ static void write_master_cfg(const char *master)
 /* ---------------------------------------------------------------- X CLIENT dizayni */
 /* xc_theme/<yo'l> -> o'yin papkasi/<yo'l>. Asl fayl bir marta xclient_backup ga saqlanadi.
  * Har ochilishda tekshiriladi: boost-top o'rnatuvchisi yoki o'yinchi fayllarni almashtirsa ham tiklanadi. */
-static BOOL same_file(const wchar_t *a, const wchar_t *b)
+static BOOL same_file_hash(const wchar_t *a, const wchar_t *b)
 {
     char ha[65], hb[65];
     ULONGLONG sa = 0, sb = 0;
     return sha256_file(a, ha, &sa) && sha256_file(b, hb, &sb) && sa == sb && !strcmp(ha, hb);
+}
+/* Tez solishtirish: har ochilishda ~90 MB fayl (dizayn, 40 ta fon bo'lagi x 3 papka) qayta o'qilib sha256 hisoblanardi -
+ * oddiy kompyuterda (HDD) launcher bir necha soniya qotib turardi. Endi: bir marta tekshirilgan juftlik hajmi va
+ * o'zgarish vaqti bilan eslab qolinadi (xc_meta.txt); ikkalasi o'zgarmagan bo'lsa - qayta o'qilmaydi. */
+typedef struct { wchar_t to[MAX_PATH]; ULONGLONG fs, fm, ts, tm; } MetaEnt;
+static MetaEnt *g_meta = NULL; static int g_meta_n = 0, g_meta_cap = 0; static BOOL g_meta_loaded = FALSE, g_meta_dirty = FALSE;
+static BOOL file_meta(const wchar_t *p, ULONGLONG *sz, ULONGLONG *mt)
+{
+    WIN32_FILE_ATTRIBUTE_DATA a;
+    if (!GetFileAttributesExW(p, GetFileExInfoStandard, &a)) return FALSE;
+    *sz = ((ULONGLONG)a.nFileSizeHigh << 32) | a.nFileSizeLow;
+    *mt = ((ULONGLONG)a.ftLastWriteTime.dwHighDateTime << 32) | a.ftLastWriteTime.dwLowDateTime;
+    return TRUE;
+}
+static void meta_load(void)
+{
+    g_meta_loaded = TRUE;
+    wchar_t f[MAX_PATH]; path_join(f, g_dir, L"xc_meta.txt");
+    FILE *fp = _wfopen(f, L"rb");
+    if (!fp) return;
+    char line[MAX_PATH * 3 + 100];
+    while (fgets(line, sizeof(line), fp)) {
+        MetaEnt e; int off = 0;
+        if (sscanf(line, "%llx %llx %llx %llx %n", &e.fs, &e.fm, &e.ts, &e.tm, &off) < 4 || !off) continue;
+        line[strcspn(line, "\r\n")] = 0;
+        if (!MultiByteToWideChar(CP_UTF8, 0, line + off, -1, e.to, MAX_PATH)) continue;
+        if (g_meta_n == g_meta_cap) { int nc = g_meta_cap ? g_meta_cap * 2 : 256; MetaEnt *nm = (MetaEnt *)realloc(g_meta, nc * sizeof(MetaEnt)); if (!nm) break; g_meta = nm; g_meta_cap = nc; }
+        g_meta[g_meta_n++] = e;
+        if (g_meta_n >= 4096) break;
+    }
+    fclose(fp);
+}
+static void meta_save(void)
+{
+    if (!g_meta_dirty) return;
+    wchar_t f[MAX_PATH]; path_join(f, g_dir, L"xc_meta.txt");
+    FILE *fp = _wfopen(f, L"wb");
+    if (!fp) return;
+    for (int i = 0; i < g_meta_n; i++) {
+        char u[MAX_PATH * 3];
+        if (!WideCharToMultiByte(CP_UTF8, 0, g_meta[i].to, -1, u, sizeof(u), NULL, NULL)) continue;
+        fprintf(fp, "%llx %llx %llx %llx %s\n", g_meta[i].fs, g_meta[i].fm, g_meta[i].ts, g_meta[i].tm, u);
+    }
+    fclose(fp);
+    g_meta_dirty = FALSE;
+}
+static void meta_put(const wchar_t *from, const wchar_t *to)    /* "from va to bir xil" - hozirgi holatini eslab qolamiz */
+{
+    MetaEnt e; if (!file_meta(from, &e.fs, &e.fm) || !file_meta(to, &e.ts, &e.tm)) return;
+    lstrcpynW(e.to, to, MAX_PATH);
+    for (int i = 0; i < g_meta_n; i++) if (!_wcsicmp(g_meta[i].to, to)) { g_meta[i] = e; g_meta_dirty = TRUE; return; }
+    if (g_meta_n == g_meta_cap) { int nc = g_meta_cap ? g_meta_cap * 2 : 256; MetaEnt *nm = (MetaEnt *)realloc(g_meta, nc * sizeof(MetaEnt)); if (!nm) return; g_meta = nm; g_meta_cap = nc; }
+    g_meta[g_meta_n++] = e; g_meta_dirty = TRUE;
+}
+static BOOL same_file(const wchar_t *from, const wchar_t *to)
+{
+    if (!g_meta_loaded) meta_load();
+    ULONGLONG fs, fm, ts, tm;
+    if (!file_meta(from, &fs, &fm) || !file_meta(to, &ts, &tm) || fs != ts) return FALSE;   /* hajmi boshqa - albatta farq qiladi */
+    for (int i = 0; i < g_meta_n; i++)
+        if (!_wcsicmp(g_meta[i].to, to)) { if (g_meta[i].fs == fs && g_meta[i].fm == fm && g_meta[i].ts == ts && g_meta[i].tm == tm) return TRUE; break; }
+    if (!same_file_hash(from, to)) return FALSE;
+    meta_put(from, to);
+    return TRUE;
+}
+/* nusxalash + eslab qolish: keyingi ochilishda shu fayl qayta tekshirilmaydi */
+static void copy_known(const wchar_t *from, const wchar_t *to)
+{
+    mkdirs_for(to); SetFileAttributesW(to, FILE_ATTRIBUTE_NORMAL);
+    if (CopyFileW(from, to, FALSE)) { if (!g_meta_loaded) meta_load(); meta_put(from, to); }
 }
 
 /* nDirect (NextClient yangilovchisi) shu fayllarni har ochilishda serverdagi bilan solishtiradi: biz almashtirsak,
@@ -696,9 +766,7 @@ static void apply_theme_dir(const wchar_t *rel)
             bak[MAX_PATH - 1] = 0;
             if (GetFileAttributesW(bak) == INVALID_FILE_ATTRIBUTES) { mkdirs_for(bak); CopyFileW(to, bak, TRUE); }
         }
-        mkdirs_for(to);
-        SetFileAttributesW(to, FILE_ATTRIBUTE_NORMAL);
-        CopyFileW(from, to, FALSE);
+        copy_known(from, to);
     } while (FindNextFileW(h, &fd));
     FindClose(h);
 }
@@ -714,8 +782,8 @@ static void copy_bg_to(const wchar_t *modDir)
     const wchar_t *lay[2] = { L"BackgroundLayout.txt", L"BackgroundLoadingLayout.txt" };
     for (int i = 0; i < 2; i++) {
         path_join(from, src, lay[i]); path_join(to, dst, lay[i]);
-        if (!file_exists(from)) continue;
-        mkdirs_for(to); SetFileAttributesW(to, FILE_ATTRIBUTE_NORMAL); CopyFileW(from, to, FALSE);
+        if (!file_exists(from) || (file_exists(to) && same_file(from, to))) continue;
+        copy_known(from, to);
     }
     path_join(bg, src, L"background");
     path_join(mask, bg, L"*.tga");
@@ -727,7 +795,8 @@ static void copy_bg_to(const wchar_t *modDir)
         path_join(from, bg, fd.cFileName);
         _snwprintf(sub, MAX_PATH, L"background\\%s", fd.cFileName); sub[MAX_PATH - 1] = 0;
         path_join(to, dst, sub);
-        mkdirs_for(to); SetFileAttributesW(to, FILE_ATTRIBUTE_NORMAL); CopyFileW(from, to, FALSE);
+        if (file_exists(to) && same_file(from, to)) continue;          /* har ochilishda 40 ta faylni qayta yozmaymiz */
+        copy_known(from, to);
     } while (FindNextFileW(h, &fd));
     FindClose(h);
 }
@@ -767,7 +836,7 @@ static void lang_bg_dir(const wchar_t *lang)
         _snwprintf(t, 48, L"background\\xcl_%d_%d.tga", r, c);
         path_join(from, src, f); path_join(to, dir, t);
         if (!file_exists(from)) continue;
-        if (!file_exists(to) || !same_file(from, to)) { mkdirs_for(to); SetFileAttributesW(to, FILE_ATTRIBUTE_NORMAL); CopyFileW(from, to, FALSE); }
+        if (!file_exists(to) || !same_file(from, to)) copy_known(from, to);
         n++;
     }
     if (n < 40) return;                              /* fon to'liq bo'lmasa layout yozmaymiz */
@@ -925,6 +994,14 @@ static char *read_all(const wchar_t *path, long *len)
 /* O'yin ichidagi X CLIENT menyusi (Sozlamalar > Tizim) ularni xc_api.php ga shu kompyuter id'si (g_id)
  * bilan yozadi; XClient.exe har ishga tushganda o'qiydi va bajaradi. */
 static int  o_beta = -1, o_auto = 1, o_start = -1, o_win = 0, o_clean = 0, o_verify = 0;
+static int  o_rsk = 1;                          /* klassik radar foni: 0 asl, 1 qora kontrast (standart), 2 qora + halqalar */
+static void radar_skin(int style);              /* xc_radar.c */
+/* oddiy kompyuter: 4 tadan kam yadro yoki 6 GB dan kam xotira - F9 buferi (butun o'yin davomida orqada yozish) o'zi yoqilmaydi */
+static BOOL pc_weak(void)
+{
+    MEMORYSTATUSEX ms; ms.dwLength = sizeof(ms); SYSTEM_INFO si; GetSystemInfo(&si);
+    return si.dwNumberOfProcessors < 4 || (GlobalMemoryStatusEx(&ms) && (ms.ullTotalPhys >> 20) < 6144);
+}
 static int  o_prio = 0, o_shots = 0, o_spray = 0, o_sprays = 0, o_ok = 0, o_hud = 100;   /* o_hud: HUD kattaligi, % */   /* o_ok: sozlamalar saytdan olindi */
 static char o_res[16] = "", o_packs[256] = "", o_sprayh[72] = "";   /* o_sprayh: spray faylining sha256 (sayt beradi) */
 
@@ -994,11 +1071,14 @@ static void fetch_opts(void)
     url_escape(v, sizeof(v), g_version[0] ? g_version : "1.0");
     hw_query(hw, sizeof(hw));
     vid_list(dm, sizeof(dm));                     /* menyudagi "Videolarim" - papkadagi haqiqiy MP4 lar */
-    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=hello&d=%s&v=%s&cache=%u%s%s", g_id, v, cache_mb(), hw, dm); url[sizeof(url) - 1] = 0;
+    wchar_t ini[MAX_PATH]; ini_path(ini);
+    unsigned cmb = (unsigned)GetPrivateProfileIntW(L"x", L"cachemb", 0, ini);   /* o'yin paytida fonda hisoblangan (cache_maint) */
+    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=hello&d=%s&v=%s&cache=%u%s%s", g_id, v, cmb, hw, dm); url[sizeof(url) - 1] = 0;
     char *r = http_get(url, NULL);
     if (!r || !strstr(r, "\"ok\":true")) { free(r); return; }
     o_beta = jint(r, "beta", -1); o_auto = jint(r, "auto", 1); o_start = jint(r, "start", -1);
     o_win = jint(r, "win", 0); o_clean = jint(r, "clean", 0); o_verify = jint(r, "verify", 0);
+    o_rsk = jint(r, "rsk", 1);
     o_prio = jint(r, "prio", 0); o_hud = jint(r, "hud", 100); o_shots = jint(r, "shots", 0); o_spray = jint(r, "spray", 0); o_sprays = jint(r, "sprays", 0);
     jstr(r, "packs", o_packs, sizeof(o_packs));
     jstr(r, "sprayh", o_sprayh, sizeof(o_sprayh));
@@ -1728,6 +1808,17 @@ static BOOL handle_running_game(void)
 #include "xc_rec.c"   /* F10: o'yinni MP4 qilib yozish */
 #include "xc_radar.c" /* radar xaritasi: overview'i yo'q xaritalar uchun */
 
+/* yuklangan fayllar (cstrike_downloads) - 30 kundan eskilari va hajmi: o'yin ochilgandan 30 soniya keyin, eng past ustuvorlikda.
+ * Oldin o'yin ochilishidan OLDIN papka uch marta aylanib chiqilardi (minglab fayl - bir necha soniya) */
+static DWORD WINAPI cache_maint(LPVOID unused)
+{
+    (void)unused;
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_IDLE);
+    Sleep(30000);
+    auto_clean_cache();
+    ini_set_int(L"cachemb", (int)cache_mb());
+    return 0;
+}
 static void run_game(void)
 {
     wchar_t exe[MAX_PATH], cmd[1024];
@@ -1741,6 +1832,7 @@ static void run_game(void)
     ensure_scheme();
     ensure_launcher_cfg();
     if (o_ok) hud_scale();
+    radar_skin(o_rsk);
     path_join(exe, g_dir, L"cstrike.exe");
     if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) path_join(exe, g_dir, L"hl.exe");
     if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) {
@@ -1770,6 +1862,7 @@ static void run_game(void)
     _snwprintf(cmd, 1024, L"\"%s\" -game cstrike%s -noforcemparms -noforcemaccel +exec xclient_launcher.cfg", exe, vid);
     STARTUPINFOW si = { sizeof(si) };
     PROCESS_INFORMATION pi;
+    meta_save();
     if (o_ok) compat_flags(exe, o_prio);
     if (CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, g_dir, &si, &pi)) {
         if (g_one) { CloseHandle(g_one); g_one = NULL; }   /* o'yin ochildi - endi yana bosilsa, yangi launcher uni topib oldinga chiqaradi */
@@ -1779,8 +1872,12 @@ static void run_game(void)
         /* O'yin yopilgach skrinshotlarni (F5) darhol galereyaga yuklaymiz - keyingi ishga tushishni kutmasdan.
          * fetch_opts qayta: menyuda o'yin paytida yoqilgan "galereyaga yuklash" ham hisobga olinadi va
          * sayt shu kompyuterni yana taniydi (shot_up 30 daqiqalik IP tekshiruvi). */
+        /* o'yin paytida launcher o'yindan oldin turmasin (oddiy kompyuterlarda qotmasin); F10 yozuvi o'z oqimida ustuvorligini oladi */
+        SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
+        { HANDLE th = CreateThread(NULL, 0, cache_maint, NULL, 0, NULL); if (th) CloseHandle(th); }
         rec_session_begin(pi.dwProcessId);
         WaitForSingleObject(pi.hProcess, INFINITE);
+        SetPriorityClass(GetCurrentProcess(), NORMAL_PRIORITY_CLASS);
         rec_session_end();
         fetch_opts();
         if (o_ok && o_shots) upload_shots();
@@ -1789,6 +1886,7 @@ static void run_game(void)
 }
 
 /* ---------------------------------------------------------------- ish oqimi */
+static DWORD WINAPI launch_ping(LPVOID unused) { (void)unused; api_call("launch", NULL); return 0; }
 static BOOL g_relaunch = FALSE, g_play = TRUE;
 static wchar_t g_err[256] = L"";
 
@@ -1823,8 +1921,7 @@ static DWORD WINAPI worker(LPVOID unused)
     fetch_opts();
     if (o_beta >= 0) { lstrcpynA(g_chan, o_beta ? "beta" : "stable", sizeof(g_chan)); ini_save(); }
     if (o_start >= 0) set_autostart(o_start);
-    if (o_clean) { status(L"Kesh tozalanmoqda...", 1); clean_cache(); }
-    else auto_clean_cache();
+    if (o_clean) { status(L"Kesh tozalanmoqda...", 1); clean_cache(); }   /* eskilarini avtomatik tozalash - o'yin ochilgach fonda (cache_maint) */
     clean_hpk();
     if (o_ok) {                                   /* internet bo'lmasa paketlarga tegmaymiz */
         install_spray();
@@ -1862,7 +1959,7 @@ static DWORD WINAPI worker(LPVOID unused)
         g_play = FALSE;
     }
     status(L"O‘yin ochilmoqda...", 100);
-    if (!g_relaunch) api_call("launch", NULL);   /* yangi launcher o'zi yuboradi */
+    if (!g_relaunch) { HANDLE th = CreateThread(NULL, 0, launch_ping, NULL, 0, NULL); if (th) CloseHandle(th); }   /* o'yinni kutdirmaydi; yangi launcher o'zi yuboradi */
     /* g_net yopilmaydi: o'yin yopilgach run_game() undan foydalanadi (sozlamalar, skrinshotlar) */
     PostMessageW(g_wnd, WM_XC_DONE, 0, 0);
     return 0;

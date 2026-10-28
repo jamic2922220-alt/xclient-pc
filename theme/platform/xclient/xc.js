@@ -56,7 +56,10 @@ function hasApi() { return !!(NC && typeof NC.exec === 'function'); }
 function hasMM() { return !!(NC && NC.matchmaking && NC.matchmaking.getServerInfo); }
 function canRead() { return !!(NC && typeof NC.getCvarValue === 'function'); }
 function ncHas(cv) { if (!canRead()) return true; var v = readCvar(cv); return v != null && v !== ''; }   // NextClient 2.5 da yo'q, 2.6 da bor sozlamalar
-function radarNC() { return ncHas('hud_radar_scale'); }   // xaritali radar sozlamalari o'yinda bormi
+function radarNC() { return ncHas('hud_radar_scale'); }
+/* oddiy kompyuter (launcher bilan bir xil qoida): F9 buferi o'yinchi o'zi yoqmasa - o'chiq */
+function pcWeak() { return !!(HW && ((HW.cpu && HW.cpu < 4) || (HW.ram && HW.ram < 6144))); }
+function rbOn() { return OPTS && OPTS.rbx ? !!OPTS.rb : !pcWeak(); }   // xaritali radar sozlamalari o'yinda bormi
 function readCvar(n) { if (!canRead()) return null; try { var v = NC.getCvarValue(n); return v == null ? null : String(v); } catch (e) { return null; } }
 function cmd(c) {
   dbg('exec: ' + c);
@@ -321,7 +324,7 @@ function fxLoop() {
  * xc_api.php ga yoziladi va XClient.exe ularni keyingi ishga tushishda bajaradi. */
 function qparam(k) { var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search || ''); return m ? decodeURIComponent(m[1]) : ''; }
 var PCID = /^[a-z0-9]{8,40}$/.test(qparam('xc')) ? qparam('xc') : '';   // kompyuter id (DB.pcid) va uning maxfiy kaliti (DB.pck) load() dan keyin olinadi
-var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '', hud: 100, vq: 'mid', dmf: null, vids: null, mic: 0, rb: 1 }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
+var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '', hud: 100, vq: 'mid', dmf: null, vids: null, mic: 0, rb: 1, rbx: 0, rsk: 1 }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
 var OPTS_TRY = 0;
 /* To'liq X CLIENT menyusi faqat XCLauncher.exe orqali ochilganda. Menyu saytda turadi va boshqa boost-top sborkalari ham
  * uni ochadi - ularda "sodda rejim": tezkor o'yin, serverlar, sozlamalar + X CLIENT ni yuklab olish kartasi.
@@ -359,6 +362,8 @@ function loadOpts() {
     if (r.o.cachemb != null && !qparam('c')) CACHE_MB = r.o.cachemb;
     if (r.o.hw) { HW = r.o.hw; if (DB.fx == null && hwClass() === 'weak') { DB.fx = 0; persist(); sparks(); } }   // kuchsiz kompyuter - yengil menyu
     if (!DB.lang && /^(ru|uz|en)$/.test(r.o.ilang || '')) { DB.lang = r.o.ilang; setLang(DB.lang); persist(); }   // o'rnatishda tanlangan til
+    var rt = OPTS.rsk ? 1 : 0;                   // radar foni launcherda; cl_radartype unga mos bo'lsin (qora fonlar - to'liq radar)
+    if (S && S.radar !== rt) { S.radar = rt; DB.set = S; persist(); cmd('cl_radartype ' + rt); }
     stateSync();
     if (curModal === 'mdSettings' && (setTab === 'pro' || setTab === 'cont')) showSetTab(setTab);
     if (curModal === 'mdSettings' && (setTab === 'system' || setTab === 'video')) showSetTab(setTab);
@@ -1051,7 +1056,7 @@ var KILLT = [], ACL_T = 0;
 function autoClipKill() {
   var t = now();
   KILLT.push(t); while (KILLT.length && t - KILLT[0] > 12000) KILLT.shift();
-  if (KILLT.length < 3 || DB.acl === 0 || !(OPTS && OPTS.rb) || !PCID || t - ACL_T < 25000) return;
+  if (KILLT.length < 3 || DB.acl === 0 || !rbOn() || !PCID || t - ACL_T < 25000) return;
   ACL_T = t; KILLT = [];
   setTimeout(function () { vidCmd('clip', '', null, true); }, 3000);   // kill'dan keyingi lahzalar ham tushsin
 }
@@ -2610,7 +2615,7 @@ var PANES = {
     });
     return '<div class="pane l"><div class="f10box big2"><b>' + esc(T('f10_t')) + '</b>' + esc(T('f10_1')) + '<br>' + esc(T('f10_2')) + '<br>' + esc(T('f9_1')) + '<br>' + esc(T('f10_3')) + '</div>' +
       '<div class="ph2 m">' + esc(T('vq_title')) + '</div><div class="big vqb">' + vqs + '</div>' +
-      vtg('rb', OPTS && OPTS.rb, 'vb_rb', 'vb_rb2') + vtg('acl', DB.acl !== 0, 'vb_acl', 'vb_acl2') + vtg('mic', OPTS && OPTS.mic, 'vb_mic', 'vb_mic2') + vtg('gsum', DB.gsum !== 0, 'gs_tg', 'gs_tg2') + '</div>' +
+      vtg('rb', rbOn(), 'vb_rb', OPTS.rbx || !pcWeak() ? 'vb_rb2' : 'vb_rbw') + vtg('acl', DB.acl !== 0, 'vb_acl', 'vb_acl2') + vtg('mic', OPTS && OPTS.mic, 'vb_mic', 'vb_mic2') + vtg('gsum', DB.gsum !== 0, 'gs_tg', 'gs_tg2') + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('vd_title')) + ' <a class="btn vfold" data-vfold="1">' + ico('folder') + ' ' + esc(T('vd_folder')) + '</a></div>' +
       '<div class="dml dml2">' + (rows || '<div class="empty">' + esc(T(PCID ? 'vd_none' : 'sy_nolaunch')) + '</div>') + '</div>' +
       '<div class="mut" style="font-size:12px;margin-top:8px">' + esc(T('vd_note')) + '</div></div>';
@@ -2685,7 +2690,11 @@ var PANES = {
         '<div class="hfoot"><span class="mut">' + esc(T('hw_note')) + '</span><a class="btn" data-act="camdef">' + esc(T('hx_std')) + '</a></div></div>';
     }
     if (HSUB === 'radar' && !radarNC()) {          // bu NextClient versiyasida xaritali radar (hud_radar_*) yo'q - faqat CS 1.6 radari
-      return sub + '<div class="pane l hp"><div class="ph2">' + esc(T('hx_radar')) + '</div>' + tg('radar', 'h_radar') +
+      var rk = '';
+      each([[1, 'rk1'], [2, 'rk2'], [0, 'rk0']], function (o) { rk += '<a class="' + ((OPTS.rsk == null ? 1 : OPTS.rsk) === o[0] ? 'on' : '') + '" data-orsk="' + o[0] + '">' + esc(T(o[1])) + '</a>'; });
+      return sub + '<div class="pane l hp"><div class="ph2">' + esc(T('hx_radar')) + '</div>' +
+        '<div class="fr"><div class="lb">' + esc(T('rk_title')) + '</div><div class="ct2 seg">' + rk + '</div></div>' +
+        '<div class="mut" style="font-size:12px;margin-top:10px">' + esc(T('rk_note')) + '</div>' +
         '<div class="mut" style="font-size:12px;margin-top:6px">' + esc(T('h_rnone')) + '</div></div>';
     }
     if (HSUB === 'radar') {
@@ -3308,7 +3317,7 @@ setInterval(function () { if (!CLK_N || !feat('clicks')) return; var c = CLK; CL
 
 /* ---- menyu ovozlari: o'yin sound/xclient/*.wav ni chaladi (XCLauncher.exe ularni o'yin papkasiga qo'yadi) ---- */
 var SFX_ATTR = ['data-act', 'data-tab', 'data-hsub', 'data-seg', 'data-tg', 'data-otg', 'data-ohud', 'data-dd', 'data-ddv', 'data-xchk', 'data-pack',
-  'data-sort', 'data-flt', 'data-theme', 'data-daymode', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-dctl', 'data-ovq', 'data-dsel', 'data-vopen', 'data-vdel', 'data-vfold', 'data-vopt', 'data-vtrim', 'data-vshare', 'data-vlink', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec', 'data-avpre'];
+  'data-sort', 'data-flt', 'data-theme', 'data-daymode', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-dctl', 'data-ovq', 'data-dsel', 'data-vopen', 'data-vdel', 'data-vfold', 'data-vopt', 'data-vtrim', 'data-vshare', 'data-vlink', 'data-orsk', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec', 'data-avpre'];
 var SFX_QUIET = false, sfxLast = null, sfxT = 0;
 function sfx(n) {
   if (!S || S.uisnd === 0 || !hasApi()) return;
@@ -3381,6 +3390,14 @@ document.onclick = function (e) {
     }); });
     return;
   }
+  if ((el = closest(t, 'data-orsk'))) {            // klassik radar foni: launcher sprites/radaropaque640.spr ni almashtiradi
+    var rv = Number(el.getAttribute('data-orsk')); OPTS.rsk = rv;
+    var rt2 = rv ? 1 : 0; S.radar = rt2; if (E) E.radar = rt2; DB.set = S; persist(); cmd('cl_radartype ' + rt2);
+    showSetTab('hud');
+    if (!PCID) return toast(T('sy_nolaunch'), 4000);
+    api('opts_set', { d: PCID, o: JSON.stringify(OPTS) }, function (r) { if (r.ok) { vidCmd('opt', '', null, true); toast(T('rk_ok'), 6000); } else toast(r.msg || 'Xato', 3500); });
+    return;
+  }
   if ((el = closest(t, 'data-ohud'))) { OPTS.hud = Number(el.getAttribute('data-ohud')); saveOpts(T('h_size4')); showSetTab('hud'); return; }
   if ((el = closest(t, 'data-otg'))) { var ok2 = el.getAttribute('data-otg'); OPTS[ok2] = OPTS[ok2] ? 0 : 1; el.className = 'tg' + (OPTS[ok2] ? ' on' : ''); saveOpts(); return; }
   if ((el = closest(t, 'data-tg'))) { var k = el.getAttribute('data-tg'); E[k] = E[k] ? 0 : 1; el.className = 'tg' + (E[k] ? ' on' : ''); if (setTab === 'hud') { drawXhair(); var cd = $('xCode'); if (cd) cd.value = xcode(E); } return; }
@@ -3431,7 +3448,8 @@ document.onclick = function (e) {
     var vk = el.getAttribute('data-vopt');
     if (vk === 'gsum') { DB.gsum = DB.gsum === 0 ? 1 : 0; persist(); showSetTab('demo'); return; }
     if (vk === 'acl') { DB.acl = DB.acl === 0 ? 1 : 0; persist(); showSetTab('demo'); return; }
-    OPTS[vk] = OPTS[vk] ? 0 : 1; showSetTab('demo');
+    if (vk === 'rb') { OPTS.rb = rbOn() ? 0 : 1; OPTS.rbx = 1; } else OPTS[vk] = OPTS[vk] ? 0 : 1;
+    showSetTab('demo');
     if (!PCID) { toast(T('sy_nolaunch'), 4000); return; }
     api('opts_set', { d: PCID, o: JSON.stringify(OPTS) }, function (r) { if (r.ok) vidCmd('opt', '', null, false); else toast(r.msg || 'Xato', 3500); });   // launcher darhol qo'llaydi
     return;

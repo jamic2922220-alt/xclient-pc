@@ -378,3 +378,81 @@ static void radar_start(void)
     radar_undo_thread(NULL);            /* tez (bir necha fayl) - o'yin ochilishidan oldin tugasin; radar_thread vaqtincha o'chirilgan */
 }
 #endif
+
+/* ---- klassik radar foni (NextClient 2.5: radarni Valve kodi chizadi - faqat fon rasmini almashtira olamiz) ----
+ * cl_radartype 1 -> sprites/radaropaque640.spr (SPR_DrawHoles, 255-indeks - teshik). Uslublar: 0 - asl, 1 - qora kontrast, 2 - qora + halqalar.
+ * Asl faylning o'lchami saqlanadi: radar radiusi va nuqtalar joyi shu o'lchamdan hisoblanadi. Oxirida "XCRSK" belgisi - bizniki ekanini bilish uchun. */
+#define RSK_MARK "XCRSK"
+static BOOL rsk_ours(const unsigned char *b, long n) { return n > 6 && !memcmp(b + n - 6, RSK_MARK, 5); }
+static unsigned char *rsk_make(const unsigned char *o, long n, int style, long *outn)
+{
+    if (n < 40 + 2 + 768 + 20 || memcmp(o, "IDSP", 4) || rad_rd32(o + 4) != 2) return NULL;
+    int pal = rad_rd16(o + 40);
+    long fo = 42 + (long)pal * 3;                                /* birinchi kadr: turi, keyin origin[2], kenglik, balandlik */
+    if (pal <= 0 || pal > 256 || fo + 20 > n || rad_rd32(o + fo) != 0) return NULL;
+    int w = rad_rd32(o + fo + 12), h = rad_rd32(o + fo + 16);
+    if (w < 16 || h < 16 || w > 1024 || h > 1024) return NULL;
+    long sz = 40 + 2 + 768 + 4 + 16 + (long)w * h + 6;
+    unsigned char *b = (unsigned char *)calloc(1, sz);
+    if (!b) return NULL;
+    memcpy(b, o, 40);
+    int one = 1, fmt = 3;                                        /* SPR_ALPHTEST: 255-indeks shaffof */
+    memcpy(b + 12, &fmt, 4); memcpy(b + 28, &one, 4);            /* bitta kadr */
+    b[40] = 0; b[41] = 1;                                        /* 256 rang */
+    unsigned char *p = b + 42;
+    static const unsigned char cols[][3] = { { 8, 8, 10 }, { 255, 255, 255 }, { 95, 95, 102 }, { 255, 59, 59 }, { 62, 62, 70 } };
+    for (int i = 0; i < 5; i++) memcpy(p + i * 3, cols[i], 3);
+    p[255 * 3] = 0; p[255 * 3 + 1] = 0; p[255 * 3 + 2] = 255;
+    unsigned char *f = b + 42 + 768;
+    memcpy(f, o + fo, 20);                                       /* kadr turi va origin, o'lcham - asl fayldagidek */
+    unsigned char *px = f + 20;
+    float cx = (w - 1) / 2.0f, cy = (h - 1) / 2.0f, R = (w < h ? w : h) / 2.0f - 0.5f, bw = w >= 96 ? 3.0f : 2.0f;
+    for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++) {
+            float dx = x - cx, dy = y - cy, d = sqrtf(dx * dx + dy * dy);
+            unsigned char c = 0;
+            if (d > R) c = 255;
+            else if (d > R - bw) c = style == 2 ? 3 : 1;
+            else if ((fabsf(dx) < 0.6f || fabsf(dy) < 0.6f) && d < R - bw - 2) c = 2;
+            else if (style == 2 && (fabsf(d - R / 3) < 0.6f || fabsf(d - 2 * R / 3) < 0.6f)) c = 4;
+            if (style == 2 && c != 255) {                        /* qarash yo'nalishi: tepada qizil uchburchak */
+                float ty = y - (cy - R + bw + 1), tw = R / 10;
+                if (ty >= 0 && ty <= tw * 1.6f && fabsf(dx) <= ty * 0.6f) c = 3;
+            }
+            px[(long)y * w + x] = c;
+        }
+    memcpy(b + sz - 6, RSK_MARK, 5); b[sz - 1] = (unsigned char)('0' + style);
+    *outn = sz;
+    return b;
+}
+static void rsk_apply_one(const wchar_t *sub, int style)
+{
+    wchar_t cur[MAX_PATH], bak[MAX_PATH], t[MAX_PATH];
+    _snwprintf(t, MAX_PATH, L"%s\\sprites\\radaropaque640.spr", sub); t[MAX_PATH - 1] = 0;
+    path_join(cur, g_dir, t);
+    _snwprintf(t, MAX_PATH, L"xc_backup\\radar\\%s\\radaropaque640.spr", sub); t[MAX_PATH - 1] = 0;
+    path_join(bak, g_dir, t);
+    long n = 0; unsigned char *c = (unsigned char *)read_all(cur, &n);
+    if (!c) return;
+    BOOL ours = rsk_ours(c, n);
+    if (!ours && !file_exists(bak)) { mkdirs_for(bak); CopyFileW(cur, bak, TRUE); }   /* asl fayl bir marta saqlanadi */
+    if (ours && n > 0 && c[n - 1] == '0' + style) { free(c); return; }               /* allaqachon shu uslub */
+    if (style == 0) { if (ours && file_exists(bak)) { SetFileAttributesW(cur, FILE_ATTRIBUTE_NORMAL); CopyFileW(bak, cur, FALSE); } free(c); return; }
+    long on = 0; unsigned char *org = ours ? (unsigned char *)read_all(bak, &on) : c;
+    if (ours) { free(c); c = NULL; } else on = n;
+    long nn = 0; unsigned char *nb = org ? rsk_make(org, on, style, &nn) : NULL;
+    if (nb) { SetFileAttributesW(cur, FILE_ATTRIBUTE_NORMAL); rad_write(cur, nb, (size_t)nn); free(nb); }
+    free(org);
+}
+static void radar_skin(int style)
+{
+    if (style < 0 || style > 2) style = 1;
+    rsk_apply_one(L"cstrike", style);
+    wchar_t pat[MAX_PATH];
+    path_join(pat, g_dir, L"cstrike_*");                         /* cstrike_russian va boshqalar: ulardagi fayl ustun turadi */
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(pat, &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do { if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && wcscmp(fd.cFileName, L"cstrike_downloads")) rsk_apply_one(fd.cFileName, style); } while (FindNextFileW(h, &fd));
+    FindClose(h);
+}

@@ -491,7 +491,9 @@ if ($a === 'vq') {
     $d = strtolower(p('d'));
     $o = preg_match('/^[a-z0-9]{8,40}$/', $d) ? rd('dev/' . $d, array()) : array();
     // "sifat mikrofon bufer": eski launcher faqat birinchi so'zni o'qiydi
-    echo (isset($o['vq']) && in_array($o['vq'], array('hi', 'mid', 'low'), true) ? $o['vq'] : 'mid'), ' ', empty($o['mic']) ? 0 : 1, ' ', isset($o['rb']) && !$o['rb'] ? 0 : 1;
+    // "sifat mikrofon bufer radar": bufer 2 - o'yinchi tanlamagan (launcher o'zi hal qiladi; eski launcher 2 ni "yoqiq" deb o'qiydi)
+    echo (isset($o['vq']) && in_array($o['vq'], array('hi', 'mid', 'low'), true) ? $o['vq'] : 'mid'), ' ', empty($o['mic']) ? 0 : 1, ' ',
+        empty($o['rbx']) ? 2 : (isset($o['rb']) && !$o['rb'] ? 0 : 1), ' ', isset($o['rsk']) ? (int)$o['rsk'] : 1;
     exit;
 }
 /* ---- klip ulashish: menyu 'share' buyrug'i chipta (tk) yaratadi, launcher videoni bo'laklab yuklaydi ----
@@ -1657,6 +1659,8 @@ case 'opts_done':
         foreach (array('beta', 'auto', 'start', 'win', 'clean', 'verify', 'prio', 'shots') as $k) if (isset($in[$k])) $o[$k] = $in[$k] ? 1 : 0;
         if (isset($in['packs'])) $o['packs'] = preg_match('/^[a-z0-9_,\-]{0,200}$/', $in['packs']) ? $in['packs'] : '';
         foreach (array('mic', 'rb') as $k) if (isset($in[$k])) $o[$k] = $in[$k] ? 1 : 0;   // videoda mikrofon, "oxirgi 30 soniya"
+        if (!empty($in['rbx'])) $o['rbx'] = 1;                                        // "oxirgi 30 soniya" ni o'yinchi o'zi tanladi (bo'lmasa - avto: oddiy kompyuterda o'chiq)
+        if (isset($in['rsk'])) $o['rsk'] = max(0, min(2, (int)$in['rsk']));          // klassik radar foni: 0 asl, 1 qora kontrast, 2 qora + halqalar
         if (isset($in['vq'])) $o['vq'] = in_array($in['vq'], array('hi', 'mid', 'low'), true) ? $in['vq'] : 'mid';   // F10 video sifati
         if (isset($in['hud'])) $o['hud'] = in_array((int)$in['hud'], array(100, 150, 200)) ? (int)$in['hud'] : 100;   // HUD kattaligi, %
         if (isset($in['res'])) $o['res'] = preg_match('/^\d{3,4}x\d{3,4}$/', $in['res']) ? $in['res'] : '';
