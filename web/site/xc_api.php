@@ -1562,7 +1562,8 @@ case 'gsshare':
     }
     out(array('ok' => true, 'url' => $img));
 
-case 'clips':                                            // ulashilgan kliplar (clips.php sahifasi)
+case 'clips':                                            // ulashilgan kliplar (clips.php va yuklab olish sahifasidagi lenta)
+    header('Access-Control-Allow-Origin: *');            // ochiq ma'lumot: cssborka.uz dagi yuklab olish sahifasi ham o'qiydi
     $l = rd('clips', array()); $out = array();
     foreach (array_slice($l, 0, 60) as $c) $out[] = array('id' => $c['id'], 'name' => $c['name'], 't' => $c['t'], 'sec' => $c['sec'], 'srv' => $c['srv']);
     out(array('ok' => true, 'clips' => $out));

@@ -58,6 +58,30 @@ footer { color: var(--mut); font-size: 13px; text-align: center; padding: 30px 0
 .perk { background: linear-gradient(180deg, rgba(255, 59, 59, .10), transparent 70%), var(--panel); border: 1px solid #3a2228; border-radius: 12px; padding: 18px; }
 .perk i { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 9px; background: rgba(255, 59, 59, .15); color: var(--red); font-style: normal; font-size: 18px; margin-bottom: 10px; }
 .perk b { display: block; margin-bottom: 4px; }
+/* o'yinchilar kliplari - aylanib turadigan lenta */
+.cliphead { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.cliphead .more { color: var(--red); text-decoration: none; font-weight: 600; margin-bottom: 28px; }
+.marq { overflow: hidden; position: relative; padding: 4px 0; -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
+.mtrack { display: flex; gap: 14px; width: max-content; animation: mq var(--mqd, 40s) linear infinite; }
+.marq:hover .mtrack { animation-play-state: paused; }
+@keyframes mq { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.clip { position: relative; width: 300px; max-width: 78vw; flex: none; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; cursor: pointer; transition: transform .2s, border-color .2s; }
+.clip:hover { transform: translateY(-4px); border-color: var(--red); }
+.clip video { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: #000; }
+.clip .pl { position: absolute; left: 0; right: 0; top: 0; aspect-ratio: 16 / 9; display: grid; place-items: center; pointer-events: none; }
+.clip .pl i { position: relative; width: 52px; height: 52px; border-radius: 50%; background: rgba(255, 59, 59, .9); box-shadow: 0 6px 20px rgba(0, 0, 0, .5); transition: opacity .2s; }
+.clip .pl i:after { content: ""; position: absolute; left: 21px; top: 16px; border-left: 15px solid #fff; border-top: 10px solid transparent; border-bottom: 10px solid transparent; }
+.clip:hover .pl i { opacity: 0; }
+.clip .m { padding: 9px 12px 11px; min-width: 0; }
+.clip .m b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.clip .m span { color: var(--mut); font-size: 13px; }
+.cmod { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(0, 0, 0, .85); padding: 16px; }
+.cmod[hidden] { display: none; }
+.cmod .cbox { position: relative; width: min(1000px, 100%); }
+.cmod video { width: 100%; max-height: 80vh; background: #000; border-radius: 10px; display: block; }
+.cmod .cx { position: absolute; right: 0; top: -40px; color: #fff; font-size: 26px; text-decoration: none; cursor: pointer; }
+.cmod .cn { color: var(--mut); margin-top: 8px; font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { .mtrack { animation: none; } .marq { overflow-x: auto; } }
 .perk span { color: var(--mut); font-size: 14px; }
 .tour { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 18px; align-items: start; }
 .tnav { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px; position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
@@ -121,6 +145,13 @@ footer { color: var(--mut); font-size: 13px; text-align: center; padding: 30px 0
     <img class="logo" src="spray_logo.png" alt="X CLIENT">
   </div>
 </div>
+
+<section id="clipsSec" hidden>
+  <div class="wrap cliphead"><div><h2 data-t="cl_t">O'yinchilar kliplari</h2><p class="sub" data-t="cl_s">X CLIENT bilan yozilgan eng zo'r lahzalar. Ustiga olib boring — video o'ynaydi, bossangiz kattasi ochiladi.</p></div>
+    <a class="more" id="clipsAll" href="https://mmb.boost-top.com/clips.php" target="_blank" rel="noopener" data-t="cl_all">Barcha kliplar →</a></div>
+  <div class="marq"><div class="mtrack" id="mtrack"></div></div>
+</section>
+<div class="cmod" id="cmod" hidden><div class="cbox"><a class="cx" id="cx">✕</a><video id="cvid" controls playsinline></video><div class="cn" id="cn"></div></div></div>
 
 <section><div class="wrap">
   <h2 data-t="f_t">Imkoniyatlar</h2>
@@ -208,7 +239,7 @@ footer { color: var(--mut); font-size: 13px; text-align: center; padding: 30px 0
     f7: 'Облачное сохранение', f7s: 'Настройки одинаковые на любом компьютере.', f8: 'Звуки и спрей', f8s: 'Звуки меню, музыка и спрей X CLIENT.',
     f9: 'F10 — видео (MP4)', f9s: 'Чёткая запись игры в MP4 без падения FPS, со звуком игры и микрофоном.', f10: 'F9 — последние 30 секунд', f10s: 'Сохраните крутой момент после. 3+ убийства — клип сохранится сам.',
     f11: 'Редактор и публикация', f11s: 'Обрежьте видео ножницами и в один клик отправьте на сайт и в Telegram-канал.', f12: 'VIP / админ вход', f12s: 'Сохраните логин и пароль один раз — при входе на сервер подставятся сами.',
-    clips: 'Клипы ▶',
+    clips: 'Клипы ▶', cl_t: 'Клипы игроков', cl_s: 'Лучшие моменты, записанные в X CLIENT. Наведите — видео заиграет, нажмите — откроется большое.', cl_all: 'Все клипы →',
     s_t: 'Экскурсия по меню', s_s: 'Каждое меню и окно — со скриншотом и описанием. Выберите в списке или нажимайте ← →.', s_big: 'Увеличить ↗', i_t: 'Установка — 3 шага', i_s: 'Займёт пару минут.',
     i1: 'Скачайте', i1s: 'Нажмите кнопку выше и сохраните X-Client-Setup.exe (≈240 МБ, внутри уже есть CS 1.6).', i2: 'Установите', i2s: 'Запустите Setup и выберите папку. Есть CS 1.6 — выберите её, нет — игра установится туда же.',
     i3: 'Играйте', i3s: 'Запускайте ярлыком X CLIENT на рабочем столе. Обновления приходят сами.',
@@ -368,6 +399,43 @@ footer { color: var(--mut); font-size: 13px; text-align: center; padding: 30px 0
   if (saved === 'ru' || (!saved && /^(ru|uk|kk|ky|be)/i.test(navigator.language || ''))) set('ru');
   // oxirgi versiya (xclient/api.php); sahifa boshqa saytda (cssborka.uz) bo'lsa - mmb.boost-top.com dan
   var x = new XMLHttpRequest(), api = /(^|\.)mmb\.boost-top\.com$|^127\.|^localhost$/.test(location.hostname) ? '' : location.protocol + '//mmb.boost-top.com/';
+  /* o'yinchilar kliplari: lenta aylanib turadi (sichqoncha ustida - to'xtaydi), karta ustida video ovozsiz o'ynaydi, bosilsa katta oynada */
+  (function () {
+    var c = new XMLHttpRequest();
+    c.open('GET', api + 'xc_api.php?a=clips', true);
+    c.onload = function () {
+      var r; try { r = JSON.parse(c.responseText); } catch (e) { return; }
+      var l = r && r.clips ? r.clips.slice(0, 20) : [];
+      if (!l.length) return;
+      var esc = function (t) { return String(t).replace(/[&<>"']/g, function (ch) { return '&#' + ch.charCodeAt(0) + ';'; }); };
+      var card = function (k) {
+        var s = k.sec ? Math.floor(k.sec / 60) + ':' + ('0' + k.sec % 60).slice(-2) : '';
+        return '<div class="clip" data-id="' + esc(k.id) + '" data-n="' + esc(k.name) + '"><video src="' + api + 'clips/' + esc(k.id) + '.mp4#t=1" preload="metadata" muted playsinline loop></video>' +
+          '<div class="pl"><i></i></div><div class="m"><b>' + esc(k.name) + '</b><span>' + esc([k.srv, s].filter(Boolean).join(' · ')) + '</span></div></div>';
+      };
+      var one = ''; var n = 0; while (n < 8) { l.forEach(function (k) { one += card(k); }); n += l.length; }   // kam bo'lsa - takrorlab to'ldiramiz
+      var t = document.getElementById('mtrack'); t.innerHTML = one + one;                                  // ikki nusxa - uzluksiz aylanish
+      t.style.setProperty('--mqd', Math.max(30, n * 5) + 's');
+      document.getElementById('clipsSec').hidden = false;
+      if (api) document.getElementById('clipsAll').href = api + 'clips.php';
+      Array.prototype.forEach.call(t.querySelectorAll('.clip'), function (el) {
+        var v = el.querySelector('video');
+        el.onmouseenter = function () { try { v.currentTime = 0; var p = v.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {} };
+        el.onmouseleave = function () { try { v.pause(); v.currentTime = 1; } catch (e) {} };
+        el.onclick = function () {
+          var m = document.getElementById('cmod'), cv = document.getElementById('cvid');
+          cv.src = api + 'clips/' + el.getAttribute('data-id') + '.mp4'; cv.muted = false;
+          document.getElementById('cn').textContent = el.getAttribute('data-n');
+          m.hidden = false; try { var p = cv.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+        };
+      });
+      var close = function () { var cv = document.getElementById('cvid'); try { cv.pause(); } catch (e) {} cv.removeAttribute('src'); document.getElementById('cmod').hidden = true; };
+      document.getElementById('cx').onclick = close;
+      document.getElementById('cmod').onclick = function (e) { if (e.target.id === 'cmod') close(); };
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+    };
+    c.send();
+  })();
   x.open('GET', api + 'xclient/api.php?a=update&ch=stable', true);
   x.onload = function () { var m = /version=([\w.\-]+)/.exec(x.responseText || ''); if (m) document.getElementById('ver').innerHTML = 'v' + m[1] + ' · Windows 7/8/10/11'; };
   x.send();
