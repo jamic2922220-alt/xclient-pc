@@ -1319,6 +1319,7 @@ function renderAnn() {
   if (ANN.length > 1 || wait > 8000) ANN_TM = setTimeout(renderAnn, wait);
 }
 function renderBar() {
+  if (playing()) { UI_DIRTY = true; return; }
   each(['miResume', 'miPlist', 'miDisc'], function (id) { var e = $(id); if (e) e.style.display = CONNECTED ? '' : 'none'; });   // serverda: o'yinga qaytish, o'yinchilar, chiqish - menyuning tepasida
   var on = 0, cnt = 0;
   for (var ip in SRV) if (SRV[ip].ok) { cnt++; on += SRV[ip].pl || 0; }
@@ -1795,7 +1796,7 @@ function pollNotif() {
   if (!ME) return;
   if (++NOTIF_N % 4 === 0 && !playing()) loadFriends();             // daqiqada bir: do'stlar qaysi serverga kirdi
   api('notif', {}, function (r) {
-    NOTIF_TM = setTimeout(pollNotif, 15000);
+    NOTIF_TM = setTimeout(pollNotif, playing() ? 60000 : 15000);   // o'yin paytida daqiqada bir (har so'rov - o'yinda kichik qotish)
     if (!r.ok) return;
     NOTIF = { unread: r.unread || [], req: r.req || [] };
     if (r.inv && r.inv.length && !DB.dnd) showInvite(r.inv[r.inv.length - 1]);   // do'st chaqirdi
@@ -3462,7 +3463,7 @@ document.addEventListener('mousedown', function (e) {
     if (a) { CLK[a] = (CLK[a] || 0) + 1; CLK_N++; return; }
   }
 }, true);
-setInterval(function () { if (!CLK_N || !feat('clicks')) return; var c = CLK; CLK = {}; CLK_N = 0; api('clicks', { c: JSON.stringify(c) }, function () {}); }, 120000);
+setInterval(function () { if (!CLK_N || !feat('clicks') || playing()) return; var c = CLK; CLK = {}; CLK_N = 0; api('clicks', { c: JSON.stringify(c) }, function () {}); }, 120000);
 
 /* ---- menyu ovozlari: o'yin sound/xclient/*.wav ni chaladi (XCLauncher.exe ularni o'yin papkasiga qo'yadi) ---- */
 var SFX_ATTR = ['data-act', 'data-tab', 'data-hsub', 'data-seg', 'data-tg', 'data-otg', 'data-ohud', 'data-dd', 'data-ddv', 'data-xchk', 'data-pack',
@@ -3704,7 +3705,10 @@ function detectLang() {
   var m = /[?&]lang=([a-z]+)/i.exec(location.search || '');
   setLang(m ? m[1] : 'uzbek');
 }
-function renderAll() { renderHome(); renderServers(); }
+/* o'yin paytida (serverda, menyu yashirin) sahifa o'zgarmaydi: o'yin brauzeri (CEF1) o'yin bilan bitta oqimda chizadi -
+ * har o'zgarish o'yinda bir lahzalik qotish edi. O'zgarishlar menyu ochilganda ('show') bir yo'la chiziladi */
+var UI_DIRTY = false;
+function renderAll() { if (playing()) { UI_DIRTY = true; return; } renderHome(); renderServers(); }
 
 /* har bir qadam alohida: bittasi buzilsa ham qolgani ishlaydi */
 function step(name, fn) { try { fn(); } catch (e) { if (window.onerror) window.onerror(name + ': ' + (e && e.message ? e.message : e), 'xc.js', 0); } }
@@ -3747,7 +3751,7 @@ if (DB.token) api('me', {}, function (r) { if (r.ok) { setMe(r.me); loadFriends(
 if (NC) {
   // o'yin ekrani ochildi (NextClient'ning o'z ro'yxatidan yoki konsoldan kirilsa ham) - menyu musiqasi o'chsin
   try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('hide', function () { UI_VIS = false; if (MUSIC_ON !== false) { cmd('mp3 stop'); MUSIC_ON = false; } }); } catch (e) {}
-  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('show', function () { UI_VIS = true; each(TOP.concat(PINNED).concat(DB.fav), function (ip) { query(ip); }); if (curModal === 'mdServers') { each(tabIps(), function (ip) { query(ip, true); }); if (srvSel) loadPlayers(srvSel); } if (CHAT && curModal === 'mdSide' && sideMode === 'chat') chatLoad(); loadFriends(); loadWeek(); ngFit(); }); } catch (e) {}
+  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('show', function () { UI_VIS = true; if (UI_DIRTY) { UI_DIRTY = false; renderAll(); renderBar(); } each(TOP.concat(PINNED).concat(DB.fav), function (ip) { query(ip); }); if (curModal === 'mdServers') { each(tabIps(), function (ip) { query(ip, true); }); if (srvSel) loadPlayers(srvSel); } if (CHAT && curModal === 'mdSide' && sideMode === 'chat') chatLoad(); loadFriends(); loadWeek(); ngFit(); }); } catch (e) {}
   try {
     if (NC.addEventListener) {
       NC.addEventListener('connect', function (e) { onConnectEvt(e && e.detail && e.detail.address, false); });
@@ -3782,10 +3786,10 @@ setInterval(function () {                          // "Serverlar" oynasi ochiq v
   each(tabIps(), function (ip) { query(ip, true); });
   if (srvSel) loadPlayers(srvSel);
 }, 15000);
-setInterval(pingPresence, 60000);
-setInterval(function () { if (CONNECTED) sendStat(); }, 120000);   // o'yin davomida 2 daqiqada bir (o'yin qulab tushsa ham yo'qolmasin)
+var PP_N = 0; setInterval(function () { if (!playing() || ++PP_N % 3 === 0) pingPresence(); }, 60000);   // o'yin paytida 3 daqiqada bir
+var SS_N = 0; setInterval(function () { if (CONNECTED && (!playing() || ++SS_N % 3 === 0)) sendStat(); }, 120000);   // menyu ochiq - 2 daqiqada, o'yin paytida 6 daqiqada bir (o'yin qulab tushsa ham yo'qolmasin)
 setInterval(function () { if (!playing()) { loadFriends(); loadWeek(); } }, 60000);   // o'yinda xabarlar pollNotif orqali keladi
 setInterval(function () { if (!playing()) loadTop(); }, 10 * 60 * 1000);
 setInterval(function () { if (!playing()) loadAnn(); }, 5 * 60 * 1000);
-setTimeout(sendStats, 90000); setInterval(sendStats, 10 * 60 * 1000);
+setTimeout(sendStats, 90000); setInterval(function () { if (!playing()) sendStats(); }, 10 * 60 * 1000);
 })();
