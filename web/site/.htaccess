@@ -7,7 +7,7 @@
   RewriteEngine On
 </IfModule>
 # xc.js / xc.css / xc_lang.js "?v=versiya" bilan chaqiriladi - uzoq keshlanadi, versiya o'zgarsa yangisi olinadi.
-# xc.html / index.html 7 kun keshlanadi: sayt vaqtincha ishlamasa ham o'yin menyuni xotiradan ochadi.
+# xc.html / index.html 1 kun keshlanadi: sayt vaqtincha ishlamasa ham o'yin menyuni xotiradan ochadi.
 # Yangilanish baribir ko'rinadi - sahifa har ochilganda ver.txt ni yangidan so'raydi va kerak bo'lsa o'zini almashtiradi.
 <IfModule mod_deflate.c>
   AddOutputFilterByType DEFLATE text/html text/plain text/css application/javascript text/javascript application/json image/svg+xml
@@ -20,17 +20,23 @@
     Header set Cache-Control "public, max-age=604800"
   </FilesMatch>
   <FilesMatch "^(xc|index)\.html$">
-    Header set Cache-Control "public, max-age=604800"
+    Header set Cache-Control "public, max-age=86400"
   </FilesMatch>
   <FilesMatch "^ver\.txt$">
     Header set Cache-Control "no-cache, no-store, must-revalidate"
   </FilesMatch>
+</IfModule>
+# Yo'naltirish va xato javoblari HECH QACHON keshlanmasin: 2026-10-29 da noto'g'ri https yo'naltirish o'yin brauzerida 7 kunga
+# saqlanib qoldi va sayt tuzalgandan keyin ham menyu qora edi. Bu qatorlar shundan himoya qiladi (Apache 2.4).
+<IfModule mod_headers.c>
+  Header always set Cache-Control "no-store, no-cache, must-revalidate" "expr=%{REQUEST_STATUS} -ge 300"
+  Header always unset Expires "expr=%{REQUEST_STATUS} -ge 300"
 </IfModule>
 <IfModule mod_expires.c>
   ExpiresActive On
   ExpiresByType application/javascript "access plus 1 year"
   ExpiresByType text/css "access plus 1 year"
   ExpiresByType image/png "access plus 7 days"
-  ExpiresByType text/html "access plus 7 days"
+  ExpiresByType text/html "access plus 1 day"
   ExpiresByType text/plain "access plus 0 seconds"
 </IfModule>

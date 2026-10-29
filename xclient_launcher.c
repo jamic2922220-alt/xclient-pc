@@ -1722,6 +1722,7 @@ static void clear_menu_cache(void)
     wchar_t ini[MAX_PATH], p[MAX_PATH + 2] = {0};
     ini_path(ini);
     int done = GetPrivateProfileIntW(L"x", L"cachebuild", 0, ini);
+    if (GetPrivateProfileIntW(L"x", L"mhfix", 0, ini)) { done = -1; WritePrivateProfileStringW(L"x", L"mhfix", NULL, ini); }   /* menyu sayti tuzaldi - eski (buzilgan) javob xotirada qolmasin */
     if (done == g_build || g_build <= 0) return;
     path_join(p, g_dir, L"htmlcache");
     if (GetFileAttributesW(p) != INVALID_FILE_ATTRIBUTES) {
@@ -1930,6 +1931,24 @@ static BOOL run_game(void)
     return again;
 }
 
+/* Menyu sayti (XC_HOME) to'g'ri javob beryaptimi - yo'naltirishsiz. O'yin brauzeri yo'naltirishni ham, xato sahifasini ham
+ * bir necha kun xotirada saqlab qolishi mumkin: sayt tuzalgandan keyin ham o'yinchida menyu qora bo'lib turadi.
+ * Shuning uchun: oldingi safar buzilgan edi, endi tuzaldi -> o'yin brauzeri xotirasi (htmlcache) bir marta tozalanadi. */
+static void menu_site_check(void)
+{
+    HINTERNET h = InternetOpenUrlA(g_net, XC_HOME "?lc=1", NULL, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_NO_UI | INTERNET_FLAG_NO_AUTO_REDIRECT, 0);
+    if (!h) return;                                              /* internet yo'q - hech narsa demaymiz */
+    DWORD code = 0, len = sizeof(code);
+    HttpQueryInfoA(h, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &code, &len, NULL);
+    InternetCloseHandle(h);
+    if (!code) return;
+    int bad = ini_int(L"mhbad");
+    if (code != 200) { if (!bad) ini_set_int(L"mhbad", 1); return; }
+    /* birinchi tekshiruvda ham bir marta tozalaymiz: 2026-10-29 dagi https yo'naltirishi 7 kun xotirada turadi */
+    if (bad || !ini_int(L"mhchk")) { ini_set_int(L"mhfix", 1); ini_set_int(L"mhbad", 0); }
+    ini_set_int(L"mhchk", 1);
+}
+
 /* ---------------------------------------------------------------- ish oqimi */
 static DWORD WINAPI launch_ping(LPVOID unused) { (void)unused; api_call("launch", NULL); return 0; }
 static BOOL g_relaunch = FALSE, g_play = TRUE;
@@ -1966,6 +1985,7 @@ static DWORD WINAPI worker(LPVOID unused)
     prune_demos();                                /* ro'yxat saytga to'g'ri ketsin - o'chiriladiganlar oldin o'chadi */
     radar_start();                                /* fonda: overview'i yo'q xaritalarga radar rasmi */
     fetch_opts();
+    menu_site_check();
     if (o_beta >= 0) { lstrcpynA(g_chan, o_beta ? "beta" : "stable", sizeof(g_chan)); ini_save(); }
     if (o_start >= 0) set_autostart(o_start);
     if (o_clean) { status(L"Kesh tozalanmoqda...", 1); clean_cache(); }   /* eskilarini avtomatik tozalash - o'yin ochilgach fonda (cache_maint) */
