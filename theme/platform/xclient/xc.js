@@ -60,7 +60,7 @@ function radarNC() { return ncHas('hud_radar_scale'); }
 /* oddiy kompyuter (launcher bilan bir xil qoida): F9 buferi o'yinchi o'zi yoqmasa - o'chiq */
 function verGE(a, b) { a = String(a || '0').split('.'); b = String(b).split('.'); for (var i = 0; i < 3; i++) { var x = +a[i] || 0, y = +b[i] || 0; if (x !== y) return x > y; } return true; }
 function pcWeak() { return !!(HW && ((HW.cpu && HW.cpu < 4) || (HW.ram && HW.ram < 6144))); }
-function rbOn() { return OPTS && OPTS.rbx ? !!OPTS.rb : !pcWeak(); }   // xaritali radar sozlamalari o'yinda bormi
+function rbOn() { return !!(OPTS && OPTS.rbx && OPTS.rb); }   // F9 (oxirgi 30 soniya) faqat o'yinchi o'zi yoqsa: orqa fonda doim yozish o'yinni qotirishi mumkin   // xaritali radar sozlamalari o'yinda bormi
 function readCvar(n) { if (!canRead()) return null; try { var v = NC.getCvarValue(n); return v == null ? null : String(v); } catch (e) { return null; } }
 function cmd(c) {
   dbg('exec: ' + c);
@@ -1098,6 +1098,7 @@ function demoPlay(nm) {
 function demoEnd(why) {
   if (DEMO_PLAY) cmd('echo [X CLIENT] demo tugadi: ' + (why || '?'));
   cmd('host_framerate 0');
+  cmd('cl_filterstuffcmd 0');                        // demo uchun yoqilgan edi - qolib ketsa serverlar menyusining bandlari ishlamaydi
   if (!DEMO_PLAY) return;
   cmd('volume ' + (S && S.vol != null ? S.vol : 0.8));
   DEMO_PLAY = false; DEMO_PAUSE = false; DEMO_END_T = now();
@@ -1943,6 +1944,9 @@ function settingsCmds(s) {
   c.push('hud_radar_tracks ' + s.rtracks, 'hud_radar_fullmap ' + s.rfull, 'hud_radar_bg ' + s.rbg, 'hud_radar_allies ' + s.rallies, 'hud_radar_name_size ' + s.rns,
     'hud_radar_health_size ' + s.rhs, 'hud_deathnotice_time ' + s.dtime, 'cl_discordrpc ' + s.drpc, 'cl_discordrpc_server ' + s.drpcs, 'cl_discordrpc_join ' + s.drpcj);
   if (s.buykeys) each(BUY, function (b) { c.push('bind ' + b[0] + ' ' + q(b[1])); });
+  /* cl_filterstuffcmd faqat demo ko'rilayotganda 1: aks holda server menyularining bandlari (server o'yinchiga buyruq yuboradi) ishlamaydi.
+   * Eski menyu demodan keyin uni 1 da qoldirib ketardi - har ochilishda tuzatiladi */
+  if (!DEMO_PLAY) c.push('cl_filterstuffcmd 0');
   return c;
 }
 function applySettings(s) { each(settingsCmds(s), function (c) { cmd(c); }); if (s.name) MYNAME = fullName(s); if (s === S) binAliases(); }

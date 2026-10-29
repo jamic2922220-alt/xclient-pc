@@ -908,7 +908,7 @@ static void ensure_launcher_cfg(void)
     FILE *f = _wfopen(p, L"wb");
     if (!f) return;
     /* spray: o'zimiznikini serverga yuborish va boshqalarnikini olish - menyuda o'chirib qo'yilgan yoki sborka o'zgartirgan bo'lsa ham */
-    fprintf(f, "// X CLIENT\nscr_drawversion \"0\"\ncl_allowupload \"1\"\ncl_allowdownload \"1\"\nhost_framerate \"0\"\n");   /* host_framerate: menyudagi demo tezligi qolib ketmasin */
+    fprintf(f, "// X CLIENT\nscr_drawversion \"0\"\ncl_allowupload \"1\"\ncl_allowdownload \"1\"\nhost_framerate \"0\"\ncl_filterstuffcmd \"0\"\n");   /* filterstuffcmd: menyudagi demo yoqib qoldirsa - server menyulari ishlamaydi */   /* host_framerate: menyudagi demo tezligi qolib ketmasin */
     fclose(f);
 }
 
