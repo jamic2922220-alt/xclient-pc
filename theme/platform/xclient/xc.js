@@ -326,7 +326,7 @@ function fxLoop() {
  * xc_api.php ga yoziladi va XClient.exe ularni keyingi ishga tushishda bajaradi. */
 function qparam(k) { var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search || ''); return m ? decodeURIComponent(m[1]) : ''; }
 var PCID = /^[a-z0-9]{8,40}$/.test(qparam('xc')) ? qparam('xc') : '';   // kompyuter id (DB.pcid) va uning maxfiy kaliti (DB.pck) load() dan keyin olinadi
-var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '', hud: 100, vq: 'mid', dmf: null, vids: null, mic: 0, rb: 1, rbx: 0, rsk: 1 }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
+var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '', hud: 100, vq: 'mid', dmf: null, vids: null, mic: 0, rb: 1, rbx: 0, rsk: 1, tune: 1, macc: 1, bgp: 1, dvr: 0, dvroff: 0 }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
 var OPTS_TRY = 0;
 /* To'liq X CLIENT menyusi faqat XCLauncher.exe orqali ochilganda. Menyu saytda turadi va boshqa boost-top sborkalari ham
  * uni ochadi - ularda "sodda rejim": tezkor o'yin, serverlar, sozlamalar + X CLIENT ni yuklab olish kartasi.
@@ -367,6 +367,7 @@ function loadOpts() {
     var rt = OPTS.rsk ? 1 : 0;                   // radar foni launcherda (1.0.91+); cl_radartype unga mos bo'lsin (qora fonlar - to'liq radar)
     if (S && S.radar !== rt && verGE(r.o.ver, '1.0.91') && !radarNC()) { S.radar = rt; DB.set = S; persist(); cmd('cl_radartype ' + rt); }
     stateSync();
+    setTimeout(tuneHints, 4000);
     if (curModal === 'mdSettings' && (setTab === 'pro' || setTab === 'cont')) showSetTab(setTab);
     if (curModal === 'mdSettings' && (setTab === 'system' || setTab === 'video')) showSetTab(setTab);
   });
@@ -1242,17 +1243,36 @@ function avInner(u, name) {
   if (u && u.av) return '<img src="' + esc(u.av) + '" alt="">';
   return esc(String(name || (u && u.name) || 'X').charAt(0).toUpperCase() || 'X');
 }
-/* ---- admin paneldagi e'lonlar: bosh menyuning o'ng ustuni tepasida ---- */
-var ANN = [];
+/* ---- admin paneldagi e'lonlar: pastki chiziqda yangiliklar lentasi (yangilik / reklama / muhim) ----
+ * Bir nechta bo'lsa - navbat bilan almashadi. Matn joyiga sig'masa - yugurib o'tadi (o'yin ustida - yugurmaydi).
+ * E'londa server IP bo'lsa - bosilganda shu serverga kiradi. */
+var ANN = [], ANN_I = -1, ANN_TM = 0;
 function loadAnn() { api('news', {}, function (r) { ANN = r.ok && r.ann ? r.ann : []; renderAnn(); }); }
+function newsBox() {
+  var el = $('bNews'), bar = $('bar');
+  if (!el && bar) { el = document.createElement('div'); el.id = 'bNews'; bar.appendChild(el); }   // oxirida: chap va o'ng yozuvlar orasidagi bo'sh joyni egallaydi
+  return el;
+}
 function renderAnn() {
-  var el = $('ann'); if (!el) return;
-  var hid = DB.annHide || [], a = null;
-  each(ANN, function (x) { if (!a && hid.indexOf(x.id) < 0) a = x; });
-  if (!a) { el.style.display = 'none'; return; }
-  el.className = 'card ann ' + (/^(info|warn|promo)$/.test(a.type) ? a.type : 'info');
-  el.innerHTML = '<div class="anh">' + esc(T('an_title')) + '<a class="anx" data-annx="' + esc(a.id) + '">✕</a></div><div class="ant">' + esc(a.text) + '</div>';
+  var el = newsBox(); if (!el) return;
+  clearTimeout(ANN_TM);
+  if (!ANN.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = '';
+  ANN_I = (ANN_I + 1) % ANN.length;
+  var a = ANN[ANN_I], ty = /^(info|warn|promo)$/.test(a.type) ? a.type : 'info', ip = /^[a-z0-9.\-]{3,64}:\d{2,5}$/i.test(a.ip || '') ? a.ip : '';
+  el.className = 'nw-' + ty + (ip ? ' nlink' : '');
+  el.setAttribute('data-newsip', ip);
+  el.innerHTML = '<div class="nw"><span class="ntg"><i></i>' + esc(T('nw_' + ty)) + '</span><div class="nb"><span class="nx in">' + esc(a.text) +
+    (ip ? ' <b class="ngo">\u25b6 ' + esc(T('nw_go')) + '</b>' : '') + '</span></div></div>';
+  var nb = el.querySelector('.nb'), nx = el.querySelector('.nx'), tg = el.querySelector('.ntg'), wait = 8000;
+  var pad = tg ? tg.offsetWidth + 12 : 112; if (nb) nb.style.paddingLeft = pad + 'px';   // yorliq kengligi tilga qarab har xil
+  var room = nb ? nb.offsetWidth - pad : 0;
+  if (nb && nx && nx.offsetWidth > room + 4 && !lowFx()) {   // sig'madi - yuguruvchi qator
+    var sec = Math.max(8, (nx.offsetWidth + room) / 70);
+    nx.className = 'nx mq'; nx.style.webkitAnimationDuration = sec + 's';
+    wait = sec * 1000;
+  }
+  if (ANN.length > 1 || wait > 8000) ANN_TM = setTimeout(renderAnn, wait);
 }
 function renderBar() {
   each(['miResume', 'miPlist', 'miDisc'], function (id) { var e = $(id); if (e) e.style.display = CONNECTED ? '' : 'none'; });   // serverda: o'yinga qaytish, o'yinchilar, chiqish - menyuning tepasida
@@ -2044,6 +2064,36 @@ function hwAuto() {
   for (var k in v) if (v.hasOwnProperty(k)) E[k] = v[k];
   showSetTab('pro'); toast(T('hw_done').replace('{c}', T('hw_' + c)), 5000);
 }
+/* ---- o'yin paytida Windows'ni moslash (launcher 1.0.96+: quvvat rejimi, sichqoncha tezlashuvi, fon dasturlari, Game Bar) ---- */
+function tunePane() {
+  var row = function (k, label, sub) {
+    return '<div class="fr w"><div class="lb">' + esc(T(label)) + '<small>' + esc(T(sub)) + '</small></div><div class="tg' + (OPTS[k] ? ' on' : '') + '" data-otg="' + k + '"><i></i></div></div>';
+  };
+  var h = '<div class="ph2 m">' + esc(T('tn_title')) + '</div>';
+  if (!verGE(VERSION, '1.0.96')) return h + '<div class="mut" style="font-size:12px">' + esc(T('tn_old')) + '</div>';
+  h += row('tune', 'tn_tune', 'tn_tune2');
+  if (OPTS.tune) h += row('macc', 'tn_macc', 'tn_macc2') + row('bgp', 'tn_bgp', 'tn_bgp2');
+  if (OPTS.dvr) h += '<div class="rowb"><b>' + esc(T('tn_dvr')) + '</b><small>' + esc(T('tn_dvr2')) + (OPTS.dvroff ? ' \u00b7 ' + esc(T('tn_dvrp')) : '') + '</small>' +
+    (OPTS.dvroff ? '' : '<a class="btn red" data-act="dvroff">' + esc(T('tn_dvrb')) + '</a>') + '</div>';
+  return h;
+}
+/* kuchsiz kompyuterga yengil grafika - bir bosishda (Saqlash bosish shart emas) */
+function hwLight() {
+  if (!S) return;
+  var v = gfxPreset('weak', S); E = copy(S);
+  for (var k in v) if (v.hasOwnProperty(k)) E[k] = v[k];
+  S = copy(E); DB.set = S; persist(); applySettings(S); cloudSave();
+  toast(T('hw_on'), 5000);
+}
+/* bir martalik takliflar (bittadan, "Bezovta qilmaslik" yoqilmagan bo'lsa): kuchsiz kompyuter, Windows Game Bar fon yozuvi */
+function tuneHints() {
+  if (DB.dnd || CONNECTED || curModal || !HW) return;
+  if (hwClass() === 'weak' && !DB.hwAsk && S) { DB.hwAsk = 1; persist(); return ask(T('hw_ask'), hwLight, false, false, true); }
+  if (OPTS.dvr && !OPTS.dvroff && !DB.dvrAsk && verGE(VERSION, '1.0.96')) {
+    DB.dvrAsk = 1; persist();
+    ask(T('dvr_ask'), function () { OPTS.dvroff = 1; saveOpts(T('dvr_ok')); }, false, false, true);
+  }
+}
 /* ---- kontent paketlari (saytdagi mmb/packs) ---- */
 var PACKS = null;
 function loadPacks() {
@@ -2704,7 +2754,8 @@ var PANES = {
       '<div class="rowb"><b>' + esc(T('pr_fps')) + '</b><small>' + esc(T('pr_fps2')) + '</small><a class="btn red" data-act="fpsmode">' + esc(T('pr_fpsb')) + '</a></div>' +
       '<div class="rowb"><b>' + esc(T('hw_title')) + ' <span class="gr">' + esc(HW ? T('hw_' + hwClass()) : '') + '</span></b><small>' + esc(hwText()) + '</small>' +
       (HW ? '<a class="btn" data-act="hwauto">' + esc(T('hw_auto')) + '</a>' : '') + '</div>' +
-      '<div class="fr w"><div class="lb">' + esc(T('pr_prio')) + '<small>' + esc(T('pr_prio2')) + '</small></div><div class="tg' + (OPTS.prio ? ' on' : '') + '" data-otg="prio"><i></i></div></div></div>' +
+      '<div class="fr w"><div class="lb">' + esc(T('pr_prio')) + '<small>' + esc(T('pr_prio2')) + '</small></div><div class="tg' + (OPTS.prio ? ' on' : '') + '" data-otg="prio"><i></i></div></div>' +
+      tunePane() + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('pr_net')) + '</div>' +
       '<div class="rowb"><b>' + esc(T('nt_title')) + '</b><small>' + esc(NETT_RUN ? T('nt_run') : NETT ? T('nt_res').replace('{p}', NETT.best).replace('{j}', NETT.jit).replace('{l}', NETT.loss) + ' \u2192 ' + T('n_' + NETT.rec.net) : T('nt_desc')) + '</small>' +
         (NETT && !NETT_RUN ? '<a class="btn red" style="right:110px" data-act="netapply">' + esc(T('x_apply')) + '</a>' : '') + '<a class="btn" data-act="nettest">' + esc(T('nt_btn')) + '</a></div>' +
@@ -3159,6 +3210,7 @@ function act(a) {
   }
   if (a === 'calcapply') { var cv = calcVal(); if (!cv) return toast(T('cc_bad')); E.sens = Math.max(0.1, Math.min(20, cv)); return toast(T('cc_ok').replace('{v}', E.sens), 4000); }
   if (a === 'hwauto') return hwAuto();
+  if (a === 'dvroff') { OPTS.dvroff = 1; saveOpts(T('dvr_ok')); return showSetTab('pro'); }
   if (a === 'spfile') { var sf = $('sprayFile'); if (!sf) return; sf.value = ''; try { sf.click(); } catch (e) { toast(T('a_photo_na')); } return; }
   if (a === 'spav') return ME && ME.av ? sprayFrom(ME.av) : null;
   if (a === 'splogo') {                         // standart tiniq X CLIENT spray (saytda tayyorlangan)
@@ -3445,10 +3497,10 @@ document.onclick = function (e) {
     return;
   }
   if ((el = closest(t, 'data-ohud'))) { OPTS.hud = Number(el.getAttribute('data-ohud')); saveOpts(T('h_size4')); showSetTab('hud'); return; }
-  if ((el = closest(t, 'data-otg'))) { var ok2 = el.getAttribute('data-otg'); OPTS[ok2] = OPTS[ok2] ? 0 : 1; el.className = 'tg' + (OPTS[ok2] ? ' on' : ''); saveOpts(); return; }
+  if ((el = closest(t, 'data-otg'))) { var ok2 = el.getAttribute('data-otg'); OPTS[ok2] = OPTS[ok2] ? 0 : 1; el.className = 'tg' + (OPTS[ok2] ? ' on' : ''); saveOpts(/^(tune|macc|bgp)$/.test(ok2) ? T('tn_next') : ''); if (ok2 === 'tune') showSetTab('pro'); return; }
   if ((el = closest(t, 'data-tg'))) { var k = el.getAttribute('data-tg'); E[k] = E[k] ? 0 : 1; el.className = 'tg' + (E[k] ? ' on' : ''); if (setTab === 'hud') { drawXhair(); var cd = $('xCode'); if (cd) cd.value = xcode(E); } return; }
   if ((el = closest(t, 'data-avc'))) { api('avatar', { color: el.getAttribute('data-avc') }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); }); return; }
-  if ((el = closest(t, 'data-annx'))) { DB.annHide = (DB.annHide || []).concat([el.getAttribute('data-annx')]).slice(-50); persist(); renderAnn(); return; }
+  if ((el = closest(t, 'data-newsip')) && el.getAttribute('data-newsip')) { sfx('click'); return doConnect(el.getAttribute('data-newsip')); }
   if ((el = closest(t, 'data-daymode'))) return dayToggle();
   if ((el = closest(t, 'data-theme'))) { DB.theme = el.getAttribute('data-theme'); persist(); cloudSave(); applyTheme(DB.theme); if (curModal === 'mdSettings') showSetTab('cont'); return; }
   if ((el = closest(t, 'data-pack'))) {

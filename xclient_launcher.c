@@ -996,6 +996,10 @@ static char *read_all(const wchar_t *path, long *len)
 static int  o_beta = -1, o_auto = 1, o_start = -1, o_win = 0, o_clean = 0, o_verify = 0;
 static int  o_rsk = 1;                          /* klassik radar foni: 0 asl, 1 qora kontrast (standart), 2 qora + halqalar */
 static void radar_skin(int style);              /* xc_radar.c */
+static int  o_tune = 1, o_macc = 1, o_bgp = 1, o_dvroff = 0;   /* xc_tune.c: o'yin paytida Windows'ni moslash (menyu > Tizim) */
+static int  dvr_state(void);
+static void ini_get(const wchar_t *k, wchar_t *out, DWORD cap);
+static void ini_str(const wchar_t *k, const wchar_t *v);
 static int ini_int(const wchar_t *k);
 static void ini_set_int(const wchar_t *k, int v);
 /* oddiy kompyuter: 4 tadan kam yadro yoki 6 GB dan kam xotira - F9 buferi (butun o'yin davomida orqada yozish) o'zi yoqilmaydi */
@@ -1075,12 +1079,17 @@ static void fetch_opts(void)
     vid_list(dm, sizeof(dm));                     /* menyudagi "Videolarim" - papkadagi haqiqiy MP4 lar */
     wchar_t ini[MAX_PATH]; ini_path(ini);
     unsigned cmb = (unsigned)GetPrivateProfileIntW(L"x", L"cachemb", 0, ini);   /* o'yin paytida fonda hisoblangan (cache_maint) */
-    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=hello&d=%s&v=%s&cache=%u%s%s", g_id, v, cmb, hw, dm); url[sizeof(url) - 1] = 0;
+    wchar_t wcr[24]; char cr[24] = ""; ini_get(L"t_cr", wcr, 24);         /* oxirgi yiqilish: "kod~fayllar" - bir marta yuboriladi */
+    WideCharToMultiByte(CP_UTF8, 0, wcr, -1, cr, sizeof(cr), NULL, NULL);
+    if (strspn(cr, "0123456789abcdef~") != strlen(cr)) cr[0] = 0;
+    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=hello&d=%s&v=%s&cache=%u&dvr=%d%s%s%s%s", g_id, v, cmb, dvr_state(), cr[0] ? "&cr=" : "", cr, hw, dm); url[sizeof(url) - 1] = 0;
     char *r = http_get(url, NULL);
     if (!r || !strstr(r, "\"ok\":true")) { free(r); return; }
     o_beta = jint(r, "beta", -1); o_auto = jint(r, "auto", 1); o_start = jint(r, "start", -1);
     o_win = jint(r, "win", 0); o_clean = jint(r, "clean", 0); o_verify = jint(r, "verify", 0);
     o_rsk = jint(r, "rsk", 1); ini_set_int(L"rsk", o_rsk + 1);   /* +1: 0 - "hali yo'q" */
+    o_tune = jint(r, "tune", 1); o_macc = jint(r, "macc", 1); o_bgp = jint(r, "bgp", 1); o_dvroff = jint(r, "dvroff", 0);
+    if (cr[0]) ini_str(L"t_cr", NULL);
     o_prio = jint(r, "prio", 0); o_hud = jint(r, "hud", 100); o_shots = jint(r, "shots", 0); o_spray = jint(r, "spray", 0); o_sprays = jint(r, "sprays", 0);
     jstr(r, "packs", o_packs, sizeof(o_packs));
     jstr(r, "sprayh", o_sprayh, sizeof(o_sprayh));
@@ -1809,6 +1818,7 @@ static BOOL handle_running_game(void)
 
 #include "xc_rec.c"   /* F10: o'yinni MP4 qilib yozish */
 #include "xc_radar.c" /* radar xaritasi: overview'i yo'q xaritalar uchun */
+#include "xc_tune.c"  /* o'yin paytida Windows'ni moslash, yiqilishni tuzatish */
 
 /* yuklangan fayllar (cstrike_downloads) - 30 kundan eskilari va hajmi: o'yin yopilgandan keyin (o'yin papkadan foydalanmayotganda).
  * Oldin o'yin ochilishidan OLDIN papka uch marta aylanib chiqilardi (minglab fayl - bir necha soniya) */
@@ -1820,7 +1830,8 @@ static DWORD WINAPI cache_maint(LPVOID unused)
     ini_set_int(L"cachemb", (int)cache_mb());
     return 0;
 }
-static void run_game(void)
+/* qaytaradi TRUE - o'yin yiqildi va o'yinchi "qayta ochish" ni tanladi */
+static BOOL run_game(void)
 {
     wchar_t exe[MAX_PATH], cmd[1024];
     remove_old_ui();
@@ -1839,7 +1850,7 @@ static void run_game(void)
     if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) path_join(exe, g_dir, L"hl.exe");
     if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) {
         MessageBoxW(NULL, L"O‘yin fayllari (cstrike.exe) topilmadi. X CLIENT ni to‘liq paketdan qayta o‘rnating.", L"X CLIENT", MB_ICONERROR);
-        return;
+        return FALSE;
     }
     wchar_t vid[96] = L"";
     unsigned w = 0, h = 0;
@@ -1866,6 +1877,8 @@ static void run_game(void)
     PROCESS_INFORMATION pi;
     meta_save();
     if (o_ok) compat_flags(exe, o_prio);
+    BOOL again = FALSE;
+    FILETIME ft0; GetSystemTimeAsFileTime(&ft0);
     if (CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, g_dir, &si, &pi)) {
         if (g_one) { CloseHandle(g_one); g_one = NULL; }   /* o'yin ochildi - endi yana bosilsa, yangi launcher uni topib oldinga chiqaradi */
         if (o_prio) SetPriorityClass(pi.hProcess, ABOVE_NORMAL_PRIORITY_CLASS);   /* "O'yinni tezlashtirish": HIGH Windows ovoz xizmatini (audiodg) siqib, ovoz qotishi va chirsillashiga sabab bo'lardi */
@@ -1875,13 +1888,28 @@ static void run_game(void)
          * fetch_opts qayta: menyuda o'yin paytida yoqilgan "galereyaga yuklash" ham hisobga olinadi va
          * sayt shu kompyuterni yana taniydi (shot_up 30 daqiqalik IP tekshiruvi). */
         rec_session_begin(pi.dwProcessId);
+        tune_begin();                                /* quvvat rejimi, sichqoncha, fon dasturlari - o'yin yopilguncha */
         WaitForSingleObject(pi.hProcess, INFINITE);
+        tune_end();
+        DWORD code = 0; GetExitCodeProcess(pi.hProcess, &code);
         rec_session_end();
+        ULONGLONG t0 = ((ULONGLONG)ft0.dwHighDateTime << 32) | ft0.dwLowDateTime;
+        if (game_crashed(code, t0)) {
+            int n = crash_fix(t0);
+            wchar_t w[24], m[640]; _snwprintf(w, 24, L"%lx~%d", (unsigned long)code, n); w[23] = 0; ini_str(L"t_cr", w);
+            BOOL ru = !strncmp(g_lang, "ru", 2);
+            if (n) _snwprintf(m, 640, ru ? L"Игра неожиданно закрылась (ошибка 0x%08lX).\n\nX CLIENT убрал %d файл(ов), скачанных с сервера перед вылетом: они могли быть повреждены. При следующем входе сервер отдаст их заново.\n\nОткрыть игру снова?"
+                : L"O‘yin kutilmaganda yopildi (xato 0x%08lX).\n\nX CLIENT yiqilishdan oldin serverdan yuklangan %d ta faylni chetga oldi: ular buzilgan bo‘lishi mumkin. Keyingi kirishda server ularni qaytadan beradi.\n\nO‘yinni qayta ochaymi?", (unsigned long)code, n);
+            else _snwprintf(m, 640, ru ? L"Игра неожиданно закрылась (ошибка 0x%08lX).\n\nОткрыть игру снова?" : L"O‘yin kutilmaganda yopildi (xato 0x%08lX).\n\nO‘yinni qayta ochaymi?", (unsigned long)code);
+            m[639] = 0;
+            again = MessageBoxW(NULL, m, L"X CLIENT", MB_YESNO | MB_ICONWARNING | MB_SETFOREGROUND) == IDYES;
+        }
         cache_maint(NULL);                           /* o'yin yopilgach: yuklangan fayllarni o'yin ishlatayotgan paytda o'chirmaymiz */
         fetch_opts();
         if (o_ok && o_shots) upload_shots();
         CloseHandle(pi.hProcess);
     }
+    return again;
 }
 
 /* ---------------------------------------------------------------- ish oqimi */
@@ -1906,6 +1934,8 @@ static DWORD WINAPI worker(LPVOID unused)
     /* o'yin allaqachon ochiq: fayllarni (kesh, paketlar, yangilanish) o'yin ishlab turganda o'zgartirmaymiz -
      * ishlab turgan bo'lsa oynasi oldinga chiqadi, qotgan bo'lsa so'raladi va yopilgach odatdagidek davom etamiz */
     if (!handle_running_game()) { g_play = FALSE; PostMessageW(g_wnd, WM_XC_DONE, 0, 0); return 0; }
+    tune_recover();                               /* oldingi safar launcher o'yin paytida yopilib qolgan bo'lsa - Windows sozlamalarini qaytarish */
+    crash_prune();
 
     g_net = InternetOpenA("XClient", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
     /* ulanish 6 s: sayt javob bermasa launcher 15 s kutib turmaydi (yuklab olishda o'qish kutishi 15 s qoladi) */
@@ -2103,7 +2133,7 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, LPWSTR cmdline, int show)
             return 0;
         }
     }
-    if (g_play) run_game();
+    if (g_play) { int tries = 0; while (run_game() && ++tries < 3) ; }   /* yiqilsa - o'yinchi xohlasa qayta ochiladi */
     CoUninitialize();
     return 0;
 }
