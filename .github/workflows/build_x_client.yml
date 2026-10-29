@@ -62,9 +62,11 @@ jobs:
       - name: X CLIENT launcher (avto-yangilovchi)
         shell: cmd
         run: |
-          rem ikonka (xclient.ico -> xclient.res)
+          rem ikonka, exe xususiyatlari (versiya) va manifest -> xclient.res
+          > own\xc_ver.h echo #define XC_BUILD %GITHUB_RUN_NUMBER%
+          >> own\xc_ver.h echo #define XC_VERSTR "%XC_VERSION%"
           pushd own && rc /nologo /fo xclient.res xclient.rc && popd
-          cl /nologo /O2 /MT /utf-8 /DUNICODE /D_UNICODE own\xclient_launcher.c own\xclient.res /Fe:dist\XCLauncher.exe /link /SUBSYSTEM:WINDOWS wininet.lib comctl32.lib ole32.lib uuid.lib shell32.lib advapi32.lib user32.lib gdi32.lib gdiplus.lib
+          cl /nologo /O2 /MT /utf-8 /DUNICODE /D_UNICODE own\xclient_launcher.c own\xclient.res /Fe:dist\XCLauncher.exe /link /SUBSYSTEM:WINDOWS /MANIFEST:NO wininet.lib comctl32.lib ole32.lib uuid.lib shell32.lib advapi32.lib user32.lib gdi32.lib gdiplus.lib
           if defined SIGN_PFX_B64 (
             powershell -NoProfile -Command "[IO.File]::WriteAllBytes('sign.pfx', [Convert]::FromBase64String($env:SIGN_PFX_B64))"
             signtool sign /f sign.pfx /p "%SIGN_PASS%" /fd sha256 /tr http://timestamp.digicert.com /td sha256 /d "X CLIENT" dist\XCLauncher.exe || exit /b 1

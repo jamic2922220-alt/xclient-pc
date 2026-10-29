@@ -22,6 +22,8 @@ VIAddVersionKey "ProductName" "X CLIENT"
 VIAddVersionKey "FileDescription" "X CLIENT - CS 1.6 launcher"
 VIAddVersionKey "FileVersion" "${VER}"
 VIAddVersionKey "LegalCopyright" "boost-top.com"
+VIAddVersionKey "CompanyName" "X CLIENT (cssborka.uz)"
+VIAddVersionKey "ProductVersion" "${VER}"
 
 !define MUI_ICON "xclient.ico"
 !define MUI_UNICON "xclient.ico"

@@ -1649,6 +1649,10 @@ case 'opts_done':
             $o['scr'] = p('res');
         }
         if (p('os') !== '') $o['os'] = clean_str(p('os'), 80);
+        if (p('dvr') !== '') { $o['dvr'] = p('dvr') === '1' ? 1 : 0; if (!$o['dvr']) unset($o['dvroff']); }   // Windows Game Bar fon yozuvi (FPS ni tushiradi)
+        if (preg_match('/^([0-9a-f]{8})~(\d{1,4})$/', p('cr'), $cm)) {   // launcher: o'yin yiqildi (Windows xato kodi ~ chetga olingan fayllar)
+            $o['cr'] = array('t' => time(), 'c' => $cm[1], 'n' => (int)$cm[2]); $o['crn'] = (isset($o['crn']) ? $o['crn'] : 0) + 1;
+        }
         if (isset($_GET['dm']) || isset($_POST['dm'])) {     // launcher: cstrike\xc_*.dem fayllari (eng yangisi birinchi) - menyudagi demolar ro'yxati
             $dmf = array();
             foreach (explode(',', (string)p('dm')) as $x) if (preg_match('/^[\w\-]{1,40}$/', $x) && count($dmf) < 40) $dmf[] = $x;
@@ -1694,6 +1698,8 @@ case 'opts_done':
         if (!is_array($in)) fail('bad', 'bad');
         foreach (array('beta', 'auto', 'start', 'win', 'clean', 'verify', 'prio', 'shots') as $k) if (isset($in[$k])) $o[$k] = $in[$k] ? 1 : 0;
         if (isset($in['packs'])) $o['packs'] = preg_match('/^[a-z0-9_,\-]{0,200}$/', $in['packs']) ? $in['packs'] : '';
+        foreach (array('tune', 'macc', 'bgp') as $k) if (isset($in[$k])) $o[$k] = $in[$k] ? 1 : 0;   // o'yin paytida Windows'ni moslash (quvvat, sichqoncha, fon dasturlari)
+        if (!empty($in['dvroff'])) $o['dvroff'] = 1;                                   // Game Bar fon yozuvini o'chirish - launcher keyingi ochilishda bajaradi
         foreach (array('mic', 'rb') as $k) if (isset($in[$k])) $o[$k] = $in[$k] ? 1 : 0;   // videoda mikrofon, "oxirgi 30 soniya"
         if (!empty($in['rbx'])) $o['rbx'] = 1;                                        // "oxirgi 30 soniya" ni o'yinchi o'zi tanladi (bo'lmasa - avto: oddiy kompyuterda o'chiq)
         if (isset($in['rsk'])) $o['rsk'] = max(0, min(2, (int)$in['rsk']));          // klassik radar foni: 0 asl, 1 qora kontrast, 2 qora + halqalar
