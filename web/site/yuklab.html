@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>X CLIENT — CS 1.6</title>
+<meta name="description" content="X CLIENT — Counter-Strike 1.6 uchun zamonaviy menyu, avto-yangilanish, pro sozlamalar va kunlik vazifalar.">
+<link rel="icon" href="spray_logo.png">
+<style>
+:root { --bg: #0d0a0e; --panel: #17121a; --line: #2a2026; --text: #f2eef0; --mut: #a39aa0; --red: #ff3b3b; --red2: #c4262e; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 "Segoe UI", Inter, Roboto, Arial, sans-serif; }
+a { color: inherit; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+.page { overflow: hidden; }
+header { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: .5px; font-size: 20px; text-decoration: none; }
+.brand img { width: 36px; height: 36px; object-fit: contain; }
+.brand b { color: var(--red); }
+.lang a { color: var(--mut); text-decoration: none; margin-left: 12px; font-size: 14px; cursor: pointer; }
+.lang a.on { color: var(--text); font-weight: 700; }
+.hero { position: relative; display: grid; grid-template-columns: 1.05fr 1fr; gap: 40px; align-items: center; padding: 40px 0 60px; }
+.hero:before { content: ""; position: absolute; left: 0; right: 0; top: -60px; height: 520px; background: radial-gradient(closest-side, rgba(255, 59, 59, .18), transparent 70%); z-index: -1; }
+.hero h1 { font-size: 52px; line-height: 1.05; margin: 0 0 14px; letter-spacing: -.5px; }
+.hero h1 b { color: var(--red); }
+.hero p.lead { color: var(--mut); font-size: 18px; margin: 0 0 26px; max-width: 520px; }
+.dl { display: inline-flex; align-items: center; gap: 12px; background: linear-gradient(180deg, var(--red), var(--red2)); color: #fff; text-decoration: none; font-weight: 700; font-size: 18px; padding: 16px 28px; border-radius: 10px; box-shadow: 0 10px 30px rgba(255, 59, 59, .25); }
+.dl:hover { filter: brightness(1.08); }
+.dl svg { width: 22px; height: 22px; }
+.meta { margin-top: 12px; color: var(--mut); font-size: 14px; }
+.ss { margin-top: 10px; max-width: 520px; color: var(--mut); font-size: 13px; line-height: 1.45; border-left: 3px solid var(--red, #ff3b3b); padding-left: 10px; }
+.hero .logo { width: 100%; max-width: 440px; justify-self: center; filter: drop-shadow(0 20px 50px rgba(255, 40, 40, .35)); }
+section { padding: 50px 0; }
+h2 { font-size: 30px; margin: 0 0 8px; }
+.sub { color: var(--mut); margin: 0 0 28px; }
+.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+.card i { display: inline-block; font-style: normal; font-size: 22px; color: var(--red); margin-bottom: 8px; }
+.card b { display: block; margin-bottom: 4px; }
+.card span { color: var(--mut); font-size: 14px; }
+.shots { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.shots img { width: 100%; border-radius: 10px; border: 1px solid var(--line); display: block; }
+.steps { counter-reset: s; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.steps .card { position: relative; padding-top: 52px; }
+.steps .card:before { counter-increment: s; content: counter(s); position: absolute; left: 18px; top: 14px; width: 28px; height: 28px; border-radius: 50%; background: var(--red); color: #fff; font-weight: 700; display: grid; place-items: center; font-size: 15px; }
+.req { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.req ul { margin: 0; padding-left: 18px; color: var(--mut); }
+.req li { margin-bottom: 6px; }
+details { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; margin-bottom: 10px; }
+summary { cursor: pointer; font-weight: 600; }
+details p { color: var(--mut); margin: 10px 0 0; }
+.cta { text-align: center; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 40px 20px; }
+footer { color: var(--mut); font-size: 13px; text-align: center; padding: 30px 0 40px; }
+.cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.cols .card b { font-size: 16px; margin-bottom: 8px; }
+.cols ul { margin: 0; padding-left: 18px; color: var(--mut); font-size: 14px; }
+.cols li { margin-bottom: 5px; }
+.perks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.perk { background: linear-gradient(180deg, rgba(255, 59, 59, .10), transparent 70%), var(--panel); border: 1px solid #3a2228; border-radius: 12px; padding: 18px; }
+.perk i { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 9px; background: rgba(255, 59, 59, .15); color: var(--red); font-style: normal; font-size: 18px; margin-bottom: 10px; }
+.perk b { display: block; margin-bottom: 4px; }
+/* o'yinchilar kliplari - aylanib turadigan lenta */
+.cliphead { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.cliphead .more { color: var(--red); text-decoration: none; font-weight: 600; margin-bottom: 28px; }
+.marq { overflow: hidden; position: relative; padding: 4px 0; -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
+.mtrack { display: flex; gap: 14px; width: max-content; animation: mq var(--mqd, 40s) linear infinite; }
+.marq:hover .mtrack { animation-play-state: paused; }
+@keyframes mq { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.clip { position: relative; width: 300px; max-width: 78vw; flex: none; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; cursor: pointer; transition: transform .2s, border-color .2s; }
+.clip:hover { transform: translateY(-4px); border-color: var(--red); }
+.clip video { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: #000; }
+.clip .pl { position: absolute; left: 0; right: 0; top: 0; aspect-ratio: 16 / 9; display: grid; place-items: center; pointer-events: none; }
+.clip .pl i { position: relative; width: 52px; height: 52px; border-radius: 50%; background: rgba(255, 59, 59, .9); box-shadow: 0 6px 20px rgba(0, 0, 0, .5); transition: opacity .2s; }
+.clip .pl i:after { content: ""; position: absolute; left: 21px; top: 16px; border-left: 15px solid #fff; border-top: 10px solid transparent; border-bottom: 10px solid transparent; }
+.clip:hover .pl i { opacity: 0; }
+.clip .m { padding: 9px 12px 11px; min-width: 0; }
+.clip .m b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.clip .m span { color: var(--mut); font-size: 13px; }
+.cmod { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(0, 0, 0, .85); padding: 16px; }
+.cmod[hidden] { display: none; }
+.cmod .cbox { position: relative; width: min(1000px, 100%); }
+.cmod video { width: 100%; max-height: 80vh; background: #000; border-radius: 10px; display: block; }
+.cmod .cx { position: absolute; right: 0; top: -40px; color: #fff; font-size: 26px; text-decoration: none; cursor: pointer; }
+.cmod .cn { color: var(--mut); margin-top: 8px; font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { .mtrack { animation: none; } .marq { overflow-x: auto; } }
+.perk span { color: var(--mut); font-size: 14px; }
+.tour { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 18px; align-items: start; }
+.tnav { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px; position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
+.tnav small { display: block; color: var(--red); font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 10px 10px 4px; }
+.tnav a { display: block; padding: 7px 10px; border-radius: 7px; color: var(--mut); font-size: 14px; text-decoration: none; cursor: pointer; }
+.tnav a:hover { color: var(--text); background: rgba(255, 255, 255, .04); }
+.tnav a.on { color: #fff; background: rgba(255, 59, 59, .16); box-shadow: inset 3px 0 0 var(--red); }
+.tview { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.tview .ph { position: relative; display: block; background: #000; aspect-ratio: 16 / 9; max-width: 100%; }
+.tview .ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tview .ph em { position: absolute; right: 10px; bottom: 10px; font-style: normal; font-size: 12px; background: rgba(0, 0, 0, .65); color: #fff; padding: 4px 9px; border-radius: 6px; }
+.tbody { padding: 20px 22px 22px; }
+.tbody .path { color: var(--red); font-size: 12px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; }
+.tbody h3 { margin: 4px 0 8px; font-size: 22px; }
+.tbody p { color: var(--mut); margin: 0 0 12px; max-width: 70ch; }
+.tbody ul { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 22px; }
+.tbody li { position: relative; padding-left: 16px; font-size: 14px; color: var(--text); }
+.tbody li:before { content: ""; position: absolute; left: 0; top: .62em; width: 6px; height: 6px; border-radius: 2px; background: var(--red); }
+.tfoot { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 0 22px 20px; color: var(--mut); font-size: 13px; }
+.tfoot button { background: transparent; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; font: inherit; font-size: 14px; cursor: pointer; }
+.tfoot button:hover { border-color: var(--red); }
+@media (max-width: 900px) {
+  .tour { grid-template-columns: 1fr; }
+  .tnav { position: static; max-height: none; display: flex; overflow-x: auto; gap: 4px; padding: 6px; }
+  .tnav small { display: none; }
+  .tnav a { flex: 0 0 auto; white-space: nowrap; }
+  .tbody ul { grid-template-columns: 1fr; }
+  .tbody { padding: 16px; } .tfoot { padding: 0 16px 16px; }
+}
+@media (max-width: 900px) { .cols, .perks { grid-template-columns: 1fr; } }
+@media (min-width: 901px) and (max-width: 1100px) { .cols { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 900px) {
+  .hero { grid-template-columns: 1fr; text-align: center; padding-top: 10px; }
+  .hero p.lead { margin-left: auto; margin-right: auto; }
+  .hero .logo { max-width: 260px; order: -1; }
+  .grid { grid-template-columns: 1fr 1fr; }
+  .steps, .req, .shots { grid-template-columns: 1fr; }
+  .hero h1 { font-size: 38px; }
+}
+@media (max-width: 480px) { .grid { grid-template-columns: 1fr; } .dl { width: 100%; justify-content: center; } }
+</style>
+</head>
+<body>
+<div class="page">
+<div class="wrap">
+  <header>
+    <a class="brand" href="#"><img src="spray_logo.png" alt=""><span><b>X</b> CLIENT</span></a>
+    <div class="lang"><a href="https://mmb.boost-top.com/clips.php" target="_blank" rel="noopener" data-t="clips">Kliplar ▶</a><a data-l="uz" class="on">O'zbekcha</a><a data-l="ru">Русский</a></div>
+  </header>
+
+  <div class="hero">
+    <div>
+      <h1><b>X</b> CLIENT<br><span data-t="h1">Counter-Strike 1.6 uchun</span></h1>
+      <p class="lead" data-t="lead">Zamonaviy menyu, F10 bilan video yozish va kliplarni Telegram'ga ulashish, VIP/admin avtomatik kirish, pro sozlamalar, do'stlar va kunlik vazifalar — hammasi bitta launcherda.</p>
+      <a class="dl" id="dl" href="https://github.com/jamic2922220-alt/xclient-pc/releases/download/xclient-latest/X-Client-Setup.exe">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M6 11l6 6 6-6M4 21h16"/></svg>
+        <span data-t="dl">Bepul yuklab olish</span>
+      </a>
+      <div class="meta"><span id="ver">Windows 7/8/10/11</span> · <span data-t="free">bepul</span></div>
+      <div class="ss" data-t="ss">Windows «Компьютер защищён» desa: «Подробнее» → «Выполнить в любом случае» bosing. X CLIENT hali raqamli imzosiz, shuning uchun Windows uni tanimaydi — fayl xavfsiz.</div>
+    </div>
+    <img class="logo" src="spray_logo.png" alt="X CLIENT">
+  </div>
+</div>
+
+<section id="clipsSec" hidden>
+  <div class="wrap cliphead"><div><h2 data-t="cl_t">O'yinchilar kliplari</h2><p class="sub" data-t="cl_s">X CLIENT bilan yozilgan eng zo'r lahzalar. Ustiga olib boring — video o'ynaydi, bossangiz kattasi ochiladi.</p></div>
+    <a class="more" id="clipsAll" href="https://mmb.boost-top.com/clips.php" target="_blank" rel="noopener" data-t="cl_all">Barcha kliplar →</a></div>
+  <div class="marq"><div class="mtrack" id="mtrack"></div></div>
+</section>
+<div class="cmod" id="cmod" hidden><div class="cbox"><a class="cx" id="cx">✕</a><video id="cvid" controls playsinline></video><div class="cn" id="cn"></div></div></div>
+
+<section><div class="wrap">
+  <h2 data-t="f_t">Imkoniyatlar</h2>
+  <p class="sub" data-t="f_s">O'yinni ochishingiz bilan hammasi tayyor — hech narsa sozlash shart emas.</p>
+  <div class="grid">
+    <div class="card"><i>⟳</i><b data-t="f1">Avto-yangilanish</b><span data-t="f1s">Yangi versiya o'zi yuklanadi va o'rnatiladi.</span></div>
+    <div class="card"><i>◎</i><b data-t="f2">Serverlar</b><span data-t="f2s">TOP, BOOST, VIP serverlar, ping, bayroqlar, xarita rasmlari.</span></div>
+    <div class="card"><i>✚</i><b data-t="f3">Pritsel va HUD</b><span data-t="f3s">Rang, o'lcham, uslub, HUD kattaligi, radar va kamera.</span></div>
+    <div class="card"><i>⚡</i><b data-t="f4">PRO CFG</b><span data-t="f4s">Bir bosishda lag'siz internet va to'g'ri otdacha.</span></div>
+    <div class="card"><i>★</i><b data-t="f5">Kunlik vazifalar</b><span data-t="f5s">Vazifalarni bajaring, XP va daraja oling.</span></div>
+    <div class="card"><i>☺</i><b data-t="f6">Do'stlar</b><span data-t="f6s">Kim qaysi serverda — bir bosishda qo'shiling.</span></div>
+    <div class="card"><i>☁</i><b data-t="f7">Bulutga saqlash</b><span data-t="f7s">Sozlamalar har kompyuterda bir xil.</span></div>
+    <div class="card"><i>♪</i><b data-t="f8">Ovozlar va spray</b><span data-t="f8s">Menyu ovozlari, musiqa va X CLIENT spreyi.</span></div>
+    <div class="card"><i>●</i><b data-t="f9">F10 — video (MP4)</b><span data-t="f9s">O'yinni tiniq MP4 ga yozish, FPS tushmaydi, o'yin ovozi va mikrofon bilan.</span></div>
+    <div class="card"><i>↺</i><b data-t="f10">F9 — oxirgi 30 soniya</b><span data-t="f10s">Zo'r lahzani keyin saqlang. 3+ kill bo'lsa klip o'zi saqlanadi.</span></div>
+    <div class="card"><i>✂</i><b data-t="f11">Muharrir va ulashish</b><span data-t="f11s">Videoni qaychi bilan kesing, bir bosishda saytga va Telegram kanalga yuboring.</span></div>
+    <div class="card"><i>⚿</i><b data-t="f12">VIP / admin kirish</b><span data-t="f12s">Login va parolni bir marta saqlang — serverga kirganda o'zi qo'yiladi.</span></div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <h2 data-t="pk_t">Imtiyozlar</h2>
+  <p class="sub" data-t="pk_s">X CLIENT bilan o'ynaganlar oladigan qulayliklar.</p>
+  <div class="perks" id="perks"></div>
+</div></section>
+
+<section><div class="wrap">
+  <h2 data-t="fl_t">Launcher ichida nimalar bor</h2>
+  <p class="sub" data-t="fl_s">Barcha funksiyalarning to'liq ro'yxati.</p>
+  <div class="cols" id="full"></div>
+</div></section>
+
+<section id="menyu"><div class="wrap">
+  <h2 data-t="s_t">Menyu bo'ylab sayohat</h2>
+  <p class="sub" data-t="s_s">Har bir menyu va oyna — rasm va izoh bilan. Ro'yxatdan tanlang yoki ← → tugmalarini bosing.</p>
+  <div class="tour">
+    <nav class="tnav" id="tnav"></nav>
+    <div class="tview">
+      <a class="ph" id="tph" target="_blank" rel="noopener"><img id="timg" alt=""><em data-t="s_big">Kattalashtirish ↗</em></a>
+      <div class="tbody"><div class="path" id="tpath"></div><h3 id="th"></h3><p id="tp"></p><ul id="tul"></ul></div>
+      <div class="tfoot"><button type="button" id="tprev">←</button><span id="tnum"></span><button type="button" id="tnext">→</button></div>
+    </div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <h2 data-t="i_t">O'rnatish — 3 qadam</h2>
+  <p class="sub" data-t="i_s">Bir necha daqiqa oladi.</p>
+  <div class="steps">
+    <div class="card"><b data-t="i1">Yuklab oling</b><span data-t="i1s">Yuqoridagi tugmani bosing va X-Client-Setup.exe ni saqlang (≈240 MB, ichida CS 1.6 ham bor).</span></div>
+    <div class="card"><b data-t="i2">O'rnating</b><span data-t="i2s">Setup'ni oching va papkani tanlang. CS 1.6 bor bo'lsa — o'sha papkani, yo'q bo'lsa — o'yin ham shu yerga o'rnatiladi.</span></div>
+    <div class="card"><b data-t="i3">O'ynang</b><span data-t="i3s">Ish stolidagi X CLIENT yorlig'i bilan oching. Yangilanishlar o'zi keladi.</span></div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="req">
+    <div class="card"><b data-t="r_t">Talablar</b><ul>
+      <li data-t="r1">Windows 7, 8, 10 yoki 11</li><li data-t="r2">Internet (yangilanish uchun)</li><li data-t="r3">CS 1.6 (bo'lmasa o'zi o'rnatadi)</li></ul></div>
+    <div class="card"><b data-t="q_t">Ko'p so'raladigan savollar</b>
+      <details><summary data-t="q1">Windows "noma'lum dastur" deb ogohlantirsa?</summary><p data-t="q1a">Launcher raqamli imzosiz, shuning uchun SmartScreen ogohlantirishi mumkin. "Подробнее / More info" → "Выполнить в любом случае / Run anyway" ni bosing.</p></details>
+      <details><summary data-t="q2">Serverlarda ban yoki kick bo'lmaydimi?</summary><p data-t="q2a">Yo'q. X CLIENT cheat emas: u faqat menyu, sozlamalar va yangilanishni boshqaradi, o'yinning o'z sozlamalaridan foydalanadi.</p></details>
+      <details><summary data-t="q3">Pullikmi?</summary><p data-t="q3a">Yo'q, butunlay bepul.</p></details>
+    </div>
+  </div>
+</div></section>
+
+<div class="wrap"><div class="cta">
+  <h2 data-t="c_t">Tayyormisiz?</h2>
+  <p class="sub" data-t="c_s">Yuklab oling va bir daqiqada o'ynang.</p>
+  <a class="dl" href="https://github.com/jamic2922220-alt/xclient-pc/releases/download/xclient-latest/X-Client-Setup.exe"><span data-t="dl">Bepul yuklab olish</span></a>
+</div></div>
+
+</div>
+<footer><span>© X CLIENT</span> · <a href="https://boost-top.com/">boost-top.com</a></footer>
+
+<script>
+(function () {
+  var RU = {
+    h1: 'для Counter-Strike 1.6', lead: 'Современное меню, запись видео на F10 и клипы в Telegram, автоматический VIP/админ вход, про-настройки, друзья и ежедневные задания — всё в одном лаунчере.',
+    dl: 'Скачать бесплатно', free: 'бесплатно', ss: 'Если Windows пишет «Компьютер защищён»: нажмите «Подробнее» → «Выполнить в любом случае». У X CLIENT пока нет цифровой подписи, поэтому Windows его не узнаёт — файл безопасен.', f_t: 'Возможности', f_s: 'Всё готово сразу после запуска — ничего настраивать не нужно.',
+    f1: 'Автообновление', f1s: 'Новая версия скачивается и ставится сама.', f2: 'Серверы', f2s: 'TOP, BOOST, VIP серверы, пинг, флаги, картинки карт.',
+    f3: 'Прицел и HUD', f3s: 'Цвет, размер, стиль, размер HUD, радар и камера.', f4: 'PRO CFG', f4s: 'В один клик — интернет без лагов и правильная отдача.',
+    f5: 'Ежедневные задания', f5s: 'Выполняйте задания, получайте XP и уровни.', f6: 'Друзья', f6s: 'Кто на каком сервере — заходите в один клик.',
+    f7: 'Облачное сохранение', f7s: 'Настройки одинаковые на любом компьютере.', f8: 'Звуки и спрей', f8s: 'Звуки меню, музыка и спрей X CLIENT.',
+    f9: 'F10 — видео (MP4)', f9s: 'Чёткая запись игры в MP4 без падения FPS, со звуком игры и микрофоном.', f10: 'F9 — последние 30 секунд', f10s: 'Сохраните крутой момент после. 3+ убийства — клип сохранится сам.',
+    f11: 'Редактор и публикация', f11s: 'Обрежьте видео ножницами и в один клик отправьте на сайт и в Telegram-канал.', f12: 'VIP / админ вход', f12s: 'Сохраните логин и пароль один раз — при входе на сервер подставятся сами.',
+    clips: 'Клипы ▶', cl_t: 'Клипы игроков', cl_s: 'Лучшие моменты, записанные в X CLIENT. Наведите — видео заиграет, нажмите — откроется большое.', cl_all: 'Все клипы →',
+    s_t: 'Экскурсия по меню', s_s: 'Каждое меню и окно — со скриншотом и описанием. Выберите в списке или нажимайте ← →.', s_big: 'Увеличить ↗', i_t: 'Установка — 3 шага', i_s: 'Займёт пару минут.',
+    i1: 'Скачайте', i1s: 'Нажмите кнопку выше и сохраните X-Client-Setup.exe (≈240 МБ, внутри уже есть CS 1.6).', i2: 'Установите', i2s: 'Запустите Setup и выберите папку. Есть CS 1.6 — выберите её, нет — игра установится туда же.',
+    i3: 'Играйте', i3s: 'Запускайте ярлыком X CLIENT на рабочем столе. Обновления приходят сами.',
+    r_t: 'Требования', r1: 'Windows 7, 8, 10 или 11', r2: 'Интернет (для обновлений)', r3: 'CS 1.6 (если нет — установит сам)',
+    q_t: 'Частые вопросы', q1: 'Windows предупреждает о «неизвестной программе»?', q1a: 'У лаунчера нет цифровой подписи, поэтому SmartScreen может предупредить. Нажмите «Подробнее» → «Выполнить в любом случае».',
+    q2: 'Не будет бана или кика на серверах?', q2a: 'Нет. X CLIENT — не чит: он управляет только меню, настройками и обновлениями и использует обычные настройки игры.',
+    pk_t: 'Преимущества', pk_s: 'Что получают игроки X CLIENT.', fl_t: 'Что внутри лаунчера', fl_s: 'Полный список возможностей.',
+    q3: 'Это платно?', q3a: 'Нет, полностью бесплатно.', c_t: 'Готовы?', c_s: 'Скачайте и играйте через минуту.'
+  };
+  var PERKS = {
+    uz: [['★', 'X CLIENT serverlarida VIP', 'X CLIENT orqali kirgan o\'yinchilarga serverlarimizda VIP bepul.'],
+         ['▲', 'Daraja va XP', 'Har o\'ynagan daqiqa va bajarilgan vazifa uchun XP, profilda daraja.'],
+         ['✓', 'Kunlik vazifalar', 'Har kuni 3 ta yangi vazifa - bajaring va qo\'shimcha XP oling.'],
+         ['☁', 'Sozlamalar bulutda', 'Boshqa kompyuterda akkauntga kirsangiz, pritsel va tugmalar o\'zi tiklanadi.'],
+         ['⚡', 'Lag\'siz va tez', 'PRO CFG va internet tekshiruvi sizga eng mos sozlamani tanlaydi.'],
+         ['⟳', 'Doim yangi versiya', 'Yangilanishlar o\'zi keladi - qayta yuklab olish shart emas.'],
+         ['▶', 'Kliplaringiz Telegram\'da', 'Ulashgan kliplaringiz saytdagi kliplar sahifasiga va Telegram kanalga tushadi.'],
+         ['▤', 'O\'yin xulosasi kartasi', 'Serverdan chiqqanda: kill, K/D, headshot, seriya - chiroyli karta qilib ulashing.'],
+         ['⚿', 'VIP/admin parolsiz qiynalmasdan', 'setinfo _pw yozib yurish shart emas - login va parol o\'zi qo\'yiladi.']],
+    ru: [['★', 'VIP на серверах X CLIENT', 'Игрокам, зашедшим через X CLIENT, VIP на наших серверах бесплатно.'],
+         ['▲', 'Уровни и XP', 'XP за каждую минуту игры и выполненные задания, уровень в профиле.'],
+         ['✓', 'Ежедневные задания', 'Каждый день 3 новых задания - выполняйте и получайте XP.'],
+         ['☁', 'Настройки в облаке', 'Войдите на другом компьютере - прицел и кнопки восстановятся сами.'],
+         ['⚡', 'Без лагов', 'PRO CFG и проверка интернета подберут лучшие настройки.'],
+         ['⟳', 'Всегда новая версия', 'Обновления приходят сами - перекачивать не нужно.'],
+         ['▶', 'Ваши клипы в Telegram', 'Клипы попадают на страницу клипов сайта и в Telegram-канал.'],
+         ['▤', 'Карточка итогов игры', 'После выхода с сервера: убийства, K/D, хедшоты, серия - поделитесь карточкой.'],
+         ['⚿', 'VIP/админ без мучений', 'Не нужно писать setinfo _pw - логин и пароль подставятся сами.']]
+  };
+  var FULL = {
+    uz: [['Bosh menyu', ['Tezkor o\'yin - eng yaxshi serverga bir bosishda', 'Serverlar: Internet, Sevimlilar, Tarix, Do\'stlar, X TOP', 'TOP / BOOST / VIP guruhlar, ping, bayroq, xarita rasmi', 'Server to\'la bo\'lsa - navbatda turib avtomatik kirish', 'Serverning gavjum soatlari grafigi', 'VIP / admin: login va parol serverga kirganda o\'zi qo\'yiladi', 'O\'yin ichida tepada: O\'yinga qaytish, O\'yinchilar, Chiqish', 'Menyu ovozlari va CS menyu musiqasi', '6 ta rang mavzusi, o\'zbek, rus, ingliz va boshqa tillar']],
+         ['Pritsel va HUD', ['Pritsel: rang, o\'lcham x1-x4, nuqta, T-shakl, doira', 'Pritsel kodi - do\'stga ulashish', 'HUD kattaligi 100 / 150 / 200%', 'Radar foni: Qora (nuqtalar yaqqol), Qora + halqalar, Yashil', 'NextClient 2.6 bilan: xaritali, aylanadigan radar va CS2 uslubi', 'Kill feed: qatorlar soni, turish vaqti, headshot belgisi', 'FPS va pingni ekranda ko\'rsatish']],
+         ['Qurol va kamera', ['Qurol joylashuvi: chap/o\'ng, oldinga/orqaga, past/tepa', 'Qurol FOV va "qurol siljimasin"', 'Chayqalish uslubi: Standart, Eski, CS:GO (nozik sozlash)', 'Qurol orqada qolishi: HL2, CS:GO, kuchi va tezligi', 'Kamera og\'ishi, silliq snayper zoomi', 'Silliq qurol almashtirish']],
+         ['O\'yin sozlamalari', ['PRO CFG - bir bosishda pro sozlama (100 FPS, rate 100000)', 'FPS 100 dan yuqori (144 / 200 / 300 / 500)', 'Internet tekshiruvi: ping, tebranish, yo\'qotish va tavsiya', 'Sichqoncha: sezgirlik, raw input, zoom sezgirligi', 'Sezgirlik kalkulyatori (CS2, Valorant va boshqalardan)', 'Tayyor uslublar: Avtomatchi, Snayper, Hujumchi, CS:GO hissi', '4 ta profil, tugmalarni sozlash, F1-F4 tezkor xarid']],
+         ['Akkaunt va do\'stlar', ['Ro\'yxatdan o\'tish, emailga kod bilan parol tiklash', 'Profil rasmi, rang va nom', 'Do\'stlar: kim qaysi serverda, bir bosishda qo\'shilish', 'Do\'stni o\'zingiz o\'ynayotgan serverga taklif qilish', 'Haftaning eng faol o\'yinchilari (TOP hafta)', 'O\'yin xulosasi: kill, K/D, headshot, seriya va ulashish kartasi', 'Reyting, duellar, sandiqlar, klanlar']],
+         ['Launcher', ['Avtomatik yangilanish (stable / beta)', 'O\'yin yo\'q bo\'lsa - o\'zi o\'rnatadi', 'X CLIENT dizayni va yuklanish ekrani', 'Hammada tiniq X CLIENT spreyi', 'Kesh tozalash va fayllarni tekshirish', 'Tez ishga tushadi, oddiy kompyuterlarda ham yengil', 'Skrinshotlar galereyasi']],
+         ['Video va kliplar', ['F10 - o\'yinni MP4 ga yozish (Yuqori / O\'rtacha / Kichik sifat)', 'F9 - oxirgi 30 soniyani klip qilish', 'Avtomatik klip: 12 soniyada 3+ kill', 'Mikrofon ovozi videoda (ixtiyoriy)', 'Video muharriri: boshini/oxirini va o\'rtasini qaychi bilan kesish', 'Bir bosishda saytga va Telegram kanalga ulashish', 'Ekranda REC belgisi videoga tushmaydi']]],
+    ru: [['Главное меню', ['Быстрая игра - лучший сервер в один клик', 'Серверы: Интернет, Избранное, История, Друзья, X TOP', 'Группы TOP / BOOST / VIP, пинг, флаги, картинки карт', 'Сервер полный - очередь и автоматический вход', 'График загруженности сервера по часам', 'VIP / админ: логин и пароль подставляются при входе', 'В игре сверху: Вернуться в игру, Игроки, Отключиться', 'Звуки меню и музыка CS', '6 цветовых тем, узбекский, русский, английский и другие языки']],
+         ['Прицел и HUD', ['Прицел: цвет, размер x1-x4, точка, T-образный, круг', 'Код прицела - поделиться с другом', 'Размер HUD 100 / 150 / 200%', 'Фон радара: Чёрный (точки хорошо видны), Чёрный + кольца, Зелёный', 'С NextClient 2.6: радар с картой, вращение и стиль CS2', 'Килл-фид: число строк, время показа, значок хедшота', 'FPS и пинг на экране']],
+         ['Оружие и камера', ['Положение оружия: влево/вправо, вперёд/назад, вниз/вверх', 'FOV оружия и «оружие не смещается»', 'Покачивание: Стандарт, Старый, CS:GO (тонкая настройка)', 'Отставание оружия: HL2, CS:GO, сила и скорость', 'Наклон камеры, плавный снайперский зум', 'Плавная смена оружия']],
+         ['Настройки игры', ['PRO CFG - про-настройки в один клик (100 FPS, rate 100000)', 'FPS выше 100 (144 / 200 / 300 / 500)', 'Проверка интернета: пинг, джиттер, потери и рекомендация', 'Мышь: чувствительность, raw input, зум', 'Калькулятор чувствительности (из CS2, Valorant и др.)', 'Готовые стили: Автоматчик, Снайпер, Штурмовик, Ощущение CS:GO', '4 профиля, назначение кнопок, быстрая закупка F1-F4']],
+         ['Аккаунт и друзья', ['Регистрация, восстановление пароля кодом на email', 'Аватар, цвет и имя', 'Друзья: кто на каком сервере, вход в один клик', 'Приглашение друга на свой сервер', 'Самые активные игроки недели (TOP недели)', 'Итоги игры: убийства, K/D, хедшоты, серия и карточка', 'Рейтинг, дуэли, сундуки, кланы']],
+         ['Лаунчер', ['Автообновление (stable / beta)', 'Нет игры - установит сам', 'Оформление X CLIENT и экран загрузки', 'Чёткий спрей X CLIENT у всех', 'Очистка кэша и проверка файлов', 'Быстрый запуск, лёгкий даже на обычных ПК', 'Галерея скриншотов']],
+         ['Видео и клипы', ['F10 - запись игры в MP4 (Высокое / Среднее / Маленькое)', 'F9 - клип из последних 30 секунд', 'Авто-клип: 3+ убийства за 12 секунд', 'Звук микрофона в видео (по желанию)', 'Редактор: обрезка начала/конца и ножницы для середины', 'Публикация на сайт и в Telegram-канал в один клик', 'Надпись REC на экране не попадает в видео']]]
+  };
+
+  /* Menyu bo'ylab: [rasm, guruh, [uz nom, uz izoh, [uz bandlar]], [ru nom, ru izoh, [ru bandlar]]] */
+  var G = { uz: { m: 'Asosiy', s: 'Serverlar', o: 'Sozlamalar', h: 'Sozlamalar → HUD' }, ru: { m: 'Главное', s: 'Серверы', o: 'Настройки', h: 'Настройки → HUD' } };
+  var TOUR = [
+    ['home', 'm', ['Bosh menyu', "O'yin ochilganda birinchi ko'rinadigan oyna. Chapda asosiy bo'limlar, o'ngda reklama qilingan TOP serverlar va onlayn do'stlar, pastda profilingiz.", ["Tezkor o'yin — eng yaxshi bo'sh serverga bir tugmada kirish", "Serverlar, Do'stlar, Profil, Vazifalar, Sozlamalar", "X TOP serverlar — bir bosishda kirish", "Do'stlar onlayn — kim qaysi serverda", "Pastki panel: daraja, XP, VIP belgisi, onlayn soni", "Menyu musiqasi va tugma ovozlari"]],
+                ['Главное меню', 'Первое окно при запуске игры. Слева разделы, справа рекламные TOP-серверы и друзья онлайн, внизу ваш профиль.', ['Быстрая игра — лучший свободный сервер в один клик', 'Серверы, Друзья, Профиль, Задания, Настройки', 'X TOP серверы — вход в один клик', 'Друзья онлайн — кто на каком сервере', 'Нижняя панель: уровень, XP, значок VIP, онлайн', 'Музыка меню и звуки кнопок']]],
+    ['login', 'm', ['Akkauntga kirish', "Bepul akkaunt 30 soniyada ochiladi. Akkaunt bilan sozlamalar bulutda saqlanadi — boshqa kompyuterga kirsangiz ham hammasi joyida.", ["Login yoki e-mail bilan kirish", "Ro'yxatdan o'tish va «Eslab qolish»", "Parolni unutdingizmi — e-mailga kod", "Akkauntsiz o'ynash ham mumkin", "Sozlamalar, statistika, do'stlar saqlanadi"]],
+                ['Вход в аккаунт', 'Бесплатный аккаунт за 30 секунд. Настройки хранятся в облаке — на другом компьютере всё будет на месте.', ['Вход по логину или e-mail', 'Регистрация и «Запомнить меня»', 'Забыли пароль — код на e-mail', 'Можно играть без аккаунта', 'Сохраняются настройки, статистика, друзья']]],
+    ['mis', 'm', ['Kunlik vazifalar', "Har kuni yangi 3 ta vazifa. Bajarsangiz XP olasiz va darajangiz oshadi.", ["Masalan: 20 ta frag, 60 daqiqa o'yin, 3 xil serverda o'ynash", "Jarayon chizig'i — qancha qolganini ko'rasiz", "«Olish» tugmasi bilan XP yig'ish", "Har kuni yarim tunda yangilanadi"]],
+              ['Ежедневные задания', 'Каждый день 3 новых задания. За выполнение — XP и рост уровня.', ['Например: 20 фрагов, 60 минут игры, 3 разных сервера', 'Полоса прогресса — сколько осталось', 'Кнопка «Забрать» для получения XP', 'Обновляются каждый день в полночь']]],
+    ['side', 'm', ["Do'stlar", "Do'stlaringizni qo'shing va ular qaysi serverda o'ynayotganini ko'ring.", ["Login bo'yicha do'st qo'shish", "Kim onlayn, qaysi server va xaritada", "«Kirish» — do'stingiz serveriga bir bosishda", "Do'stni o'z serveringizga taklif qilish"]],
+               ['Друзья', 'Добавляйте друзей и смотрите, на каком сервере они играют.', ['Добавление друга по логину', 'Кто онлайн, на каком сервере и карте', '«Войти» — на сервер друга в один клик', 'Пригласить друга на свой сервер']]],
+    ['srv', 's', ['Serverlar — Internet', "Barcha CS 1.6 serverlar ro'yxati. Serverni tanlasangiz o'ngda xarita rasmi, o'yinchilar va ping ko'rinadi.", ["Qidirish: nom, IP yoki xarita bo'yicha", "Filtr: xarita, rejim (Zombie, Jail, KZ, GunGame…)", "Ping < 50, Bo'sh emas, To'la emas", "TOP / BOOST / VIP serverlar alohida guruhda", "O'yinchilar ro'yxati: hisob va o'ynagan vaqt", "Yulduzcha bilan sevimlilarga qo'shish"]],
+            ['Серверы — Интернет', 'Список всех серверов CS 1.6. При выборе сервера справа — карта, игроки и пинг.', ['Поиск по имени, IP или карте', 'Фильтры: карта, режим (Zombie, Jail, KZ, GunGame…)', 'Пинг < 50, Не пустой, Не полный', 'TOP / BOOST / VIP серверы отдельной группой', 'Список игроков: счёт и время в игре', 'Звёздочка — добавить в избранное']]],
+    ['srv_favs', 's', ['Serverlar — Sevimlilar', "O'zingiz yoqtirgan serverlar. Akkauntga saqlanadi va hamma kompyuterda chiqadi.", ["Bir bosishda kirish", "Serverlar bo'shligi va xaritasi doim ko'rinib turadi", "IP qo'lda qo'shish"]],
+                 ['Серверы — Избранное', 'Ваши любимые серверы. Сохраняются в аккаунте и видны на любом компьютере.', ['Вход в один клик', 'Заполненность и карта всегда видны', 'Добавление IP вручную']]],
+    ['srv_history', 's', ['Serverlar — Tarix', "Oxirgi o'ynagan serverlaringiz va statistika.", ["Bugun qancha o'ynadingiz", "Fraglar soni va K/D", "Eng ko'p o'ynagan serveringiz", "Qaytadan bir bosishda kirish", "Tarixni tozalash"]],
+                    ['Серверы — История', 'Последние серверы, на которых вы играли, и статистика.', ['Сколько вы сыграли сегодня', 'Фраги и K/D', 'Самый любимый сервер', 'Повторный вход в один клик', 'Очистка истории']]],
+    ['srv_top', 's', ['Serverlar — X TOP', "boost-top.com saytida TOP o'rinni olgan serverlar.", ["Eng yaxshi serverlar birinchi turadi", "Onlayn va xarita darhol ko'rinadi", "O'z serveringizni shu yerga chiqarish — boost-top.com"]],
+                ['Серверы — X TOP', 'Серверы с TOP-местом на сайте boost-top.com.', ['Лучшие серверы — первыми', 'Онлайн и карта видны сразу', 'Разместить свой сервер — на boost-top.com']]],
+    ['s_game', 'o', ["O'yin", "Asosiy o'yin sozlamalari: ism, klan tegi, internet tezligi va Discord.", ["O'yindagi nom va klan tegi", "Internet: Sekin / O'rtacha / Tez — rate o'zi sozlanadi", "Uzilsa avtomatik qayta ulanish", "Server to'la bo'lsa — navbatda turib kirish", "Server reklama ovozlarini o'chirish", "Qurol o'ng/chap qo'lda, tez almashtirish", "Har o'yinni demo qilib yozish", "Discord holati: server nomi va qo'shilish"]],
+               ['Игра', 'Основные настройки: ник, клан-тег, скорость интернета и Discord.', ['Ник и клан-тег', 'Интернет: Медленный / Средний / Быстрый — rate настраивается сам', 'Автопереподключение при обрыве', 'Сервер полный — вход по очереди', 'Отключение рекламных звуков сервера', 'Оружие в правой/левой руке, быстрая смена', 'Автозапись демо каждой игры', 'Статус в Discord: имя сервера и присоединение']]],
+    ['s_keys', 'o', ['Tugmalar', "Hamma tugmalarni o'zgartirish. Vazifani bosing, keyin yangi tugmani bosing.", ["Harakat: oldinga, orqaga, chapga, o'ngga, sakrash, o'tirish", "Qurollar: asosiy, pistolet, pichoq, granata, C4", "Sotib olish menyusi, chatlar, ovozli chat", "Spray, tungi ko'rish, skrinshot, radio buyruqlar", "Esc — bekor qilish"]],
+               ['Кнопки', 'Переназначение всех кнопок. Нажмите действие, затем новую клавишу.', ['Движение: вперёд, назад, влево, вправо, прыжок, присед', 'Оружие: основное, пистолет, нож, гранаты, C4', 'Меню покупки, чаты, голосовой чат', 'Спрей, ночное видение, скриншот, радио', 'Esc — отмена']]],
+    ['s_mouse', 'o', ['Sichqoncha', "Nishonga aniq olish uchun sichqoncha sozlamalari.", ["Sezgirlik (slider + aniq raqam)", "Pritsel (zoom) sezgirligi alohida", "To'g'ridan-to'g'ri kiritish (raw input) — Windows tezlanishisiz", "Sichqoncha filtri", "Teskari sichqoncha"]],
+                ['Мышь', 'Настройки мыши для точного прицеливания.', ['Чувствительность (ползунок + точное число)', 'Отдельная чувствительность в зуме', 'Raw input — без ускорения Windows', 'Фильтр мыши', 'Инверсия мыши']]],
+    ['s_sound', 'o', ['Ovoz', "Ovoz balandligi, ovozli chat va menyu ovozlari.", ["Umumiy ovoz, musiqa, ovozli chat balandligi", "Ovozli chatni yoqish / o'z ovozingizni eshitish", "O'yin oynasi yopilganda ovozni o'chirish", "Menyu ovozlari va menyu musiqasi", "Yuqori sifatli ovoz, ovoz kechikishi"]],
+                ['Звук', 'Громкость, голосовой чат и звуки меню.', ['Общая громкость, музыка, голосовой чат', 'Включить голосовой чат / слышать себя', 'Без звука, когда окно игры свёрнуто', 'Звуки и музыка меню', 'Высокое качество звука, задержка звука']]],
+    ['s_video', 'o', ['Video', "Grafika va FPS sozlamalari.", ["FPS chegarasi: 100 / 144 / 200 / 300 / 500", "Yorqinlik (gamma)", "Ko'rish burchagi (FOV) va qurol FOV", "O'q izlari (decal) soni", "Keng ekran (Hor+), VSync", "FPS ni ekranda ko'rsatish, dinamik yorug'lik"]],
+                ['Видео', 'Графика и FPS.', ['Лимит FPS: 100 / 144 / 200 / 300 / 500', 'Яркость (гамма)', 'Угол обзора (FOV) и FOV оружия', 'Количество следов от пуль (decal)', 'Широкий экран (Hor+), VSync', 'FPS на экране, динамический свет']]],
+    ['h_main', 'h', ['Pritsel — Asosiy', "Pritselni jonli ko'rib turib sozlang. Kodni do'stingizga yuborishingiz mumkin.", ["Uslub: Pro kichik, klassik va boshqalar", "Kattaligi: x1 (eng kichik) dan Katta gacha", "Rang: tayyor ranglar yoki o'zingiz tanlash", "Noshaffoflik, nuqta markazda, T-shakl, doira", "Pritsel kodi: nusxa olish va qo'llash", "«O'yinda sinash» tugmasi"]],
+                ['Прицел — Основное', 'Настройка прицела с живым предпросмотром. Кодом можно поделиться с другом.', ['Стиль: Pro маленький, классический и др.', 'Размер: от x1 (самый маленький) до Большого', 'Цвет: готовые или свой', 'Прозрачность, точка, T-образный, круг', 'Код прицела: копировать и применить', 'Кнопка «Проверить в игре»']]],
+    ['h_snip', 'h', ['Pritsel — Snayper', "AWP va Scout zoomi uchun alohida sezgirlik.", ["Zoomdagi sichqoncha sezgirligi", "Oddiy sezgirlik bilan solishtirish", "Snayper pritselini o'yinning o'zi chizadi"]],
+                ['Прицел — Снайпер', 'Отдельная чувствительность для зума AWP и Scout.', ['Чувствительность мыши в зуме', 'Сравнение с обычной чувствительностью', 'Снайперский прицел рисует сама игра']]],
+    ['h_wpn', 'h', ['Qurol', "Qurol ekranda qayerda turishi va qanday harakatlanishi.", ["Chapga/o'ngga, oldinga/orqaga, pastga/tepaga", "Qurol FOV", "Qurol siljimasin — tepaga qaraganda joyida turadi", "Qurol orqada qolishi: Yo'q / HL2 / CS:GO", "Kuchi va tezligi", "Silliq qurol almashtirish"]],
+              ['Оружие', 'Положение оружия на экране и его движение.', ['Влево/вправо, вперёд/назад, вниз/вверх', 'FOV оружия', 'Оружие не смещается при взгляде вверх', 'Отставание оружия: Нет / HL2 / CS:GO', 'Сила и скорость', 'Плавная смена оружия']]],
+    ['h_cam', 'h', ['Kamera', "Yugurganda qurol va kamera qanday chayqalishi.", ["Chayqalish uslubi: Standart / Eski / CS:GO", "Kamera ham chayqalsin", "Kamera og'ishi va og'ish tezligi", "Snayper zoomi silliqligi (FOV)", "Kamera harakati kuchi"]],
+              ['Камера', 'Как покачиваются оружие и камера при беге.', ['Стиль покачивания: Стандарт / Старый / CS:GO', 'Покачивание камеры', 'Наклон камеры и скорость наклона', 'Плавность снайперского зума (FOV)', 'Сила движения камеры']]],
+    ['h_radar', 'h', ['Radar', "Yangi xarita-radar yoki klassik radar.", ["Radar turi: Yangi (xarita) / Klassik", "Kattalik, yaqinlik, shaffoflik, fon", "Dumaloq radar", "Qarash bilan aylanish, Tab — to'liq xarita", "Jamoadoshlar izi, ismlari va joni", "Ism va jon chizig'i kattaligi"]],
+                ['Радар', 'Новый радар-карта или классический.', ['Тип: Новый (карта) / Классический', 'Размер, приближение, прозрачность, фон', 'Круглый радар', 'Поворот по взгляду, Tab — полная карта', 'Следы, имена и здоровье союзников', 'Размер имён и полоски здоровья']]],
+    ['h_misc', 'h', ['HUD — Boshqa', "Ekran (HUD) kattaligi va kill feed.", ["HUD kattaligi: 100% / 150% / 200% (jon, pul, o'q)", "Kill feed qatorlari soni va turish vaqti", "Kill feed'da headshot belgisi", "FPS va pingni ko'rsatish", "Nishondagi o'yinchi nomi markazda", "O'yin versiyasini yashirish"]],
+               ['HUD — Прочее', 'Размер HUD и килл-фид.', ['Размер HUD: 100% / 150% / 200% (жизни, деньги, патроны)', 'Строки и время килл-фида', 'Значок хедшота в килл-фиде', 'Показ FPS и пинга', 'Имя игрока в прицеле по центру', 'Скрыть версию игры']]],
+    ['s_pro', 'o', ['Kengaytirilgan', "Professional sozlamalar va internet tekshiruvi.", ["PRO CFG — bir bosishda pro sozlamalar (100 FPS, rate 100000)", "FPS rejimi — kuchsiz kompyuter uchun", "Internet tekshiruvi: ping, tebranish, yo'qotish va tavsiya", "Interpolyatsiya 0.01 / 0.05 / 0.1", "Qurol bashorati va kechikish kompensatsiyasi", "O'yinni tezlashtirish (yuqori ustuvorlik)", "Chat vaqti, FPS va ping joyi"]],
+               ['Расширенные', 'Профессиональные настройки и проверка интернета.', ['PRO CFG — про-настройки в один клик (100 FPS, rate 100000)', 'Режим FPS — для слабых ПК', 'Проверка интернета: пинг, джиттер, потери и совет', 'Интерполяция 0.01 / 0.05 / 0.1', 'Предсказание оружия и компенсация лагов', 'Ускорение игры (высокий приоритет)', 'Время чата, место FPS и пинга']]],
+    ['s_tools', 'o', ["Qo'shimcha", "Profillar, tayyor uslublar va sezgirlik kalkulyatori.", ["4 ta profil: O'yin, Turnir, AWP va boshqa", "Tayyor uslublar: Avtomatchi, Snayper, Klassik 1.6, Yangi boshlovchi, Hujumchi, Past sezgirlik, CS:GO hissi", "Sezgirlik kalkulyatori: CS2 / CS:GO, Valorant, Overwatch 2, Apex → CS 1.6", "Demolar ro'yxati"]],
+                 ['Дополнительно', 'Профили, готовые стили и калькулятор чувствительности.', ['4 профиля: Игра, Турнир, AWP и др.', 'Готовые стили: Автоматчик, Снайпер, Классика 1.6, Новичок, Штурмовик, Низкая чувствительность, Ощущение CS:GO', 'Калькулятор: CS2 / CS:GO, Valorant, Overwatch 2, Apex → CS 1.6', 'Список демо']]],
+    ['s_cont', 'o', ['Kontent', "Spray, skrinshotlar va menyu rangi.", ["X CLIENT spreyi — hammada tiniq, T tugmasi bilan", "Skrinshotlarni galereyaga yuklash (F5)", "Galereyani ochish", "Menyu rangi: qizil, ko'k, havorang, yashil, binafsha, to'q sariq", "Paketlar (ovoz, model) — ixtiyoriy"]],
+                ['Контент', 'Спрей, скриншоты и цвет меню.', ['Спрей X CLIENT — у всех чёткий, кнопка T', 'Загрузка скриншотов в галерею (F5)', 'Открыть галерею', 'Цвет меню: красный, синий, голубой, зелёный, фиолетовый, оранжевый', 'Пакеты (звуки, модели) — по желанию']]],
+    ['s_account', 'o', ['Akkaunt', "Profilingiz, xavfsizlik va bulutga saqlash.", ["Avatar rangi, rasm qo'yish, nomni o'zgartirish", "Daraja va XP", "VIP holati", "E-mail va parolni o'zgartirish", "Sozlamalar avtomatik bulutga saqlanadi", "Hozir saqlash / Bulutdan tiklash, nechta kompyuter"]],
+                   ['Аккаунт', 'Профиль, безопасность и облачное сохранение.', ['Цвет аватара, загрузка фото, смена имени', 'Уровень и XP', 'Статус VIP', 'Смена e-mail и пароля', 'Настройки автоматически в облаке', 'Сохранить сейчас / Восстановить, число компьютеров']]],
+    ['s_system', 'o', ['Tizim', "Til, yangilanish va texnik xizmat.", ["10 til: o'zbek, rus, ingliz, turk, ukrain, qozoq, qirg'iz, tojik, ozarbayjon, turkman", "Versiya, avtomatik yangilanish, beta versiyalar", "Windows bilan ishga tushirish, oynali rejim", "Menyu animatsiyasi, ekran tanlash", "Keshni tozalash, fayllarni tekshirish", "Xatolik haqida xabar yuborish"]],
+                  ['Система', 'Язык, обновления и обслуживание.', ['10 языков: узбекский, русский, английский, турецкий, украинский, казахский, киргизский, таджикский, азербайджанский, туркменский', 'Версия, автообновление, бета-версии', 'Автозапуск с Windows, оконный режим', 'Анимации меню, выбор экрана', 'Очистка кэша, проверка файлов', 'Отправить отчёт об ошибке']]],
+    ['video', 'o', ['Demo — videolar (F10 / F9)', "O'yinni MP4 ga yozing, eng zo'r lahzalarni klip qiling va ulashing.", ["F10 — yozish, F9 — oxirgi 30 soniya", "Sifat: Yuqori / O'rtacha / Kichik (Telegram uchun)", "Avtomatik klip va mikrofon ovozi", "Ochish, qaychi bilan kesish, o'chirish", "Ulashish — sayt va Telegram kanalga", "O'yin xulosasini yoqish/o'chirish"]],
+              ['Демо — видео (F10 / F9)', 'Записывайте игру в MP4, сохраняйте лучшие моменты клипами и делитесь ими.', ['F10 — запись, F9 — последние 30 секунд', 'Качество: Высокое / Среднее / Маленькое (для Telegram)', 'Авто-клип и звук микрофона', 'Открыть, обрезать ножницами, удалить', 'Поделиться — на сайт и в Telegram-канал', 'Включение итогов игры']]],
+    ['gsum', 'm', ["O'yin xulosasi", "Serverdan chiqqanda qanday o'ynaganingiz bir oynada. Kartani do'stlarga ulashing.", ["Kill, o'lim, K/D va headshot foizi", "O'lmasdan eng uzun seriya", "Assistlar va sevimli qurol", "Olingan XP va saqlangan videolar", "Ulashish — chiroyli karta Telegram'ga"]],
+             ['Итоги игры', 'После выхода с сервера — как вы сыграли, в одном окне. Поделитесь карточкой с друзьями.', ['Убийства, смерти, K/D и процент хедшотов', 'Лучшая серия без смерти', 'Ассисты и любимое оружие', 'Полученный XP и сохранённые видео', 'Поделиться — карточка в Telegram']]],
+    ['vip', 's', ['VIP / admin kirish', "Serverda VIP yoki admin bo'lsangiz — login va parolni server oynasida bir marta saqlang.", ["Login (nik) va parol — server oynasida doim ko'rinadi", "Shu serverga kirganda o'zi qo'yiladi", "setinfo _pw yozish shart emas", "Boshqa serverlarda parol yuborilmaydi, nik odatdagisiga qaytadi"]],
+            ['VIP / админ вход', 'Если вы VIP или админ на сервере — сохраните логин и пароль один раз прямо в окне сервера.', ['Логин (ник) и пароль — всегда видны в окне сервера', 'Подставляются сами при входе на этот сервер', 'Не нужно писать setinfo _pw', 'На других серверах пароль не отправляется, ник возвращается']]],
+    ['radar2', 'h', ['Radar foni', "Klassik radar uchun yaqqol fon: nuqtalar va bomba aniq ko'rinadi.", ["Qora — qora fon, oq chegara (standart)", "Qora + halqalar — masofa va yo'nalish", "Yashil — asl radar", "NextClient 2.6 bilan — xaritali, aylanadigan radar"]],
+               ['Фон радара', 'Контрастный фон для классического радара: точки и бомба хорошо видны.', ['Чёрный — чёрный фон, белая рамка (по умолчанию)', 'Чёрный + кольца — дистанция и направление', 'Зелёный — стандартный радар', 'С NextClient 2.6 — радар с картой и вращением']]]
+  ];
+  TOUR = TOUR.filter(function (t) { return t[1] !== 'h'; }).concat(TOUR.filter(function (t) { return t[1] === 'h'; }));
+  var TI = 0, TL = 'uz';
+  function tshow(i) {
+    TI = (i + TOUR.length) % TOUR.length;
+    var t = TOUR[TI], d = t[TL === 'ru' ? 3 : 2], src = 'img/m/' + t[0] + '.jpg';
+    document.getElementById('timg').src = src; document.getElementById('timg').alt = d[0];
+    document.getElementById('tph').href = src;
+    document.getElementById('tpath').textContent = G[TL][t[1]];
+    document.getElementById('th').textContent = d[0];
+    document.getElementById('tp').textContent = d[1];
+    document.getElementById('tul').innerHTML = d[2].map(function (x) { return '<li>' + x + '</li>'; }).join('');
+    document.getElementById('tnum').textContent = (TI + 1) + ' / ' + TOUR.length;
+    var a = document.querySelectorAll('#tnav a');
+    for (var k = 0; k < a.length; k++) { a[k].className = +a[k].getAttribute('data-i') === TI ? 'on' : ''; }
+    var on = document.querySelector('#tnav a.on'); if (on && window.innerWidth <= 900) { var n = document.getElementById('tnav'); n.scrollLeft = on.offsetLeft - n.clientWidth / 2 + on.offsetWidth / 2; }
+  }
+  function tnav(l) {
+    TL = l; var h = '', g = '';
+    TOUR.forEach(function (t, i) { if (t[1] !== g) { g = t[1]; h += '<small>' + G[l][g] + '</small>'; } h += '<a data-i="' + i + '">' + t[l === 'ru' ? 3 : 2][0] + '</a>'; });
+    document.getElementById('tnav').innerHTML = h; tshow(TI);
+  }
+  document.getElementById('tnav').onclick = function (e) { var a = e.target.closest ? e.target.closest('a[data-i]') : null; if (a) tshow(+a.getAttribute('data-i')); };
+  document.getElementById('tprev').onclick = function () { tshow(TI - 1); };
+  document.getElementById('tnext').onclick = function () { tshow(TI + 1); };
+  document.addEventListener('keydown', function (e) {
+    var r = document.getElementById('menyu').getBoundingClientRect(); if (r.bottom < 0 || r.top > window.innerHeight) return;
+    if (e.key === 'ArrowLeft') tshow(TI - 1); else if (e.key === 'ArrowRight') tshow(TI + 1);
+  });
+  (function () { var im = new Image(); TOUR.forEach(function (t, i) { if (i < 3) { im = new Image(); im.src = 'img/m/' + t[0] + '.jpg'; } }); })();
+  function render(l) {
+    tnav(l);
+    var h = '';
+    PERKS[l].forEach(function (x) { h += '<div class="perk"><i>' + x[0] + '</i><b>' + x[1] + '</b><span>' + x[2] + '</span></div>'; });
+    document.getElementById('perks').innerHTML = h; h = '';
+    FULL[l].forEach(function (g) { h += '<div class="card"><b>' + g[0] + '</b><ul>' + g[1].map(function (t) { return '<li>' + t + '</li>'; }).join('') + '</ul></div>'; });
+    document.getElementById('full').innerHTML = h;
+  }
+  var UZ = {};
+  var els = document.querySelectorAll('[data-t]');
+  for (var i = 0; i < els.length; i++) UZ[els[i].getAttribute('data-t')] = els[i].innerHTML;
+  function set(l) {
+    render(l);
+    for (var i = 0; i < els.length; i++) { var k = els[i].getAttribute('data-t'), d = l === 'ru' ? RU : UZ; if (d[k]) els[i].innerHTML = d[k]; }
+    var ls = document.querySelectorAll('.lang a'); for (var j = 0; j < ls.length; j++) ls[j].className = ls[j].getAttribute('data-l') === l ? 'on' : '';
+    document.documentElement.lang = l; try { localStorage.setItem('xc_dl_lang', l); } catch (e) {}
+  }
+  render('uz');
+  var ls = document.querySelectorAll('.lang a');
+  for (var j = 0; j < ls.length; j++) ls[j].onclick = function () { set(this.getAttribute('data-l')); };
+  var saved = null; try { saved = localStorage.getItem('xc_dl_lang'); } catch (e) {}
+  if (saved === 'ru' || (!saved && /^(ru|uk|kk|ky|be)/i.test(navigator.language || ''))) set('ru');
+  // oxirgi versiya (xclient/api.php); sahifa boshqa saytda (cssborka.uz) bo'lsa - mmb.boost-top.com dan
+  var x = new XMLHttpRequest(), api = /(^|\.)mmb\.boost-top\.com$|^127\.|^localhost$/.test(location.hostname) ? '' : location.protocol + '//mmb.boost-top.com/';
+  /* o'yinchilar kliplari: lenta aylanib turadi (sichqoncha ustida - to'xtaydi), karta ustida video ovozsiz o'ynaydi, bosilsa katta oynada */
+  (function () {
+    var c = new XMLHttpRequest();
+    c.open('GET', api + 'xc_api.php?a=clips', true);
+    c.onload = function () {
+      var r; try { r = JSON.parse(c.responseText); } catch (e) { return; }
+      var l = r && r.clips ? r.clips.slice(0, 20) : [];
+      if (!l.length) return;
+      var esc = function (t) { return String(t).replace(/[&<>"']/g, function (ch) { return '&#' + ch.charCodeAt(0) + ';'; }); };
+      var card = function (k) {
+        var s = k.sec ? Math.floor(k.sec / 60) + ':' + ('0' + k.sec % 60).slice(-2) : '';
+        return '<div class="clip" data-id="' + esc(k.id) + '" data-n="' + esc(k.name) + '"><video src="' + api + 'clips/' + esc(k.id) + '.mp4#t=1" preload="metadata" muted playsinline loop></video>' +
+          '<div class="pl"><i></i></div><div class="m"><b>' + esc(k.name) + '</b><span>' + esc([k.srv, s].filter(Boolean).join(' · ')) + '</span></div></div>';
+      };
+      var one = ''; var n = 0; while (n < 8) { l.forEach(function (k) { one += card(k); }); n += l.length; }   // kam bo'lsa - takrorlab to'ldiramiz
+      var t = document.getElementById('mtrack'); t.innerHTML = one + one;                                  // ikki nusxa - uzluksiz aylanish
+      t.style.setProperty('--mqd', Math.max(30, n * 5) + 's');
+      document.getElementById('clipsSec').hidden = false;
+      if (api) document.getElementById('clipsAll').href = api + 'clips.php';
+      Array.prototype.forEach.call(t.querySelectorAll('.clip'), function (el) {
+        var v = el.querySelector('video');
+        el.onmouseenter = function () { try { v.currentTime = 0; var p = v.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {} };
+        el.onmouseleave = function () { try { v.pause(); v.currentTime = 1; } catch (e) {} };
+        el.onclick = function () {
+          var m = document.getElementById('cmod'), cv = document.getElementById('cvid');
+          cv.src = api + 'clips/' + el.getAttribute('data-id') + '.mp4'; cv.muted = false;
+          document.getElementById('cn').textContent = el.getAttribute('data-n');
+          m.hidden = false; try { var p = cv.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+        };
+      });
+      var close = function () { var cv = document.getElementById('cvid'); try { cv.pause(); } catch (e) {} cv.removeAttribute('src'); document.getElementById('cmod').hidden = true; };
+      document.getElementById('cx').onclick = close;
+      document.getElementById('cmod').onclick = function (e) { if (e.target.id === 'cmod') close(); };
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+    };
+    c.send();
+  })();
+  x.open('GET', api + 'xclient/api.php?a=update&ch=stable', true);
+  x.onload = function () { var m = /version=([\w.\-]+)/.exec(x.responseText || ''); if (m) document.getElementById('ver').innerHTML = 'v' + m[1] + ' · Windows 7/8/10/11'; };
+  x.send();
+})();
+</script>
+</body>
+</html>
