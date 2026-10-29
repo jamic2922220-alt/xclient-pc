@@ -380,7 +380,8 @@ static void radar_start(void)
 #endif
 
 /* ---- klassik radar foni (NextClient 2.5: radarni Valve kodi chizadi - faqat fon rasmini almashtira olamiz) ----
- * cl_radartype 1 -> sprites/radaropaque640.spr (SPR_DrawHoles, 255-indeks - teshik). Uslublar: 0 - asl, 1 - qora kontrast, 2 - qora + halqalar.
+ * cl_radartype 1 -> sprites/radaropaque640.spr (SPR_DrawHoles, 255-indeks - teshik). Uslublar: 0 - asl, 1 - qora kontrast, 2 - qora + halqalar,
+ * 3 - taktik to'r (standart), 4 - neon, 5 - minimal (ichi shaffof), 6 - kontrast kvadrat.
  * Asl faylning o'lchami saqlanadi: radar radiusi va nuqtalar joyi shu o'lchamdan hisoblanadi. Oxirida "XCRSK" belgisi - bizniki ekanini bilish uchun. */
 #define RSK_MARK "XCRSK"
 static BOOL rsk_ours(const unsigned char *b, long n) { return n > 6 && !memcmp(b + n - 6, RSK_MARK, 5); }
@@ -400,8 +401,10 @@ static unsigned char *rsk_make(const unsigned char *o, long n, int style, long *
     memcpy(b + 12, &fmt, 4); memcpy(b + 28, &one, 4);            /* bitta kadr */
     b[40] = 0; b[41] = 1;                                        /* 256 rang */
     unsigned char *p = b + 42;
-    static const unsigned char cols[][3] = { { 8, 8, 10 }, { 255, 255, 255 }, { 95, 95, 102 }, { 255, 59, 59 }, { 62, 62, 70 } };
-    for (int i = 0; i < 5; i++) memcpy(p + i * 3, cols[i], 3);
+    /* 0 fon, 1 oq, 2 kulrang chiziq, 3 qizil, 4 halqa, 5 to'r (yashil), 6 burchaklar (och yashil), 7 neon pushti, 8 neon havorang, 9 binafsha fon, 10 to'q yashil fon */
+    static const unsigned char cols[][3] = { { 8, 8, 10 }, { 255, 255, 255 }, { 95, 95, 102 }, { 255, 59, 59 }, { 62, 62, 70 },
+        { 34, 92, 52 }, { 150, 255, 175 }, { 255, 90, 215 }, { 120, 215, 255 }, { 22, 6, 28 }, { 9, 24, 14 } };
+    for (int i = 0; i < 11; i++) memcpy(p + i * 3, cols[i], 3);
     p[255 * 3] = 0; p[255 * 3 + 1] = 0; p[255 * 3 + 2] = 255;
     unsigned char *f = b + 42 + 768;
     memcpy(f, o + fo, 20);                                       /* kadr turi va origin, o'lcham - asl fayldagidek */
@@ -411,8 +414,22 @@ static unsigned char *rsk_make(const unsigned char *o, long n, int style, long *
         for (int x = 0; x < w; x++) {
             float dx = x - cx, dy = y - cy, d = sqrtf(dx * dx + dy * dy);
             unsigned char c = 0;
+            if (style == 3) {                                    /* taktik to'r: kvadrat, yashil to'r, burchaklarda qavslar */
+                float st = (w < h ? w : h) / 8.0f, gx = fmodf((float)x, st), gy = fmodf((float)y, st);
+                int edge = x < 2 || y < 2 || x >= w - 2 || y >= h - 2, cl = (w < h ? w : h) / 7;
+                int corner = (x < 4 || x >= w - 4 || y < 4 || y >= h - 4) && ((x < cl || x >= w - cl) && (y < cl || y >= h - cl));
+                c = corner ? 6 : edge ? 5 : (gx < 1 || gy < 1) ? 5 : 10;
+                px[(long)y * w + x] = c; continue;
+            }
+            if (style == 6) {                                    /* kontrast kvadrat: qora, oq ramka, markazda halqa */
+                int edge = x < 3 || y < 3 || x >= w - 3 || y >= h - 3;
+                c = edge ? 1 : fabsf(d - R / 2) < 0.6f ? 4 : 0;
+                px[(long)y * w + x] = c; continue;
+            }
             if (d > R) c = 255;
-            else if (d > R - bw) c = style == 2 ? 3 : 1;
+            else if (style == 4) c = d > R - bw - 1 ? 7 : fabsf(d - R / 2) < 0.7f ? 8 : 9;   /* neon */
+            else if (style == 5) c = d > R - 1.5f ? 1 : (d < 3 && (fabsf(dx) < 0.6f || fabsf(dy) < 0.6f)) ? 1 : 255;   /* minimal: faqat ingichka halqa */
+            else if (d > R - bw) c = style == 2 ? 3 : 1;   /* 1, 2 - qora dumaloq */
             else if ((fabsf(dx) < 0.6f || fabsf(dy) < 0.6f) && d < R - bw - 2) c = 2;
             else if (style == 2 && (fabsf(d - R / 3) < 0.6f || fabsf(d - 2 * R / 3) < 0.6f)) c = 4;
             if (style == 2 && c != 255) {                        /* qarash yo'nalishi: tepada qizil uchburchak */
@@ -446,7 +463,7 @@ static void rsk_apply_one(const wchar_t *sub, int style)
 }
 static void radar_skin(int style)
 {
-    if (style < 0 || style > 2) style = 1;
+    if (style < 0 || style > 6) style = 3;
     rsk_apply_one(L"cstrike", style);
     wchar_t pat[MAX_PATH];
     path_join(pat, g_dir, L"cstrike_*");                         /* cstrike_russian va boshqalar: ulardagi fayl ustun turadi */

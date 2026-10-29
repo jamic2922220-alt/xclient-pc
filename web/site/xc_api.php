@@ -460,6 +460,9 @@ $a = p('a');
  * Bu manzil yo'naltirilsa (masalan, boost-top.com yangilanganda qo'shilgan "https ga" qoidasi) yoki ochilmasa - menyu hammada qora bo'lib qoladi.
  * Launcherlar 'hello' da (o'yinchilar o'yinni ochganda) va FastPanel planirovshigi ?a=watch orqali eng ko'pi 5 daqiqada bir tekshiradi;
  * holat o'zgarsa (buzildi / tuzaldi) - admin Telegram'iga xabar. */
+/* radar foni: o'yinchi o'zi tanlagan bo'lsa (rskx) - o'sha; aks holda standart - 3 (taktik to'r).
+ * Eski menyu har sozlama saqlanganda rsk=1 ni ham yozib qo'yardi - o'shani "tanlov" deb hisoblamaymiz */
+function rsk_of($o) { return isset($o['rsk']) && (!empty($o['rskx']) || (int)$o['rsk'] !== 1) ? (int)$o['rsk'] : 3; }
 function menu_watch() {
     $st = rd('watch', array('t' => 0, 'ok' => 1, 'why' => ''));
     if (time() - $st['t'] < 300) return $st;
@@ -537,7 +540,7 @@ if ($a === 'vq') {
     // "sifat mikrofon bufer": eski launcher faqat birinchi so'zni o'qiydi
     // "sifat mikrofon bufer radar": bufer 2 - o'yinchi tanlamagan (launcher o'zi hal qiladi; eski launcher 2 ni "yoqiq" deb o'qiydi)
     echo (isset($o['vq']) && in_array($o['vq'], array('hi', 'mid', 'low'), true) ? $o['vq'] : 'mid'), ' ', empty($o['mic']) ? 0 : 1, ' ',
-        empty($o['rbx']) ? 2 : (isset($o['rb']) && !$o['rb'] ? 0 : 1), ' ', isset($o['rsk']) ? (int)$o['rsk'] : 1;
+        empty($o['rbx']) ? 2 : (isset($o['rb']) && !$o['rb'] ? 0 : 1), ' ', rsk_of($o);
     exit;
 }
 /* ---- klip ulashish: menyu 'share' buyrug'i chipta (tk) yaratadi, launcher videoni bo'laklab yuklaydi ----
@@ -1716,6 +1719,7 @@ case 'opts_done':
         if ($isNew) tg_notify('install', "Yangi X CLIENT o'rnatish\n" . strtoupper(isset($o['cc']) ? $o['cc'] : '') . ' ' . $ip . "\n" . (isset($o['os']) ? $o['os'] : '') . (isset($o['scr']) ? ' · ' . $o['scr'] : ''));
         wr($ipk, array('d' => $d, 't' => time()));
         $ho = with_forced_packs($o, $d); unset($ho['k'], $ho['kc'], $ho['st'], $ho['fav'], $ho['ip']);   // launcherga saqlangan holat (token) kerak emas
+        $ho['rsk'] = rsk_of($o);
         out(array('ok' => true, 'o' => $ho));
     }
     $claim = false;
@@ -1740,7 +1744,8 @@ case 'opts_done':
         if (!empty($in['dvroff'])) $o['dvroff'] = 1;                                   // Game Bar fon yozuvini o'chirish - launcher keyingi ochilishda bajaradi
         foreach (array('mic', 'rb') as $k) if (isset($in[$k])) $o[$k] = $in[$k] ? 1 : 0;   // videoda mikrofon, "oxirgi 30 soniya"
         if (!empty($in['rbx'])) $o['rbx'] = 1;                                        // "oxirgi 30 soniya" ni o'yinchi o'zi tanladi (bo'lmasa - avto: oddiy kompyuterda o'chiq)
-        if (isset($in['rsk'])) $o['rsk'] = max(0, min(2, (int)$in['rsk']));          // klassik radar foni: 0 asl, 1 qora kontrast, 2 qora + halqalar
+        if (isset($in['rsk'])) $o['rsk'] = max(0, min(6, (int)$in['rsk']));
+        if (!empty($in['rskx'])) $o['rskx'] = 1;                                       // radar fonini o'yinchi o'zi tanladi          // klassik radar foni: 0 asl, 1 qora, 2 halqalar, 3 taktik to'r (standart), 4 neon, 5 minimal, 6 kontrast
         if (isset($in['vq'])) $o['vq'] = in_array($in['vq'], array('hi', 'mid', 'low'), true) ? $in['vq'] : 'mid';   // F10 video sifati
         if (isset($in['hud'])) $o['hud'] = in_array((int)$in['hud'], array(100, 150, 200)) ? (int)$in['hud'] : 100;   // HUD kattaligi, %
         if (isset($in['res'])) $o['res'] = preg_match('/^\d{3,4}x\d{3,4}$/', $in['res']) ? $in['res'] : '';
@@ -1752,6 +1757,7 @@ case 'opts_done':
     }
     $key = isset($o['k']) ? $o['k'] : '';
     unset($o['k'], $o['kc'], $o['ip'], $o['st'], $o['fav'], $o['vc']);   // saqlangan holat (token) faqat dstate orqali, kalit bilan
+    $o['rsk'] = rsk_of($o);
     out(array('ok' => true, 'o' => $o, 'd' => $d, 'k' => $claim ? $key : null));
 
 /* ---------- sevimli serverlar kompyuter bo'yicha zaxirada (menyu keshi tozalansa yoki manzil o'zgarsa yo'qolmasin) ---------- */

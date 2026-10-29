@@ -326,7 +326,7 @@ function fxLoop() {
  * xc_api.php ga yoziladi va XClient.exe ularni keyingi ishga tushishda bajaradi. */
 function qparam(k) { var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search || ''); return m ? decodeURIComponent(m[1]) : ''; }
 var PCID = /^[a-z0-9]{8,40}$/.test(qparam('xc')) ? qparam('xc') : '';   // kompyuter id (DB.pcid) va uning maxfiy kaliti (DB.pck) load() dan keyin olinadi
-var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '', hud: 100, vq: 'mid', dmf: null, vids: null, mic: 0, rb: 1, rbx: 0, rsk: 1, tune: 1, macc: 1, bgp: 1, dvr: 0, dvroff: 0 }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
+var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '', hud: 100, vq: 'mid', dmf: null, vids: null, mic: 0, rb: 1, rbx: 0, rsk: 3, rskx: 0, tune: 1, macc: 1, bgp: 1, dvr: 0, dvroff: 0 }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
 var OPTS_TRY = 0;
 /* To'liq X CLIENT menyusi faqat XCLauncher.exe orqali ochilganda. Menyu saytda turadi va boshqa boost-top sborkalari ham
  * uni ochadi - ularda "sodda rejim": tezkor o'yin, serverlar, sozlamalar + X CLIENT ni yuklab olish kartasi.
@@ -2837,7 +2837,7 @@ var PANES = {
     }
     if (HSUB === 'radar' && !radarNC()) {          // bu NextClient versiyasida xaritali radar (hud_radar_*) yo'q - faqat CS 1.6 radari
       var rk = '';
-      each([[1, 'rk1'], [2, 'rk2'], [0, 'rk0']], function (o) { rk += '<a class="' + ((OPTS.rsk == null ? 1 : OPTS.rsk) === o[0] ? 'on' : '') + '" data-orsk="' + o[0] + '">' + esc(T(o[1])) + '</a>'; });
+      each(verGE(VERSION, '1.0.102') ? [[3, 'rk3'], [1, 'rk1'], [2, 'rk2'], [4, 'rk4'], [5, 'rk5'], [6, 'rk6'], [0, 'rk0']] : [[1, 'rk1'], [2, 'rk2'], [0, 'rk0']], function (o) { rk += '<a class="' + ((OPTS.rsk == null ? 3 : OPTS.rsk) === o[0] ? 'on' : '') + '" data-orsk="' + o[0] + '">' + esc(T(o[1])) + '</a>'; });   // 4-6: launcher 1.0.102+
       return sub + '<div class="pane l hp"><div class="ph2">' + esc(T('hx_radar')) + '</div>' +
         '<div class="fr"><div class="lb">' + esc(T('rk_title')) + '</div><div class="ct2 seg">' + rk + '</div></div>' +
         '<div class="mut" style="font-size:12px;margin-top:10px">' + esc(T('rk_note')) + '</div>' +
@@ -3529,7 +3529,7 @@ document.onclick = function (e) {
     return;
   }
   if ((el = closest(t, 'data-orsk'))) {            // klassik radar foni: launcher sprites/radaropaque640.spr ni almashtiradi
-    var rv = Number(el.getAttribute('data-orsk')); OPTS.rsk = rv;
+    var rv = Number(el.getAttribute('data-orsk')); OPTS.rsk = rv; OPTS.rskx = 1;
     var rt2 = rv ? 1 : 0; S.radar = rt2; if (E) E.radar = rt2; DB.set = S; persist(); cmd('cl_radartype ' + rt2);
     showSetTab('hud');
     if (!PCID) return toast(T('sy_nolaunch'), 4000);

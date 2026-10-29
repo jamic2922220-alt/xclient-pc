@@ -104,7 +104,7 @@ static void rec_quality(void)
         char q[8]; int mic = 0, rb = 1, rsk = -1;
         /* rb: 0/1 - o'yinchi o'zi tanlagan, 2 - tanlamagan (avto: oddiy kompyuterda o'chiq) */
         if (sscanf(r, "%7s %d %d %d", q, &mic, &rb, &rsk) >= 2) { g_mic = mic ? 1 : 0; g_rb = rb == 2 ? !pc_weak() : rb ? 1 : 0; }
-        if (rsk >= 0 && rsk <= 2 && rsk != o_rsk) { o_rsk = rsk; ini_set_int(L"rsk", rsk + 1); radar_skin(rsk); }   /* menyuda radar foni almashdi - keyingi xaritadan ko'rinadi */
+        if (rsk >= 0 && rsk <= 6 && rsk != o_rsk) { o_rsk = rsk; ini_set_int(L"rsk", rsk + 1); radar_skin(rsk); }   /* menyuda radar foni almashdi - keyingi xaritadan ko'rinadi */
         free(r);
     }   /* internet bo'lmasa - oldingi tanlov */
 }

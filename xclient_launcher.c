@@ -994,7 +994,7 @@ static char *read_all(const wchar_t *path, long *len)
 /* O'yin ichidagi X CLIENT menyusi (Sozlamalar > Tizim) ularni xc_api.php ga shu kompyuter id'si (g_id)
  * bilan yozadi; XClient.exe har ishga tushganda o'qiydi va bajaradi. */
 static int  o_beta = -1, o_auto = 1, o_start = -1, o_win = 0, o_clean = 0, o_verify = 0;
-static int  o_rsk = 1;                          /* klassik radar foni: 0 asl, 1 qora kontrast (standart), 2 qora + halqalar */
+static int  o_rsk = 3;                          /* klassik radar foni: 0 asl, 1 qora kontrast, 2 qora + halqalar, 3 taktik to'r (standart), 4 neon, 5 minimal, 6 kontrast kvadrat */
 static void radar_skin(int style);              /* xc_radar.c */
 static int  o_tune = 1, o_macc = 1, o_bgp = 1, o_dvroff = 0;   /* xc_tune.c: o'yin paytida Windows'ni moslash (menyu > Tizim) */
 static int  dvr_state(void);
@@ -1087,7 +1087,7 @@ static void fetch_opts(void)
     if (!r || !strstr(r, "\"ok\":true")) { free(r); return; }
     o_beta = jint(r, "beta", -1); o_auto = jint(r, "auto", 1); o_start = jint(r, "start", -1);
     o_win = jint(r, "win", 0); o_clean = jint(r, "clean", 0); o_verify = jint(r, "verify", 0);
-    o_rsk = jint(r, "rsk", 1); ini_set_int(L"rsk", o_rsk + 1);   /* +1: 0 - "hali yo'q" */
+    o_rsk = jint(r, "rsk", 3); ini_set_int(L"rsk", o_rsk + 1);   /* +1: 0 - "hali yo'q" */
     o_tune = jint(r, "tune", 1); o_macc = jint(r, "macc", 1); o_bgp = jint(r, "bgp", 1); o_dvroff = jint(r, "dvroff", 0);
     if (cr[0]) ini_str(L"t_cr", NULL);
     o_prio = jint(r, "prio", 0); o_hud = jint(r, "hud", 100); o_shots = jint(r, "shots", 0); o_spray = jint(r, "spray", 0); o_sprays = jint(r, "sprays", 0);
