@@ -1243,17 +1243,36 @@ function avInner(u, name) {
   if (u && u.av) return '<img src="' + esc(u.av) + '" alt="">';
   return esc(String(name || (u && u.name) || 'X').charAt(0).toUpperCase() || 'X');
 }
-/* ---- admin paneldagi e'lonlar: bosh menyuning o'ng ustuni tepasida ---- */
-var ANN = [];
+/* ---- admin paneldagi e'lonlar: pastki chiziqda yangiliklar lentasi (yangilik / reklama / muhim) ----
+ * Bir nechta bo'lsa - navbat bilan almashadi. Matn joyiga sig'masa - yugurib o'tadi (o'yin ustida - yugurmaydi).
+ * E'londa server IP bo'lsa - bosilganda shu serverga kiradi. */
+var ANN = [], ANN_I = -1, ANN_TM = 0;
 function loadAnn() { api('news', {}, function (r) { ANN = r.ok && r.ann ? r.ann : []; renderAnn(); }); }
+function newsBox() {
+  var el = $('bNews'), bar = $('bar');
+  if (!el && bar) { el = document.createElement('div'); el.id = 'bNews'; bar.appendChild(el); }   // oxirida: chap va o'ng yozuvlar orasidagi bo'sh joyni egallaydi
+  return el;
+}
 function renderAnn() {
-  var el = $('ann'); if (!el) return;
-  var hid = DB.annHide || [], a = null;
-  each(ANN, function (x) { if (!a && hid.indexOf(x.id) < 0) a = x; });
-  if (!a) { el.style.display = 'none'; return; }
-  el.className = 'card ann ' + (/^(info|warn|promo)$/.test(a.type) ? a.type : 'info');
-  el.innerHTML = '<div class="anh">' + esc(T('an_title')) + '<a class="anx" data-annx="' + esc(a.id) + '">✕</a></div><div class="ant">' + esc(a.text) + '</div>';
+  var el = newsBox(); if (!el) return;
+  clearTimeout(ANN_TM);
+  if (!ANN.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = '';
+  ANN_I = (ANN_I + 1) % ANN.length;
+  var a = ANN[ANN_I], ty = /^(info|warn|promo)$/.test(a.type) ? a.type : 'info', ip = /^[a-z0-9.\-]{3,64}:\d{2,5}$/i.test(a.ip || '') ? a.ip : '';
+  el.className = 'nw-' + ty + (ip ? ' nlink' : '');
+  el.setAttribute('data-newsip', ip);
+  el.innerHTML = '<div class="nw"><span class="ntg"><i></i>' + esc(T('nw_' + ty)) + '</span><div class="nb"><span class="nx in">' + esc(a.text) +
+    (ip ? ' <b class="ngo">\u25b6 ' + esc(T('nw_go')) + '</b>' : '') + '</span></div></div>';
+  var nb = el.querySelector('.nb'), nx = el.querySelector('.nx'), tg = el.querySelector('.ntg'), wait = 8000;
+  var pad = tg ? tg.offsetWidth + 12 : 112; if (nb) nb.style.paddingLeft = pad + 'px';   // yorliq kengligi tilga qarab har xil
+  var room = nb ? nb.offsetWidth - pad : 0;
+  if (nb && nx && nx.offsetWidth > room + 4 && !lowFx()) {   // sig'madi - yuguruvchi qator
+    var sec = Math.max(8, (nx.offsetWidth + room) / 70);
+    nx.className = 'nx mq'; nx.style.webkitAnimationDuration = sec + 's';
+    wait = sec * 1000;
+  }
+  if (ANN.length > 1 || wait > 8000) ANN_TM = setTimeout(renderAnn, wait);
 }
 function renderBar() {
   each(['miResume', 'miPlist', 'miDisc'], function (id) { var e = $(id); if (e) e.style.display = CONNECTED ? '' : 'none'; });   // serverda: o'yinga qaytish, o'yinchilar, chiqish - menyuning tepasida
@@ -3481,7 +3500,7 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-otg'))) { var ok2 = el.getAttribute('data-otg'); OPTS[ok2] = OPTS[ok2] ? 0 : 1; el.className = 'tg' + (OPTS[ok2] ? ' on' : ''); saveOpts(/^(tune|macc|bgp)$/.test(ok2) ? T('tn_next') : ''); if (ok2 === 'tune') showSetTab('pro'); return; }
   if ((el = closest(t, 'data-tg'))) { var k = el.getAttribute('data-tg'); E[k] = E[k] ? 0 : 1; el.className = 'tg' + (E[k] ? ' on' : ''); if (setTab === 'hud') { drawXhair(); var cd = $('xCode'); if (cd) cd.value = xcode(E); } return; }
   if ((el = closest(t, 'data-avc'))) { api('avatar', { color: el.getAttribute('data-avc') }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); }); return; }
-  if ((el = closest(t, 'data-annx'))) { DB.annHide = (DB.annHide || []).concat([el.getAttribute('data-annx')]).slice(-50); persist(); renderAnn(); return; }
+  if ((el = closest(t, 'data-newsip')) && el.getAttribute('data-newsip')) { sfx('click'); return doConnect(el.getAttribute('data-newsip')); }
   if ((el = closest(t, 'data-daymode'))) return dayToggle();
   if ((el = closest(t, 'data-theme'))) { DB.theme = el.getAttribute('data-theme'); persist(); cloudSave(); applyTheme(DB.theme); if (curModal === 'mdSettings') showSetTab('cont'); return; }
   if ((el = closest(t, 'data-pack'))) {

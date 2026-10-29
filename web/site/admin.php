@@ -191,7 +191,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($act === 'ann_add' && pp('text') !== '') {
         $a = rd('announce', array());
         array_unshift($a, array('id' => substr(rnd(4), 0, 8), 'text' => mb_substr(pp('text'), 0, 400, 'UTF-8'), 'type' => in_array(pp('type'), array('info', 'warn', 'promo')) ? pp('type') : 'info',
-            't' => time(), 'until' => (int)pp('days') > 0 ? time() + 86400 * (int)pp('days') : 0));
+            't' => time(), 'until' => (int)pp('days') > 0 ? time() + 86400 * (int)pp('days') : 0,
+            'ip' => preg_match('/^[a-z0-9.\-]{3,64}:\d{2,5}$/i', trim(pp('ip'))) ? trim(pp('ip')) : ''));
         wr('announce', array_slice($a, 0, 30)); flash("E'lon qo'shildi - o'yinchilar menyusida 5 daqiqa ichida chiqadi"); go('?p=ann');
     }
     if ($act === 'ann_del') { $a = array(); foreach (rd('announce', array()) as $x) if ($x['id'] !== pp('id')) $a[] = $x; wr('announce', $a); flash("E'lon o'chirildi"); go('?p=ann'); }
@@ -585,11 +586,12 @@ if ($P === 'ann') {
         . '<div class="row"><input name="xp" type="number" min="1" max="100000" value="500" placeholder="XP"><input name="text" maxlength="300" placeholder="Izoh: masalan, Navro\'z bayrami bilan!"></div><button class="btn red">Hammaga yuborish</button> <span class="mut small">Har o\'yinchi menyuni ochganda "Sovg\'a: +500 XP" xabarini ko\'radi</span></form></div>'
         . '<div class="panel"><div class="ph">Yangi e\'lon</div><form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="ann_add">'
         . '<textarea name="text" maxlength="400" placeholder="Masalan: Bugun 20:00 da UZB ARENA serverida turnir! Sovrin - 1 oy VIP"></textarea>'
-        . '<div class="row"><select name="type"><option value="info">Ma\'lumot (ko\'k)</option><option value="promo">Aksiya (qizil)</option><option value="warn">Ogohlantirish (sariq)</option></select>'
+        . '<div class="row"><select name="type"><option value="info">Yangilik (ko\'k)</option><option value="promo">Reklama (qizil)</option><option value="warn">Muhim (sariq)</option></select>'
+            . '<input name="ip" maxlength="70" placeholder="Server IP (ixtiyoriy): 157.22.130.26:27015" style="max-width:300px">'
         . '<select name="days"><option value="1">1 kun</option><option value="3">3 kun</option><option value="7" selected>7 kun</option><option value="30">30 kun</option><option value="0">Muddatsiz</option></select><button class="btn red">E\'lon qilish</button></div>'
-        . '<div class="mut small">E\'lon barcha o\'yinchilarning X CLIENT menyusida, o\'ng tomonda chiqadi. O\'yinchi uni yopishi mumkin.</div></form></div>';
-    echo '<div class="panel"><div class="ph">Barcha e\'lonlar</div><table class="list"><tr><th>Matn</th><th>Turi</th><th>Qo\'shilgan</th><th>Muddati</th><th></th></tr>';
-    foreach (rd('announce', array()) as $a) echo '<tr><td style="white-space:normal">' . h($a['text']) . '</td><td><span class="tag ' . h($a['type']) . '">' . h($a['type']) . '</span></td><td>' . dt($a['t']) . '</td><td>' . ($a['until'] ? ($a['until'] < time() ? '<span class="dn">tugagan</span>' : dt($a['until'])) : 'muddatsiz') . '</td>'
+        . '<div class="mut small">E\'lon barcha o\'yinchilarning X CLIENT menyusida, pastki qatorda (nik va versiya orasida) chiqadi. Bir nechta bo\'lsa - navbat bilan almashadi, uzun matn yugurib o\'tadi. Server IP yozilsa - o\'yinchi bosganda shu serverga kiradi (reklama uchun qulay).</div></form></div>';
+    echo '<div class="panel"><div class="ph">Barcha e\'lonlar</div><table class="list"><tr><th>Matn</th><th>Server</th><th>Turi</th><th>Qo\'shilgan</th><th>Muddati</th><th></th></tr>';
+    foreach (rd('announce', array()) as $a) echo '<tr><td style="white-space:normal">' . h($a['text']) . '</td><td>' . h(isset($a['ip']) ? $a['ip'] : '') . '</td><td><span class="tag ' . h($a['type']) . '">' . h($a['type']) . '</span></td><td>' . dt($a['t']) . '</td><td>' . ($a['until'] ? ($a['until'] < time() ? '<span class="dn">tugagan</span>' : dt($a['until'])) : 'muddatsiz') . '</td>'
         . '<td class="r"><form method="post" class="inl">' . csrf_in() . '<input type="hidden" name="act" value="ann_del"><input type="hidden" name="id" value="' . h($a['id']) . '"><button class="lnk red">O\'chirish</button></form></td></tr>';
     echo '</table></div>';
 }

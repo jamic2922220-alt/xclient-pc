@@ -1601,7 +1601,7 @@ case 'news':                                             // turnirlar / e'lonlar
     $f = __DIR__ . '/xc_news.json';
     $j = is_file($f) ? json_decode(file_get_contents($f), true) : null;
     $ann = array();                                      // admin paneldagi e'lonlar
-    foreach ((array)rd('announce', array()) as $x) if (empty($x['until']) || $x['until'] > time()) $ann[] = array('id' => $x['id'], 'text' => $x['text'], 'type' => $x['type'], 'link' => isset($x['link']) ? $x['link'] : '');
+    foreach ((array)rd('announce', array()) as $x) if (empty($x['until']) || $x['until'] > time()) $ann[] = array('id' => $x['id'], 'text' => $x['text'], 'type' => $x['type'], 'link' => isset($x['link']) ? $x['link'] : '', 'ip' => isset($x['ip']) ? $x['ip'] : '');
     out(array('ok' => true, 'news' => is_array($j) ? $j : array(), 'ann' => $ann));
 
 case 'report':                                           // "Xatolik haqida xabar": konsol loglari

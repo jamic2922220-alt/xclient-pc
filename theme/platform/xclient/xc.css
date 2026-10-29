@@ -875,3 +875,29 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .dmr.th .btn { top: 22px; }
 @-webkit-keyframes vthA { from { background-position: 0 0; } to { background-position: -960px 0; } }
 @keyframes vthA { from { background-position: 0 0; } to { background-position: -960px 0; } }
+
+/* ---- bosh ekran: "Hafta qotillari" va "Do'stlar onlayn" kartalari olib tashlandi; e'lonlar endi pastki chiziqda ---- */
+#weekCard, #frCard, #ann { display: none !important; }
+/* pastki chiziqdagi yangiliklar lentasi (admin panel > E'lonlar) */
+#bNews { overflow: hidden; position: relative; height: 52px; margin-left: 4px; }
+#bNews .nw { position: absolute; left: 0; right: 24px; top: 11px; height: 30px; line-height: 30px; border-radius: 15px; overflow: hidden;
+  background: rgba(61, 134, 223, .10); border: 1px solid rgba(61, 134, 223, .45); }
+#bNews .ntg { position: absolute; left: 0; top: 0; bottom: 0; z-index: 2; padding: 0 12px 0 10px; font-size: 11px; font-weight: bold; letter-spacing: 1.5px; color: #fff;
+  background: -webkit-linear-gradient(top, #4d97f0, #2e6fc4); border-radius: 15px 0 0 15px; box-shadow: 6px 0 12px rgba(10, 8, 12, .9); }
+#bNews .ntg i { display: inline-block; width: 7px; height: 7px; margin: 0 7px 1px 0; border-radius: 50%; background: #fff; vertical-align: middle; -webkit-animation: k_npulse 1.4s ease-in-out infinite; }
+#bNews .nb { position: absolute; left: 0; right: 14px; top: 0; bottom: 0; overflow: hidden; padding-left: 112px; }
+#bNews .nx { position: relative; display: inline-block; white-space: nowrap; font-size: 13px; color: #f1e9ec; }
+#bNews .nx.in { -webkit-animation: k_nin .45s ease-out; }
+#bNews .nx.mq { padding-left: 100%; -webkit-animation-name: k_nmq; -webkit-animation-timing-function: linear; -webkit-animation-iteration-count: 1; -webkit-animation-fill-mode: both; }
+#bNews .ngo { margin-left: 10px; font-size: 12px; color: #ffd24a; }
+#bNews.nlink .nw { cursor: pointer; }
+#bNews.nlink .nw:hover { filter: brightness(1.15); }
+#bNews.nw-promo .nw { background: rgba(255, 59, 59, .10); border-color: rgba(255, 59, 59, .5); }
+#bNews.nw-promo .ntg { background: -webkit-linear-gradient(top, #ff5a4e, #d6262a); }
+#bNews.nw-warn .nw { background: rgba(245, 166, 35, .10); border-color: rgba(245, 166, 35, .5); }
+#bNews.nw-warn .ntg { background: -webkit-linear-gradient(top, #f7b23d, #d98a12); color: #1a1208; }
+#bNews.nw-warn .ntg i { background: #1a1208; }
+@-webkit-keyframes k_nin { from { opacity: 0; -webkit-transform: translateY(12px); } to { opacity: 1; -webkit-transform: translateY(0); } }
+@-webkit-keyframes k_nmq { from { -webkit-transform: translateX(0); } to { -webkit-transform: translateX(-100%); } }
+@-webkit-keyframes k_npulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+.lowfx #bNews .ntg i { -webkit-animation: none; }
