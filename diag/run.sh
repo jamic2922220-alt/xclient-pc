@@ -14,3 +14,4 @@ curl -s -m 30 -o $O/https_xc.html -w "%{http_code} %{time_total}s  https xc.html
 dig +short mmb.boost-top.com >> $O/summary.txt 2>&1
 npm i -s playwright@1.47.2 >/dev/null 2>&1 && npx playwright install --with-deps chromium >/dev/null 2>&1
 node diag/load.js >> $O/summary.txt 2>&1
+# 06:07:08
