@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<title>X CLIENT</title>
+<!--
+  X CLIENT — o'yin ichidagi bosh menyu (NextClient Main Menu Browser).
+  Saytga (boost-top.com/mmb = mmb.boost-top.com) yuklanadi - platform/mmb_home_page.html shu manzilni ochadi.
+  CEF1 (Chrome 17): faqat ES5, flexbox/vh/calc yo'q — hamma narsa absolute + px.
+  O'yin bilan aloqa: nextclient.exec / getCvarValue / matchmaking / console / gameUi.
+  Akkaunt: xc_api.php (shu papkada).
+-->
+<meta http-equiv="Cache-Control" content="no-cache">
+<script>
+/* O'yin brauzeri (CEF) sahifani soatlab xotiradan ochishi mumkin - yangilanish ko'rinmay qoladi.
+ * Har ochilishda server "qaysi versiya" deb so'raladi (beta testerlarga - beta, boshqalarga - barqaror, admin panel > Menyu versiyalari).
+ * Boshqa bo'lsa - o'sha versiyaning sahifasi (rel/<versiya>/index.html) yuklanib, joriy sahifa shu bilan almashtiriladi. */
+(function () {
+  var V = '10199700';
+  window.XC_V = V;
+  try {
+    if (window.name === 'xcfresh' + V) return;
+    var t = new Date().getTime(), get = function (u) { var x = new XMLHttpRequest(); x.open('GET', u, false); x.send(null); return x; }, ok = function (v) { return /^\d{6,12}$/.test(v); };
+    var v = '';
+    try { var a = get('xc_api.php?a=menuver&t=' + t); if (a.status === 200) v = String(a.responseText || '').replace(/\s+/g, ''); } catch (e) {}
+    if (!ok(v)) { var b = get('ver.txt?t=' + t); v = b.status === 200 ? String(b.responseText || '').replace(/\s+/g, '') : ''; }
+    if (!ok(v) || v === V || window.name === 'xcfresh' + v) return;
+    window.name = 'xcfresh' + v;
+    var y = null;
+    try { y = get('rel/' + v + '/index.html?t=' + t); } catch (e) {}
+    if (!y || y.status !== 200 || y.responseText.indexOf('id="app"') < 0) {
+      var me = (/[^\/]+\.html$/.exec(location.pathname) || ['index.html'])[0];   // xc.html (X CLIENT launcheri) yoki index.html
+      y = get(me + '?t=' + t);
+    }
+    if (y.status === 200 && y.responseText.indexOf('id="app"') > 0) {
+      // eski sahifaning qolgan qismi ishlamasin (plaintext), yuklanib bo'lgach - yangisi bilan almashtiramiz
+      var fresh = y.responseText;
+      document.write('<plaintext style="display:none">');
+      window.addEventListener('load', function () { document.open(); document.write(fresh); document.close(); }, false);
+    }
+  } catch (e) {}
+})();
+</script>
+<link rel="stylesheet" href="xc.css?v=10199700">
+<script>
+/* Xato bo'lsa ekranning tepasida ko'rsatamiz (o'yin brauzerida konsol yo'q) */
+window.XC_ERRS = [];
+window.onerror = function (msg, url, line) {
+  var t = String(msg) + ' (' + String(url || '').replace(/^.*\//, '') + ':' + line + ')';
+  window.XC_ERRS.push(t); if (window.XC_ERRS.length > 20) window.XC_ERRS.shift();   // takrorlanuvchi xato soatlab o'smasin
+  var d = document.getElementById('xcerr');
+  if (!d && document.body) { d = document.createElement('div'); d.id = 'xcerr'; d.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:999;padding:6px 12px;font:13px Tahoma,Arial;color:#fff;background:#b3161c'; document.body.appendChild(d); }
+  if (d) d.innerHTML = 'X CLIENT xato: ' + window.XC_ERRS.join(' | ').replace(/</g, '&lt;');
+  try {                                                       // admin panelga avtomatik (sahifada 5 tagacha)
+    if (window.XC_ERRS.length <= 5) { var x = new XMLHttpRequest(); x.open('POST', 'xc_api.php', true); x.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+      x.send('a=jserr&msg=' + encodeURIComponent(String(msg)) + '&src=' + encodeURIComponent(String(url || '').replace(/^.*\//, '')) + '&line=' + (line || 0) + '&ver=' + encodeURIComponent(window.XC_V || '')); }
+  } catch (e) {}
+  return false;
+};
+</script>
+<script src="xc_lang.js?v=10199700"></script>
+</head>
+<body>
+<div id="app">
+  <div id="bg"></div>
+  <!-- markazdagi animatsiyali X CLIENT -->
+  <div id="stage">
+    <div class="glow"></div>
+    <div class="ring r1"></div>
+    <div class="xl2"><img src="logo_big.png" alt=""><div class="shine"></div></div>
+    <div class="ttl"><span>X</span> CLIENT</div>
+    <div class="sub2">COUNTER-STRIKE 1.6</div>
+  </div>
+  <div id="vig"></div>
+
+  <!-- ===== logo ===== -->
+  <div id="logo">
+    <img src="logo.png" alt="">
+    <div class="lt">
+      <div class="xc"><span>X</span> CLIENT</div>
+      <div class="sub"><span class="bt">COUNTER-STRIKE</span><span class="v">1.6 PRO EDITION</span></div>
+    </div>
+  </div>
+
+  <!-- ===== chap menyu ===== -->
+  <div id="menu">
+    <div class="mi" id="miResume" data-act="resume" style="display:none"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></i><span data-t="m_resume"></span></div>
+    <div class="mi" id="miPlist" data-act="plist" style="display:none"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></i><span data-t="m_plist"></span></div>
+    <div class="mi" id="miDisc" data-act="dconn" style="display:none"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></i><span data-t="m_disc"></span></div>
+    <div class="mi" data-act="quick"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="7 4 20 12 7 20 7 4"/></svg></i><span data-t="m_quick"></span></div>
+    <div class="mi" data-act="servers"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><line x1="7" y1="6.5" x2="7.01" y2="6.5"/><line x1="7" y1="17.5" x2="7.01" y2="17.5"/></svg></i><span data-t="m_servers"></span></div>
+    <div class="mi" data-act="friends"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></i><span data-t="m_friends"></span><em id="mFriends" class="gr"></em><em id="mFrNew" class="frn" style="display:none"></em></div>
+    <div class="mi" data-act="profile"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></i><span data-t="m_profile"></span><em id="mChest" class="frn chn" style="display:none" data-act="chests"></em></div>
+    <div class="mi" data-act="missions"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/></svg></i><span data-t="m_missions"></span></div>
+    <div class="sep"></div>
+    <div class="mi" data-act="settings"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></i><span data-t="m_settings"></span></div>
+    <div class="mi" data-act="quit"><i><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg></i><span data-t="m_quit"></span></div>
+  </div>
+
+  <!-- ===== o'ng ustun ===== -->
+  <div id="col">
+    <div class="card ann" id="ann" style="display:none"></div>
+    <!-- sodda rejim (oddiy launcher): X CLIENT ni yuklab olish kartasi -->
+    <div class="card xpcard" id="xpromo" data-act="promo">
+      <a class="cx" data-act="promox">&#215;</a>
+      <div class="xph"><img src="logo.png" alt=""><div><b data-t="lp_t"></b><small data-t="lp_s"></small></div></div>
+      <div class="acl"><span>&#10003; <b data-t="lp_1"></b></span><span>&#10003; <b data-t="lp_2"></b></span><span>&#10003; <b data-t="lp_3"></b></span></div>
+      <a class="btn red acbtn" data-act="promo">cssborka.uz/xclient &#8594;</a>
+    </div>
+    <!-- akkauntga kirmaganlar uchun ko'zga tashlanadigan karta -->
+    <div class="card acct" id="acct" data-act="login" style="display:none">
+      <a class="cx" data-act="acctx">&#215;</a>
+      <div class="acx">X</div>
+      <div class="act1" data-t="ac_t1"></div>
+      <div class="act2" data-t="ac_t2"></div>
+      <div class="acl"><span>&#10003; <b data-t="ac_b1"></b></span><span>&#10003; <b data-t="ac_b2"></b></span><span>&#10003; <b data-t="ac_b3"></b></span></div>
+      <a class="btn red acbtn" data-act="login"><span data-t="a_login"></span> &#8594;</a>
+    </div>
+     <div class="card">
+      <div class="ct"><span data-t="top_title"></span><span class="mut" data-t="ad"></span></div>
+      <div id="topList"></div>
+    </div>
+
+    <div class="card" id="weekCard">   <!-- hafta qotillari TOP-3 (jang statistikasi) -->
+      <div class="ct"><span data-t="tk_title"></span><span class="mut link" data-act="stats" data-t="all"></span></div>
+      <div id="weekList"></div>
+    </div>
+
+    <div class="card" id="frCard">
+      <div class="ct"><span data-t="fr_title"></span><span class="mut" id="frCnt"></span></div>
+      <div id="frList"></div>
+    </div>
+  </div>
+
+  <!-- ===== pastki panel ===== -->
+  <div id="bar">
+    <div class="me" data-act="profile"><div class="av" id="meAv">X</div><div><b id="meName">Player</b><small id="meLvl" class="mut"></small><div class="xpb"><i id="meXp"></i></div></div></div>
+    <div class="vipb" id="meVip">VIP</div>
+    <div class="st"><span data-t="b_online"></span> <b id="bOnline">0</b></div>
+    <div class="st"><span data-t="b_servers"></span> <b id="bServers">0</b></div>
+    <div class="st" id="bCloud"></div>
+    <div class="ver" id="bVer">X CLIENT</div>
+  </div>
+
+  <!-- ===== KIRISH (akkaunt) ekrani ===== -->
+  <div class="modal" id="mdLogin">
+    <div id="whyBox">
+      <div class="wt" data-t="why_title"></div>
+      <div class="wl"><i>&#9729;</i><b data-t="why1"></b> <span data-t="why1b"></span></div>
+      <div class="wl"><i>&#9636;</i><b data-t="why2"></b> <span data-t="why2b"></span></div>
+      <div class="wl"><i>&#9733;</i><b data-t="why3"></b> <span data-t="why3b"></span></div>
+      <div class="wl"><i>&#9786;</i><b data-t="why4"></b> <span data-t="why4b"></span></div>
+      <div class="wl"><i>&#8644;</i><span data-t="why5"></span></div>
+    </div>
+    <div id="loginBox">
+      <div class="lh1" id="lgTitle"></div>
+      <div class="lh2">X CLIENT &middot; boost-top.com</div>
+      <div class="lbl" data-t="lg_login"></div>
+      <input class="tx big" id="lgLogin" type="text" maxlength="60">
+      <div class="lbl" id="lgEmailL" data-t="lg_email"></div>
+      <input class="tx big" id="lgEmail" type="text" maxlength="60">
+      <div class="lbl" data-t="lg_pass"></div>
+      <input class="tx big" id="lgPass" type="password" maxlength="60">
+      <div class="lrow"><span class="cb on" id="lgRemember"><i>&#10003;</i></span><span data-t="lg_remember"></span><a class="mut fr2" data-act="forgot" data-t="lg_forgot"></a></div>
+      <div class="lerr" id="lgErr"></div>
+      <a class="btn gold" id="lgGo" data-act="dologin"></a>
+      <div class="l2"><a class="btn" data-act="lgswitch" id="lgSwitch"></a></div>
+      <a class="guest" data-act="guest" data-t="lg_guest"></a>
+    </div>
+  </div>
+
+  <!-- ===== SERVERLAR oynasi ===== -->
+  <div class="modal" id="mdServers">
+    <div class="win">
+      <div class="wh"><img src="logo.png" alt=""><span data-t="m_servers"></span><a class="x" data-act="close">&#10005;</a></div>
+      <div class="tabs" id="srvTabs">
+        <a data-tab="internet" data-t="t_internet"></a>
+        <a data-tab="favs"><span data-t="t_favs"></span> <small id="favCnt"></small></a>
+        <a data-tab="history" data-t="t_history"></a>
+        <a data-tab="friends" data-t="t_friends"></a>
+        <a data-tab="top" data-t="t_top"></a>
+      </div>
+      <div class="wb">
+        <div id="srvTools">
+          <input id="srvSearch" type="text">
+          <a class="dd" id="fMap" data-dd="map"><span></span><i>&#9662;</i></a>
+          <a class="dd" id="fMode" data-dd="mode"><span></span><i>&#9662;</i></a>
+          <a class="chip" data-flt="ping" data-t="f_ping"></a>
+          <a class="chip" data-flt="notempty" data-t="f_notempty"></a>
+          <a class="chip" data-flt="notfull" data-t="f_notfull"></a>
+          <a class="btn red" id="quickBtn" data-act="quick"><span data-t="m_quick"></span></a>
+          <a class="btn" id="addIpBtn" data-act="addip">+ <span data-t="add_ip"></span></a>
+          <a class="btn" id="clearHist" data-act="clearhist">&#10005; <span data-t="clear_hist"></span></a>
+          <span class="mut" id="favNote" data-t="fav_note"></span>
+        </div>
+        <div id="srvHead" class="lh">
+          <span class="c0">&#9733;</span><span class="c1 sort" data-sort="name" data-t="h_server"></span><span class="c2 sort" data-sort="pl" data-t="h_players"></span><span class="c3 sort" data-sort="map" data-t="h_map"></span><span class="c4 sort" data-sort="ping" data-t="h_ping"></span><span class="c5" id="h5"></span><span class="c6" id="h6"></span>
+        </div>
+        <div id="srvList" class="lst"></div>
+        <div id="srvExtra"></div>
+        <div id="srvInfo"></div>
+      </div>
+      <div class="wf">
+        <span class="mut" id="srvFoot"></span>
+        <a class="btn" data-act="refresh"><span data-t="refresh"></span></a>
+        <a class="btn" data-act="togglefav" id="favBtn">&#9733; <span data-t="to_favs"></span></a>
+        <a class="btn red" data-act="join">&#9654; <span data-t="join"></span></a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SOZLAMALAR oynasi ===== -->
+  <div class="modal" id="mdSettings">
+    <div class="win">
+      <div class="wh"><img src="logo.png" alt=""><span data-t="m_settings"></span><a class="x" data-act="close">&#10005;</a></div>
+      <div class="tabs" id="setTabs">
+        <a data-tab="game" data-t="s_game"></a>
+        <a data-tab="keys" data-t="s_keys"></a>
+        <a data-tab="mouse" data-t="s_mouse"></a>
+        <a data-tab="sound" data-t="s_sound"></a>
+        <a data-tab="video" data-t="s_video"></a>
+        <a data-tab="demo" data-t="s_demo"></a>
+        <a data-tab="hud" data-t="s_hud"></a>
+        <a data-tab="pro" data-t="s_pro"></a>
+        <a data-tab="tools" data-t="s_tools"></a>
+        <a data-tab="cont" data-t="s_cont"></a>
+        <a data-tab="account" data-t="s_account"></a>
+        <a data-tab="system" data-t="s_system"></a>
+      </div>
+      <div class="wb" id="setBody"></div>
+      <div class="wf">
+        <span class="mut" id="setNote"></span>
+        <a class="btn" data-act="defaults" data-t="defaults"></a>
+        <a class="btn" data-act="close" data-t="cancel"></a>
+        <a class="btn red" data-act="save" data-t="save"></a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TURNIRLAR / DO'STLAR (kichik oyna) ===== -->
+  <div class="modal" id="mdSide">
+    <div class="win sm">
+      <div class="wh"><img src="logo.png" alt=""><span id="sideTitle"></span><a class="x" data-act="close">&#10005;</a></div>
+      <div class="wb" id="sideBody"></div>
+    </div>
+  </div>
+
+  <!-- ===== so'rov oynasi ===== -->
+  <div class="modal" id="mdAsk">
+    <div class="ask">
+      <div class="at" id="askT"></div>
+      <input id="askI" class="tx big" type="text">
+      <input id="askI2" class="tx big" type="password">
+      <div class="ab"><a class="btn" id="askNo" data-t="cancel"></a><a class="btn red" id="askYes">OK</a></div>
+    </div>
+  </div>
+
+  <input type="file" id="sprayFile" accept="image/*" style="position:absolute;left:-9999px;top:0;width:1px;height:1px">
+  <input type="file" id="avFile" accept="image/*" style="position:absolute;left:-9999px;top:0;width:1px;height:1px">
+  <div id="ddList"></div>
+  <div id="toast"></div>
+  <div id="dbg"></div>
+</div>
+<script src="master.js"></script>
+<script src="xc.js?v=10199700"></script>
+</body>
+</html>
