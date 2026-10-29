@@ -746,20 +746,34 @@ function pump() {
           fin();
         });
       }
-      var tm = setTimeout(function () { if (!done) viaSite(); }, 6000);
+      var tm = setTimeout(function () { if (!done) { netStat(s, 0); viaSite(); } }, 6000);
       if (!hasMM()) { clearTimeout(tm); viaSite(); return; }
       try {
         NC.matchmaking.getServerInfo(ip).then(function (r) {
           clearTimeout(tm);
           r = r || {};
-          s.prevPl = s.ok ? s.pl : null; s.ok = true; s.fail = false; s.ping = now() - t0;
+          s.prevPl = s.ok ? s.pl : null; s.ok = true; s.fail = false; s.ping = now() - t0; netStat(s, s.ping);
           s.name = clean(r.hostname) || ip; s.map = clean(r.map);
           s.pl = r.playersOnline || 0; s.max = r.playersMax || 0; s.bots = r.botsOnline || 0; s.pass = !!r.isPasswordProtected;
           fin();
-        }, function () { clearTimeout(tm); viaSite(); });
+        }, function () { clearTimeout(tm); netStat(s, 0); viaSite(); });
       } catch (e) { clearTimeout(tm); viaSite(); }
     })(queue.shift());
   }
+}
+/* server bilan aloqa sifati: so'rovlarning necha foizi javobsiz qoldi (yo'qotish) va ping qanchalik sakraydi (tebranish).
+ * Oxirgi 10 ta so'rov hisobga olinadi. Tezkor o'yin va kirishdan oldingi tekshiruv shundan foydalanadi */
+function netStat(s, ping) {
+  s.nh = (s.nh || []).concat([ping || -1]).slice(-10);
+}
+function netQual(s) {
+  var h = s.nh || [], lost = 0, ok = [], i;
+  for (i = 0; i < h.length; i++) { if (h[i] < 0) lost++; else ok.push(h[i]); }
+  var avg = 0, jit = 0;
+  for (i = 0; i < ok.length; i++) avg += ok[i];
+  avg = ok.length ? avg / ok.length : 0;
+  for (i = 0; i < ok.length; i++) jit += Math.abs(ok[i] - avg);
+  return { n: h.length, loss: h.length ? Math.round(lost * 100 / h.length) : 0, ping: Math.round(avg), jit: ok.length ? Math.round(jit / ok.length) : 0 };
 }
 function isX(s) { return PINNED.indexOf(s.ip) >= 0 || /x\s*client/i.test(s.name || ''); }
 function isFavIp(ip) { return DB.fav.indexOf(ip) >= 0; }
@@ -941,7 +955,33 @@ function connect(ip) {
   if (!ip) return;
   if (S.queue && isFull(srv(ip))) { startQueue(ip); return; }
   stopQueue();
-  doConnect(ip);
+  netCheck(ip, function () { doConnect(ip); });
+}
+/* kirishdan oldin aloqani tekshirish: serverga 3 ta qisqa so'rov (0.3 s oraliq). Yo'qotish yoki ping juda yuqori bo'lsa -
+ * o'yinchiga aytamiz (lag kutilmasdan), u baribir kirishni tanlashi mumkin. Hammasi joyida bo'lsa - darhol kiradi */
+var NC_BUSY = false;
+function netCheck(ip, go) {
+  if (NC_BUSY || CONNECTED || !hasMM() || DB.ncOff) return go();
+  NC_BUSY = true;
+  toast(T('nc_wait'), 2500);
+  var pings = [], lost = 0, n = 0;
+  function probe() {
+    var t0 = now(), done = false;
+    var tm = setTimeout(function () { if (!done) { done = true; lost++; next(); } }, 2500);
+    try {
+      NC.matchmaking.getServerInfo(ip).then(function () { if (done) return; done = true; clearTimeout(tm); pings.push(now() - t0); next(); },
+        function () { if (done) return; done = true; clearTimeout(tm); lost++; next(); });
+    } catch (e) { done = true; clearTimeout(tm); lost++; next(); }
+  }
+  function next() {
+    if (++n < 3) return setTimeout(probe, 300);
+    NC_BUSY = false;
+    var avg = 0; each(pings, function (p) { avg += p; }); avg = pings.length ? Math.round(avg / pings.length) : 0;
+    var loss = Math.round(lost * 100 / 3);
+    if (loss < 34 && avg < 180) return go();
+    ask(T(pings.length ? 'nc_bad' : 'nc_dead').replace('{p}', avg).replace('{l}', loss), go, false, false, true);
+  }
+  probe();
 }
 /* server parollari (VIP/admin, setinfo _pw): akkauntda saqlanadi, faqat SHU serverga ulanishdan oldin qo'yiladi.
  * Boshqa serverga ulanganda maydon tozalanadi - parol begona serverlarga yuborilmasin */
@@ -1186,7 +1226,7 @@ function onConsole(txt) {
 function bestServer() {
   var best = null;
   // do'stlar o'ynayotgan server, past ping va o'yinchi ko'pligi ustun
-  function score(s) { return (isX(s) ? 1000 : 0) + friendsAt(s.ip).length * 300 + Math.min(s.pl || 0, 28) * 10 - (s.ping || 300) / 4; }
+  function score(s) { var q = netQual(s); return (isX(s) ? 1000 : 0) + friendsAt(s.ip).length * 300 + Math.min(s.pl || 0, 28) * 10 - (s.ping || 300) / 4 - q.loss * 6 - q.jit / 2; }   // yo'qotish va tebranish - lag
   for (var ip in SRV) {
     var s = SRV[ip];
     if (!s.ok || s.pass || isFull(s)) continue;

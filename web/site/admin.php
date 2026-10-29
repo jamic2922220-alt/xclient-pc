@@ -390,7 +390,7 @@ if ($P === 'installs' && g('csv')) {
 
 /* ---------- sahifa ---------- */
 $NAV = array('dash' => array('Infopanel', '⌂'), 'online' => array('Onlayn', '●'), 'players' => array("O'yinchilar", '☺'), 'installs' => array("O'rnatishlar", '↓'), 'accounts' => array('Akkauntlar', '✉'),
-    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'stats' => array('Statistika', '★'), 'churn' => array('Ketganlar', '↘'), 'fb' => array('Fikrlar', '✎'), 'clips' => array('Kliplar', '▶'), 'clicks' => array('Tugmalar', '⊙'), 'menuver' => array('Menyu versiyalari', '⇅'), 'feat' => array('Funksiyalar', '◧'), 'speed' => array('Tezlik', '⚡'), 'promo' => array('Reklama', '$'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
+    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'stats' => array('Statistika', '★'), 'churn' => array('Ketganlar', '↘'), 'fb' => array('Fikrlar', '✎'), 'clips' => array('Kliplar', '▶'), 'crash' => array('Yiqilishlar', '✖'), 'clicks' => array('Tugmalar', '⊙'), 'menuver' => array('Menyu versiyalari', '⇅'), 'feat' => array('Funksiyalar', '◧'), 'speed' => array('Tezlik', '⚡'), 'promo' => array('Reklama', '$'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
 $devCount = count((array)glob(XC_DIR . '/dev/*.php')); $ncCount = count((array)glob(XC_DIR . '/nc/*.php')); $accCount = count((array)glob(XC_DIR . '/users/*.php')); $repCount = count((array)glob(XC_DIR . '/reports/*.php'));
 $fbCount = count((array)glob(XC_DIR . '/feedback/*.php'));
 $badge = array('players' => $devCount + $ncCount, 'installs' => $devCount, 'accounts' => $accCount, 'reports' => $repCount, 'fb' => $fbCount);
@@ -399,6 +399,10 @@ echo '<div class="side"><div class="brand"><span>X</span> CLIENT<small>admin pan
 foreach ($NAV as $k => $n) echo '<a href="?p=' . $k . '" class="' . ($P === $k || ($P === 'player' && $k === 'players') || ($P === 'report' && $k === 'reports') ? 'on' : '') . '"><i>' . $n[1] . '</i>' . h($n[0]) . (!empty($badge[$k]) ? '<em>' . $badge[$k] . '</em>' : '') . '</a>';
 echo '<div class="sep"></div><a href="' . h(nd_base() . 'admin') . '" target="_blank"><i>↗</i>NextClient (nDirect)</a><a href="?logout=1" class="out"><i>⏻</i>Chiqish</a></div><div class="main">';
 if (!empty($_SESSION['flash'])) { echo '<div class="flash">' . h($_SESSION['flash']) . '</div>'; unset($_SESSION['flash']); }
+/* menyu sayti kuzatuvi (xc_api.php menu_watch): buzilgan bo'lsa - har sahifa tepasida qizil ogohlantirish */
+$W = rd('watch', array());
+if (isset($W['ok']) && !$W['ok']) echo '<div class="panel" style="border-color:#ff3b3b;background:rgba(255,59,59,.12)"><div class="ph" style="color:#ff6a6a">⚠ Menyu o\'yinchilarda ochilmayapti</div>'
+    . '<div>http://mmb.boost-top.com/xc.html: ' . h($W['why']) . '</div><div class="mut small">' . dt(isset($W['since']) ? $W['since'] : $W['t']) . ' dan beri · oxirgi tekshiruv ' . dt($W['t']) . '</div></div>';
 
 /* ===== INFOPANEL ===== */
 if ($P === 'dash') {
@@ -830,6 +834,33 @@ if ($P === 'clips') {
     echo '<h1>Kliplar</h1><div class="panel"><div class="ph">O\'yinchilar ulashgan kliplar: ' . count($l) . ' ta · ' . round($mb) . ' MB <a class="btn r" href="clips.php" target="_blank">Sahifani ochish</a></div><table class="list"><tr><th>Vaqt</th><th>O\'yinchi</th><th>Server</th><th>Hajm</th><th></th></tr>';
     foreach ($l as $c) echo '<tr><td>' . dt($c['t']) . '</td><td><b>' . h($c['name']) . '</b> <span class="mut small">' . h($c['login']) . '</span></td><td>' . h($c['srv']) . '</td><td>' . h($c['mb']) . ' MB</td><td class="r"><a class="lnk" href="clips.php?v=' . h($c['id']) . '" target="_blank">▶ Ko\'rish</a> <form method="post" class="inl" onsubmit="return confirm(\'O\\\'chirilsinmi?\')">' . csrf_in() . '<input type="hidden" name="act" value="clip_del"><input type="hidden" name="id" value="' . h($c['id']) . '"><button class="lnk red">O\'chirish</button></form></td></tr>';
     if (!$l) echo '<tr><td colspan="5" class="mut">Hali yo\'q. O\'yinchilar menyu → Demo → "Ulashish" orqali yuboradi. Eng ko\'pi 300 ta saqlanadi, eskilari o\'zi o\'chadi.</td></tr>';
+    echo '</table></div>';
+}
+
+/* ===== YIQILISHLAR: launcher o'yin haqiqatan yiqilganini (Windows xato kodi, config.cfg yozilmagan) yuboradi ===== */
+if ($P === 'crash') {
+    $CN = array('c0000005' => 'Xotiraga noto\'g\'ri murojaat (ko\'pincha buzilgan model/sprayt/xarita yoki plagin)', 'c00000fd' => 'Stek to\'ldi', 'c0000409' => 'Stek buzildi',
+        'c0000374' => 'Xotira (heap) buzildi', 'c000001d' => 'Protsessor buyrug\'i yo\'q (eski protsessor)', 'c0000094' => 'Nolga bo\'lish', 'c0000017' => 'Xotira yetmadi');
+    $rows = array(); $d1 = 0; $d7 = 0; $codes = array();
+    foreach ((array)glob(XC_DIR . '/dev/*.php') as $f) {
+        $o = json_decode(substr((string)@file_get_contents($f), strlen(XC_GUARD)), true);
+        if (empty($o['cr']['t']) || time() - $o['cr']['t'] > 30 * 86400) continue;
+        $o['_d'] = basename($f, '.php'); $rows[] = $o;
+        if (time() - $o['cr']['t'] < 86400) $d1++;
+        if (time() - $o['cr']['t'] < 7 * 86400) $d7++;
+        $c = $o['cr']['c']; $codes[$c] = (isset($codes[$c]) ? $codes[$c] : 0) + 1;
+    }
+    usort($rows, function ($a, $b) { return $b['cr']['t'] - $a['cr']['t']; });
+    arsort($codes);
+    $w = rd('watch', array());
+    echo '<h1>Yiqilishlar</h1><div class="grid2"><div class="panel"><div class="ph">Oxirgi yiqilishlar</div><div>24 soatda: <b>' . $d1 . '</b> ta kompyuter · 7 kunda: <b>' . $d7 . '</b> · 30 kunda: <b>' . count($rows) . '</b></div>'
+        . '<div class="mut small" style="margin-top:6px">Faqat haqiqiy yiqilishlar (o\'yin oddiy yopilganda hisoblanmaydi). Yiqilishda launcher shu o\'yinda serverdan yuklangan fayllarni xc_backup\\crash ga oladi - "Fayllar" ustuni.</div></div>'
+        . '<div class="panel"><div class="ph">Menyu sayti</div><div>' . (isset($w['ok']) ? ($w['ok'] ? '✅ ochilyapti' : '⚠ <b>ochilmayapti</b>: ' . h($w['why'])) : 'hali tekshirilmagan') . '</div><div class="mut small">Oxirgi tekshiruv: ' . dt(isset($w['t']) ? $w['t'] : 0) . '. Har 5 daqiqada (o\'yinchilar o\'yinni ochganda yoki planirovshik orqali).</div></div></div>';
+    echo '<div class="panel"><div class="ph">Xato turlari</div><table class="list"><tr><th>Kod</th><th>Ma\'nosi</th><th>Kompyuterlar</th></tr>';
+    foreach ($codes as $c => $n) echo '<tr><td><code>0x' . h(strtoupper($c)) . '</code></td><td>' . h(isset($CN[$c]) ? $CN[$c] : '—') . '</td><td>' . $n . '</td></tr>';
+    if (!$codes) echo '<tr><td colspan="3" class="mut">30 kunda yiqilish yo\'q</td></tr>';
+    echo '</table></div><div class="panel"><div class="ph">Kompyuterlar</div><table class="list"><tr><th>Vaqt</th><th>Kompyuter</th><th>Windows</th><th>Versiya</th><th>Kod</th><th>Fayllar</th><th>Jami</th></tr>';
+    foreach (array_slice($rows, 0, 200) as $o) echo '<tr><td>' . dt($o['cr']['t']) . '</td><td><a href="?p=player&id=' . h($o['_d']) . '">' . h(substr($o['_d'], 0, 10)) . '</a></td><td>' . h(isset($o['os']) ? $o['os'] : '') . '</td><td>' . h(isset($o['ver']) ? $o['ver'] : '') . '</td><td><code>0x' . h(strtoupper($o['cr']['c'])) . '</code></td><td>' . (int)$o['cr']['n'] . '</td><td>' . (int)(isset($o['crn']) ? $o['crn'] : 1) . '</td></tr>';
     echo '</table></div>';
 }
 

@@ -1830,6 +1830,24 @@ static DWORD WINAPI cache_maint(LPVOID unused)
     ini_set_int(L"cachemb", (int)cache_mb());
     return 0;
 }
+/* exe ochilmadi (o'yin yoki yangilangan launcher). Ko'pincha sabab - antivirus faylni to'xtatgan yoki karantinga olgan:
+ * o'yinchiga nima qilishni aniq aytamiz (aks holda "launcher ochilmayapti" deyishadi va sababini bilishmaydi) */
+static void start_failed(const wchar_t *exe, DWORD err)
+{
+    const wchar_t *nm = wcsrchr(exe, L'\\'); nm = nm ? nm + 1 : exe;
+    wchar_t m[900];
+    if (err == 225 || err == 226 || err == ERROR_ACCESS_DENIED || err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND || err == 1260)
+        _snwprintf(m, 900, L"%s ni ochib bo‘lmadi (xato %lu). Ko‘pincha sabab - antivirus faylni to‘xtatgan yoki karantinga olgan.\n\n"
+            L"Tuzatish: antivirusni oching → «Karantin» → %s ni toping → «Tiklash» va «Istisnolarga qo‘shish». Keyin X CLIENT ni qayta oching.\n\n"
+            L"Не удалось запустить %s (ошибка %lu). Обычно файл заблокировал или поместил в карантин антивирус.\n"
+            L"Откройте антивирус → «Карантин» → найдите %s → «Восстановить» и «Добавить в исключения», затем снова откройте X CLIENT.",
+            nm, (unsigned long)err, nm, nm, (unsigned long)err, nm);
+    else _snwprintf(m, 900, L"%s ni ochib bo‘lmadi (xato %lu). Kompyuterni qayta yoqib ko‘ring.\n\nНе удалось запустить %s (ошибка %lu). Перезагрузите компьютер.",
+            nm, (unsigned long)err, nm, (unsigned long)err);
+    m[899] = 0;
+    MessageBoxW(NULL, m, L"X CLIENT", MB_ICONWARNING | MB_SETFOREGROUND);
+}
+
 /* qaytaradi TRUE - o'yin yiqildi va o'yinchi "qayta ochish" ni tanladi */
 static BOOL run_game(void)
 {
@@ -1908,7 +1926,7 @@ static BOOL run_game(void)
         fetch_opts();
         if (o_ok && o_shots) upload_shots();
         CloseHandle(pi.hProcess);
-    }
+    } else start_failed(exe, GetLastError());
     return again;
 }
 
@@ -2132,6 +2150,7 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, LPWSTR cmdline, int show)
             CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
             return 0;
         }
+        start_failed(g_self, GetLastError());          /* yangi launcher ochilmadi - o'yin shu (eski) nusxa bilan ochiladi */
     }
     if (g_play) { int tries = 0; while (run_game() && ++tries < 3) ; }   /* yiqilsa - o'yinchi xohlasa qayta ochiladi */
     CoUninitialize();

@@ -456,6 +456,43 @@ function touch_device(&$u) {
 
 ensure_dir();
 $a = p('a');
+/* ---- menyu saytini kuzatish: o'yin brauzeri menyuni http://mmb.boost-top.com/xc.html dan ochadi.
+ * Bu manzil yo'naltirilsa (masalan, boost-top.com yangilanganda qo'shilgan "https ga" qoidasi) yoki ochilmasa - menyu hammada qora bo'lib qoladi.
+ * Launcherlar 'hello' da (o'yinchilar o'yinni ochganda) va FastPanel planirovshigi ?a=watch orqali eng ko'pi 5 daqiqada bir tekshiradi;
+ * holat o'zgarsa (buzildi / tuzaldi) - admin Telegram'iga xabar. */
+function menu_watch() {
+    $st = rd('watch', array('t' => 0, 'ok' => 1, 'why' => ''));
+    if (time() - $st['t'] < 300) return $st;
+    $st['t'] = time(); wr('watch', $st);                 // boshqa so'rovlar bir vaqtda tekshirmasin
+    $why = '';
+    $ctx = stream_context_create(array('http' => array('method' => 'GET', 'timeout' => 4, 'follow_location' => 0, 'ignore_errors' => true,
+        'header' => "User-Agent: XClient-watch\r\nCache-Control: no-cache\r\n")));
+    $body = @file_get_contents('http://mmb.boost-top.com/xc.html?w=' . time(), false, $ctx);
+    if ($body === false && empty($http_response_header)) {   // server o'z domenini ichkaridan ocholmasa - to'g'ridan-to'g'ri o'ziga (Host bilan)
+        $ctx = stream_context_create(array('http' => array('method' => 'GET', 'timeout' => 4, 'follow_location' => 0, 'ignore_errors' => true,
+            'header' => "Host: mmb.boost-top.com\r\nUser-Agent: XClient-watch\r\n")));
+        $body = @file_get_contents('http://127.0.0.1/xc.html?w=' . time(), false, $ctx);
+        if ($body === false && empty($http_response_header)) return $st;   // tekshirib bo'lmadi - "buzilgan" demaymiz
+    }
+    $code = 0; $loc = '';
+    foreach ((array)(isset($http_response_header) ? $http_response_header : array()) as $hl) {
+        if (preg_match('#^HTTP/\S+\s+(\d{3})#', $hl, $m)) $code = (int)$m[1];
+        if (stripos($hl, 'Location:') === 0) $loc = trim(substr($hl, 9));
+    }
+    if ($body === false && !$code) $why = 'sayt javob bermadi';
+    elseif ($code >= 300 && $code < 400) $why = 'yo\'naltirilyapti (' . $code . ') -> ' . $loc . ' . Sabab ko\'pincha: boost-top.com yoki FastPanel\'dagi "https ga yo\'naltirish". mmb papkasidagi .htaccess ni tekshiring';
+    elseif ($code !== 200) $why = 'xato ' . $code;
+    elseif (strpos((string)$body, 'id="app"') === false) $why = 'sahifa buzilgan (menyu kodi topilmadi)';
+    $ok = $why === '' ? 1 : 0;
+    if ($ok !== (int)$st['ok']) {
+        $c = xc_cfg();
+        if (!empty($c['tg_chat'])) tg_send($c['tg_chat'], $ok ? "✅ X CLIENT menyusi yana ochilyapti." : "⚠️ X CLIENT menyusi o'yinchilarda OCHILMAYAPTI!\nhttp://mmb.boost-top.com/xc.html: " . $why);
+    }
+    $st = array('t' => time(), 'ok' => $ok, 'why' => $why, 'since' => $ok !== (int)$st['ok'] ? time() : (isset($st['since']) ? $st['since'] : time()));
+    wr('watch', $st);
+    return $st;
+}
+if ($a === 'watch') { header('Content-Type: text/plain'); header('Cache-Control: no-store'); $w = menu_watch(); echo $w['ok'] ? "ok\n" : 'BUZILGAN: ' . $w['why'] . "\n"; exit; }
 /* menyu qaysi versiyani ochsin: beta testerlarga - beta, boshqalarga - barqaror (ver.txt). Tez javob: boshqa ishlarsiz */
 if ($a === 'menuver') {
     header('Content-Type: text/plain'); header('Cache-Control: no-store');
@@ -1630,6 +1667,7 @@ case 'opts_done':
     if ($a === 'hello') {
         if (!preg_match('/^[a-z0-9]{8,40}$/', $d)) fail('dev', 'device');
         geo_cc(client_ip());                               // qulfdan oldin - keyin keshdan olinadi
+        menu_watch();                                      // qulfdan oldin, 5 daqiqada bir: menyu sayti ochilyaptimi (ochilmasa - Telegram)
         lock();
         $o = rd('dev/' . $d, array());
         $isNew = empty($o['first']) && empty($o['seen']);  // birinchi marta ko'rinayotgan kompyuter = yangi o'rnatish
