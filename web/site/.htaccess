@@ -1,4 +1,11 @@
 # X CLIENT menyusi: siqish (gzip) va kesh.
+
+# MUHIM: o'yin brauzeri (CEF1, Chrome 17) zamonaviy https ni ocholmaydi - menyu HTTP da ochilishi shart.
+# Yuqori papkadagi (boost-top.com) .htaccess dagi "https ga yo'naltirish" qoidalari bu papkaga ta'sir qilmasin:
+# o'z RewriteEngine'imiz bo'lsa, Apache yuqoridagi Rewrite qoidalarini bu yerga meros qilib olmaydi.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+</IfModule>
 # xc.js / xc.css / xc_lang.js "?v=versiya" bilan chaqiriladi - uzoq keshlanadi, versiya o'zgarsa yangisi olinadi.
 # xc.html / index.html 7 kun keshlanadi: sayt vaqtincha ishlamasa ham o'yin menyuni xotiradan ochadi.
 # Yangilanish baribir ko'rinadi - sahifa har ochilganda ver.txt ni yangidan so'raydi va kerak bo'lsa o'zini almashtiradi.
