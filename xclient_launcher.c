@@ -1893,8 +1893,9 @@ static BOOL run_game(void)
         tune_end();
         DWORD code = 0; GetExitCodeProcess(pi.hProcess, &code);
         rec_session_end();
-        if (crash_code(code)) {
-            int n = crash_fix(((ULONGLONG)ft0.dwHighDateTime << 32) | ft0.dwLowDateTime);
+        ULONGLONG t0 = ((ULONGLONG)ft0.dwHighDateTime << 32) | ft0.dwLowDateTime;
+        if (game_crashed(code, t0)) {
+            int n = crash_fix(t0);
             wchar_t w[24], m[640]; _snwprintf(w, 24, L"%lx~%d", (unsigned long)code, n); w[23] = 0; ini_str(L"t_cr", w);
             BOOL ru = !strncmp(g_lang, "ru", 2);
             if (n) _snwprintf(m, 640, ru ? L"Игра неожиданно закрылась (ошибка 0x%08lX).\n\nX CLIENT убрал %d файл(ов), скачанных с сервера перед вылетом: они могли быть повреждены. При следующем входе сервер отдаст их заново.\n\nОткрыть игру снова?"

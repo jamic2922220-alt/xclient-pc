@@ -141,6 +141,26 @@ static void dvr_off(void)                     /* faqat o'yinchi menyuda "O'chiri
     RegCloseKey(k);
 }
 
+/* ---------------- o'yin yiqildimi yoki oddiy yopildimi ----------------
+ * CS 1.6 oddiy yopilganda ham (Выход, quit, oynani yopish) ko'pincha oxirida 0xC0000005 bilan tugaydi - o'yinchi buni sezmaydi.
+ * Lekin oddiy chiqishda o'yin avval sozlamalarni config.cfg ga yozadi, keyin yopiladi; haqiqiy yiqilishda config.cfg yozilmaydi.
+ * Shuning uchun: xato kodi bor, lekin config.cfg o'yin tugashidan oldingi 30 soniyada yozilgan bo'lsa - bu oddiy chiqish. */
+static BOOL crash_code(DWORD code);
+static BOOL cfg_written_since(ULONGLONG from)
+{
+    wchar_t p[MAX_PATH]; WIN32_FILE_ATTRIBUTE_DATA fa;
+    path_join(p, g_dir, L"cstrike\\config.cfg");
+    if (!GetFileAttributesExW(p, GetFileExInfoStandard, &fa)) return FALSE;
+    return (((ULONGLONG)fa.ftLastWriteTime.dwHighDateTime << 32) | fa.ftLastWriteTime.dwLowDateTime) >= from;
+}
+static BOOL game_crashed(DWORD code, ULONGLONG t0)
+{
+    if (!crash_code(code)) return FALSE;
+    FILETIME nf; GetSystemTimeAsFileTime(&nf);
+    ULONGLONG now = ((ULONGLONG)nf.dwHighDateTime << 32) | nf.dwLowDateTime, from = now - 30ULL * 10000000;
+    return !cfg_written_since(from > t0 ? from : t0);
+}
+
 /* ---------------- o'yin seansi ---------------- */
 static void tune_begin(void)
 {
