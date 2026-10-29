@@ -9,6 +9,7 @@ done
 V=$(curl -s "$H/xc_api.php?a=menuver" | tr -d '\r\n '); echo "menuver=$V" >> $O/summary.txt
 for f in index.html xc.js xc.css xc_lang.js; do curl -s -o /dev/null -w "%{http_code} %{size_download}B rel/$V/$f\n" "$H/rel/$V/$f" >> $O/summary.txt; done
 curl -s "$H/rel/$V/xc.js" | grep -c "newsBox\|netCheck\|rsk_of\|rk3" >> $O/summary.txt
-# npm skip
-# load skip
+npm i -s playwright@1.47.2 >/dev/null 2>&1 && npx playwright install --with-deps chromium >/dev/null 2>&1
+node diag/load.js >> $O/summary.txt 2>&1
 # 06:58:59
+# 07:02:33
