@@ -1924,6 +1924,7 @@ static BOOL run_game(void)
             again = MessageBoxW(NULL, m, L"X CLIENT", MB_YESNO | MB_ICONWARNING | MB_SETFOREGROUND) == IDYES;
         }
         cache_maint(NULL);                           /* o'yin yopilgach: yuklangan fayllarni o'yin ishlatayotgan paytda o'chirmaymiz */
+        vthumb_start(0);                             /* "Mening videolarim" ko'rinishlari - o'yin yopilgach (o'yin paytida qotirardi) */
         fetch_opts();
         if (o_ok && o_shots) upload_shots();
         CloseHandle(pi.hProcess);
@@ -2173,6 +2174,7 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, LPWSTR cmdline, int show)
         start_failed(g_self, GetLastError());          /* yangi launcher ochilmadi - o'yin shu (eski) nusxa bilan ochiladi */
     }
     if (g_play) { int tries = 0; while (run_game() && ++tries < 3) ; }   /* yiqilsa - o'yinchi xohlasa qayta ochiladi */
+    for (int i = 0; i < 1200 && g_vth_run; i++) Sleep(100);   /* videolar ko'rinishi tugasin (2 daqiqagacha), launcher oynasiz turadi */
     CoUninitialize();
     return 0;
 }

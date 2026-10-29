@@ -901,3 +901,6 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 @-webkit-keyframes k_nmq { from { -webkit-transform: translateX(0); } to { -webkit-transform: translateX(-100%); } }
 @-webkit-keyframes k_npulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 .lowfx #bNews .ntg i { -webkit-animation: none; }
+
+/* serverda (ESC menyusi o'yin ustida yoki yashirin) - hech qanday animatsiya yo'q: o'yin brauzeri har kadrda qayta chizib, o'yin FPS'ini tushirardi */
+.lowfx *, .lowfx *:before, .lowfx *:after { -webkit-animation: none !important; animation: none !important; -webkit-transition: none !important; transition: none !important; }

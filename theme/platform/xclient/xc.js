@@ -57,6 +57,8 @@ function hasMM() { return !!(NC && NC.matchmaking && NC.matchmaking.getServerInf
 function canRead() { return !!(NC && typeof NC.getCvarValue === 'function'); }
 function ncHas(cv) { if (!canRead()) return true; var v = readCvar(cv); return v != null && v !== ''; }   // NextClient 2.5 da yo'q, 2.6 da bor sozlamalar
 function radarNC() { return ncHas('hud_radar_scale'); }
+var NCH = {};
+function ncHasC(cv) { if (!(cv in NCH)) NCH[cv] = ncHas(cv); return NCH[cv]; }   // natija eslab qolinadi (har saqlashda o'yindan qayta so'ramaymiz)
 /* oddiy kompyuter (launcher bilan bir xil qoida): F9 buferi o'yinchi o'zi yoqmasa - o'chiq */
 function verGE(a, b) { a = String(a || '0').split('.'); b = String(b).split('.'); for (var i = 0; i < 3; i++) { var x = +a[i] || 0, y = +b[i] || 0; if (x !== y) return x > y; } return true; }
 function pcWeak() { return !!(HW && ((HW.cpu && HW.cpu < 4) || (HW.ram && HW.ram < 6144))); }
@@ -1297,6 +1299,7 @@ function newsBox() {
 function renderAnn() {
   var el = newsBox(); if (!el) return;
   clearTimeout(ANN_TM);
+  if (playing() && el.innerHTML) { ANN_TM = setTimeout(renderAnn, 8000); return; }   // o'yin paytida sahifani o'zgartirmaymiz (qayta chizish - FPS)
   if (!ANN.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = '';
   ANN_I = (ANN_I + 1) % ANN.length;
@@ -1935,14 +1938,18 @@ function settingsCmds(s) {
   /* o'q tekkan joydagi tutun/chang va gilzalar - standart: ular o'q qayerga ketayotganini ko'rsatadi (otdachani boshqarish uchun).
    * 0 qilinganda o'yinchilar "qurol sochilib ketyapti" deyishdi */
   c.push('max_shells 120', 'max_smokepuffs 120');
-  c.push('hud_radar_scale ' + (s.rscale / 100), 'hud_radar_opacity ' + s.ropac, 'hud_radar_names ' + s.rnames, 'hud_radar_health ' + s.rhp);
-  c.push('hud_radar_mode ' + s.rmode, 'hud_radar_round ' + s.rround, 'hud_radar_rotate ' + s.rrot, 'hud_radar_map_scale ' + s.rmap);
-  c.push('viewmodel_offset_x ' + s.vmx, 'viewmodel_offset_y ' + s.vmy, 'viewmodel_offset_z ' + s.vmz, 'viewmodel_disable_shift ' + s.vmshift,
+  /* NextClient'ning qo'shimcha sozlamalari (radar, qurol joylashuvi, kamera, Discord): bu versiyada bo'lmaganlari yuborilmaydi -
+   * aks holda konsol har safar "Unknown command" bilan to'lib ketardi */
+  var x = [];
+  x.push('hud_radar_scale ' + (s.rscale / 100), 'hud_radar_opacity ' + s.ropac, 'hud_radar_names ' + s.rnames, 'hud_radar_health ' + s.rhp);
+  x.push('hud_radar_mode ' + s.rmode, 'hud_radar_round ' + s.rround, 'hud_radar_rotate ' + s.rrot, 'hud_radar_map_scale ' + s.rmap);
+  x.push('viewmodel_offset_x ' + s.vmx, 'viewmodel_offset_y ' + s.vmy, 'viewmodel_offset_z ' + s.vmz, 'viewmodel_disable_shift ' + s.vmshift,
     'cl_bobstyle ' + s.bobst, 'viewmodel_lag_style ' + s.lagst, 'camera_movement_interp ' + (s.camint ? 0.1 : 0));
-  c.push('cl_rollangle ' + s.roll, 'cl_rollspeed ' + s.rollspd, 'cl_bobamt_vert ' + s.bobv, 'cl_bobamt_lat ' + s.bobl, 'cl_bob_lower_amt ' + s.boblow, 'cl_bob_camera ' + s.bobcam,
+  x.push('cl_rollangle ' + s.roll, 'cl_rollspeed ' + s.rollspd, 'cl_bobamt_vert ' + s.bobv, 'cl_bobamt_lat ' + s.bobl, 'cl_bob_lower_amt ' + s.boblow, 'cl_bob_camera ' + s.bobcam,
     'viewmodel_lag_scale ' + s.lagsc, 'viewmodel_lag_speed ' + s.lagsp, 'fov_lerp ' + s.fovlerp, 'camera_movement_scale ' + s.camsc);
-  c.push('hud_radar_tracks ' + s.rtracks, 'hud_radar_fullmap ' + s.rfull, 'hud_radar_bg ' + s.rbg, 'hud_radar_allies ' + s.rallies, 'hud_radar_name_size ' + s.rns,
+  x.push('hud_radar_tracks ' + s.rtracks, 'hud_radar_fullmap ' + s.rfull, 'hud_radar_bg ' + s.rbg, 'hud_radar_allies ' + s.rallies, 'hud_radar_name_size ' + s.rns,
     'hud_radar_health_size ' + s.rhs, 'hud_deathnotice_time ' + s.dtime, 'cl_discordrpc ' + s.drpc, 'cl_discordrpc_server ' + s.drpcs, 'cl_discordrpc_join ' + s.drpcj);
+  each(x, function (k) { if (ncHasC(k.split(' ')[0])) c.push(k); });
   if (s.buykeys) each(BUY, function (b) { c.push('bind ' + b[0] + ' ' + q(b[1])); });
   /* cl_filterstuffcmd faqat demo ko'rilayotganda 1: aks holda server menyularining bandlari (server o'yinchiga buyruq yuboradi) ishlamaydi.
    * Eski menyu demodan keyin uni 1 da qoldirib ketardi - har ochilishda tuzatiladi */
