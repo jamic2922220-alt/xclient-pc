@@ -538,9 +538,9 @@ if ($a === 'vq') {
     $d = strtolower(p('d'));
     $o = preg_match('/^[a-z0-9]{8,40}$/', $d) ? rd('dev/' . $d, array()) : array();
     // "sifat mikrofon bufer": eski launcher faqat birinchi so'zni o'qiydi
-    // "sifat mikrofon bufer radar": bufer faqat o'yinchi o'zi yoqqan bo'lsa (rbx) - orqa fonda doim yozish ba'zi kompyuterlarda o'yinni qotirardi
+    // "sifat mikrofon bufer radar": F9 buferi (orqa fonda doim yozish) hammada o'chiq - o'yinni qotirardi
     echo (isset($o['vq']) && in_array($o['vq'], array('hi', 'mid', 'low'), true) ? $o['vq'] : 'mid'), ' ', empty($o['mic']) ? 0 : 1, ' ',
-        empty($o['rbx']) ? 0 : (isset($o['rb']) && !$o['rb'] ? 0 : 1), ' ', rsk_of($o);
+        0, ' ', rsk_of($o);
     exit;
 }
 /* ---- klip ulashish: menyu 'share' buyrug'i chipta (tk) yaratadi, launcher videoni bo'laklab yuklaydi ----

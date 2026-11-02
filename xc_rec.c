@@ -1176,11 +1176,10 @@ static DWORD WINAPI rec_hotkey_thread(LPVOID unused)
     MSG m;
     PeekMessageW(&m, NULL, WM_USER, WM_USER, PM_NOREMOVE);              /* navbat yaratilsin */
     BOOL reg = RegisterHotKey(NULL, 0xC10, 0x4000 /* MOD_NOREPEAT */, REC_HOTKEY);
-    BOOL reg9 = RegisterHotKey(NULL, 0xC09, 0x4000, VK_F9);
+    BOOL reg9 = FALSE;                                                  /* F9 (oxirgi 30 soniya) o'chirilgan - orqa fonda doim yozish o'yinni qotirardi */
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
-    g_rb = !pc_weak();                                                  /* internet bo'lmasa: oddiy kompyuterda bufer o'chiq */
-    rec_quality();                                                      /* bufer yoqilganmi (menyu > Demo) */
-    g_buf_want = g_rb; g_buf_fail = 0;
+    rec_quality();
+    g_rb = 0; g_buf_want = 0; g_buf_fail = 0;                           /* F9 buferi hammada o'chiq */
     SetTimer(NULL, 0, 8000, NULL);                                      /* o'yin ochilib, to'liq ekranga o'tgach - bufer */
     while (GetMessageW(&m, NULL, 0, 0) > 0) {
         if (m.hwnd) { TranslateMessage(&m); DispatchMessageW(&m); continue; }   /* ekrandagi belgi oynasi */
@@ -1348,7 +1347,7 @@ static void vid_exec(const char *line)
     if (!strcmp(c, "share")) sscanf(line, "%*s %*s %39s", tk);
     if (!strcmp(c, "clip")) { if (g_buf_run) InterlockedExchange(&g_clip_req, 1); return; }   /* menyu: avtomatik klip (3+ kill) */
     if (!strcmp(c, "opt")) {                           /* menyuda bufer/mikrofon o'zgardi */
-        rec_quality(); g_buf_want = g_rb;
+        rec_quality(); g_rb = 0; g_buf_want = 0;
         if (!g_rb) buf_stop(); else PostThreadMessageW(g_hk_tid, WM_REC_STATE, 100, 0);
         return;
     }

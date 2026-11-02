@@ -62,7 +62,7 @@ function ncHasC(cv) { if (!(cv in NCH)) NCH[cv] = ncHas(cv); return NCH[cv]; }  
 /* oddiy kompyuter (launcher bilan bir xil qoida): F9 buferi o'yinchi o'zi yoqmasa - o'chiq */
 function verGE(a, b) { a = String(a || '0').split('.'); b = String(b).split('.'); for (var i = 0; i < 3; i++) { var x = +a[i] || 0, y = +b[i] || 0; if (x !== y) return x > y; } return true; }
 function pcWeak() { return !!(HW && ((HW.cpu && HW.cpu < 4) || (HW.ram && HW.ram < 6144))); }
-function rbOn() { return !!(OPTS && OPTS.rbx && OPTS.rb); }   // F9 (oxirgi 30 soniya) faqat o'yinchi o'zi yoqsa: orqa fonda doim yozish o'yinni qotirishi mumkin   // xaritali radar sozlamalari o'yinda bormi
+function rbOn() { return false; }   // F9 (oxirgi 30 soniya) hammada o'chiq: orqa fonda doim yozish o'yinni qotirardi
 function readCvar(n) { if (!canRead()) return null; try { var v = NC.getCvarValue(n); return v == null ? null : String(v); } catch (e) { return null; } }
 function cmd(c) {
   dbg('exec: ' + c);
@@ -2770,9 +2770,9 @@ var PANES = {
         '<a class="btn vcut" data-vtrim="' + esc(v.n) + '" data-vsec="' + sec + '" title="' + esc(T('vd_trim')) + '">' + ico('cut') + '</a>' +
         '<a class="btn red" data-vopen="' + esc(v.n) + '">' + ico('play') + ' ' + esc(T('vd_open')) + '</a></div>';
     });
-    return '<div class="pane l"><div class="f10box big2"><b>' + esc(T('f10_t')) + '</b>' + esc(T('f10_1')) + '<br>' + esc(T('f10_2')) + '<br>' + esc(T('f9_1')) + '<br>' + esc(T('f10_3')) + '</div>' +
+    return '<div class="pane l"><div class="f10box big2"><b>' + esc(T('f10_t')) + '</b>' + esc(T('f10_1')) + '<br>' + esc(T('f10_2')) + '<br>' + esc(T('f10_3')) + '</div>' +
       '<div class="ph2 m">' + esc(T('vq_title')) + '</div><div class="big vqb">' + vqs + '</div>' +
-      vtg('rb', rbOn(), 'vb_rb', OPTS.rbx || !pcWeak() ? 'vb_rb2' : 'vb_rbw') + vtg('acl', DB.acl !== 0, 'vb_acl', 'vb_acl2') + vtg('mic', OPTS && OPTS.mic, 'vb_mic', 'vb_mic2') + vtg('gsum', DB.gsum !== 0, 'gs_tg', 'gs_tg2') + '</div>' +
+      vtg('mic', OPTS && OPTS.mic, 'vb_mic', 'vb_mic2') + vtg('gsum', DB.gsum !== 0, 'gs_tg', 'gs_tg2') + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('vd_title')) + ' <a class="btn vfold" data-vfold="1">' + ico('folder') + ' ' + esc(T('vd_folder')) + '</a></div>' +
       '<div class="dml dml2">' + (rows || '<div class="empty">' + esc(T(PCID ? 'vd_none' : 'sy_nolaunch')) + '</div>') + '</div>' +
       '<div class="mut" style="font-size:12px;margin-top:8px">' + esc(T('vd_note')) + '</div></div>';
@@ -3720,7 +3720,7 @@ step('seedFromGame();', function () { seedFromGame(); });
 // saqlangan sozlamalar har ochilishda qayta qo'yiladi: sborkaning userconfig.cfg / eski xclient_launcher.cfg ularni o'zgartirib yuboradi
 step('demo', function () { if (DB.dplay && now() - DB.dplay.t < 600000) { DEMO_PLAY = true; DEMO_CUR = DB.dplay.n; } });   // demo paytida menyu qayta yuklandi
 step('f10', function () {                          // F10 (video) va F9 (oxirgi 30 soniya) - launcher ushlaydi; o'yinda zararsiz bo'lsin
-  each(['F10', 'F9'], function (key) {
+  each(['F10'], function (key) {
     var used = false; for (var a in BINDS) if (BINDS.hasOwnProperty(a) && (BINDS[a] === key || BINDS2[a] === key)) used = true;
     if (!used) { cmd('alias xc_' + key.toLowerCase() + ' "echo X CLIENT: ' + key + ' - video (launcher)"'); cmd('bind ' + key + ' xc_' + key.toLowerCase()); }
   });
