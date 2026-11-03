@@ -918,3 +918,11 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .rgo { padding: 14px; margin: 12px 0; border: 1px solid #f5c518; background: #2a2108; text-align: center; }
 .rgo b { display: block; font-size: 18px; color: #f5c518; margin-bottom: 6px; }
 .rgo p { margin: 0 0 10px; }
+
+/* o'ng tomondagi qahramonlar rasmi: kartalar ostida, bosilmaydi */
+#hero { position: absolute; right: 0; bottom: 52px; width: 480px; height: 585px; pointer-events: none; }
+#hero img { position: absolute; right: 0; bottom: 0; width: 480px; height: 585px; }
+#hero .hglow { position: absolute; left: 40px; top: 120px; width: 440px; height: 440px; border-radius: 220px;
+  background: -webkit-radial-gradient(center, circle, rgba(255,40,40,0.22) 0%, rgba(255,40,40,0.08) 45%, rgba(255,40,40,0) 70%); }
+#col { z-index: 2; }
+.lite #hero, .gate #hero { display: none; }

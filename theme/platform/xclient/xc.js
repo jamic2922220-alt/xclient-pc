@@ -257,6 +257,17 @@ function fxVisible() {
   if (curModal || document.webkitHidden) return false;
   return uiShown();
 }
+/* o'ng tomondagi qahramonlar: sekin suzadi va nafas oladi. CEF1 har kadrni protsessorda chizadi - shuning uchun
+ * sekundiga ~15 kadr, faqat menyu ko'rinib turganda, oyna ochiq emas va effektlar yoqiq bo'lsa (o'yinda/kuchsiz PC da - qimirlamaydi) */
+var HERO_T0 = now(), HERO_I = null, HERO_G = null;
+function heroTick() {
+  var h = $('hero'); if (!h || !HERO_I) { if (h) { HERO_I = h.getElementsByTagName('img')[0]; HERO_G = h.getElementsByTagName('div')[0]; } return; }
+  if (lowFx() || !fxVisible()) return;
+  var t = (now() - HERO_T0) / 1000, y = Math.sin(t * 0.55) * 7, x = Math.sin(t * 0.31) * 3, sc = 1 + Math.sin(t * 0.55 + 1) * 0.008;
+  HERO_I.style.webkitTransform = 'translate(' + x.toFixed(2) + 'px,' + y.toFixed(2) + 'px) scale(' + sc.toFixed(4) + ')';
+  HERO_G.style.opacity = (0.75 + Math.sin(t * 0.9) * 0.25).toFixed(3);
+}
+setInterval(heroTick, 66);
 /* menyu foni (rang) va zarrachalar: uchqun / qor / yo'q. Bayramlarda o'zi bezanadi (Yangi yil - qor, Navro'z, Mustaqillik) */
 var BGS = { def: '', blue: '#0d2a4a 0%, #0b1526 30%, #080c16 60%, #05070c 100%', purple: '#3a0d4a 0%, #1f0b2a 30%, #110a18 60%, #08060c 100%',
   green: '#0d3a1e 0%, #0b1f12 30%, #0a120d 60%, #060a07 100%', dark: '#1a1a1f 0%, #111114 30%, #0b0b0d 60%, #060607 100%', sand: '#4a3410 0%, #2a1e0b 30%, #16100a 60%, #0a0806 100%' };
