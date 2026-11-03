@@ -1,9 +1,8 @@
 #!/bin/bash
 O=diag/out; mkdir -p $O; : > $O/summary.txt
-UA="Dalvik/2.1.0 (Linux; U; Android 11; SM-A125F Build/RP1A.200720.012)"
-for u in /servers.php /mobile.json /stats.php /ms.php?q=x /flag.php?c=uz /mobile/cs16_data.zip /xc.html; do
-  echo "== http $u" >> $O/summary.txt
-  curl -s -A "$UA" -o /tmp/b -D - --max-time 30 -r 0-300 "http://mmb.boost-top.com$u" | head -12 >> $O/summary.txt
-  echo "-- body: $(head -c 300 /tmp/b | tr -d '\0' | tr '\n' ' ')" >> $O/summary.txt
+echo "dns: $(getent hosts mmb.boost-top.com boost-top.com | tr '\n' ' ')" >> $O/summary.txt
+for u in http://mmb.boost-top.com/xc.html http://mmb.boost-top.com/servers.php https://boost-top.com/ http://boost-top.com/; do
+  echo "== $u: $(curl -sS -o /dev/null --max-time 25 -w '%{http_code} %{time_total}s ip=%{remote_ip} -> %{redirect_url}' "$u" 2>&1 | tr '\n' ' ')" >> $O/summary.txt
 done
-echo "== https mobile.json: $(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' https://mmb.boost-top.com/mobile.json)" >> $O/summary.txt
+echo "ping: $(ping -c 3 -W 3 mmb.boost-top.com 2>&1 | tail -2 | tr '\n' ' ')" >> $O/summary.txt
+echo "tcp80: $(timeout 10 bash -c 'echo > /dev/tcp/mmb.boost-top.com/80' && echo open || echo closed)" >> $O/summary.txt
