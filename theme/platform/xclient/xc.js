@@ -380,7 +380,7 @@ var STATE_SYNCED = false, STATE_TM = 0;
 function stateData() {
   var h = [];
   each((DB.hist || []).slice(0, 50), function (x) { h.push({ ip: x.ip, name: x.name, map: x.map, t: x.t, d: x.d, k: x.k, x: x.x }); });
-  return { token: DB.forget ? '' : (DB.token || ''), fav: DB.fav.slice(0, 100), hist: h, binds: DB.binds || null, binds2: DB.binds2 || null, lang: DB.lang || '', wnSeen: DB.wnSeen || '', dnd: DB.dnd ? 1 : 0, acx: DB.acx ? 1 : 0, pxx: DB.pxx || 0, demos: (DB.demos || []).slice(0, 40) };
+  return { token: DB.forget ? '' : (DB.token || ''), fav: DB.fav.slice(0, 100), hist: h, binds: DB.binds || null, binds2: DB.binds2 || null, lang: DB.lang || '', wnSeen: DB.wnSeen || '', dnd: DB.dnd ? 1 : 0, acx: DB.acx ? 1 : 0, pxx: DB.pxx || 0, tour: DB.tour ? 1 : 0, rgo: DB.rgo || 0, rgn: DB.rgn || 0, demos: (DB.demos || []).slice(0, 40) };
 }
 function statePush() {
   if (!PCID || !STATE_SYNCED) return;
@@ -400,6 +400,8 @@ function stateSync() {
     if (DB.dnd == null && st.dnd) { DB.dnd = 1; ch = true; }
     if (!DB.acx && st.acx) { DB.acx = 1; ch = true; }
     if (!DB.pxx && st.pxx) { DB.pxx = st.pxx; ch = true; }
+    if (!DB.tour && st.tour) { DB.tour = 1; ch = true; }
+    if (!DB.rgo && st.rgo) { DB.rgo = st.rgo; DB.rgn = st.rgn || 0; ch = true; }
     if ((!DB.demos || !DB.demos.length) && st.demos && st.demos.length) { DB.demos = st.demos; ch = true; }   // demolar ro'yxati qayta kirganda yo'qolmasin
     STATE_SYNCED = true;
     if (!DB.token && st.token) {
@@ -465,6 +467,8 @@ function claimDaily() {
     if (r.chests != null) { ME.chests = r.chests; renderBar(); }
     if (r.yday && !DB.dnd) setTimeout(function () { if (!curModal) showYesterday(r.yday); }, 2500);
     if (!DB.dnd) { toast(T('dl_ok').replace('{n}', r.got).replace('{d}', r.streak), 7000); sfx('save'); }
+    if (r.d2) setTimeout(function () { toast(T('d2_got'), 9000); sfx('save'); }, 8000);
+    else if (r.tmr) setTimeout(function () { toast(T('d2_tmr'), 8000); }, 8000);
   });
 }
 /* jang statistikasi qo'shilgunga qadar o'ynalgan o'yinlar (shu kompyuter tarixidan) - akkauntga BIR MARTA qo'shiladi */
@@ -1196,6 +1200,7 @@ function onDisconnectEvt() {
   var fin = CUR;
   if (fin && !DEMO_PLAY) { VIDS_T = 0; setTimeout(vidsRefresh, 2000); }
   if (fin && !DEMO_PLAY) setTimeout(function () { if (!CONNECTED && !DEMO_PLAY) gameSummary(fin); }, 5000);   // qayta ulanish bo'lmasa - xulosa
+  if (fin && !DEMO_PLAY && !ME) setTimeout(function () { if (!CONNECTED && !DEMO_PLAY && !ME && !curModal && regOfferDue()) { regOfferMark(); openSide('rgo', T('ro_btn'), '<div class="ydc">' + regOfferHtml(1) + '</div>'); } }, 6500);
   CUR = null;                                        // demo ko'rganda konsoldagi kill'lar oxirgi o'yinga qo'shilmasin
   CONNECTED = ''; renderAll(); pingPresence(); sparks();
   // o'yinchi o'zi menyudan chiqmagan bo'lsa (menyu yopiq) - qayta ulanamiz
@@ -2502,6 +2507,29 @@ function duelResult(d) {
 }
 /* ---- o'yin xulosasi: serverdan chiqqanda (2+ daqiqa o'ynalgan bo'lsa) ---- */
 var XP0 = null, GS_LAST = null;
+/* ---- mehmon: o'yindan keyin "Akkaunt oching - +500 XP va sandiq" (2 kunda bir, ko'pi 4 marta) ---- */
+function regOfferDue() { return !ME && !DB.dnd && (DB.rgn || 0) < 4 && now() - (DB.rgo || 0) > 2 * 864e5; }
+function regOfferMark() { DB.rgo = now(); DB.rgn = (DB.rgn || 0) + 1; persist(); }
+function regOfferHtml(force) {
+  if (!force) { if (!regOfferDue()) return ''; regOfferMark(); }
+  return '<div class="rgo"><b>' + esc(T('ro_t')) + '</b><p>' + esc(T('ro_d')) + '</p><a class="btn red" data-act="regoffer">' + esc(T('ro_btn')) + '</a></div>';
+}
+/* ---- birinchi ochilish: 3 ta slayd ---- */
+var TOUR_I = 0, TOUR = [['\u25B6', 'tr_1t', 'tr_1d'], ['\u265B', 'tr_2t', 'tr_2d'], ['\u2605', 'tr_3t', 'tr_3d']];
+function tourShow() {
+  if (DB.tour) return;
+  if (DB.dnd || (DB.hist && DB.hist.length) || ME || DB.token) { DB.tour = 1; persist(); return; }   // eski o'yinchilarga ko'rsatmaymiz
+  if (CONNECTED || curModal || playing()) return setTimeout(tourShow, 30000);
+  TOUR_I = 0; tourDraw(); openModal('mdTour');
+}
+function tourDraw() {
+  var t = TOUR[TOUR_I], d = '', last = TOUR_I === TOUR.length - 1;
+  for (var i = 0; i < TOUR.length; i++) d += '<i' + (i === TOUR_I ? ' class="on"' : '') + '></i>';
+  $('trI').innerHTML = t[0]; $('trT').innerHTML = esc(T(t[1])); $('trD').innerHTML = esc(T(t[2])); $('trDots').innerHTML = d;
+  $('trNext').innerHTML = esc(T(last ? 'tr_go' : 'tr_next')); $('trSkip').innerHTML = esc(T('tr_skip'));
+  $('trReg').innerHTML = esc(T('tr_reg')); $('trReg').style.display = last && !ME ? '' : 'none';
+}
+function tourEnd() { DB.tour = 1; persist(); closeModal(); }
 function gameSummary(g) {
   if (!g || DB.dnd || DB.gsum === 0 || (g.d || 0) < 120 || (g.k || 0) + (g.x || 0) < 2) return;
   if (curModal && curModal !== 'mdSide') return;                // o'yinchi boshqa oynada - xalaqit bermaymiz
@@ -2520,6 +2548,7 @@ function gameSummary(g) {
     '<div class="stmore">' + row('gs_streak', g.bs || 0) + row('gs_hsn', g.h || 0) + (g.a ? row('gs_assist', g.a) : '') + (fav ? row('gs_fav', fav + ' (' + fn + ')') : '') +
     (xp ? row('gs_xp', '+' + xp + ' XP') : '') + (clips ? row('gs_clips', clips) : '') + '</div>' +
     '<p class="mut">' + esc(T((g.k || 0) >= 25 || kd >= 2 ? 'gs_great' : (g.k || 0) >= 10 ? 'gs_good' : 'gs_ok')) + '</p>' +
+    (ME ? '' : regOfferHtml()) +
     (ME ? '<a class="btn red" data-act="gsshare">' + ico('share') + ' ' + esc(T('gs_share')) + '</a> ' : '') +
     (clips ? '<a class="btn red" data-act="gsvids">' + ico('play') + ' ' + esc(T('gs_vids')) + '</a> ' : '') +
     '<a class="btn" data-act="gsoff">' + esc(T('gs_off')) + '</a></div>';
@@ -3179,6 +3208,10 @@ function act(a) {
   if (a === 'weekall') return openServers('history');
   if (a === 'profile') return ME ? openSettings('account') : openLogin();
   if (a === 'login') return openLogin();
+  if (a === 'regoffer') { lgReg = true; return openLogin(); }
+  if (a === 'trnext') { if (TOUR_I < TOUR.length - 1) { TOUR_I++; tourDraw(); } else tourEnd(); return; }
+  if (a === 'trskip') return tourEnd();
+  if (a === 'trreg') { tourEnd(); lgReg = true; return openLogin(); }
   if (a === 'acctx') { DB.acx = 1; persist(); statePush(); renderAll(); return toast(T('ac_x'), 5000); }   // akkaunt kartasi bir marta yopiladi
   if (a === 'promox') { DB.pxx = now(); persist(); statePush(); renderAll(); return; }
   if (a === 'feedback') return openFeedback();
@@ -3738,6 +3771,7 @@ step('loadFeat', function () { loadFeat(); });
 step('perf', function () { perfStart(); });
 step('music', function () { setTimeout(musicSync, 3000); });
 step('whatsnew', function () { setTimeout(loadWhatsNew, 4000); });
+step('tour', function () { setTimeout(tourShow, 3000); });
 step('ngFit', function () { ngFit(); });
 step('applyTheme', function () { if ((DB.theme && DB.theme !== 'red') || DB.day || (DB.fs && DB.fs !== 1)) applyTheme(DB.theme || 'red'); else { renderTop2(); applyBg(); } });
 step('detectLang();', function () { detectLang(); });

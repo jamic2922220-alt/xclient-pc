@@ -670,8 +670,9 @@ case 'register':
     $meta = rd('meta', array('next' => 100001));
     $u = array(
         'id' => 'X-' . $meta['next'], 'login' => $login, 'name' => $login, 'email' => $email,
-        'pass' => password_hash($pass, PASSWORD_DEFAULT), 'xp' => 0, 'vip' => true,
+        'pass' => password_hash($pass, PASSWORD_DEFAULT), 'xp' => 500, 'vip' => true, 'chb' => 1, 'rgw' => 1,
         'created' => time(), 'pwchanged' => time(), 'friends' => array(), 'seen' => 0,
+        'msgs' => array(array('t' => time(), 'text' => "\xF0\x9F\x8E\x81 X CLIENT'ga xush kelibsiz! Ro'yxatdan o'tganingiz uchun +500 XP va 1 ta sandiq berildi. Sandiqni yuqoridagi \xF0\x9F\x8E\x81 belgisidan oching.\n\nErtaga ham kiring - yana 1 ta sandiq!")),
     );
     $meta['next']++;
     wr('meta', $meta);
@@ -1425,8 +1426,10 @@ case 'daily':
     $newach = ach_check($u);
     save_user($u);
     if ($streak % 7 === 0) $u['chb'] = (int)@$u['chb'] + 1;                    // 7 kun ketma-ket - sandiq
+    $d2 = 0;
+    if ($streak === 2 && empty($u['d2'])) { $u['chb'] = (int)@$u['chb'] + 1; $u['d2'] = 1; $d2 = 1; }   // 2-kun mukofoti (bir marta)
     save_user($u);
-    out(array('ok' => true, 'yday' => $yday, 'chests' => chests_avail($u), 'newach' => $newach, 'got' => $got, 'streak' => $streak, 'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL));
+    out(array('ok' => true, 'd2' => $d2, 'tmr' => ($streak === 1 && empty($u['d2'])) ? 1 : 0, 'yday' => $yday, 'chests' => chests_avail($u), 'newach' => $newach, 'got' => $got, 'streak' => $streak, 'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL));
 
 /* ---------- "Sizni sog'indik": 3+ kun kirmagan do'stni chaqirish (u qaytganda menyuda ko'radi) ---------- */
 case 'miss_call':

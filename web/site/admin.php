@@ -768,7 +768,7 @@ if ($P === 'churn') {
     echo '<div class="grid2"><div class="panel"><div class="ph">Oxirgi kirish</div><table class="list"><tr><th></th><th>7 kun ichida</th><th>1-2 hafta</th><th>2-4 hafta</th><th>30+ kun</th><th>Kirmayapti</th></tr>'
         . $row('X CLIENT kompyuterlar', $gx) . $row('NextClient (menyu)', $gn) . $row('Akkauntlar', $gu) . '</table>'
         . '<div class="mut small" style="margin-top:8px">Menyudagi "Sizni sog\'indik" tugmasi do\'stlarga 3+ kun kirmaganlarni chaqirishga imkon beradi.</div></div>';
-    $bye = array_reverse(all_of('bye')); $why = array(); $nm = array('lag' => "Qotadi / FPS past", 'bugs' => 'Xatolar', 'menu' => 'Menyu yoqmadi', 'ads' => 'Reklama/xabar ko\'p', 'other' => 'Boshqa sborka', 'reinst' => 'Qayta o\'rnatish', 'nogame' => 'O\'ynamay qo\'ydi');
+    $bye = array_reverse(all_of('bye')); $why = array(); $nm = array('lag' => "Qotadi / FPS past", 'bugs' => 'Xatolar', 'menu' => 'Menyu yoqmadi', 'ads' => 'Reklama/xabar ko\'p', 'other' => 'Boshqa sborka', 'reinst' => 'Qayta o\'rnatish', 'nogame' => 'O\'ynamay qo\'ydi', 'av' => 'Antivirus');
     foreach ($bye as $b) { $k = isset($nm[$b['r']]) ? $nm[$b['r']] : 'izohsiz'; $why[$k] = (isset($why[$k]) ? $why[$k] : 0) + 1; } arsort($why);
     echo '<div class="panel"><div class="ph">Nega o\'chirishdi (' . count($bye) . ' ta javob)</div>' . pie($why) . '</div></div>';
     echo '<div class="panel"><div class="ph">O\'chirganlarning izohlari</div><table class="list"><tr><th>Sana</th><th>Sabab</th><th>Izoh</th><th>Kompyuter</th></tr>';
