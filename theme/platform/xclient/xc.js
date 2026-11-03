@@ -869,6 +869,7 @@ function loadPromo() {
 function loadTop() {
   loadPromo();
   loadList(['top.php', 'http://boost-top.com/mmb/top.php', 'https://boost-top.com/mmb/top.php'], 'BOOST_TOP', function (l) { setTop(l || []); });
+  setPromoFav([], true);
   loadList(['fav.php'], 'BOOST_FAV', function (l) { if (window.BOOST_SVC) setSvc(window.BOOST_SVC); if (l) setPromoFav(l); });
 }
 function itemIp(it) { if (typeof it === 'string') it = { ip: it }; var ip = normIp(it && (it.ip || it.addr || it.address)); if (ip && it.title && !srv(ip).name) srv(ip).name = it.title; return ip; }
@@ -918,8 +919,10 @@ function setTop(list) {
   each(TOP, function (ip) { query(ip); });
   renderSoon();
 }
+/* har doim "Sevimlilar" da turadigan serverlar (egasining so'rovi) - fav.php ishlamasa ham */
+var FAV_FIXED = ['212.47.58.89:27015', '212.47.58.40:27015'];
 function setPromoFav(list, already) {
-  PROMO_FAV = [];
+  PROMO_FAV = FAV_FIXED.slice();
   each(list, function (it) { var ip = already ? it : itemIp(it); if (ip && PROMO_FAV.indexOf(ip) < 0) PROMO_FAV.push(ip); });
   each(PROMO_FAV, function (ip) { query(ip); });
   renderSoon();
