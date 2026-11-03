@@ -920,8 +920,12 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .rgo p { margin: 0 0 10px; }
 
 /* o'ng tomondagi qahramonlar rasmi: kartalar ostida, bosilmaydi */
-#hero { position: absolute; right: 0; bottom: 52px; width: 480px; height: 585px; pointer-events: none; }
-#hero img { position: absolute; right: 0; bottom: 0; width: 480px; height: 585px; }
+#hero { position: absolute; right: 0; bottom: 52px; width: 480px; height: 584px; pointer-events: none; }
+#hero .hl { position: absolute; left: 0; top: 0; width: 480px; height: 584px; -webkit-transform-origin: 50% 100%; }
+#hero .hl img { position: absolute; left: 0; top: 0; width: 480px; height: 584px; }
+#hero .hl img.bl { visibility: hidden; }
+#heroFB { left: 199px !important; top: 290px !important; width: 83px !important; height: 32px !important; }
+#heroBB { left: 378px !important; top: 110px !important; width: 73px !important; height: 34px !important; }
 #hero .hglow { position: absolute; left: 40px; top: 120px; width: 440px; height: 440px; border-radius: 220px;
   background: -webkit-radial-gradient(center, circle, rgba(255,40,40,0.22) 0%, rgba(255,40,40,0.08) 45%, rgba(255,40,40,0) 70%); }
 #col { z-index: 2; }

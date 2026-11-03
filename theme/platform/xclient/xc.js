@@ -257,15 +257,31 @@ function fxVisible() {
   if (curModal || document.webkitHidden) return false;
   return uiShown();
 }
-/* o'ng tomondagi qahramonlar: sekin suzadi va nafas oladi. CEF1 har kadrni protsessorda chizadi - shuning uchun
- * sekundiga ~15 kadr, faqat menyu ko'rinib turganda, oyna ochiq emas va effektlar yoqiq bo'lsa (o'yinda/kuchsiz PC da - qimirlamaydi) */
-var HERO_T0 = now(), HERO_I = null, HERO_G = null;
+/* o'ng tomondagi qahramonlar: ikkalasi alohida qatlam - har biri o'zicha nafas oladi, tebranadi va ko'zini pirpiratadi.
+ * CEF1 har kadrni protsessorda chizadi - sekundiga ~15 kadr, faqat menyu ko'rinib turganda, oyna ochiq emas va effektlar
+ * yoqiq bo'lsa (o'yinda va kuchsiz kompyuterda qimirlamaydi) */
+var HERO = null, HERO_T0 = now();
+function heroInit() {
+  var f = $('heroF'), b = $('heroB'); if (!f || !b) return null;
+  return { f: f, b: b, g: $('hero').getElementsByTagName('div')[0], fb: $('heroFB'), bb: $('heroBB'), nf: now() + 2500, nb: now() + 4200 };
+}
+function heroBlink(el, at) {   // ko'z yumiladi ~130 ms; ba'zan ikki marta
+  var t = now();
+  if (t >= at) { el.style.visibility = 'visible'; setTimeout(function () { el.style.visibility = 'hidden'; }, 130); return t + (Math.random() < 0.2 ? 320 : 3000 + Math.random() * 4000); }
+  return at;
+}
 function heroTick() {
-  var h = $('hero'); if (!h || !HERO_I) { if (h) { HERO_I = h.getElementsByTagName('img')[0]; HERO_G = h.getElementsByTagName('div')[0]; } return; }
+  if (!HERO) { HERO = heroInit(); if (!HERO) return; }
   if (lowFx() || !fxVisible()) return;
-  var t = (now() - HERO_T0) / 1000, y = Math.sin(t * 0.55) * 7, x = Math.sin(t * 0.31) * 3, sc = 1 + Math.sin(t * 0.55 + 1) * 0.008;
-  HERO_I.style.webkitTransform = 'translate(' + x.toFixed(2) + 'px,' + y.toFixed(2) + 'px) scale(' + sc.toFixed(4) + ')';
-  HERO_G.style.opacity = (0.75 + Math.sin(t * 0.9) * 0.25).toFixed(3);
+  var t = (now() - HERO_T0) / 1000;
+  /* oldingi: sekin nafas (yelka ko'tariladi), ozgina chayqaladi */
+  var fy = Math.sin(t * 0.52) * 3.2, fx = Math.sin(t * 0.31 + 2) * 2.2, fs = 1 + (Math.sin(t * 1.15) + 1) * 0.004, fr = Math.sin(t * 0.37) * 0.35;
+  /* orqadagi: boshqa tezlikda - ular bir-biridan alohida "tirik" ko'rinadi */
+  var by = Math.sin(t * 0.44 + 1.3) * 3.6, bx = Math.sin(t * 0.27 + 0.4) * 3, bs = 1 + (Math.sin(t * 0.97 + 2.2) + 1) * 0.004, br = Math.sin(t * 0.33 + 1) * 0.45;
+  HERO.f.style.webkitTransform = 'translate(' + fx.toFixed(2) + 'px,' + fy.toFixed(2) + 'px) rotate(' + fr.toFixed(3) + 'deg) scale(' + fs.toFixed(4) + ')';
+  HERO.b.style.webkitTransform = 'translate(' + bx.toFixed(2) + 'px,' + by.toFixed(2) + 'px) rotate(' + br.toFixed(3) + 'deg) scale(' + bs.toFixed(4) + ')';
+  if (HERO.g) HERO.g.style.opacity = (0.75 + Math.sin(t * 0.9) * 0.25).toFixed(3);
+  HERO.nf = heroBlink(HERO.fb, HERO.nf); HERO.nb = heroBlink(HERO.bb, HERO.nb);
 }
 setInterval(heroTick, 66);
 /* menyu foni (rang) va zarrachalar: uchqun / qor / yo'q. Bayramlarda o'zi bezanadi (Yangi yil - qor, Navro'z, Mustaqillik) */

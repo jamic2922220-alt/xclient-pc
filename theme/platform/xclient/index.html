@@ -16,7 +16,7 @@
  * Har ochilishda server "qaysi versiya" deb so'raladi (beta testerlarga - beta, boshqalarga - barqaror, admin panel > Menyu versiyalari).
  * Boshqa bo'lsa - o'sha versiyaning sahifasi (rel/<versiya>/index.html) yuklanib, joriy sahifa shu bilan almashtiriladi. */
 (function () {
-  var V = '10200400';
+  var V = '10200500';
   window.XC_V = V;
   try {
     if (window.name === 'xcfresh' + V) return;
@@ -41,7 +41,7 @@
   } catch (e) {}
 })();
 </script>
-<link rel="stylesheet" href="xc.css?v=10200400">
+<link rel="stylesheet" href="xc.css?v=10200500">
 <script>
 /* Xato bo'lsa ekranning tepasida ko'rsatamiz (o'yin brauzerida konsol yo'q) */
 window.XC_ERRS = [];
@@ -58,7 +58,7 @@ window.onerror = function (msg, url, line) {
   return false;
 };
 </script>
-<script src="xc_lang.js?v=10200400"></script>
+<script src="xc_lang.js?v=10200500"></script>
 </head>
 <body>
 <div id="app">
@@ -98,7 +98,7 @@ window.onerror = function (msg, url, line) {
   </div>
 
   <!-- ===== o'ng tomonda qahramonlar (sekin "nafas oladi") ===== -->
-  <div id="hero"><div class="hglow"></div><img src="hero.png" alt=""></div>
+  <div id="hero"><div class="hglow"></div><div class="hl" id="heroB"><img src="hero_b.png" alt=""><img class="bl" id="heroBB" src="hero_bb.png" alt=""></div><div class="hl" id="heroF"><img src="hero_f.png" alt=""><img class="bl" id="heroFB" src="hero_fb.png" alt=""></div></div>
 
   <!-- ===== o'ng ustun ===== -->
   <div id="col">
@@ -273,6 +273,6 @@ window.onerror = function (msg, url, line) {
   <div id="dbg"></div>
 </div>
 <script src="master.js"></script>
-<script src="xc.js?v=10200400"></script>
+<script src="xc.js?v=10200500"></script>
 </body>
 </html>
