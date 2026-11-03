@@ -445,7 +445,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 .mis .msr.got { opacity: .7; }
 .wn ul { margin: 8px 0 0; padding-left: 18px; }
 .wn li { margin: 0 0 9px; line-height: 1.45; font-size: 14px; }
-.amsg { background: #1d171c; border-left: 3px solid #ff3b3b; padding: 12px 14px; margin-bottom: 10px; font-size: 14px; line-height: 1.5; }
+.amsg { background: #1d171c; border-left: 3px solid #ff3b3b; padding: 12px 14px; margin-bottom: 10px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
 .amsg small { display: block; margin-top: 6px; }
 .mis .msr .xpw { height: 6px; background: #2a2026; overflow: hidden; margin-right: 96px; }
 .mis .msr .xpw i { display: block; height: 100%; background: #e0353b; background: -webkit-linear-gradient(left, #c4262e, #ff4d4d); }

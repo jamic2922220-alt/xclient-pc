@@ -240,6 +240,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash($ch . ': hamma o\'yinchilarga build ' . $b . ' beriladi ✓'); }
         go('?p=upd');
     }
+    /* Fikrlar: shikoyat/taklifga javob - akkaunti bor o'yinchi menyuni ochganda ko'radi (admin xabari oynasi) */
+    if ($act === 'fb_reply' && pp('text') !== '') {
+        $fid = preg_replace('/[^0-9\-]/', '', pp('id')); $fb = $fid !== '' ? rd('feedback/' . $fid, null) : null;
+        if ($fb) {
+            $ans = mb_substr(trim(pp('text')), 0, 800, 'UTF-8');
+            $fb['reply'] = $ans; $fb['rt'] = time(); wr('feedback/' . $fid, $fb);
+            $l = strtolower($safeId(isset($fb['who']) ? $fb['who'] : '')); $u = $l !== '' ? rd('users/' . $l, null) : null;
+            if ($u) {
+                if (empty($u['msgs'])) $u['msgs'] = array();
+                $q = mb_substr($fb['text'], 0, 120, 'UTF-8') . (mb_strlen($fb['text'], 'UTF-8') > 120 ? '…' : '');
+                $u['msgs'][] = array('t' => time(), 'text' => "Sizning xabaringiz: «" . $q . "»\n\nX CLIENT javobi: " . $ans);
+                $u['msgs'] = array_slice($u['msgs'], -10); wr('users/' . $l, $u);
+                flash('Javob yuborildi - ' . $l . ' menyuni ochganda ko\'radi');
+            } else flash('Javob saqlandi, lekin bu o\'yinchi akkauntsiz yozgan - unga yetkazib bo\'lmaydi');
+        }
+        go('?p=fb');
+    }
     if ($act === 'acc_msg' && pp('text') !== '') {
         $l = strtolower($safeId(pp('login'))); $u = rd('users/' . $l, null);
         if ($u) { if (empty($u['msgs'])) $u['msgs'] = array(); $u['msgs'][] = array('t' => time(), 'text' => mb_substr(pp('text'), 0, 500, 'UTF-8')); $u['msgs'] = array_slice($u['msgs'], -10); wr('users/' . $l, $u);
@@ -823,10 +840,16 @@ if ($P === 'fb') {
     usort($l, function ($a, $b) { return $b['t'] - $a['t']; });
     $kn = array('idea' => array('Taklif', ''), 'bug' => array('Xatolik', 'red'), 'complain' => array('Shikoyat', 'red'));
     echo '<h1>Fikrlar</h1><div class="panel"><div class="ph">O\'yinchilarning taklif va shikoyatlari (' . count($l) . ')</div>'
-        . '<form method="post" onsubmit="return confirm(\'Belgilanganlar o\\\'chirilsinmi?\')">' . csrf_in() . '<input type="hidden" name="act" value="fb_del"><table class="list"><tr><th><input type="checkbox" onclick="var c=document.querySelectorAll(\'.ck\');for(var i=0;i<c.length;i++)c[i].checked=this.checked"></th><th>Sana</th><th>Turi</th><th>Kim</th><th>Matn</th></tr>';
-    foreach ($l as $o) { $k = isset($kn[$o['kind']]) ? $kn[$o['kind']] : $kn['idea']; echo '<tr><td><input type="checkbox" class="ck" name="ids[]" value="' . h($o['id']) . '"></td><td>' . dt($o['t']) . '</td><td class="' . $k[1] . '">' . $k[0] . '</td><td>' . ($o['who'] !== '' ? '<b>' . h($o['who']) . '</b>' : h($o['nick'] !== '' ? $o['nick'] : 'mehmon')) . ' <span class="mut small">v' . h($o['ver']) . '</span></td><td style="white-space:pre-wrap">' . h($o['text']) . '</td></tr>'; }
+        . '<form method="post" onsubmit="return confirm(\'Belgilanganlar o\\\'chirilsinmi?\')">' . csrf_in() . '<input type="hidden" name="act" value="fb_del"><table class="list"><tr><th><input type="checkbox" onclick="var c=document.querySelectorAll(\'.ck\');for(var i=0;i<c.length;i++)c[i].checked=this.checked"></th><th>Sana</th><th>Turi</th><th>Kim</th><th>Matn</th><th>Javob</th></tr>';
+    foreach ($l as $o) { $k = isset($kn[$o['kind']]) ? $kn[$o['kind']] : $kn['idea']; echo '<tr><td><input type="checkbox" class="ck" name="ids[]" value="' . h($o['id']) . '"></td><td>' . dt($o['t']) . '</td><td class="' . $k[1] . '">' . $k[0] . '</td><td>' . ($o['who'] !== '' ? '<b>' . h($o['who']) . '</b>' : h($o['nick'] !== '' ? $o['nick'] : 'mehmon')) . ' <span class="mut small">v' . h($o['ver']) . '</span></td><td style="white-space:pre-wrap">' . h($o['text']) . '</td><td style="min-width:280px">'
+        . (!empty($o['reply']) ? '<div style="white-space:pre-wrap">' . h($o['reply']) . '</div><div class="mut small">✓ javob berilgan · ' . dt($o['rt']) . '</div>'
+            : ($o['who'] !== '' ? '<button type="button" class="btn" onclick="var f=document.getElementById(\'rp' . h($o['id']) . '\');f.style.display=f.style.display?\'\':\'none\'">Javob yozish</button>'
+            : '<span class="mut small">akkauntsiz - javob yetkazib bo\'lmaydi</span>')) . '</td></tr>'
+        . (empty($o['reply']) && $o['who'] !== '' ? '<tr id="rp' . h($o['id']) . '" style="display:none"><td></td><td colspan="5"><textarea form="fr' . h($o['id']) . '" name="text" maxlength="800" rows="3" style="width:100%" placeholder="Javobingiz - o\'yinchi menyuni ochganda ko\'radi"></textarea><button class="btn red" form="fr' . h($o['id']) . '" style="margin-top:6px">Yuborish</button></td></tr>' : ''); }
     if (!$l) echo '<tr><td colspan="5" class="mut">Hali yo\'q. O\'yinchilar menyuning pastidagi ✎ tugmasi orqali yozadi.</td></tr>';
-    echo '</table>' . ($l ? '<button class="btn" style="margin-top:10px">Belgilanganlarni o\'chirish</button>' : '') . '</form></div>';
+    echo '</table>' . ($l ? '<button class="btn" style="margin-top:10px">Belgilanganlarni o\'chirish</button>' : '') . '</form>';
+    foreach ($l as $o) if (empty($o['reply']) && $o['who'] !== '') echo '<form method="post" id="fr' . h($o['id']) . '">' . csrf_in() . '<input type="hidden" name="act" value="fb_reply"><input type="hidden" name="id" value="' . h($o['id']) . '"></form>';
+    echo '</div>';
 }
 
 if ($P === 'clips') {
