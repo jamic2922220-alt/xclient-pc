@@ -1849,12 +1849,12 @@ var DEF = {
   sens: 2.5, zoom: 1.2, raw: 1, filter: 0, inv: 0,
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1, micwarm: 1, micfix: 0,
   fps: 100, showfps: 0, uisnd: 1, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
-  xp: 'pro', xt: 0, xs: 'small', xc: '255 59 59', xtr: 0, xdyn: 0, xthick: 1, xgap: 3, xout: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
+  xp: 'pro', xt: 0, xs: 'small', xc: '50 250 50', xtr: 0, xdyn: 0, xthick: 1, xgap: 3, xout: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
   rscale: 115, ropac: 100, rnames: 0, rhp: 0, rmode: 1, rround: 1, rrot: 1, rmap: 0.8,
   vmx: 0, vmy: 0, vmz: 0, vmshift: 0, bobst: 0, lagst: 0, camint: 0,
   roll: 0, rollspd: 200, bobv: 0.13, bobl: 0.32, boblow: 8, bobcam: 1, lagsc: 1, lagsp: 8, fovlerp: 0, camsc: 1,
   rtracks: 0, rfull: 1, rbg: 0, rallies: 1, rns: 0.8, rhs: 1, dtime: 6, drpc: 1, drpcs: 1, drpcj: 1, mmusic: 1,
-  bob: 0.01, picmip: 0, detail: 0, shadows: 1, minm: 0, interp: 0.01, lw: 1, lc: 1, hisnd: 1, mixa: 0.1, loop: 0, saytm: 5, ngpos: 1, pro: 0, gfxc: '', xmig: 0, pmig: 0, gmig: 0,
+  bob: 0.01, picmip: 0, detail: 0, shadows: 1, minm: 0, interp: 0.01, lw: 1, lc: 1, hisnd: 1, mixa: 0.1, loop: 0, saytm: 5, ngpos: 1, pro: 0, gfxc: '', xgm: 0, xmig: 0, pmig: 0, gmig: 0,
   awps: 0, awpz: 1, awpxc: '0 230 255', awpxs: 'small'
 };
 var S = null, E = null;
@@ -1876,6 +1876,8 @@ function loadSettings() {
   if (!(S.mixa >= 0.1)) S.mixa = 0.1;              // 0.05 (eski PRO CFG) - ovoz buferi juda kichik: FPS tushsa ovoz qotib takrorlanadi va uziladi
   /* pritsel otganda kattalashmaydi - hech qaysi CFG da (egasining talabi); saqlangan eski 1 lar ham 0 bo'ladi */
   S.xdyn = 0; cmd('cl_dynamiccrosshair 0');
+  /* standart pritsel: kichik, yashil (eski standart qizil edi) - bir marta; o'yinchi o'zi tanlagan boshqa rangga tegmaymiz */
+  if (!S.xgm) { if (S.xc === '255 59 59') S.xc = '50 250 50'; if (!S.xs || S.xs === 'auto') S.xs = 'small'; S.xgm = 1; if (DB.set) DB.set = S; }
   /* spray: o'zimiznikini yuborish va boshqalarnikini ko'rish doim yoqiq (X CLIENT spreyi hamma serverda ko'rinsin) */
   S.spray = 1; S.dl = 1; cmd('cl_allowupload 1'); cmd('cl_allowdownload 1');
   cmd('host_framerate 0');                         // demo tezligi oldingi ishga tushishdan qolib ketgan bo'lsa
@@ -2043,6 +2045,7 @@ function xhairCmds(s) {
   for (var k in XSUP) if (XSUP.hasOwnProperty(k) && XSUP[k]) c.push(XSUP[k] + ' ' + xextVal(k, s));
   return c;
 }
+function xhairApply() { if (S && !DEMO_PLAY) each(xhairCmds(S), function (x) { cmd(x); }); }
 function xLive() { if (!E) return; XLIVE = true; each(xhairCmds(E), function (x) { cmd(x); }); }
 /* ---- profillar: 4 ta joy, har birida sozlamalar + tugmalar ---- */
 function profSlots() {
@@ -2143,12 +2146,12 @@ function hwLight() {
   var v = gfxPreset('weak', S); E = copy(S);
   for (var k in v) if (v.hasOwnProperty(k)) E[k] = v[k];
   S = copy(E); DB.set = S; persist(); applySettings(S); cloudSave();
-  toast(T('hw_on'), 5000);
+  toast(T('hw_on'), 9000);
 }
 /* bir martalik takliflar (bittadan, "Bezovta qilmaslik" yoqilmagan bo'lsa): kuchsiz kompyuter, Windows Game Bar fon yozuvi */
 function tuneHints() {
-  if (DB.dnd || CONNECTED || curModal || !HW) return;
-  if (hwClass() === 'weak' && !DB.hwAsk && S) { DB.hwAsk = 1; persist(); return ask(T('hw_ask'), hwLight, false, false, true); }
+  if (!CONNECTED && HW && hwClass() === 'weak' && !DB.hwAsk && S) { DB.hwAsk = 1; persist(); return hwLight(); }
+  if (DB.dnd || CONNECTED || curModal || !HW) return;   // kuchsiz kompyuter - so'ramasdan yengil grafika (Sozlamalarda qaytarsa bo'ladi)
   if (OPTS.dvr && !OPTS.dvroff && !DB.dvrAsk && verGE(VERSION, '1.0.96')) {
     DB.dvrAsk = 1; persist();
     ask(T('dvr_ask'), function () { OPTS.dvroff = 1; saveOpts(T('dvr_ok')); }, false, false, true);
@@ -3761,7 +3764,7 @@ step('f10', function () {                          // F10 (video) va F9 (oxirgi 
     if (!used) { cmd('alias xc_' + key.toLowerCase() + ' "echo X CLIENT: ' + key + ' - video (launcher)"'); cmd('bind ' + key + ' xc_' + key.toLowerCase()); }
   });
 });   // launcher F10 ni ushlay olmasa ham o'yinda "quit prompt" chiqmasin
-step('reapply', function () { if (DB.set) { var ra = function () { applySettings(S); applyBinds(); }; setTimeout(ra, 2500); setTimeout(ra, 12000); } });
+step('reapply', function () { if (DB.set) { var ra = function () { applySettings(S); applyBinds(); }; setTimeout(ra, 2500); setTimeout(ra, 12000); } else setTimeout(xhairApply, 2500); });
 step('fit();', function () { fit(); });
 step('window.onresize = fit;', function () { window.onresize = fit; });
 step('fxLoop();', function () { fxLoop(); });
@@ -3792,7 +3795,7 @@ if (NC) {
   try {
     if (NC.addEventListener) {
       NC.addEventListener('connect', function (e) { onConnectEvt(e && e.detail && e.detail.address, false); });
-      NC.addEventListener('putinserver', function (e) { onConnectEvt(e && e.detail && e.detail.address, true); });
+      NC.addEventListener('putinserver', function (e) { onConnectEvt(e && e.detail && e.detail.address, true); setTimeout(xhairApply, 4000); });   // server pritselni o'zgartirgan bo'lsa - qaytaramiz
       NC.addEventListener('disconnect', function () { onDisconnectEvt(); cmd('hideconsole'); setTimeout(function () { if (!CONNECTED) pwRestoreName(); }, 6000); });
     }
     /* CS 1.6: bir marta ochilgan konsol yopilmaguncha har ESC da (bosh menyuda) qayta chiqadi - NextClient faqat o'yinga qaytganda yopadi */
