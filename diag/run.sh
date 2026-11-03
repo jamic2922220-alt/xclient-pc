@@ -1,8 +1,10 @@
 #!/bin/bash
 O=diag/out; mkdir -p $O; : > $O/summary.txt
-echo "dns: $(getent hosts mmb.boost-top.com boost-top.com | tr '\n' ' ')" >> $O/summary.txt
-for u in http://mmb.boost-top.com/xc.html http://mmb.boost-top.com/servers.php https://boost-top.com/ http://boost-top.com/; do
-  echo "== $u: $(curl -sS -o /dev/null --max-time 25 -w '%{http_code} %{time_total}s ip=%{remote_ip} -> %{redirect_url}' "$u" 2>&1 | tr '\n' ' ')" >> $O/summary.txt
+sudo apt-get install -y -qq whois >/dev/null 2>&1
+echo "rdns: $(getent hosts 51.89.39.107; dig +short -x 51.89.39.107 2>/dev/null)" >> $O/summary.txt
+echo "whois: $(whois 51.89.39.107 2>/dev/null | grep -iE '^(netname|descr|org-name|country|OrgName)' | head -6 | tr '\n' ' ')" >> $O/summary.txt
+for d in greyweb.ru www.greyweb.ru greyweb.net greyweb.com my.greyweb.ru bill.greyweb.ru; do
+  echo "== $d dns=$(getent hosts $d | head -1 | tr -s ' ') http=$(curl -sS -o /dev/null --max-time 20 -w '%{http_code}->%{redirect_url}' https://$d 2>&1 | tail -1)" >> $O/summary.txt
 done
-echo "ping: $(ping -c 3 -W 3 mmb.boost-top.com 2>&1 | tail -2 | tr '\n' ' ')" >> $O/summary.txt
-echo "tcp80: $(timeout 10 bash -c 'echo > /dev/tcp/mmb.boost-top.com/80' && echo open || echo closed)" >> $O/summary.txt
+echo "== 51.89.39.107: $(curl -sS -o /dev/null --max-time 15 -w '%{http_code}' http://51.89.39.107 2>&1 | tail -1)" >> $O/summary.txt
+echo "trace: $(traceroute -n -w 2 -q 1 -m 20 51.89.39.107 2>/dev/null | tail -6 | tr '\n' '|')" >> $O/summary.txt
