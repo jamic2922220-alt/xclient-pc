@@ -2851,8 +2851,8 @@ var PANES = {
   },
   sound: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('so_title')) + '</div>' + sl('vol', 'so_vol', 0, 1, 0.05) + sl('mus', 'so_mus', 0, 1, 0.05) + sl('vscale', 'so_vscale', 0, 2, 0.1) + '</div>' +
-      '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('voice', 'so_voice') + tg('micwarm', 'so_micwarm', 'so_micwarm2') + tg('micfix', 'so_micfix', 'so_micfix2') + tg('loop', 'so_loop') + tg('mute', 'so_mute') + tg('uisnd', 'so_ui', 'so_ui2') + (S && S.uisnd !== 0 ? tg('uics', 'so_uics', 'so_uics2') : '') + tg('mmusic', 'so_music', 'so_music2') +
-      '<div class="ph2 m">' + esc(T('so_q')) + '</div>' + tg('hisnd', 'so_hi') + seg('mixa', 'so_mix', [[0.1, 'so_mix2'], [0.15, 'so_mix3']]) + musicPick() + '</div>';
+      '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('voice', 'so_voice') + tg('micwarm', 'so_micwarm', 'so_micwarm2') + tg('micfix', 'so_micfix', 'so_micfix2') + tg('loop', 'so_loop') + tg('mute', 'so_mute') + tg('uisnd', 'so_ui', 'so_ui2') +
+      '<div class="ph2 m">' + esc(T('so_q')) + '</div>' + tg('hisnd', 'so_hi') + seg('mixa', 'so_mix', [[0.1, 'so_mix2'], [0.15, 'so_mix3']]) + '</div>';
   },
   video: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('v_title')) + '</div>' +
@@ -3523,13 +3523,9 @@ var MVOL = 0.85, GMUTE = false, ESC_OPEN = false;   // ESC_OPEN - serverda 'show
 setInterval(function () { if ((GMUTE || MUSIC_ON) && CONNECTED && !uiShown()) { ESC_OPEN = false; musicSync(); } }, 3000);
 function gameVol() { return S && S.vol != null ? S.vol : 0.8; }
 function musicSync() {
-  var inMenu = !CONNECTED || uiShown();
-  var want = !!(S && S.mmusic && !S.mp3off && inMenu && !DEMO_PLAY && hasApi());   // demo ko'rilayotganda menyu musiqasi chalinmasin
-  if (want && !MUSIC_ON) { cmd('mp3volume ' + MVOL); cmd('mp3 loop ' + (/^[\w\/.\-]+\.mp3$/.test(DB.mtrack || '') ? DB.mtrack : MTRACK_DEF)); MUSIC_ON = true; }
-  else if (!want && MUSIC_ON !== false) { cmd('mp3 stop'); cmd('mp3volume ' + (S && S.mp3off ? 0 : (S ? S.mus : 0.4))); MUSIC_ON = false; }
-  var mute = want && !!CONNECTED && ESC_OPEN && uiShown();   // serverda, aniq ESC bosilgan - o'yin ovozi jim
-  if (mute && !GMUTE) { cmd('volume 0'); GMUTE = true; }
-  else if (!mute && GMUTE) { cmd('volume ' + gameVol()); GMUTE = false; }
+  /* menyu musiqasi va ESC da o'yin ovozini o'chirish olib tashlandi (egasining so'rovi): faqat oldingi versiyadan qolgan holatni tozalaymiz */
+  if (MUSIC_ON !== false) { cmd('mp3 stop'); cmd('mp3volume ' + (S && S.mp3off ? 0 : (S ? S.mus : 0.4))); MUSIC_ON = false; }
+  if (GMUTE) { cmd('volume ' + gameVol()); GMUTE = false; }
 }
 
 /* ---- internet tekshiruvi: bir nechta serverga 3 martadan so'rov - ping, tebranish, yo'qotish -> mos rate ---- */
@@ -3649,7 +3645,7 @@ function sfx(n) {
   if (!S || S.uisnd === 0 || !hasApi()) return;
   var t = now();
   if (n === 'hover' && (DB.dnd || t - sfxT < 45)) return;
-  sfxT = t; cmd('play ' + (S.uics === 1 ? SFX_CS[n] || SFX_CS.click : (verGE(VERSION, '1.0.114') ? 'xclient/s/' : 'xclient/') + n + '.wav'));   // standart - yumshoq X CLIENT ovozlari (launcher 1.0.114+)
+  sfxT = t; cmd('play xclient/' + n + '.wav');   // asl X CLIENT menyu ovozlari
 }
 function sfxTarget(el) {
   for (; el && el !== document; el = el.parentNode) {
