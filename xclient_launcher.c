@@ -1984,11 +1984,10 @@ static BOOL run_game(void)
          * 2-4 GB li kompyuterlarda o'yinga ko'proq RAM qoladi. 20 soniyadan keyin (o'yin yuklanib bo'lgach), keyin 5 daqiqada bir;
          * video yozilayotganda tegmaymiz. Kerakli sahifalar so'ralganda Windows ularni o'zi qaytaradi */
         {
-            DWORD wt = 20000;
-            while (WaitForSingleObject(pi.hProcess, wt) == WAIT_TIMEOUT) {
-                if (!g_rec_run) { HeapCompact(GetProcessHeap(), 0); SetProcessWorkingSetSize(GetCurrentProcess(), (SIZE_T)-1, (SIZE_T)-1); }
-                wt = 300000;
-            }
+            /* faqat bir marta, o'yin yuklanib bo'lgach (60 s). Har 5 daqiqada qayta qilish launcher sahifalarini diskdan qayta
+             * o'qitib, sekin diskli kompyuterda o'yin paytida qisqa qotish berishi mumkin edi */
+            if (WaitForSingleObject(pi.hProcess, 60000) == WAIT_TIMEOUT && !g_rec_run) { HeapCompact(GetProcessHeap(), 0); SetProcessWorkingSetSize(GetCurrentProcess(), (SIZE_T)-1, (SIZE_T)-1); }
+            WaitForSingleObject(pi.hProcess, INFINITE);
         }
         tune_end();
         DWORD code = 0; GetExitCodeProcess(pi.hProcess, &code);

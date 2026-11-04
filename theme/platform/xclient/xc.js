@@ -277,18 +277,20 @@ function heroBlink(el, at) {   // ko'z yumiladi ~130 ms; ba'zan ikki marta
  * Menyu ochilgandan 10 s keyin boshlanadi (o'yin yuklanib bo'lgach); admin > Funksiyalar > Animatsiyalar o'chiq bo'lsa - qimirlamaydi */
 var HERO_T1 = now() + 10000;
 function heroTick() {
-  if (!HERO) { HERO = heroInit(); if (!HERO) return; HERO.el = $('hero'); }
+  if (!HERO) { HERO = heroInit(); if (!HERO) return 1000; HERO.el = $('hero'); }
   var tn = now(), off = HERO_OFF || lowFx() || !feat('anim') || tn < HERO_T1;
   var cls = off ? 'hoff' : !fxVisible() ? 'hp' : '';
   if (HERO.cls !== cls) { HERO.cls = cls; HERO.el.className = cls; }
-  if (cls) { HERO_LAST = 0; return; }
-  if (HERO_LAST) { HERO_SLOW = tn - HERO_LAST > 160 ? HERO_SLOW + 1 : Math.max(0, HERO_SLOW - 1); if (HERO_SLOW > 30) { HERO_OFF = true; return; } } HERO_LAST = tn;
+  if (cls) { HERO_LAST = 0; return 1000; }
+  if (HERO_LAST) { HERO_SLOW = tn - HERO_LAST > 160 ? HERO_SLOW + 1 : Math.max(0, HERO_SLOW - 1); if (HERO_SLOW > 30) { HERO_OFF = true; return 1000; } } HERO_LAST = tn;
   var t = (tn - HERO_T0) / 1000;
   HERO.f.style.webkitTransform = 'translate(' + (Math.sin(t * 0.31 + 2) * 2).toFixed(2) + 'px,' + (Math.sin(t * 1.12) * 3.5).toFixed(2) + 'px)';
   HERO.b.style.webkitTransform = 'translate(' + (Math.sin(t * 0.27 + 0.4) * 2.5).toFixed(2) + 'px,' + (Math.sin(t * 0.86 + 1.3) * 4).toFixed(2) + 'px)';
   HERO.nf = heroBlink(HERO.fb, HERO.nf); HERO.nb = heroBlink(HERO.bb, HERO.nb);
+  return 50;
 }
-setInterval(heroTick, 50);
+/* o'yin paytida (harakat o'chiq) taymer sekundiga 20 marta emas, 1 marta uyg'onadi - CEF1 taymerlari o'yin oqimida ishlaydi */
+(function heroLoop() { var d = 1000; try { d = heroTick() || 1000; } catch (e) {} setTimeout(heroLoop, d); })();
 /* menyu foni (rang) va zarrachalar: uchqun / qor / yo'q. Bayramlarda o'zi bezanadi (Yangi yil - qor, Navro'z, Mustaqillik) */
 var BGS = { def: '', blue: '#0d2a4a 0%, #0b1526 30%, #080c16 60%, #05070c 100%', purple: '#3a0d4a 0%, #1f0b2a 30%, #110a18 60%, #08060c 100%',
   green: '#0d3a1e 0%, #0b1f12 30%, #0a120d 60%, #060a07 100%', dark: '#1a1a1f 0%, #111114 30%, #0b0b0d 60%, #060607 100%', sand: '#4a3410 0%, #2a1e0b 30%, #16100a 60%, #0a0806 100%' };
@@ -3520,7 +3522,7 @@ function restCheck() {
 }
 var MVOL = 0.85, GMUTE = false, ESC_OPEN = false;   // ESC_OPEN - serverda 'show' hodisasi kelgan (o'yin ustida menyu ochiq)
 /* ehtiyot: 'hide' hodisasi kelmay qolsa ham o'yin ovozi jim qolib ketmasin (3 soniyada bir, faqat holat tekshiriladi) */
-setInterval(function () { if ((GMUTE || MUSIC_ON) && CONNECTED && !uiShown()) { ESC_OPEN = false; musicSync(); } }, 3000);
+
 function gameVol() { return S && S.vol != null ? S.vol : 0.8; }
 function musicSync() {
   /* menyu musiqasi va ESC da o'yin ovozini o'chirish olib tashlandi (egasining so'rovi): faqat oldingi versiyadan qolgan holatni tozalaymiz */
