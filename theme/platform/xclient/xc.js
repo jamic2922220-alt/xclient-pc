@@ -1873,7 +1873,7 @@ var DEF = {
   name: '', tag: 'X | ', net: 'fast', dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, buykeys: 0, queue: 1, reconn: 1, demo: 0, dmig: 0, dmig2: 0,
   sens: 2.5, zoom: 1.2, raw: 1, filter: 0, inv: 0,
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1, micwarm: 1, micfix: 0,
-  fps: 100, showfps: 0, uisnd: 1, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
+  fps: 100, showfps: 0, uisnd: 1, uics: 1, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
   xp: 'pro', xt: 0, xs: 'small', xc: '50 250 50', xtr: 0, xdyn: 0, xthick: 1, xgap: 3, xout: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
   rscale: 115, ropac: 100, rnames: 0, rhp: 0, rmode: 1, rround: 1, rrot: 1, rmap: 0.8,
   vmx: 0, vmy: 0, vmz: 0, vmshift: 0, bobst: 0, lagst: 0, camint: 0,
@@ -2771,7 +2771,7 @@ var PANES = {
   },
   sound: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('so_title')) + '</div>' + sl('vol', 'so_vol', 0, 1, 0.05) + sl('mus', 'so_mus', 0, 1, 0.05) + sl('vscale', 'so_vscale', 0, 2, 0.1) + '</div>' +
-      '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('voice', 'so_voice') + tg('micwarm', 'so_micwarm', 'so_micwarm2') + tg('micfix', 'so_micfix', 'so_micfix2') + tg('loop', 'so_loop') + tg('mute', 'so_mute') + tg('uisnd', 'so_ui', 'so_ui2') + tg('mmusic', 'so_music', 'so_music2') +
+      '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('voice', 'so_voice') + tg('micwarm', 'so_micwarm', 'so_micwarm2') + tg('micfix', 'so_micfix', 'so_micfix2') + tg('loop', 'so_loop') + tg('mute', 'so_mute') + tg('uisnd', 'so_ui', 'so_ui2') + (S && S.uisnd !== 0 ? tg('uics', 'so_uics', 'so_uics2') : '') + tg('mmusic', 'so_music', 'so_music2') +
       '<div class="ph2 m">' + esc(T('so_q')) + '</div>' + tg('hisnd', 'so_hi') + seg('mixa', 'so_mix', [[0.1, 'so_mix2'], [0.15, 'so_mix3']]) + musicPick() + '</div>';
   },
   video: function () {
@@ -3544,11 +3544,14 @@ setInterval(function () { if (!CLK_N || !feat('clicks') || playing()) return; va
 var SFX_ATTR = ['data-act', 'data-tab', 'data-hsub', 'data-seg', 'data-tg', 'data-otg', 'data-ohud', 'data-dd', 'data-ddv', 'data-xchk', 'data-pack',
   'data-sort', 'data-flt', 'data-theme', 'data-daymode', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-dctl', 'data-ovq', 'data-dsel', 'data-vopen', 'data-vdel', 'data-vfold', 'data-vopt', 'data-vtrim', 'data-vshare', 'data-vlink', 'data-orsk', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec', 'data-avpre'];
 var SFX_QUIET = false, sfxLast = null, sfxT = 0;
+/* CS 1.6 ning asl menyu ovozlari (o'yinning o'z fayllari: valve/sound/UI) - standart. Sozlamalarda X CLIENT ovozlariga almashtirsa bo'ladi */
+var SFX_CS = { hover: 'ui/buttonrollover.wav', click: 'ui/buttonclick.wav', tab: 'ui/buttonclick.wav', on: 'ui/buttonclick.wav', off: 'ui/buttonclickrelease.wav',
+  save: 'ui/buttonclick.wav', open: 'ui/buttonclickrelease.wav', close: 'ui/buttonclickrelease.wav' };
 function sfx(n) {
   if (!S || S.uisnd === 0 || !hasApi()) return;
   var t = now();
   if (n === 'hover' && (DB.dnd || t - sfxT < 45)) return;
-  sfxT = t; cmd('play xclient/' + n + '.wav');
+  sfxT = t; cmd('play ' + (S.uics === 0 ? 'xclient/' + n + '.wav' : SFX_CS[n] || SFX_CS.click));
 }
 function sfxTarget(el) {
   for (; el && el !== document; el = el.parentNode) {
