@@ -1933,7 +1933,7 @@ var DEF = {
   name: '', tag: 'X | ', net: 'fast', dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, buykeys: 0, queue: 1, reconn: 1, rest: 0, demo: 0, dmig: 0, dmig2: 0,
   sens: 2.5, zoom: 1.2, raw: 1, filter: 0, inv: 0,
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1, micwarm: 1, micfix: 0,
-  fps: 100, showfps: 0, uisnd: 1, uics: 1, ultra: 0, ann: 1, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
+  fps: 100, showfps: 0, uisnd: 1, uics: 0, uimig: 0, ultra: 0, ann: 1, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
   xp: 'pro', xt: 0, xs: 'small', xc: '50 250 50', xtr: 0, xdyn: 0, xthick: 1, xgap: 3, xout: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
   rscale: 115, ropac: 100, rnames: 0, rhp: 0, rmode: 1, rround: 1, rrot: 1, rmap: 0.8,
   vmx: 0, vmy: 0, vmz: 0, vmshift: 0, bobst: 0, lagst: 0, camint: 0,
@@ -1961,6 +1961,7 @@ function loadSettings() {
   if (!(S.mixa >= 0.1)) S.mixa = 0.1;              // 0.05 (eski PRO CFG) - ovoz buferi juda kichik: FPS tushsa ovoz qotib takrorlanadi va uziladi
   /* pritsel otganda kattalashmaydi - hech qaysi CFG da (egasining talabi); saqlangan eski 1 lar ham 0 bo'ladi */
   S.xdyn = 0; cmd('cl_dynamiccrosshair 0');
+  if (!S.uimig) { S.uics = 0; S.uimig = 1; if (DB.set) DB.set = S; }   // yangi yumshoq menyu ovozlari hammaga
   /* standart pritsel: kichik, yashil (eski standart qizil edi) - bir marta; o'yinchi o'zi tanlagan boshqa rangga tegmaymiz */
   if (!S.xgm) { if (S.xc === '255 59 59') S.xc = '50 250 50'; if (!S.xs || S.xs === 'auto') S.xs = 'small'; S.xgm = 1; if (DB.set) DB.set = S; }
   /* spray: o'zimiznikini yuborish va boshqalarnikini ko'rish doim yoqiq (X CLIENT spreyi hamma serverda ko'rinsin) */
@@ -3641,7 +3642,7 @@ function sfx(n) {
   if (!S || S.uisnd === 0 || !hasApi()) return;
   var t = now();
   if (n === 'hover' && (DB.dnd || t - sfxT < 45)) return;
-  sfxT = t; cmd('play ' + (S.uics === 0 ? 'xclient/' + n + '.wav' : SFX_CS[n] || SFX_CS.click));
+  sfxT = t; cmd('play ' + (S.uics === 1 ? SFX_CS[n] || SFX_CS.click : 'xclient/s/' + n + '.wav'));   // standart - yumshoq X CLIENT ovozlari (launcher 1.0.114+)
 }
 function sfxTarget(el) {
   for (; el && el !== document; el = el.parentNode) {
