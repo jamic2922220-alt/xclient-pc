@@ -272,16 +272,23 @@ function heroBlink(el, at) {   // ko'z yumiladi ~130 ms; ba'zan ikki marta
 }
 /* Harakatning o'zi CSS animatsiyada (brauzer silliq chizadi - JS taymer bilan "qotib-qotib" siljirdi).
  * JS faqat: ko'z pirpiratish, menyu ko'rinmaganda pauza, kompyuter ulgurmasa butunlay to'xtatish */
+/* Harakat JS bilan, sekundiga 20 kadr va faqat siljish (masshtabsiz): o'yin brauzeri (CEF1) har kadrni o'yinning asosiy oqimida
+ * chizadi - CSS animatsiya kadr tezligida (100+) qayta chizib, kuchsizroq kompyuterda o'yinni "не отвечает" holatiga tushirardi.
+ * Menyu ochilgandan 10 s keyin boshlanadi (o'yin yuklanib bo'lgach); admin > Funksiyalar > Animatsiyalar o'chiq bo'lsa - qimirlamaydi */
+var HERO_T1 = now() + 10000;
 function heroTick() {
   if (!HERO) { HERO = heroInit(); if (!HERO) return; HERO.el = $('hero'); }
-  var cls = HERO_OFF || lowFx() ? 'hoff' : !fxVisible() ? 'hp' : '';
+  var tn = now(), off = HERO_OFF || lowFx() || !feat('anim') || tn < HERO_T1;
+  var cls = off ? 'hoff' : !fxVisible() ? 'hp' : '';
   if (HERO.cls !== cls) { HERO.cls = cls; HERO.el.className = cls; }
   if (cls) { HERO_LAST = 0; return; }
-  /* kadrlar orasi 100 ms o'rniga 250+ ms - kompyuter ulgurmayapti: ~4 soniyada animatsiya o'chadi, rasm joyida qoladi */
-  var tn = now(); if (HERO_LAST) { HERO_SLOW = tn - HERO_LAST > 250 ? HERO_SLOW + 1 : Math.max(0, HERO_SLOW - 1); if (HERO_SLOW > 15) HERO_OFF = true; } HERO_LAST = tn;
+  if (HERO_LAST) { HERO_SLOW = tn - HERO_LAST > 160 ? HERO_SLOW + 1 : Math.max(0, HERO_SLOW - 1); if (HERO_SLOW > 30) { HERO_OFF = true; return; } } HERO_LAST = tn;
+  var t = (tn - HERO_T0) / 1000;
+  HERO.f.style.webkitTransform = 'translate(' + (Math.sin(t * 0.31 + 2) * 2).toFixed(2) + 'px,' + (Math.sin(t * 1.12) * 3.5).toFixed(2) + 'px)';
+  HERO.b.style.webkitTransform = 'translate(' + (Math.sin(t * 0.27 + 0.4) * 2.5).toFixed(2) + 'px,' + (Math.sin(t * 0.86 + 1.3) * 4).toFixed(2) + 'px)';
   HERO.nf = heroBlink(HERO.fb, HERO.nf); HERO.nb = heroBlink(HERO.bb, HERO.nb);
 }
-setInterval(heroTick, 100);
+setInterval(heroTick, 50);
 /* menyu foni (rang) va zarrachalar: uchqun / qor / yo'q. Bayramlarda o'zi bezanadi (Yangi yil - qor, Navro'z, Mustaqillik) */
 var BGS = { def: '', blue: '#0d2a4a 0%, #0b1526 30%, #080c16 60%, #05070c 100%', purple: '#3a0d4a 0%, #1f0b2a 30%, #110a18 60%, #08060c 100%',
   green: '#0d3a1e 0%, #0b1f12 30%, #0a120d 60%, #060a07 100%', dark: '#1a1a1f 0%, #111114 30%, #0b0b0d 60%, #060607 100%', sand: '#4a3410 0%, #2a1e0b 30%, #16100a 60%, #0a0806 100%' };
