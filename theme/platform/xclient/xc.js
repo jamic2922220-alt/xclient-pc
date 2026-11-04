@@ -1080,7 +1080,8 @@ function applyPw(ip) {
   var p = srvPw(ip);
   for (var f in PW_SET) if (PW_SET.hasOwnProperty(f) && (!p || p.f !== f)) { cmd('setinfo ' + f + ' ""'); delete PW_SET[f]; }
   if (p) { cmd('setinfo ' + p.f + ' ' + q(p.pw)); PW_SET[p.f] = 1; }
-  if (p && p.login) { cmd('name ' + q(p.login)); MYNAME = p.login; PW_NAME = true; }
+  if (p && p.login) { cmd('name ' + q(p.login)); MYNAME = p.login; PW_NAME = p.login; }
+  else if (p && S && S.name && S.tag) { cmd('name ' + q(S.name)); MYNAME = S.name; PW_NAME = S.name; }   // VIP aniq nik bo'yicha - klan tegi xalaqit beradi
   else pwRestoreName();
 }
 var PW_IP = '';
@@ -2011,7 +2012,8 @@ function fullName(s) { return ((s.tag || '') + s.name).slice(0, 31); }
 var ULTRA_WAS = false;  // asl qiymatlar faqat o'yinchi "Ultra yengil" ni o'chirganda yuboriladi (qon va h.k. ni o'zi o'chirganlarga tegmaymiz)
 function settingsCmds(s) {
   var n = NETS[s.net] || NETS.fast, c = [];
-  if (s.name) c.push('name ' + q(fullName(s)));
+  if (PW_NAME && CONNECTED) c.push('name ' + q(PW_NAME));      // shu serverda VIP nik bilan kirilgan - tegli nik bilan almashtirmaymiz
+  else if (s.name) c.push('name ' + q(fullName(s)));
   c.push('rate ' + n[0], 'cl_updaterate ' + n[1], 'cl_cmdrate ' + n[2]);
   c.push('cl_allowdownload 1', 'cl_allowupload 1', 'cl_righthand ' + s.hand, 'hud_fastswitch ' + s.fastsw);
   c.push('mp3volume ' + (s.mp3off ? 0 : s.mus));
