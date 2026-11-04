@@ -1892,16 +1892,27 @@ static DWORD WINAPI game_icon_thread(LPVOID arg)
     HICON big = (HICON)LoadImageW(hi, MAKEINTRESOURCEW(1), IMAGE_ICON, GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), 0);
     HICON sm = (HICON)LoadImageW(hi, MAKEINTRESOURCEW(1), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), 0);
     if (!big || !sm) return 0;
+    /* O'yin oynasiga xabar yuborish uning kadr aylanishiga tegadi - o'yin davomida doimiy tekshirmaymiz (5 soniyada bir
+     * WM_SETICON qotish berardi). Oyna topilgach faqat bir necha marta: darhol, 15 s, 60 s, 3 daqiqadan keyin (video rejim o'rnashguncha) */
     GameWin g; g.pid = GetProcessId(proc);
-    while (WaitForSingleObject(proc, 5000) == WAIT_TIMEOUT) {
+    static const DWORD waits[] = { 2000, 15000, 45000, 120000 };
+    int found = 0, k = 0;
+    for (int i = 0; i < 60 && !found; i++) {                          /* oynani 2 daqiqagacha kutamiz */
+        if (WaitForSingleObject(proc, 2000) != WAIT_TIMEOUT) goto out;
+        g.w = NULL; EnumWindows(game_win_cb, (LPARAM)&g); found = g.w != NULL;
+    }
+    for (k = 0; found && k < 4; k++) {
+        if (WaitForSingleObject(proc, waits[k]) != WAIT_TIMEOUT) break;
         g.w = NULL; EnumWindows(game_win_cb, (LPARAM)&g);
         if (!g.w) continue;
         DWORD_PTR cur = 0;
-        if (!SendMessageTimeoutW(g.w, WM_GETICON, ICON_BIG, 0, SMTO_ABORTIFHUNG, 500, &cur) || (HICON)cur != big) {
-            SendMessageTimeoutW(g.w, WM_SETICON, ICON_BIG, (LPARAM)big, SMTO_ABORTIFHUNG, 500, NULL);
-            SendMessageTimeoutW(g.w, WM_SETICON, ICON_SMALL, (LPARAM)sm, SMTO_ABORTIFHUNG, 500, NULL);
+        if (!SendMessageTimeoutW(g.w, WM_GETICON, ICON_BIG, 0, SMTO_ABORTIFHUNG, 300, &cur) || (HICON)cur != big) {
+            SendMessageTimeoutW(g.w, WM_SETICON, ICON_BIG, (LPARAM)big, SMTO_ABORTIFHUNG, 300, NULL);
+            SendMessageTimeoutW(g.w, WM_SETICON, ICON_SMALL, (LPARAM)sm, SMTO_ABORTIFHUNG, 300, NULL);
         }
     }
+    WaitForSingleObject(proc, INFINITE);                              /* ikonkalar o'yin yopilguncha yashashi kerak */
+out:
     CloseHandle(proc);
     DestroyIcon(big); DestroyIcon(sm);
     return 0;

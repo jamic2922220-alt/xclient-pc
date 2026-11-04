@@ -1310,6 +1310,7 @@ function onConsole(txt) {
 var ANN_T = 0, ANN_N = 0, ANN_LAST = 0;
 function annLang() { var l = DB.lang || 'uz'; return l === 'uz' ? 'uz' : /^(ru|ua|kz|kg|tj)$/.test(l) ? 'ru' : 'en'; }
 function annKill(wpn, hs, streak) {
+  if (true) return;                              // egasining so'rovi bilan o'chirildi (serverlarda o'z ovoz plaginlari bor)
   if (!S || S.ann === 0 || DEMO_PLAY) return;
   var t = now(); ANN_N = t - ANN_T <= 5000 ? ANN_N + 1 : 1; ANN_T = t;
   var id = ANN_N >= 5 ? 'ace' : ANN_N === 4 ? 'k4' : ANN_N === 3 ? 'k3' : ANN_N === 2 ? 'k2'
@@ -2842,7 +2843,7 @@ var PANES = {
   },
   sound: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('so_title')) + '</div>' + sl('vol', 'so_vol', 0, 1, 0.05) + sl('mus', 'so_mus', 0, 1, 0.05) + sl('vscale', 'so_vscale', 0, 2, 0.1) + '</div>' +
-      '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('voice', 'so_voice') + tg('micwarm', 'so_micwarm', 'so_micwarm2') + tg('micfix', 'so_micfix', 'so_micfix2') + tg('loop', 'so_loop') + tg('mute', 'so_mute') + tg('ann', 'so_ann', 'so_ann2') + tg('uisnd', 'so_ui', 'so_ui2') + (S && S.uisnd !== 0 ? tg('uics', 'so_uics', 'so_uics2') : '') + tg('mmusic', 'so_music', 'so_music2') +
+      '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('voice', 'so_voice') + tg('micwarm', 'so_micwarm', 'so_micwarm2') + tg('micfix', 'so_micfix', 'so_micfix2') + tg('loop', 'so_loop') + tg('mute', 'so_mute') + tg('uisnd', 'so_ui', 'so_ui2') + (S && S.uisnd !== 0 ? tg('uics', 'so_uics', 'so_uics2') : '') + tg('mmusic', 'so_music', 'so_music2') +
       '<div class="ph2 m">' + esc(T('so_q')) + '</div>' + tg('hisnd', 'so_hi') + seg('mixa', 'so_mix', [[0.1, 'so_mix2'], [0.15, 'so_mix3']]) + musicPick() + '</div>';
   },
   video: function () {
