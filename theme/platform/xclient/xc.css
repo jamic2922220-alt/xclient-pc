@@ -945,3 +945,10 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .nlw { padding: 16px; border: 1px solid #f5a623; background: #2a1d08; }
 .nlw b { display: block; font-size: 20px; color: #ffc04d; margin-bottom: 8px; }
 .nlw ul { margin: 8px 0 12px 20px; padding: 0; } .nlw li { margin: 4px 0; }
+
+/* batafsil statistika */
+.sdeep .ph3 { margin: 12px 0 6px; font-size: 12px; letter-spacing: 1px; color: #c9bfc6; text-transform: uppercase; }
+.sdw { overflow: hidden; height: 24px; line-height: 24px; }
+.sdw span { float: left; width: 90px; color: #e8e2e6; }
+.sdw i { float: left; height: 10px; margin: 7px 10px 0 0; background: #ff3b3b; }
+.sdw b { float: left; font-size: 13px; }

@@ -557,7 +557,7 @@ function openStats() {
     '<div class="ph2 m">' + esc(T('ks_wpn')) + '</div>' + (w || '<div class="mut">' + esc(T('ks_none')) + '</div>') +
     '<div class="ph2 m">' + esc(T('ks_srv')) + '</div>' + (sv || '<div class="mut">' + esc(T('ks_none')) + '</div>') +
     '<div class="ph2 m">' + esc(T('ks_top')) + '</div><div id="topkList" class="mut">...</div><small class="mut">' + esc(T('ks_note')) + '</small>';
-  h = rankCard(ME) + statBox(st) + wkChart(ME && ME.wkst) + h.slice(statBox(st).length) + myGames() + '<div class="ph2 m">' + esc(T('rk_top')) + '</div><div id="rpTop" class="mut">...</div>';
+  h = rankCard(ME) + statBox(st) + wkChart(ME && ME.wkst) + statDeep() + h.slice(statBox(st).length) + myGames() + '<div class="ph2 m">' + esc(T('rk_top')) + '</div><div id="rpTop" class="mut">...</div>';
   openSide('stats', T('ks_title'), h);
   api('toprp', {}, function (r) {
     var el = $('rpTop'); if (!el) return; var t = '';
@@ -570,6 +570,35 @@ function openStats() {
     each((r.ok && r.top) || [], function (x, i) { t += '<div class="kv"><span>' + (i + 1) + '. ' + esc(x.name) + (x.vip ? ' <em class="vipb">VIP</em>' : '') + '</span><b>' + x.k + ' kill · K/D ' + x.kd + '</b></div>'; });
     el.innerHTML = t || esc(T('ks_none')); el.className = '';
   });
+}
+/* batafsil (shu kompyuterdagi oxirgi 300 o'yin): sevimli qurollar + headshot %, eng zo'r xaritalar, eng yaxshi o'yin */
+function statDeep() {
+  var W = {}, M = {}, best = null, K = 0, H = 0;
+  each(DB.hist || [], function (g) {
+    if (!g || !(g.k || g.x)) return;
+    K += g.k || 0; H += g.h || 0;
+    for (var w in g.w || {}) if (g.w.hasOwnProperty(w)) { W[w] = W[w] || { k: 0, h: 0 }; W[w].k += g.w[w]; W[w].h += (g.wh && g.wh[w]) || 0; }
+    var mp = g.map || ''; if (mp) { M[mp] = M[mp] || { g: 0, k: 0, x: 0 }; M[mp].g++; M[mp].k += g.k || 0; M[mp].x += g.x || 0; }
+    if (!best || (g.k || 0) > (best.k || 0)) best = g;
+  });
+  if (!K) return '';
+  var wl = []; for (var w in W) if (W.hasOwnProperty(w)) wl.push([w, W[w]]);
+  wl.sort(function (a, b) { return b[1].k - a[1].k; }); wl = wl.slice(0, 6);
+  var mx = wl.length ? wl[0][1].k : 1, h = '<div class="ph2 m">' + esc(T('sd_title')) + '</div><div class="sdeep">';
+  h += '<div class="kv"><span>' + esc(T('sd_hs')) + '</span><b>' + Math.round(H * 100 / K) + '%</b></div>';
+  if (best) h += '<div class="kv"><span>' + esc(T('sd_best')) + '</span><b>' + (best.k || 0) + ' kill \u00b7 ' + esc(best.map || '') + ' \u00b7 ' + esc(fmtTime(best.t)) + '</b></div>';
+  h += '<div class="ph3">' + esc(T('sd_wpn')) + '</div>';
+  each(wl, function (x) {
+    var hs = x[1].h ? ' \u00b7 HS ' + Math.round(x[1].h * 100 / x[1].k) + '%' : '';
+    h += '<div class="sdw"><span>' + esc(x[0]) + '</span><i style="width:' + Math.max(4, Math.round(220 * x[1].k / mx)) + 'px"></i><b>' + x[1].k + hs + '</b></div>';
+  });
+  var ml = []; for (var m in M) if (M.hasOwnProperty(m) && M[m].g >= 2) ml.push([m, M[m], M[m].x ? M[m].k / M[m].x : M[m].k]);
+  ml.sort(function (a, b) { return b[2] - a[2]; }); ml = ml.slice(0, 5);
+  if (ml.length) {
+    h += '<div class="ph3">' + esc(T('sd_maps')) + '</div>';
+    each(ml, function (x, i) { h += '<div class="kv"><span>' + (i + 1) + '. ' + esc(x[0]) + ' <small class="mut">(' + x[1].g + ' ' + esc(T('sd_games')) + ')</small></span><b>K/D ' + x[2].toFixed(2) + '</b></div>'; });
+  }
+  return h + '</div>';
 }
 /* haftalar bo'yicha grafik: ustun - kill, ostida K/D (oxirgi 12 hafta) */
 function wkChart(ws) {
@@ -1270,10 +1299,23 @@ function onConsole(txt) {
   if (m[1] !== MYNAME && kp.length === 2 && kp[0] === MYNAME) killer = MYNAME;
   if (killer === MYNAME && m[2] !== MYNAME) { autoClipKill();
     CUR.k = (CUR.k || 0) + 1; CUR.w = CUR.w || {}; CUR.w[m[4]] = (CUR.w[m[4]] || 0) + 1;
-    if (m[3]) CUR.h = (CUR.h || 0) + 1;
-    CUR.s = (CUR.s || 0) + 1; if (CUR.s > (CUR.bs || 0)) CUR.bs = CUR.s; persist(); }
+    if (m[3]) { CUR.h = (CUR.h || 0) + 1; CUR.wh = CUR.wh || {}; CUR.wh[m[4]] = (CUR.wh[m[4]] || 0) + 1; }
+    CUR.s = (CUR.s || 0) + 1; if (CUR.s > (CUR.bs || 0)) CUR.bs = CUR.s; persist(); annKill(m[4], !!m[3], CUR.s); }
   else if (m[2] === MYNAME) { CUR.x = (CUR.x || 0) + 1; CUR.s = 0; persist(); }
   else if (kp.length === 2 && kp[1] === MYNAME) { CUR.a = (CUR.a || 0) + 1; persist(); }
+}
+/* ---- kill ovozlari (faqat o'yinchining o'ziga eshitiladi): ketma-ket kill (5 soniya ichida), seriya (o'lmasdan), headshot, pichoq, granata.
+ * Fayllar launcher bilan keladi: cstrike/sound/xclient/ann/<til>/<nom>.wav. Til - menyu tili (uz / ru / en) */
+var ANN_T = 0, ANN_N = 0, ANN_LAST = 0;
+function annLang() { var l = DB.lang || 'uz'; return l === 'uz' ? 'uz' : /^(ru|ua|kz|kg|tj)$/.test(l) ? 'ru' : 'en'; }
+function annKill(wpn, hs, streak) {
+  if (!S || S.ann === 0 || DEMO_PLAY) return;
+  var t = now(); ANN_N = t - ANN_T <= 5000 ? ANN_N + 1 : 1; ANN_T = t;
+  var id = ANN_N >= 5 ? 'ace' : ANN_N === 4 ? 'k4' : ANN_N === 3 ? 'k3' : ANN_N === 2 ? 'k2'
+    : streak === 7 ? 'legend' : streak === 5 ? 'unstop' : streak === 3 ? 'onfire'
+    : wpn === 'knife' ? 'knife' : wpn === 'grenade' ? 'grenade' : hs ? 'hs' : '';
+  if (!id || (t - ANN_LAST < 700 && id === 'hs')) return;          // oddiy headshot ketma-ket ovozni bosib ketmasin
+  ANN_LAST = t; cmd('play xclient/ann/' + annLang() + '/' + id + '.wav');
 }
 function bestServer() {
   var best = null;
@@ -1889,7 +1931,7 @@ var DEF = {
   name: '', tag: 'X | ', net: 'fast', dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, buykeys: 0, queue: 1, reconn: 1, demo: 0, dmig: 0, dmig2: 0,
   sens: 2.5, zoom: 1.2, raw: 1, filter: 0, inv: 0,
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1, micwarm: 1, micfix: 0,
-  fps: 100, showfps: 0, uisnd: 1, uics: 1, ultra: 0, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
+  fps: 100, showfps: 0, uisnd: 1, uics: 1, ultra: 0, ann: 1, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
   xp: 'pro', xt: 0, xs: 'small', xc: '50 250 50', xtr: 0, xdyn: 0, xthick: 1, xgap: 3, xout: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
   rscale: 115, ropac: 100, rnames: 0, rhp: 0, rmode: 1, rround: 1, rrot: 1, rmap: 0.8,
   vmx: 0, vmy: 0, vmz: 0, vmshift: 0, bobst: 0, lagst: 0, camint: 0,
@@ -2793,7 +2835,7 @@ var PANES = {
   },
   sound: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('so_title')) + '</div>' + sl('vol', 'so_vol', 0, 1, 0.05) + sl('mus', 'so_mus', 0, 1, 0.05) + sl('vscale', 'so_vscale', 0, 2, 0.1) + '</div>' +
-      '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('voice', 'so_voice') + tg('micwarm', 'so_micwarm', 'so_micwarm2') + tg('micfix', 'so_micfix', 'so_micfix2') + tg('loop', 'so_loop') + tg('mute', 'so_mute') + tg('uisnd', 'so_ui', 'so_ui2') + (S && S.uisnd !== 0 ? tg('uics', 'so_uics', 'so_uics2') : '') + tg('mmusic', 'so_music', 'so_music2') +
+      '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('voice', 'so_voice') + tg('micwarm', 'so_micwarm', 'so_micwarm2') + tg('micfix', 'so_micfix', 'so_micfix2') + tg('loop', 'so_loop') + tg('mute', 'so_mute') + tg('ann', 'so_ann', 'so_ann2') + tg('uisnd', 'so_ui', 'so_ui2') + (S && S.uisnd !== 0 ? tg('uics', 'so_uics', 'so_uics2') : '') + tg('mmusic', 'so_music', 'so_music2') +
       '<div class="ph2 m">' + esc(T('so_q')) + '</div>' + tg('hisnd', 'so_hi') + seg('mixa', 'so_mix', [[0.1, 'so_mix2'], [0.15, 'so_mix3']]) + musicPick() + '</div>';
   },
   video: function () {
