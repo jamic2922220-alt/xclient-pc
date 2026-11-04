@@ -3642,7 +3642,7 @@ function sfx(n) {
   if (!S || S.uisnd === 0 || !hasApi()) return;
   var t = now();
   if (n === 'hover' && (DB.dnd || t - sfxT < 45)) return;
-  sfxT = t; cmd('play ' + (S.uics === 1 ? SFX_CS[n] || SFX_CS.click : 'xclient/s/' + n + '.wav'));   // standart - yumshoq X CLIENT ovozlari (launcher 1.0.114+)
+  sfxT = t; cmd('play ' + (S.uics === 1 ? SFX_CS[n] || SFX_CS.click : (verGE(VERSION, '1.0.114') ? 'xclient/s/' : 'xclient/') + n + '.wav'));   // standart - yumshoq X CLIENT ovozlari (launcher 1.0.114+)
 }
 function sfxTarget(el) {
   for (; el && el !== document; el = el.parentNode) {
