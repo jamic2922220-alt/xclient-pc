@@ -1217,7 +1217,7 @@ function onConnectEvt(addr, inGame) {
   if (DEMO_PLAY) return;
   cmd('host_framerate 0');          // demo o'zi ham ulanish hodisasini berishi mumkin - demo paytida tegmaymiz (serverga ulanish 'Connecting to' bilan ushlanadi)
   if (QUEUE_IP && addr !== QUEUE_IP && addr !== CONNECTED) stopQueue();   // hozirgi serverning o'z hodisalari (xarita almashishi) bekor qilmaydi   // boshqa serverga (konsol, o'yin ro'yxati) kirildi - navbat bekor
-  if (addr !== CONNECTED) { CONNECTED = addr; MUSIC_ON = null; if (!inGame) applyPw(addr); startGame(addr); musicSync();   // serverda mp3 chalinmasin: o'yin ovozlarini bo'g'adi
+  if (addr !== CONNECTED) { CONNECTED = addr; if (!inGame) applyPw(addr); startGame(addr); musicSync();   // serverda mp3 chalinmasin: o'yin ovozlarini bo'g'adi
     pingPresence(); renderAll(); sparks(); voiceWarm(); }
   if (S.demo) startRecord(inGame ? 1500 : 25000);   // 'connect' dan keyin 'putinserver' kelmasa ham 25 soniyadan so'ng urinamiz
 }
@@ -1996,7 +1996,7 @@ function settingsCmds(s) {
   if (!DEMO_PLAY) c.push('cl_filterstuffcmd 0');
   return c;
 }
-function applySettings(s) { each(settingsCmds(s), function (c) { cmd(c); }); if (s.name) MYNAME = fullName(s); if (s === S) binAliases(); }
+function applySettings(s) { each(settingsCmds(s), function (c) { cmd(c); }); if (MUSIC_ON) cmd('mp3volume ' + MVOL); if (GMUTE) cmd('volume 0'); if (s.name) MYNAME = fullName(s); if (s === S) binAliases(); }
 
 /* saqlashdan keyin o'yindan qayta o'qib tekshirish */
 var LAST_CHECK = null;
@@ -3421,10 +3421,21 @@ function act(a) {
 /* ============================================================ hodisalar */
 /* ---- menyu musiqasi: CS ning o'z menyu kuyi (media/gamestartup.mp3), faqat serverda bo'lmaganda ---- */
 var MUSIC_ON = null;                             // null - noma'lum: oldingi sahifa (menyu yangilangan) qoldirgan musiqa ham o'chirilsin
+/* Menyu musiqasi: bosh menyuda va o'yin ichida ESC bosilganda ham chaladi. ESC menyusi ochiq turganda o'yin ovozi
+ * (otishmalar) o'chiriladi, o'yinga qaytilganda ('hide') musiqa to'xtaydi va o'yin ovozi qaytadi.
+ * Menyu musiqasining balandligi alohida (MVOL) - serverlar chaladigan mp3 balandligi (S.mus) o'zgarmaydi */
+var MVOL = 0.85, GMUTE = false;
+/* ehtiyot: 'hide' hodisasi kelmay qolsa ham o'yin ovozi jim qolib ketmasin (3 soniyada bir, faqat holat tekshiriladi) */
+setInterval(function () { if ((GMUTE || MUSIC_ON) && CONNECTED && !uiShown()) musicSync(); }, 3000);
+function gameVol() { return S && S.vol != null ? S.vol : 0.8; }
 function musicSync() {
-  var want = !!(S && S.mmusic && !CONNECTED && !DEMO_PLAY && hasApi());   // demo ko'rilayotganda menyu musiqasi chalinmasin
-  if (want && !MUSIC_ON) { cmd('mp3volume ' + (S.mp3off ? 0 : S.mus)); cmd('mp3 loop ' + (/^[\w\/.\-]+\.mp3$/.test(DB.mtrack || '') ? DB.mtrack : MTRACK_DEF)); MUSIC_ON = true; }
-  else if (!want && MUSIC_ON !== false) { cmd('mp3 stop'); MUSIC_ON = false; }
+  var inMenu = !CONNECTED || uiShown();
+  var want = !!(S && S.mmusic && !S.mp3off && inMenu && !DEMO_PLAY && hasApi());   // demo ko'rilayotganda menyu musiqasi chalinmasin
+  if (want && !MUSIC_ON) { cmd('mp3volume ' + MVOL); cmd('mp3 loop ' + (/^[\w\/.\-]+\.mp3$/.test(DB.mtrack || '') ? DB.mtrack : MTRACK_DEF)); MUSIC_ON = true; }
+  else if (!want && MUSIC_ON !== false) { cmd('mp3 stop'); cmd('mp3volume ' + (S && S.mp3off ? 0 : (S ? S.mus : 0.4))); MUSIC_ON = false; }
+  var mute = want && !!CONNECTED;                  // serverda, ESC menyusi ochiq - o'yin ovozi jim
+  if (mute && !GMUTE) { cmd('volume 0'); GMUTE = true; }
+  else if (!mute && GMUTE) { cmd('volume ' + gameVol()); GMUTE = false; }
 }
 
 /* ---- internet tekshiruvi: bir nechta serverga 3 martadan so'rov - ping, tebranish, yo'qotish -> mos rate ---- */
@@ -3819,8 +3830,8 @@ if (DB.token) api('me', {}, function (r) { if (r.ok) { setMe(r.me); loadFriends(
 
 if (NC) {
   // o'yin ekrani ochildi (NextClient'ning o'z ro'yxatidan yoki konsoldan kirilsa ham) - menyu musiqasi o'chsin
-  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('hide', function () { UI_VIS = false; if (MUSIC_ON !== false) { cmd('mp3 stop'); MUSIC_ON = false; } }); } catch (e) {}
-  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('show', function () { UI_VIS = true; if (UI_DIRTY) { UI_DIRTY = false; renderAll(); renderBar(); } each(TOP.concat(PINNED).concat(DB.fav), function (ip) { query(ip); }); if (curModal === 'mdServers') { each(tabIps(), function (ip) { query(ip, true); }); if (srvSel) loadPlayers(srvSel); } if (CHAT && curModal === 'mdSide' && sideMode === 'chat') chatLoad(); loadFriends(); loadWeek(); ngFit(); }); } catch (e) {}
+  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('hide', function () { UI_VIS = false; musicSync(); }); } catch (e) {}
+  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('show', function () { UI_VIS = true; musicSync(); if (UI_DIRTY) { UI_DIRTY = false; renderAll(); renderBar(); } each(TOP.concat(PINNED).concat(DB.fav), function (ip) { query(ip); }); if (curModal === 'mdServers') { each(tabIps(), function (ip) { query(ip, true); }); if (srvSel) loadPlayers(srvSel); } if (CHAT && curModal === 'mdSide' && sideMode === 'chat') chatLoad(); loadFriends(); loadWeek(); ngFit(); }); } catch (e) {}
   try {
     if (NC.addEventListener) {
       NC.addEventListener('connect', function (e) { onConnectEvt(e && e.detail && e.detail.address, false); });
