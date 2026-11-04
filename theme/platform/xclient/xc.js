@@ -1258,7 +1258,7 @@ function onConnectEvt(addr, inGame) {
   if (DEMO_PLAY) return;
   cmd('host_framerate 0');          // demo o'zi ham ulanish hodisasini berishi mumkin - demo paytida tegmaymiz (serverga ulanish 'Connecting to' bilan ushlanadi)
   if (QUEUE_IP && addr !== QUEUE_IP && addr !== CONNECTED) stopQueue();   // hozirgi serverning o'z hodisalari (xarita almashishi) bekor qilmaydi   // boshqa serverga (konsol, o'yin ro'yxati) kirildi - navbat bekor
-  if (addr !== CONNECTED) { CONNECTED = addr; ESC_OPEN = false; if (!inGame) applyPw(addr); startGame(addr); musicSync();   // serverda mp3 chalinmasin: o'yin ovozlarini bo'g'adi
+  if (addr !== CONNECTED) { CONNECTED = addr; ESC_OPEN = false; setTimeout(restCheck, 3000); if (!inGame) applyPw(addr); startGame(addr); musicSync();   // serverda mp3 chalinmasin: o'yin ovozlarini bo'g'adi
     pingPresence(); renderAll(); sparks(); voiceWarm(); }
   if (S.demo) startRecord(inGame ? 1500 : 25000);   // 'connect' dan keyin 'putinserver' kelmasa ham 25 soniyadan so'ng urinamiz
 }
@@ -1928,7 +1928,7 @@ function openAvatars() {
 
 /* ============================================================ SOZLAMALAR */
 var DEF = {
-  name: '', tag: 'X | ', net: 'fast', dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, buykeys: 0, queue: 1, reconn: 1, demo: 0, dmig: 0, dmig2: 0,
+  name: '', tag: 'X | ', net: 'fast', dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, buykeys: 0, queue: 1, reconn: 1, rest: 0, demo: 0, dmig: 0, dmig2: 0,
   sens: 2.5, zoom: 1.2, raw: 1, filter: 0, inv: 0,
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1, micwarm: 1, micfix: 0,
   fps: 100, showfps: 0, uisnd: 1, uics: 1, ultra: 0, ann: 1, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
@@ -2807,7 +2807,7 @@ var PANES = {
       '<div class="fr"><div class="lb">' + esc(T('g_name')) + '</div><div class="ct2"><input class="tx" id="fName" maxlength="28" value="' + esc(E.name) + '"></div></div>' +
       seg('tag', 'g_tag', [['X | ', 'X |'], ['[UZ] ', '[UZ]']].concat(ME && ME.clan ? [['[' + ME.clan.tag + '] ', '[' + ME.clan.tag + ']']] : []).concat([['', 'g_none']])) +
       '<div class="ph2 m">' + esc(T('g_net')) + '</div><div class="big">' + nets + '</div>' +
-      '<div class="mut" style="margin:10px 0 14px;font-size:12px">' + esc(T('g_net_note')) + '</div>' + tg('reconn', 'g_reconn') + '</div>' +
+      '<div class="mut" style="margin:10px 0 14px;font-size:12px">' + esc(T('g_net_note')) + '</div>' + tg('reconn', 'g_reconn') + tg('rest', 'g_rest', 'g_rest2') + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('g_server')) + '</div>' +
       tg('queue', 'g_queue', 'g_queue2') + tg('mp3off', 'g_mp3', 'g_mp32') + tg('hand', 'g_hand') + tg('fastsw', 'g_fast') +
       (ncHas('cl_discordrpc') ? '<div class="ph2 m">Discord</div>' + tg('drpc', 'g_drpc', 'g_drpc2') + tg('drpcs', 'g_drpcs') + tg('drpcj', 'g_drpcj') : '') + '</div>';
@@ -2974,9 +2974,9 @@ var PANES = {
     }
     if (HSUB === 'radar' && !radarNC()) {          // bu NextClient versiyasida xaritali radar (hud_radar_*) yo'q - faqat CS 1.6 radari
       var rk = '';
-      each(verGE(VERSION, '1.0.102') ? [[3, 'rk3'], [1, 'rk1'], [2, 'rk2'], [4, 'rk4'], [5, 'rk5'], [6, 'rk6'], [0, 'rk0']] : [[1, 'rk1'], [2, 'rk2'], [0, 'rk0']], function (o) { rk += '<a class="' + ((OPTS.rsk == null ? 3 : OPTS.rsk) === o[0] ? 'on' : '') + '" data-orsk="' + o[0] + '">' + esc(T(o[1])) + '</a>'; });   // 4-6: launcher 1.0.102+
+      each(verGE(VERSION, '1.0.102') ? [[3, 'rk3'], [1, 'rk1'], [2, 'rk2'], [4, 'rk4'], [5, 'rk5'], [6, 'rk6'], [0, 'rk0']] : [[1, 'rk1'], [2, 'rk2'], [0, 'rk0']], function (o) { rk += '<a class="rkc' + ((OPTS.rsk == null ? 3 : OPTS.rsk) === o[0] ? ' on' : '') + '" data-orsk="' + o[0] + '"><i style="background-image:url(radar_prev.jpg);background-position:-' + (o[0] * 112) + 'px 0"></i><span>' + esc(T(o[1])) + '</span></a>'; });   // 4-6: launcher 1.0.102+; rasm - radar_prev.jpg (launcher chizadigan uslubning o'zi)
       return sub + '<div class="pane l hp"><div class="ph2">' + esc(T('hx_radar')) + '</div>' +
-        '<div class="fr"><div class="lb">' + esc(T('rk_title')) + '</div><div class="ct2 seg">' + rk + '</div></div>' +
+        '<div class="lb" style="margin-bottom:10px">' + esc(T('rk_title')) + '</div><div class="rkg">' + rk + '</div>' +
         '<div class="mut" style="font-size:12px;margin-top:10px">' + esc(T('rk_note')) + '</div>' +
         '<div class="mut" style="font-size:12px;margin-top:6px">' + esc(T('h_rnone')) + '</div></div>';
     }
@@ -3491,6 +3491,17 @@ var MUSIC_ON = null;                             // null - noma'lum: oldingi sah
 /* Menyu musiqasi: bosh menyuda va o'yin ichida ESC bosilganda ham chaladi. ESC menyusi ochiq turganda o'yin ovozi
  * (otishmalar) o'chiriladi, o'yinga qaytilganda ('hide') musiqa to'xtaydi va o'yin ovozi qaytadi.
  * Menyu musiqasining balandligi alohida (MVOL) - serverlar chaladigan mp3 balandligi (S.mus) o'zgarmaydi */
+/* o'yin vaqti eslatmasi (Sozlamalar > O'yin, standart o'chiq): o'yin jarayoni boshlangandan (sessionStorage - menyu qayta
+ * yuklansa ham saqlanadi) 2 soat o'tib, keyin har soatda - ESC bosilganda yoki ulanganda qisqa yozuv */
+function restCheck() {
+  if (!S || !S.rest || !CONNECTED) return;
+  var t0 = 0, nx = 2;
+  try { t0 = +sessionStorage.getItem('xcpt') || 0; nx = +sessionStorage.getItem('xcpn') || 2; if (!t0) { t0 = now(); sessionStorage.setItem('xcpt', String(t0)); } } catch (e) { return; }
+  var hrs = (now() - t0) / 36e5;
+  if (hrs < nx) return;
+  try { sessionStorage.setItem('xcpn', String(Math.floor(hrs) + 1)); } catch (e) {}
+  toast(T('rest_msg').replace('{h}', Math.floor(hrs)), 10000);
+}
 var MVOL = 0.85, GMUTE = false, ESC_OPEN = false;   // ESC_OPEN - serverda 'show' hodisasi kelgan (o'yin ustida menyu ochiq)
 /* ehtiyot: 'hide' hodisasi kelmay qolsa ham o'yin ovozi jim qolib ketmasin (3 soniyada bir, faqat holat tekshiriladi) */
 setInterval(function () { if ((GMUTE || MUSIC_ON) && CONNECTED && !uiShown()) { ESC_OPEN = false; musicSync(); } }, 3000);
@@ -3905,7 +3916,7 @@ if (DB.token) api('me', {}, function (r) { if (r.ok) { setMe(r.me); loadFriends(
 if (NC) {
   // o'yin ekrani ochildi (NextClient'ning o'z ro'yxatidan yoki konsoldan kirilsa ham) - menyu musiqasi o'chsin
   try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('hide', function () { UI_VIS = false; ESC_OPEN = false; musicSync(); }); } catch (e) {}
-  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('show', function () { UI_VIS = true; ESC_OPEN = !!CONNECTED; musicSync(); if (UI_DIRTY) { UI_DIRTY = false; renderAll(); renderBar(); } each(TOP.concat(PINNED).concat(DB.fav), function (ip) { query(ip); }); if (curModal === 'mdServers') { each(tabIps(), function (ip) { query(ip, true); }); if (srvSel) loadPlayers(srvSel); } if (CHAT && curModal === 'mdSide' && sideMode === 'chat') chatLoad(); loadFriends(); loadWeek(); ngFit(); }); } catch (e) {}
+  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('show', function () { UI_VIS = true; ESC_OPEN = !!CONNECTED; musicSync(); restCheck(); if (UI_DIRTY) { UI_DIRTY = false; renderAll(); renderBar(); } each(TOP.concat(PINNED).concat(DB.fav), function (ip) { query(ip); }); if (curModal === 'mdServers') { each(tabIps(), function (ip) { query(ip, true); }); if (srvSel) loadPlayers(srvSel); } if (CHAT && curModal === 'mdSide' && sideMode === 'chat') chatLoad(); loadFriends(); loadWeek(); ngFit(); }); } catch (e) {}
   try {
     if (NC.addEventListener) {
       NC.addEventListener('connect', function (e) { onConnectEvt(e && e.detail && e.detail.address, false); });

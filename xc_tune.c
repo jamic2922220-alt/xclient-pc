@@ -162,8 +162,32 @@ static BOOL game_crashed(DWORD code, ULONGLONG t0)
 }
 
 /* ---------------- o'yin seansi ---------------- */
+/* Shift 5 marta (Sticky Keys), o'ng Shift 8 soniya (Filter Keys), NumLock 5 soniya (Toggle Keys) - Windows so'rov oynasini ochib,
+ * o'yinni yig'ib qo'yadi. O'yin paytida faqat shu "tezkor tugma" o'chadi (funksiyaning o'zi yoqilgan bo'lsa - tegmaymiz).
+ * SPIF_UPDATEINIFILE yo'q: o'zgarish profilga yozilmaydi, launcher to'satdan yopilsa ham kompyuter qayta yoqilganda qaytadi */
+static STICKYKEYS g_sk0; static FILTERKEYS g_fk0; static TOGGLEKEYS g_tk0; static BOOL g_acc = FALSE;
+static void acc_off(void)
+{
+    g_sk0.cbSize = sizeof(g_sk0); g_fk0.cbSize = sizeof(g_fk0); g_tk0.cbSize = sizeof(g_tk0);
+    if (!SystemParametersInfoW(SPI_GETSTICKYKEYS, sizeof(g_sk0), &g_sk0, 0) || !SystemParametersInfoW(SPI_GETFILTERKEYS, sizeof(g_fk0), &g_fk0, 0)
+        || !SystemParametersInfoW(SPI_GETTOGGLEKEYS, sizeof(g_tk0), &g_tk0, 0)) return;
+    g_acc = TRUE;
+    STICKYKEYS sk = g_sk0; FILTERKEYS fk = g_fk0; TOGGLEKEYS tk = g_tk0;
+    if (!(sk.dwFlags & SKF_STICKYKEYSON)) { sk.dwFlags &= ~(SKF_HOTKEYACTIVE | SKF_CONFIRMHOTKEY); SystemParametersInfoW(SPI_SETSTICKYKEYS, sizeof(sk), &sk, 0); }
+    if (!(fk.dwFlags & FKF_FILTERKEYSON)) { fk.dwFlags &= ~(FKF_HOTKEYACTIVE | FKF_CONFIRMHOTKEY); SystemParametersInfoW(SPI_SETFILTERKEYS, sizeof(fk), &fk, 0); }
+    if (!(tk.dwFlags & TKF_TOGGLEKEYSON)) { tk.dwFlags &= ~(TKF_HOTKEYACTIVE | TKF_CONFIRMHOTKEY); SystemParametersInfoW(SPI_SETTOGGLEKEYS, sizeof(tk), &tk, 0); }
+}
+static void acc_restore(void)
+{
+    if (!g_acc) return;
+    g_acc = FALSE;
+    SystemParametersInfoW(SPI_SETSTICKYKEYS, sizeof(g_sk0), &g_sk0, 0);
+    SystemParametersInfoW(SPI_SETFILTERKEYS, sizeof(g_fk0), &g_fk0, 0);
+    SystemParametersInfoW(SPI_SETTOGGLEKEYS, sizeof(g_tk0), &g_tk0, 0);
+}
 static void tune_begin(void)
 {
+    acc_off();                                    /* "Залипание клавиш" oynasi o'yinni yig'ib qo'ymasin (har doim) */
     if (o_dvroff && dvr_state()) dvr_off();
     if (!o_tune) return;                          /* "O'yin uchun Windows'ni moslash" o'chiq */
     power_on();
@@ -177,6 +201,7 @@ static void tune_end(void)
     bgp_restore();
     macc_restore();
     power_off();
+    acc_restore();
 }
 /* launcher oldingi safar o'yin paytida yopilib qolgan (o'chirilgan, yiqilgan): qolgan o'zgarishlarni qaytarish */
 static void tune_recover(void) { macc_restore(); power_off(); }

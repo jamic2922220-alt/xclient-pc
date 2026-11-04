@@ -952,3 +952,12 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .sdw span { float: left; width: 90px; color: #e8e2e6; }
 .sdw i { float: left; height: 10px; margin: 7px 10px 0 0; background: #ff3b3b; }
 .sdw b { float: left; font-size: 13px; }
+
+/* radar fonini tanlash - rasmlar bilan */
+.rkg { overflow: hidden; }
+.rkg .rkc { float: left; width: 112px; margin: 0 10px 12px 0; padding: 4px; border: 2px solid #3a2a30; background: #141118; text-align: center; cursor: pointer; }
+.rkg .rkc i { display: block; width: 112px; height: 112px; background-repeat: no-repeat; }
+.rkg .rkc span { display: block; height: 32px; padding: 5px 0 0; font-size: 12px; line-height: 15px; color: #cfc6cc; overflow: hidden; }
+.rkg .rkc:hover { border-color: #ff5a5a; }
+.rkg .rkc.on { border-color: #ff3b3b; background: #2a1418; }
+.rkg .rkc.on span { color: #fff; }
