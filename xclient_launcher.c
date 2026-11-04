@@ -1874,6 +1874,39 @@ static void start_failed(const wchar_t *exe, DWORD err)
     MessageBoxW(NULL, m, L"X CLIENT", MB_ICONWARNING | MB_SETFOREGROUND);
 }
 
+/* O'yin oynasi (taskbar, Alt+Tab, sarlavha) - X CLIENT belgisi. O'yin o'z ikonkasini qo'yadi va video rejim almashganda
+ * qayta qo'yishi mumkin, shuning uchun o'yin davomida 5 soniyada bir tekshiramiz (arzon: bitta xabar). Ikonka launcher
+ * jarayonida yaratiladi - launcher o'yin yopilguncha ishlab turadi, shuning uchun u o'chib qolmaydi */
+typedef struct { DWORD pid; HWND w; } GameWin;
+static BOOL CALLBACK game_win_cb(HWND h, LPARAM l)
+{
+    GameWin *g = (GameWin *)l; DWORD pid = 0;
+    GetWindowThreadProcessId(h, &pid);
+    if (pid == g->pid && IsWindowVisible(h) && !GetWindow(h, GW_OWNER)) { RECT r; GetWindowRect(h, &r); if (r.right - r.left >= 320) { g->w = h; return FALSE; } }
+    return TRUE;
+}
+static DWORD WINAPI game_icon_thread(LPVOID arg)
+{
+    HANDLE proc = (HANDLE)arg;
+    HINSTANCE hi = GetModuleHandleW(NULL);
+    HICON big = (HICON)LoadImageW(hi, MAKEINTRESOURCEW(1), IMAGE_ICON, GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), 0);
+    HICON sm = (HICON)LoadImageW(hi, MAKEINTRESOURCEW(1), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), 0);
+    if (!big || !sm) return 0;
+    GameWin g; g.pid = GetProcessId(proc);
+    while (WaitForSingleObject(proc, 5000) == WAIT_TIMEOUT) {
+        g.w = NULL; EnumWindows(game_win_cb, (LPARAM)&g);
+        if (!g.w) continue;
+        DWORD_PTR cur = 0;
+        if (!SendMessageTimeoutW(g.w, WM_GETICON, ICON_BIG, 0, SMTO_ABORTIFHUNG, 500, &cur) || (HICON)cur != big) {
+            SendMessageTimeoutW(g.w, WM_SETICON, ICON_BIG, (LPARAM)big, SMTO_ABORTIFHUNG, 500, NULL);
+            SendMessageTimeoutW(g.w, WM_SETICON, ICON_SMALL, (LPARAM)sm, SMTO_ABORTIFHUNG, 500, NULL);
+        }
+    }
+    CloseHandle(proc);
+    DestroyIcon(big); DestroyIcon(sm);
+    return 0;
+}
+
 /* qaytaradi TRUE - o'yin yiqildi va o'yinchi "qayta ochish" ni tanladi */
 static BOOL run_game(void)
 {
@@ -1931,6 +1964,9 @@ static BOOL run_game(void)
         /* O'yin yopilgach skrinshotlarni (F5) darhol galereyaga yuklaymiz - keyingi ishga tushishni kutmasdan.
          * fetch_opts qayta: menyuda o'yin paytida yoqilgan "galereyaga yuklash" ham hisobga olinadi va
          * sayt shu kompyuterni yana taniydi (shot_up 30 daqiqalik IP tekshiruvi). */
+        { HANDLE dup = NULL;   /* taskbar va Alt+Tab da X CLIENT belgisi */
+          if (DuplicateHandle(GetCurrentProcess(), pi.hProcess, GetCurrentProcess(), &dup, SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, 0)) {
+              HANDLE it = CreateThread(NULL, 0, game_icon_thread, dup, 0, NULL); if (it) CloseHandle(it); else CloseHandle(dup); } }
         rec_session_begin(pi.dwProcessId);
         tune_begin();                                /* quvvat rejimi, sichqoncha, fon dasturlari - o'yin yopilguncha */
         /* o'yin davomida launcher orqada turadi (F10, Windows sozlamalari). Uning ishlatmayotgan xotirasini Windows'ga qaytaramiz -
