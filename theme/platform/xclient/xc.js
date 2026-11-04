@@ -2010,6 +2010,7 @@ var NETS = { slow: [25000, 60, 60], mid: [50000, 101, 101], fast: [100000, 101, 
 var BUY = [['F1', 'buy m4a1; buy ak47; buyammo1; buyammo1'], ['F2', 'buy awp; buyammo1; buyammo1'], ['F3', 'buy vesthelm; buy defuser'], ['F4', 'buy hegren; buy flash; buy flash; buy sgren']];
 function fullName(s) { return ((s.tag || '') + s.name).slice(0, 31); }
 var ULTRA_WAS = false;  // asl qiymatlar faqat o'yinchi "Ultra yengil" ni o'chirganda yuboriladi (qon va h.k. ni o'zi o'chirganlarga tegmaymiz)
+function sndSet(c, cv, v) { var cur = parseFloat(readCvar(cv)); if (!isNaN(cur) && Math.abs(cur - Number(v)) > 1e-6) c.push(cv + ' ' + v); }
 function settingsCmds(s) {
   var n = NETS[s.net] || NETS.fast, c = [];
   if (PW_NAME && CONNECTED) c.push('name ' + q(PW_NAME));      // shu serverda VIP nik bilan kirilgan - tegli nik bilan almashtirmaymiz
@@ -2031,12 +2032,16 @@ function settingsCmds(s) {
   else if (s.ultra === 0 && ULTRA_WAS) c.push('cl_weather 1', 'gl_spriteblend 1', 'violence_hblood 1', 'violence_hgibs 1', 'cl_corpsestay 600', 'r_mirroralpha 1', 'gl_keeptjunctions 1');
   ULTRA_WAS = !!s.ultra;
   c.push('cl_bob ' + s.bob, 'gl_picmip 0', 'r_detailtextures ' + s.detail, 'cl_shadows ' + s.shadows, 'cl_minmodels 0',
-    'ex_interp ' + s.interp, 'cl_lw ' + s.lw, 'cl_lc ' + s.lc, 'hisound ' + s.hisnd, '_snd_mixahead ' + s.mixa, 'voice_loopback ' + s.loop,
+    'ex_interp ' + s.interp, 'cl_lw ' + s.lw, 'cl_lc ' + s.lc, 'voice_loopback ' + s.loop,
     'hud_saytext_time ' + s.saytm, 'net_graphpos ' + s.ngpos);
   c.push('net_graph ' + (s.netg ? 3 : 0), 'hud_deathnotice_old ' + (s.hs ? 0 : 1), 'hud_deathnotice_max ' + s.dmax, 'cl_radartype ' + s.radar, 'hud_centerid ' + s.cid, 'scr_drawversion ' + (s.nover ? 0 : 1));
   // PRO CFG qo'shimchasi: to'liq yugurish tezligi, eski ovoz tezlatkichlari o'chiq (qotish beradi), keraksiz effektlarsiz - yuqori va barqaror FPS
   if (s.pro) c.push('cl_forwardspeed 400', 'cl_sidespeed 400', 'cl_backspeed 400', 'cl_upspeed 400', 'cl_pitchup 89', 'cl_pitchdown 89',
-    's_a3d 0', 's_eax 0', 'cl_weather 0', 'cl_showevents 0', 'cl_timeout 60');
+    'cl_weather 0', 'cl_showevents 0', 'cl_timeout 60');
+  /* ovoz tizimi sozlamalari: ba'zi NextClient versiyalarida ularni yuborish (qiymat o'zgarmasa ham) ovozni qayta ishga tushiradi
+   * va o'yin qayta ochilguncha ovoz yo'qoladi. Faqat o'yindagi qiymat haqiqatan boshqacha bo'lsa yuboramiz, o'qib bo'lmasa - umuman yo'q */
+  sndSet(c, 'hisound', s.hisnd); sndSet(c, '_snd_mixahead', s.mixa);
+  if (s.pro) { sndSet(c, 's_a3d', 0); sndSet(c, 's_eax', 0); }
   /* o'q tekkan joydagi tutun/chang va gilzalar - standart: ular o'q qayerga ketayotganini ko'rsatadi (otdachani boshqarish uchun).
    * 0 qilinganda o'yinchilar "qurol sochilib ketyapti" deyishdi */
   c.push('max_shells 120', 'max_smokepuffs 120');
