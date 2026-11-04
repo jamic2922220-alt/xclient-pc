@@ -260,7 +260,7 @@ function fxVisible() {
 /* o'ng tomondagi qahramonlar: ikkalasi alohida qatlam - har biri o'zicha nafas oladi, tebranadi va ko'zini pirpiratadi.
  * CEF1 har kadrni protsessorda chizadi - sekundiga ~15 kadr, faqat menyu ko'rinib turganda, oyna ochiq emas va effektlar
  * yoqiq bo'lsa (o'yinda va kuchsiz kompyuterda qimirlamaydi) */
-var HERO = null, HERO_T0 = now();
+var HERO = null, HERO_T0 = now(), HERO_LAST = 0, HERO_SLOW = 0, HERO_OFF = false;
 function heroInit() {
   var f = $('heroF'), b = $('heroB'); if (!f || !b) return null;
   return { f: f, b: b, g: $('hero').getElementsByTagName('div')[0], fb: $('heroFB'), bb: $('heroBB'), nf: now() + 2500, nb: now() + 4200 };
@@ -272,14 +272,16 @@ function heroBlink(el, at) {   // ko'z yumiladi ~130 ms; ba'zan ikki marta
 }
 function heroTick() {
   if (!HERO) { HERO = heroInit(); if (!HERO) return; }
-  if (lowFx() || !fxVisible()) return;
-  var t = (now() - HERO_T0) / 1000;
+  if (HERO_OFF || lowFx() || !fxVisible()) { HERO_LAST = 0; return; }
+  /* kompyuter ulgurmayapti (kadrlar orasi 66 ms o'rniga 150+ ms) - 4 soniyada qimirlashni butunlay to'xtatamiz, rasm joyida qoladi */
+  var tn = now(); if (HERO_LAST) { HERO_SLOW = tn - HERO_LAST > 150 ? HERO_SLOW + 1 : Math.max(0, HERO_SLOW - 1); if (HERO_SLOW > 25) { HERO_OFF = true; return; } } HERO_LAST = tn;
+  var t = (tn - HERO_T0) / 1000;
   /* oldingi: sekin nafas (yelka ko'tariladi), ozgina chayqaladi */
-  var fy = Math.sin(t * 0.52) * 3.2, fx = Math.sin(t * 0.31 + 2) * 2.2, fs = 1 + (Math.sin(t * 1.15) + 1) * 0.004, fr = Math.sin(t * 0.37) * 0.35;
+  var fy = Math.sin(t * 0.52) * 3.2, fx = Math.sin(t * 0.31 + 2) * 2.2, fs = 1 + (Math.sin(t * 1.15) + 1) * 0.004;
   /* orqadagi: boshqa tezlikda - ular bir-biridan alohida "tirik" ko'rinadi */
-  var by = Math.sin(t * 0.44 + 1.3) * 3.6, bx = Math.sin(t * 0.27 + 0.4) * 3, bs = 1 + (Math.sin(t * 0.97 + 2.2) + 1) * 0.004, br = Math.sin(t * 0.33 + 1) * 0.45;
-  HERO.f.style.webkitTransform = 'translate(' + fx.toFixed(2) + 'px,' + fy.toFixed(2) + 'px) rotate(' + fr.toFixed(3) + 'deg) scale(' + fs.toFixed(4) + ')';
-  HERO.b.style.webkitTransform = 'translate(' + bx.toFixed(2) + 'px,' + by.toFixed(2) + 'px) rotate(' + br.toFixed(3) + 'deg) scale(' + bs.toFixed(4) + ')';
+  var by = Math.sin(t * 0.44 + 1.3) * 3.6, bx = Math.sin(t * 0.27 + 0.4) * 3, bs = 1 + (Math.sin(t * 0.97 + 2.2) + 1) * 0.004;
+  HERO.f.style.webkitTransform = 'translate(' + fx.toFixed(2) + 'px,' + fy.toFixed(2) + 'px) scale(' + fs.toFixed(4) + ')';
+  HERO.b.style.webkitTransform = 'translate(' + bx.toFixed(2) + 'px,' + by.toFixed(2) + 'px) scale(' + bs.toFixed(4) + ')';
   if (HERO.g) HERO.g.style.opacity = (0.75 + Math.sin(t * 0.9) * 0.25).toFixed(3);
   HERO.nf = heroBlink(HERO.fb, HERO.nf); HERO.nb = heroBlink(HERO.bb, HERO.nb);
 }
@@ -2134,7 +2136,7 @@ function applyStyle(id) {
 function hwClass() {
   if (!HW) return 'mid';
   var weakGpu = /intel.*(hd|gma|uhd)|sis |via |radeon.*(hd [2-5]|x[0-9])|geforce (6|7|8|9|2[0-9]{2}) /i.test(HW.gpu || '');
-  if (HW.ram < 3500 || HW.cpu <= 2 || (weakGpu && HW.ram < 6000)) return 'weak';
+  if (HW.ram < 4600 || HW.cpu <= 2 || (weakGpu && HW.ram < 6000)) return 'weak';   // 4 GB li kompyuterlar ham (CS + menyu brauzeri)
   if (HW.ram >= 8000 && HW.cpu >= 4 && !weakGpu) return 'strong';
   return 'mid';
 }
@@ -2635,11 +2637,11 @@ function layoutCheck(where) {
   }, 400);
 }
 /* menyu musiqasi: ro'yxat admin panelda (Sozlamalar > Menyu musiqasi), fayllar o'yin papkasida (Paketlar orqali) */
-var MUSICS = null;
+var MUSICS = null, MTRACK_DEF = 'media/xclient_theme.mp3';   // launcher xc_theme/cstrike/media dan o'rnatadi
 function musicPick() {
   if (MUSICS === null) { MUSICS = []; api('music', {}, function (r) { MUSICS = (r.ok && r.list) || []; if (curModal === 'mdSettings' && setTab === 'sound' && MUSICS.length) showSetTab('sound'); }); }
-  var cur = DB.mtrack || 'media/gamestartup.mp3', h = '<div class="ph2 m">' + esc(T('mu_title')) + '</div><div class="mul">';
-  each([[T('mu_def'), 'media/gamestartup.mp3']].concat(MUSICS), function (m) { h += '<a class="sgo' + (cur === m[1] ? ' on' : '') + '" data-mtrack="' + esc(m[1]) + '">\u266b ' + esc(m[0]) + '</a>'; });
+  var cur = DB.mtrack || MTRACK_DEF, h = '<div class="ph2 m">' + esc(T('mu_title')) + '</div><div class="mul">';
+  each([[T('mu_xc'), MTRACK_DEF], [T('mu_def'), 'media/gamestartup.mp3']].concat(MUSICS), function (m) { h += '<a class="sgo' + (cur === m[1] ? ' on' : '') + '" data-mtrack="' + esc(m[1]) + '">\u266b ' + esc(m[0]) + '</a>'; });
   return h + '</div>';
 }
 /* CFG kodini qo'yish (kod yozilganda yoki "Mashhur CFGlar" dan) */
@@ -3421,7 +3423,7 @@ function act(a) {
 var MUSIC_ON = null;                             // null - noma'lum: oldingi sahifa (menyu yangilangan) qoldirgan musiqa ham o'chirilsin
 function musicSync() {
   var want = !!(S && S.mmusic && !CONNECTED && !DEMO_PLAY && hasApi());   // demo ko'rilayotganda menyu musiqasi chalinmasin
-  if (want && !MUSIC_ON) { cmd('mp3volume ' + (S.mp3off ? 0 : S.mus)); cmd('mp3 loop ' + (/^[\w\/.\-]+\.mp3$/.test(DB.mtrack || '') ? DB.mtrack : 'media/gamestartup.mp3')); MUSIC_ON = true; }
+  if (want && !MUSIC_ON) { cmd('mp3volume ' + (S.mp3off ? 0 : S.mus)); cmd('mp3 loop ' + (/^[\w\/.\-]+\.mp3$/.test(DB.mtrack || '') ? DB.mtrack : MTRACK_DEF)); MUSIC_ON = true; }
   else if (!want && MUSIC_ON !== false) { cmd('mp3 stop'); MUSIC_ON = false; }
 }
 
