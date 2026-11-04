@@ -2008,7 +2008,7 @@ function seedFromGame() {
 var NETS = { slow: [25000, 60, 60], mid: [50000, 101, 101], fast: [100000, 101, 105] };
 var BUY = [['F1', 'buy m4a1; buy ak47; buyammo1; buyammo1'], ['F2', 'buy awp; buyammo1; buyammo1'], ['F3', 'buy vesthelm; buy defuser'], ['F4', 'buy hegren; buy flash; buy flash; buy sgren']];
 function fullName(s) { return ((s.tag || '') + s.name).slice(0, 31); }
-var ULTRA_WAS = true;   // birinchi qo'llashda o'chiq bo'lsa asl qiymatlar bir marta yuboriladi (oldin yoqilgan bo'lishi mumkin)
+var ULTRA_WAS = false;  // asl qiymatlar faqat o'yinchi "Ultra yengil" ni o'chirganda yuboriladi (qon va h.k. ni o'zi o'chirganlarga tegmaymiz)
 function settingsCmds(s) {
   var n = NETS[s.net] || NETS.fast, c = [];
   if (s.name) c.push('name ' + q(fullName(s)));
@@ -3424,7 +3424,7 @@ function act(a) {
     E.detail = 0; E.shadows = 0; E.dyn = 0; E.vsync = 0; if (E.fps < 200) E.fps = 200;
     showSetTab('pro'); return toast(T('pr_fpsok'), 5000);
   }
-  if (a === 'ultraoff') { E.ultra = 0; E.decals = 1000; E.hisnd = 1; E.mixa = 0.1; toast(T('pr_uloffok'), 5000); a = 'save'; }
+  if (a === 'ultraoff') { ULTRA_WAS = true; E.ultra = 0; E.decals = 1000; E.hisnd = 1; E.mixa = 0.1; toast(T('pr_uloffok'), 5000); a = 'save'; }
   if (a === 'ultramode') {                     // juda eski kompyuter: teksturalar 2 barobar kichik, effektlar minimal - FPS 1.5-2 barobar
     E.ultra = 1; E.detail = 0; E.shadows = 0; E.dyn = 0; E.vsync = 0; E.decals = 300; E.hisnd = 0; E.mixa = 0.15; E.bob = 0;
     if (!(E.fps >= 100)) E.fps = 100;
