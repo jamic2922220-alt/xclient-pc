@@ -407,7 +407,7 @@ if ($P === 'installs' && g('csv')) {
 
 /* ---------- sahifa ---------- */
 $NAV = array('dash' => array('Infopanel', '⌂'), 'online' => array('Onlayn', '●'), 'players' => array("O'yinchilar", '☺'), 'installs' => array("O'rnatishlar", '↓'), 'accounts' => array('Akkauntlar', '✉'),
-    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'stats' => array('Statistika', '★'), 'churn' => array('Ketganlar', '↘'), 'fb' => array('Fikrlar', '✎'), 'clips' => array('Kliplar', '▶'), 'crash' => array('Yiqilishlar', '✖'), 'clicks' => array('Tugmalar', '⊙'), 'menuver' => array('Menyu versiyalari', '⇅'), 'feat' => array('Funksiyalar', '◧'), 'speed' => array('Tezlik', '⚡'), 'promo' => array('Reklama', '$'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
+    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'stats' => array('Statistika', '★'), 'churn' => array('Ketganlar', '↘'), 'fb' => array('Fikrlar', '✎'), 'clips' => array('Kliplar', '▶'), 'crash' => array('Yiqilishlar', '✖'), 'clicks' => array('Tugmalar', '⊙'), 'ret' => array('Natijalar', '↗'), 'menuver' => array('Menyu versiyalari', '⇅'), 'feat' => array('Funksiyalar', '◧'), 'speed' => array('Tezlik', '⚡'), 'promo' => array('Reklama', '$'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
 $devCount = count((array)glob(XC_DIR . '/dev/*.php')); $ncCount = count((array)glob(XC_DIR . '/nc/*.php')); $accCount = count((array)glob(XC_DIR . '/users/*.php')); $repCount = count((array)glob(XC_DIR . '/reports/*.php'));
 $fbCount = count((array)glob(XC_DIR . '/feedback/*.php'));
 $badge = array('players' => $devCount + $ncCount, 'installs' => $devCount, 'accounts' => $accCount, 'reports' => $repCount, 'fb' => $fbCount);
@@ -822,6 +822,42 @@ if ($P === 'speed') {
     echo '</table><div class="mut small" style="margin-top:8px">Yangi versiyada "Qotgan sessiyalar" yoki "Ochilish" keskin oshsa - Menyu versiyalari sahifasida oldingisiga qaytaring. Menyu FPS - menyu animatsiyalari tezligi (o\'yin FPS\'ini menyu o\'qiy olmaydi).</div></div>';
 }
 
+/* ===== NATIJALAR: o'yinchilarni ushlab qolish funksiyalari foyda berdimi ===== */
+if ($P === 'ret') {
+    @date_default_timezone_set('Asia/Tashkent');
+    $users = all_of('users'); $D = 14; $reg = array(); $rgw = array();
+    for ($i = $D - 1; $i >= 0; $i--) { $k = date('Y-m-d', strtotime("-$i day")); $reg[$k] = 0; $rgw[$k] = 0; }
+    $c2 = array('new' => array(0, 0), 'old' => array(0, 0));      // [ertasi kuni kelishi mumkin bo'lganlar, qaytganlar]
+    foreach ($users as $u) {
+        $ct = (int)@$u['created']; if (!$ct) continue; $k = date('Y-m-d', $ct);
+        if (isset($reg[$k])) { $reg[$k]++; if (!empty($u['rgw'])) $rgw[$k]++; }
+        if (empty($u['rgw']) || date('Y-m-d') <= date('Y-m-d', $ct + 86400)) continue;   // ertasi kuni hali tugamagan
+        $c2['new'][0]++; if (!empty($u['r2']) || !empty($u['d2'])) $c2['new'][1]++;
+    }
+    $sum = array(); for ($i = 0; $i < $D; $i++) foreach (rd('clicks/' . date('Y-m-d', strtotime("-$i day")), array()) as $k => $n) { $p2 = explode(':', $k, 2); $kk = isset($p2[1]) ? $p2[1] : $p2[0]; $sum[$kk] = (isset($sum[$kk]) ? $sum[$kk] : 0) + $n; }
+    $ck = function ($k) use ($sum) { return isset($sum[$k]) ? (int)$sum[$k] : 0; };
+    $before = 0; $after = 0; $nb = 0; $na = 0;
+    foreach ($reg as $k => $n) { if ($rgw[$k] > 0 || $after) { $after += $n; $na++; } else { $before += $n; $nb++; } }
+    echo '<h1>Natijalar</h1><div class="grid2">';
+    echo '<div class="panel"><div class="ph">Akkaunt ochish (+500 XP va sandiq sovg\'asidan oldin va keyin)</div>'
+        . '<div class="big">' . ($na ? round($after / $na, 1) : 0) . ' <span class="mut small">ta/kun keyin</span> · ' . ($nb ? round($before / $nb, 1) : 0) . ' <span class="mut small">ta/kun oldin</span></div>'
+        . '<table class="list"><tr><th>Kun</th><th>Yangi akkaunt</th><th>Sovg\'a bilan</th></tr>';
+    foreach (array_reverse($reg, true) as $k => $n) echo '<tr><td>' . h($k) . '</td><td><b>' . $n . '</b></td><td class="mut">' . ($rgw[$k] ? $rgw[$k] : '') . '</td></tr>';
+    echo '</table></div>';
+    $p2r = $c2['new'][0] ? round($c2['new'][1] * 100 / $c2['new'][0]) : null;
+    echo '<div class="panel"><div class="ph">Ertasi kuni qaytganlar (2-kun sandig\'i)</div>'
+        . '<div class="big">' . ($p2r === null ? '—' : $p2r . '%') . '</div><div class="mut small">Sovg\'a bilan ro\'yxatdan o\'tgan ' . $c2['new'][0] . ' kishidan ' . $c2['new'][1] . ' tasi ertasi kuni ham kirdi. 40% dan yuqori - yaxshi natija.</div>'
+        . '<div class="ph" style="margin-top:18px">Menyuda (oxirgi ' . $D . ' kun)</div><table class="list">';
+    foreach (array(array('regoffer', "O'yindan keyingi \"Akkaunt oching\" taklifi bosildi"), array('trreg', 'Tanishtiruvdan akkaunt ochishga o\'tdi'), array('trnext', 'Tanishtiruv: "Keyingi" bosildi'), array('trskip', "Tanishtiruv o'tkazib yuborildi"), array('login', 'Kirish / ro\'yxatdan o\'tish oynasi ochildi'), array('nolaunch', "O'yin X CLIENT'siz ochildi (ogohlantirish ko'rsatildi)")) as $r)
+        echo '<tr><td>' . h($r[1]) . '</td><td><b>' . $ck($r[0]) . '</b></td></tr>';
+    echo '</table></div></div>';
+    $bye = all_of('bye'); $w = array(); $nm = array('lag' => "Qotadi / FPS past", 'bugs' => 'Xatolar', 'menu' => 'Menyu yoqmadi', 'ads' => 'Reklama/xabar ko\'p', 'other' => 'Boshqa sborka', 'reinst' => 'Qayta o\'rnatish', 'nogame' => 'O\'ynamay qo\'ydi', 'av' => 'Antivirus');
+    foreach ($bye as $b) if ((int)@$b['t'] > time() - 7 * 86400) { $k = isset($nm[$b['r']]) ? $nm[$b['r']] : 'izohsiz'; $w[$k] = (isset($w[$k]) ? $w[$k] : 0) + 1; }
+    arsort($w);
+    echo '<div class="panel"><div class="ph">Nega o\'chirishdi - oxirgi 7 kun (' . array_sum($w) . ' ta javob)</div>' . ($w ? pie($w) : '<div class="mut">Bu hafta javob yo\'q</div>') . '</div>';
+    echo '<div class="mut small">Ertasi kuni qaytish yangi menyu (10200200+) ishlay boshlagan kundan hisoblanadi. Tugmalar soni menyu yuborgan statistikadan.</div>';
+}
+
 /* ===== TUGMALAR: menyuda nima ko'p bosiladi (7 kun) ===== */
 if ($P === 'clicks') {
     $days = max(1, min(30, (int)g('d', '7'))); $sum = array();
@@ -1009,7 +1045,7 @@ h1{font-size:26px;margin:0 0 18px}.mut{color:#8b90a0}.small{font-size:12px;margi
 .lg{font-weight:400;font-size:12px;color:#aab}.lg.c{text-align:center;margin-top:6px}.lg i,.plg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 5px 0 12px}
 .chart{position:relative}.chart svg{width:100%;height:300px;display:block}.g{stroke:#2a2e38;stroke-dasharray:3 4}.ax{fill:#6f7585;font-size:11px}.chart [data-v]:hover{stroke:#fff;stroke-width:1.5}
 .tip{position:absolute;display:none;pointer-events:none;background:#23262e;border:1px solid #3a3f4c;border-radius:8px;padding:6px 10px;font-size:13px;white-space:nowrap;z-index:5}.tip b{font-size:16px;margin-right:6px}.tip i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}.grid3{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:18px}@media(max-width:900px){.grid2{grid-template-columns:1fr}}
+.big{font-size:30px;font-weight:700;margin:4px 0 12px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}.grid3{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:18px}@media(max-width:900px){.grid2{grid-template-columns:1fr}}
 .pie{display:flex;justify-content:center}.pie svg{width:190px;height:190px}.plg{display:flex;flex-wrap:wrap;gap:4px 0;justify-content:center;margin-top:10px;font-size:12px;color:#c9cdd8}.plg span{white-space:nowrap}.plg b{color:#8b90a0;font-weight:400;margin-right:4px}
 table{width:100%;border-collapse:collapse}td,th{padding:10px;border-bottom:1px solid #262a33;text-align:left;vertical-align:middle}th{color:#8b90a0;font-weight:500;font-size:12px;white-space:nowrap}th a{color:#8b90a0}th a.on{color:#fff}
 .list td{white-space:nowrap}tr.sel td{background:#22262e}.dot{display:inline-block;width:8px;height:8px;border-radius:4px;background:#3ccf8e;margin-right:6px}

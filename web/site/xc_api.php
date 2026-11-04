@@ -1420,6 +1420,7 @@ case 'daily':
     $streak = $dl['d'] === $yd ? (int)$dl['s'] + 1 : 1;
     $got = $streak % 7 === 0 ? 200 : 20 + 10 * min(5, ($streak - 1) % 7);
     $u['dly'] = array('d' => $day, 's' => $streak);
+    if (!empty($u['created']) && $day === date('Y-m-d', (int)$u['created'] + 86400)) $u['r2'] = 1;   // ro'yxatdan o'tgach ertasiga qaytdi (admin > Natijalar)
     $u['xp'] = (int)$u['xp'] + $got;
     if (!isset($u['wk']) || $u['wk'] !== week_id()) { $u['wk'] = week_id(); $u['wkxp'] = 0; }
     $u['wkxp'] = (int)$u['wkxp'] + $got;
@@ -1761,6 +1762,7 @@ case 'opts_done':
     $key = isset($o['k']) ? $o['k'] : '';
     unset($o['k'], $o['kc'], $o['ip'], $o['st'], $o['fav'], $o['vc']);   // saqlangan holat (token) faqat dstate orqali, kalit bilan
     $o['rsk'] = rsk_of($o);
+    $o['age'] = isset($o['seen']) ? max(0, time() - (int)$o['seen']) : -1;   // launcher oxirgi marta necha soniya oldin ochilgan (menyu: launchersiz kirishni aniqlaydi)
     out(array('ok' => true, 'o' => $o, 'd' => $d, 'k' => $claim ? $key : null));
 
 /* ---------- sevimli serverlar kompyuter bo'yicha zaxirada (menyu keshi tozalansa yoki manzil o'zgarsa yo'qolmasin) ---------- */

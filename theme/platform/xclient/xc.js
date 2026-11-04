@@ -377,6 +377,21 @@ function openPromo() {
   each(['lp_1', 'lp_2', 'lp_3', 'lp_4', 'lp_5'], function (k) { h += '<li>' + esc(T(k)) + '</li>'; });
   openSide('promo', 'X CLIENT', h + '</ul><div class="xurl">cssborka.uz/xclient</div><small class="mut">' + esc(T('lp_how')) + '</small></div>');
 }
+/* O'yin X CLIENT'siz (cstrike.exe / hl.exe dan) ochilganmi: launcher har ishga tushganda saytga "hello" yuboradi.
+ * O'yin jarayonidagi birinchi menyu yuklanishida (sessionStorage) launcher 15 daqiqadan ko'p oldin ochilgan bo'lsa - o'yin launchersiz ochilgan */
+function launchCheck(age) {
+  var first = true;
+  try { first = !sessionStorage.getItem('xcs'); sessionStorage.setItem('xcs', '1'); } catch (e) { return; }
+  if (!first || age < 900 || CONNECTED || DEMO_PLAY) return;
+  if (DB.nlw && now() - DB.nlw < 3 * 3600 * 1000) return;          // ko'pi 3 soatda bir marta
+  if (curModal) return setTimeout(function () { launchCheckShow(); }, 20000);
+  launchCheckShow();
+}
+function launchCheckShow() {
+  if (curModal || CONNECTED) return;
+  DB.nlw = now(); persist(); CLK.nolaunch = (CLK.nolaunch || 0) + 1; CLK_N++;   // admin > Tugmalar: necha marta launchersiz ochilgan
+  openSide('nolaunch', T('nl_t'), '<div class="nlw"><b>' + esc(T('nl_t')) + '</b><p>' + esc(T('nl_d')) + '</p><ul><li>' + esc(T('nl_1')) + '</li><li>' + esc(T('nl_2')) + '</li></ul><p class="mut">' + esc(T('nl_how')) + '</p></div>');
+}
 function loadOpts() {
   // id berilmasa server shu IP dan oxirgi ulangan XClient.exe ni topadi
   if (!PCID && DB.pcid && DB.pck) PCID = DB.pcid;
@@ -388,6 +403,7 @@ function loadOpts() {
     if (r.k) { DB.pcid = r.d; DB.pck = r.k; persist(); }
     for (var k in r.o) if (r.o.hasOwnProperty(k) && OPTS.hasOwnProperty(k)) OPTS[k] = r.o[k];
     if (r.o.ver && !qparam('v')) { VERSION = r.o.ver; renderBar(); }
+    if (r.o.age != null) setTimeout(function () { launchCheck(r.o.age); }, 3500);
     if (r.o.cachemb != null && !qparam('c')) CACHE_MB = r.o.cachemb;
     if (r.o.hw) { HW = r.o.hw; if (DB.fx == null && hwClass() === 'weak') { DB.fx = 0; persist(); sparks(); } }   // kuchsiz kompyuter - yengil menyu
     if (!DB.lang && /^(ru|uz|en)$/.test(r.o.ilang || '')) { DB.lang = r.o.ilang; setLang(DB.lang); persist(); }   // o'rnatishda tanlangan til

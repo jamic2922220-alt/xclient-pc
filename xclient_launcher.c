@@ -480,6 +480,29 @@ static void make_shortcut(const wchar_t *target)
     }
 }
 
+/* O'yin papkasida yorliq: ko'pchilik papkani ochib adashib cstrike.exe ni bosadi - launchersiz yangilanish, video, tezlashtirish
+ * ishlamaydi. Papkaning eng tepasida turadigan yorliq to'g'ri yo'lni ko'rsatadi. Bor bo'lsa - tegmaymiz (har ochilishda arzon tekshiruv) */
+static void game_dir_link(void)
+{
+    wchar_t lnk[MAX_PATH], tgt[MAX_PATH];
+    if (!g_dir[0]) return;
+    path_join(lnk, g_dir, L"\u25B6 X CLIENT - O\u2018YINNI SHU YERDAN OCHING.lnk");
+    if (GetFileAttributesW(lnk) != INVALID_FILE_ATTRIBUTES) return;
+    path_join(tgt, g_dir, L"XCLauncher.exe");
+    if (GetFileAttributesW(tgt) == INVALID_FILE_ATTRIBUTES) lstrcpynW(tgt, g_self, MAX_PATH);
+    HRESULT ci = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);    /* worker oqimida COM hali ishga tushmagan bo'lishi mumkin */
+    IShellLinkW *sl = NULL;
+    if (FAILED(CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void **)&sl))) { if (SUCCEEDED(ci)) CoUninitialize(); return; }
+    IPersistFile *pf = NULL;
+    sl->lpVtbl->SetPath(sl, tgt);
+    sl->lpVtbl->SetWorkingDirectory(sl, g_dir);
+    sl->lpVtbl->SetIconLocation(sl, tgt, 0);
+    sl->lpVtbl->SetDescription(sl, L"X CLIENT \u2014 Counter-Strike 1.6 (yangilanish, video, tezlashtirish)");
+    if (SUCCEEDED(sl->lpVtbl->QueryInterface(sl, &IID_IPersistFile, (void **)&pf))) { pf->lpVtbl->Save(pf, lnk, TRUE); pf->lpVtbl->Release(pf); }
+    sl->lpVtbl->Release(sl);
+    if (SUCCEEDED(ci)) CoUninitialize();
+}
+
 /* CS 1.6 (boost-top PRO) o'rnatuvchisi ish stoli va Pusk menyusiga o'z yorliqlarini qo'yadi - o'yinchi "ikkita client
  * o'rnatildi" deb o'ylaydi. O'yin papkamizdagi fayllarga olib boradigan, X CLIENT ga tegishli bo'lmagan yorliqlarni o'chiramiz
  * (o'yin fayllari qoladi - X CLIENT ularni ishlatadi). Boshqa sborkalar yorliqlariga tegmaymiz: faqat nishoni g_dir ichida bo'lsa. */
@@ -1966,6 +1989,7 @@ static DWORD WINAPI worker(LPVOID unused)
         return 0;
     }
     ini_load();
+    game_dir_link();                              /* o'yin papkasida "O'YINNI SHU YERDAN OCHING" yorlig'i */
     if (!g_key[0]) read_trailer();
     make_id();
     ini_save();

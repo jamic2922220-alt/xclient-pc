@@ -940,3 +940,8 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 #hero .hglow { -webkit-animation: hrG 6s ease-in-out infinite; }
 #hero.hp .hl, #hero.hp .hglow { -webkit-animation-play-state: paused; }
 #hero.hoff .hl, #hero.hoff .hglow { -webkit-animation: none; }
+
+/* launchersiz ochilgan o'yin - ogohlantirish */
+.nlw { padding: 16px; border: 1px solid #f5a623; background: #2a1d08; }
+.nlw b { display: block; font-size: 20px; color: #ffc04d; margin-bottom: 8px; }
+.nlw ul { margin: 8px 0 12px 20px; padding: 0; } .nlw li { margin: 4px 0; }
