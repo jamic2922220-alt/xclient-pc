@@ -270,22 +270,18 @@ function heroBlink(el, at) {   // ko'z yumiladi ~130 ms; ba'zan ikki marta
   if (t >= at) { el.style.visibility = 'visible'; setTimeout(function () { el.style.visibility = 'hidden'; }, 130); return t + (Math.random() < 0.2 ? 320 : 3000 + Math.random() * 4000); }
   return at;
 }
+/* Harakatning o'zi CSS animatsiyada (brauzer silliq chizadi - JS taymer bilan "qotib-qotib" siljirdi).
+ * JS faqat: ko'z pirpiratish, menyu ko'rinmaganda pauza, kompyuter ulgurmasa butunlay to'xtatish */
 function heroTick() {
-  if (!HERO) { HERO = heroInit(); if (!HERO) return; }
-  if (HERO_OFF || lowFx() || !fxVisible()) { HERO_LAST = 0; return; }
-  /* kompyuter ulgurmayapti (kadrlar orasi 66 ms o'rniga 150+ ms) - 4 soniyada qimirlashni butunlay to'xtatamiz, rasm joyida qoladi */
-  var tn = now(); if (HERO_LAST) { HERO_SLOW = tn - HERO_LAST > 150 ? HERO_SLOW + 1 : Math.max(0, HERO_SLOW - 1); if (HERO_SLOW > 25) { HERO_OFF = true; return; } } HERO_LAST = tn;
-  var t = (tn - HERO_T0) / 1000;
-  /* oldingi: sekin nafas (yelka ko'tariladi), ozgina chayqaladi */
-  var fy = Math.sin(t * 0.52) * 3.2, fx = Math.sin(t * 0.31 + 2) * 2.2, fs = 1 + (Math.sin(t * 1.15) + 1) * 0.004;
-  /* orqadagi: boshqa tezlikda - ular bir-biridan alohida "tirik" ko'rinadi */
-  var by = Math.sin(t * 0.44 + 1.3) * 3.6, bx = Math.sin(t * 0.27 + 0.4) * 3, bs = 1 + (Math.sin(t * 0.97 + 2.2) + 1) * 0.004;
-  HERO.f.style.webkitTransform = 'translate(' + fx.toFixed(2) + 'px,' + fy.toFixed(2) + 'px) scale(' + fs.toFixed(4) + ')';
-  HERO.b.style.webkitTransform = 'translate(' + bx.toFixed(2) + 'px,' + by.toFixed(2) + 'px) scale(' + bs.toFixed(4) + ')';
-  if (HERO.g) HERO.g.style.opacity = (0.75 + Math.sin(t * 0.9) * 0.25).toFixed(3);
+  if (!HERO) { HERO = heroInit(); if (!HERO) return; HERO.el = $('hero'); }
+  var cls = HERO_OFF || lowFx() ? 'hoff' : !fxVisible() ? 'hp' : '';
+  if (HERO.cls !== cls) { HERO.cls = cls; HERO.el.className = cls; }
+  if (cls) { HERO_LAST = 0; return; }
+  /* kadrlar orasi 100 ms o'rniga 250+ ms - kompyuter ulgurmayapti: ~4 soniyada animatsiya o'chadi, rasm joyida qoladi */
+  var tn = now(); if (HERO_LAST) { HERO_SLOW = tn - HERO_LAST > 250 ? HERO_SLOW + 1 : Math.max(0, HERO_SLOW - 1); if (HERO_SLOW > 15) HERO_OFF = true; } HERO_LAST = tn;
   HERO.nf = heroBlink(HERO.fb, HERO.nf); HERO.nb = heroBlink(HERO.bb, HERO.nb);
 }
-setInterval(heroTick, 66);
+setInterval(heroTick, 100);
 /* menyu foni (rang) va zarrachalar: uchqun / qor / yo'q. Bayramlarda o'zi bezanadi (Yangi yil - qor, Navro'z, Mustaqillik) */
 var BGS = { def: '', blue: '#0d2a4a 0%, #0b1526 30%, #080c16 60%, #05070c 100%', purple: '#3a0d4a 0%, #1f0b2a 30%, #110a18 60%, #08060c 100%',
   green: '#0d3a1e 0%, #0b1f12 30%, #0a120d 60%, #060a07 100%', dark: '#1a1a1f 0%, #111114 30%, #0b0b0d 60%, #060607 100%', sand: '#4a3410 0%, #2a1e0b 30%, #16100a 60%, #0a0806 100%' };

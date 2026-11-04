@@ -930,3 +930,13 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
   background: -webkit-radial-gradient(center, circle, rgba(255,40,40,0.22) 0%, rgba(255,40,40,0.08) 45%, rgba(255,40,40,0) 70%); }
 #col { z-index: 2; }
 .lite #hero, .gate #hero { display: none; }
+
+/* qahramonlar harakati: brauzerning o'z animatsiyasi (silliq). Oldingi va orqadagi - har xil tezlik va yo'nalish */
+@-webkit-keyframes hrF { 0%, 100% { -webkit-transform: translate(0, 0) scale(1); } 50% { -webkit-transform: translate(-2px, -5px) scale(1.007); } }
+@-webkit-keyframes hrB { 0%, 100% { -webkit-transform: translate(0, 0) scale(1); } 50% { -webkit-transform: translate(3px, -6px) scale(1.008); } }
+@-webkit-keyframes hrG { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+#heroF { -webkit-animation: hrF 5.6s ease-in-out infinite; }
+#heroB { -webkit-animation: hrB 7.3s ease-in-out -2.6s infinite; }
+#hero .hglow { -webkit-animation: hrG 6s ease-in-out infinite; }
+#hero.hp .hl, #hero.hp .hglow { -webkit-animation-play-state: paused; }
+#hero.hoff .hl, #hero.hoff .hglow { -webkit-animation: none; }
