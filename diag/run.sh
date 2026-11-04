@@ -1,14 +1,15 @@
 #!/bin/bash
-O=diag/out; mkdir -p $O/ann; : > $O/summary.txt
+O=diag/out; mkdir -p $O/vo; : > $O/summary.txt
 pip install -q edge-tts >/dev/null 2>&1
-gen() { # til ovoz nom matn
-  mkdir -p $O/ann/$1
-  edge-tts --voice "$2" --rate=+8% --pitch=-6Hz --text "$4" --write-media "$O/ann/$1/$3.mp3" >/dev/null 2>&1 && echo "ok $1/$3" >> $O/summary.txt || echo "FAIL $1/$3" >> $O/summary.txt
-}
-U=uz-UZ-SardorNeural; R=ru-RU-DmitryNeural; E=en-US-GuyNeural
-gen uz $U hs "Boshga!"; gen uz $U k2 "Ikki kill!"; gen uz $U k3 "Uch kill!"; gen uz $U k4 "To'rt kill!"; gen uz $U ace "Hammasini qirding!"
-gen uz $U onfire "Qizib ketding!"; gen uz $U unstop "To'xtatib bo'lmaydi!"; gen uz $U legend "Afsona!"; gen uz $U knife "Pichoq bilan!"; gen uz $U grenade "Granata!"
-gen ru $R hs "В голову!"; gen ru $R k2 "Двойное!"; gen ru $R k3 "Тройное!"; gen ru $R k4 "Мульти килл!"; gen ru $R ace "Эйс!"
-gen ru $R onfire "В ударе!"; gen ru $R unstop "Неудержим!"; gen ru $R legend "Легенда!"; gen ru $R knife "Ножом!"; gen ru $R grenade "Гранатой!"
-gen en $E hs "Headshot!"; gen en $E k2 "Double kill!"; gen en $E k3 "Triple kill!"; gen en $E k4 "Multi kill!"; gen en $E ace "Ace!"
-gen en $E onfire "On fire!"; gen en $E unstop "Unstoppable!"; gen en $E legend "Legendary!"; gen en $E knife "Humiliation!"; gen en $E grenade "Boom!"
+V=uz-UZ-SardorNeural
+g() { edge-tts --voice $V --rate=+12% --pitch=+0Hz --text "$2" --write-media "$O/vo/$1.mp3" >/dev/null 2>&1 && echo "ok $1" >> $O/summary.txt || echo "FAIL $1" >> $O/summary.txt; }
+g 01 "To'xta! CS 1.6 o'ynaysanmi? Unda buni oxirigacha ko'r. Oxirida sen hali ko'rmagan narsa bor."
+g 02 "Bu — X CLIENT. Counter-Strike 1.6 uchun bepul launcher. Oddiy CS'ni butunlay boshqa darajaga olib chiqadi."
+g 03 "F10 ni bosasan — eng zo'r killaring tiniq videoga yoziladi. FPS tushmaydi."
+g 04 "Har bir o'yining hisoblanadi: headshot foizi, sevimli quroling, eng zo'r xaritang."
+g 05 "Do'stlaring qaysi serverda o'ynayotganini ko'rasan va bitta bosishda yoniga kirasan."
+g 06 "VIP serverga har safar parol yozish shart emas. X CLIENT o'zi kiritadi."
+g 07 "Kompyuteringiz kuchsizmi? X CLIENT o'zi sozlaydi. O'yin qotmaydi."
+g 08 "Akkaunt ochsang — besh yuz XP va sovg'a sandiq darhol seniki."
+g 09 "Yuklab olish juda oson: cssborka.uz saytiga kir va X CLIENT ni bepul yuklab ol."
+g 10 "Lekin bu hali hammasi emas... X CLIENT'ning eng zo'r funksiyasini keyingi qismda ko'rsataman. O'tkazib yubormaslik uchun hoziroq obuna bo'l!"
