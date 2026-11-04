@@ -13,3 +13,4 @@ g 07 "Kompyuteringiz kuchsizmi? Iks Klayent o'zi sozlaydi. O'yin qotmaydi."
 g 08 "Akkaunt ochsang — besh yuz ochko va sovg'a sandiq darhol seniki."
 g 09 "Yuklab olish juda oson: si-es-es borka nuqta uz saytiga kir va Iks Klayentni bepul yuklab ol."
 g 10 "Lekin bu hali hammasi emas... Iks Klayentning eng zo'r funksiyasini keyingi qismda ko'rsataman. O'tkazib yubormaslik uchun hoziroq obuna bo'l!"
+# 1793791990
