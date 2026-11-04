@@ -1889,7 +1889,7 @@ var DEF = {
   name: '', tag: 'X | ', net: 'fast', dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, buykeys: 0, queue: 1, reconn: 1, demo: 0, dmig: 0, dmig2: 0,
   sens: 2.5, zoom: 1.2, raw: 1, filter: 0, inv: 0,
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1, micwarm: 1, micfix: 0,
-  fps: 100, showfps: 0, uisnd: 1, uics: 1, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
+  fps: 100, showfps: 0, uisnd: 1, uics: 1, ultra: 0, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
   xp: 'pro', xt: 0, xs: 'small', xc: '50 250 50', xtr: 0, xdyn: 0, xthick: 1, xgap: 3, xout: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
   rscale: 115, ropac: 100, rnames: 0, rhp: 0, rmode: 1, rround: 1, rrot: 1, rmap: 0.8,
   vmx: 0, vmy: 0, vmz: 0, vmshift: 0, bobst: 0, lagst: 0, camint: 0,
@@ -1966,6 +1966,7 @@ function seedFromGame() {
 var NETS = { slow: [25000, 60, 60], mid: [50000, 101, 101], fast: [100000, 101, 105] };
 var BUY = [['F1', 'buy m4a1; buy ak47; buyammo1; buyammo1'], ['F2', 'buy awp; buyammo1; buyammo1'], ['F3', 'buy vesthelm; buy defuser'], ['F4', 'buy hegren; buy flash; buy flash; buy sgren']];
 function fullName(s) { return ((s.tag || '') + s.name).slice(0, 31); }
+var ULTRA_WAS = true;   // birinchi qo'llashda o'chiq bo'lsa asl qiymatlar bir marta yuboriladi (oldin yoqilgan bo'lishi mumkin)
 function settingsCmds(s) {
   var n = NETS[s.net] || NETS.fast, c = [];
   if (s.name) c.push('name ' + q(fullName(s)));
@@ -1980,6 +1981,11 @@ function settingsCmds(s) {
   c.push('fps_max ' + s.fps, 'gamma ' + s.gamma, 'fov_angle ' + s.fov, 'viewmodel_fov ' + s.vmfov, 'fov_horplus ' + s.hor, 'gl_vsync ' + s.vsync, 'r_dynamic ' + s.dyn, 'mp_decals ' + Math.max(300, s.decals));   // kam bo'lsa spray o'q izlari orasida tez o'chib ketadi
   each(xhairCmds(s), function (x) { c.push(x); });
   // gl_picmip 0 va cl_minmodels 0 qotirilgan: aks holda serverning o'yinchi skinlari, qurollari va spray buziladi
+  /* ultra yengil: teksturalarga tegmaydi (picmip/minmodels serverning skin va spreylarini buzadi) - faqat effektlar: yomg'ir/qor,
+   * sprayt aralashuvi, qon/bo'laklar, jasadlar, oyna/suv akslari. O'chirilsa - CS 1.6 ning asl qiymatlari */
+  if (s.ultra) c.push('cl_weather 0', 'gl_spriteblend 0', 'violence_hblood 0', 'violence_hgibs 0', 'cl_corpsestay 0', 'r_mirroralpha 0', 'gl_wateramp 0', 'gl_keeptjunctions 0');
+  else if (s.ultra === 0 && ULTRA_WAS) c.push('cl_weather 1', 'gl_spriteblend 1', 'violence_hblood 1', 'violence_hgibs 1', 'cl_corpsestay 600', 'r_mirroralpha 1', 'gl_keeptjunctions 1');
+  ULTRA_WAS = !!s.ultra;
   c.push('cl_bob ' + s.bob, 'gl_picmip 0', 'r_detailtextures ' + s.detail, 'cl_shadows ' + s.shadows, 'cl_minmodels 0',
     'ex_interp ' + s.interp, 'cl_lw ' + s.lw, 'cl_lc ' + s.lc, 'hisound ' + s.hisnd, '_snd_mixahead ' + s.mixa, 'voice_loopback ' + s.loop,
     'hud_saytext_time ' + s.saytm, 'net_graphpos ' + s.ngpos);
@@ -2880,6 +2886,7 @@ var PANES = {
       '<div class="ph2 m">' + esc(T('pr_fps')) + '</div>' +
       '<div class="rowb"><b>' + esc(T('pr_cfg')) + '</b><small>' + esc(T('pr_cfg2')) + '</small><a class="btn red" data-act="procfg">' + esc(T('pr_cfgb')) + '</a></div>' +
       '<div class="rowb"><b>' + esc(T('pr_fps')) + '</b><small>' + esc(T('pr_fps2')) + '</small><a class="btn red" data-act="fpsmode">' + esc(T('pr_fpsb')) + '</a></div>' +
+      '<div class="rowb"><b>' + esc(T('pr_ul')) + '</b><small>' + esc(T('pr_ul2')) + '</small>' + (E.ultra ? '<a class="btn" data-act="ultraoff">' + esc(T('pr_uloff')) + '</a>' : '<a class="btn red" data-act="ultramode">' + esc(T('pr_fpsb')) + '</a>') + '</div>' +
       '<div class="rowb"><b>' + esc(T('hw_title')) + ' <span class="gr">' + esc(HW ? T('hw_' + hwClass()) : '') + '</span></b><small>' + esc(hwText()) + '</small>' +
       (HW ? '<a class="btn" data-act="hwauto">' + esc(T('hw_auto')) + '</a>' : '') + '</div>' +
       '<div class="fr w"><div class="lb">' + esc(T('pr_prio')) + '<small>' + esc(T('pr_prio2')) + '</small></div><div class="tg' + (OPTS.prio ? ' on' : '') + '" data-otg="prio"><i></i></div></div>' +
@@ -3375,6 +3382,12 @@ function act(a) {
     E.detail = 0; E.shadows = 0; E.dyn = 0; E.vsync = 0; if (E.fps < 200) E.fps = 200;
     showSetTab('pro'); return toast(T('pr_fpsok'), 5000);
   }
+  if (a === 'ultraoff') { E.ultra = 0; E.decals = 1000; E.hisnd = 1; E.mixa = 0.1; toast(T('pr_uloffok'), 5000); a = 'save'; }
+  if (a === 'ultramode') {                     // juda eski kompyuter: teksturalar 2 barobar kichik, effektlar minimal - FPS 1.5-2 barobar
+    E.ultra = 1; E.detail = 0; E.shadows = 0; E.dyn = 0; E.vsync = 0; E.decals = 300; E.hisnd = 0; E.mixa = 0.15; E.bob = 0;
+    if (!(E.fps >= 100)) E.fps = 100;
+    toast(T('pr_ulok'), 7000); a = 'save';    // darhol saqlab qo'llaymiz
+  }
   if (a === 'vmdef') { each(['vmx', 'vmy', 'vmz', 'vmshift', 'lagst', 'lagsc', 'lagsp', 'camint', 'vmfov', 'bob'], function (k) { E[k] = DEF[k]; }); return showSetTab('hud'); }
   if (a === 'gsshare') {                         // xulosa kartasi: saytdagi o'yin yozuvidan chiziladi, Telegram kanalga ham tushadi
     var gl = GS_LAST, gb = document.querySelector('[data-act="gsshare"]'); if (!gl || !ME) return;
@@ -3672,7 +3685,7 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-frcmp'))) { openCompare(el.getAttribute('data-frcmp')); return; }
   if ((el = closest(t, 'data-clkick'))) { clanCall('clan_kick', { who: el.getAttribute('data-clkick') }); return; }
   if ((el = closest(t, 'data-copyip'))) { copyIp(el.getAttribute('data-copyip'), el.parentNode.querySelector('input')); return; }
-  if ((el = closest(t, 'data-ovq'))) { OPTS = OPTS || {}; OPTS.vq = el.getAttribute('data-ovq'); saveOpts(T('vq_ok')); showSetTab('demo'); return; }
+  if ((el = closest(t, 'data-ovq'))) { OPTS = OPTS || {}; OPTS.vq = el.getAttribute('data-ovq'); OPTS.vqx = 1; saveOpts(T('vq_ok')); showSetTab('demo'); return; }
   if ((el = closest(t, 'data-vopen'))) { vidCmd('open', el.getAttribute('data-vopen')); return; }
   if ((el = closest(t, 'data-vdel'))) { var vn = el.getAttribute('data-vdel'); ask(T('vd_delq'), function () { vidCmd('del', vn); }, false, false, true); return; }
   if ((el = closest(t, 'data-vfold'))) { vidCmd('folder', ''); return; }

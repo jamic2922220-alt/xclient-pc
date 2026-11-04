@@ -100,7 +100,7 @@ static void rec_quality(void)
     _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=vq&d=%s", g_id); url[sizeof(url) - 1] = 0;
     char *r = http_get(url, NULL);
     if (r) {
-        g_vq = !strncmp(r, "hi", 2) ? 2 : !strncmp(r, "low", 3) ? 0 : 1;
+        g_vq = !strncmp(r, "hi", 2) ? 2 : !strncmp(r, "low", 3) ? 0 : !strncmp(r, "auto", 4) ? (pc_weak() ? 0 : 1) : 1;   /* auto: kuchsiz kompyuterda 720p 30 kadr - yozish paytida FPS tushmasin */
         char q[8]; int mic = 0, rb = 1, rsk = -1;
         /* rb: 0/1 - o'yinchi o'zi tanlagan, 2 - tanlamagan (avto: oddiy kompyuterda o'chiq) */
         if (sscanf(r, "%7s %d %d %d", q, &mic, &rb, &rsk) >= 2) { g_mic = mic ? 1 : 0; g_rb = rb == 2 ? !pc_weak() : rb ? 1 : 0; }

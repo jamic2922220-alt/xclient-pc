@@ -1206,8 +1206,10 @@ static void auto_clean_cache(void)
     if (GetFileAttributesW(d) == INVALID_FILE_ATTRIBUTES) return;
     FILETIME now; GetSystemTimeAsFileTime(&now);
     ULONGLONG t = ((ULONGLONG)now.dwHighDateTime << 32) | now.dwLowDateTime;
-    prune_old(d, t - (ULONGLONG)AUTOCLEAN_DAYS * 24 * 3600 * 10000000ULL);
-    if (cache_mb() > AUTOCLEAN_MAX_MB) clean_cache();
+    /* kuchsiz kompyuter (odatda kichik/sekin disk): 14 kun va 1 GB - xarita yuklanishi tezroq, disk to'lmaydi */
+    BOOL weak = pc_weak();
+    prune_old(d, t - (ULONGLONG)(weak ? 14 : AUTOCLEAN_DAYS) * 24 * 3600 * 10000000ULL);
+    if (cache_mb() > (weak ? 1024 : AUTOCLEAN_MAX_MB)) clean_cache();
 }
 
 /* ---------------------------------------------------------------- Kontent (menyudan tanlanadi) */
@@ -1931,7 +1933,16 @@ static BOOL run_game(void)
          * sayt shu kompyuterni yana taniydi (shot_up 30 daqiqalik IP tekshiruvi). */
         rec_session_begin(pi.dwProcessId);
         tune_begin();                                /* quvvat rejimi, sichqoncha, fon dasturlari - o'yin yopilguncha */
-        WaitForSingleObject(pi.hProcess, INFINITE);
+        /* o'yin davomida launcher orqada turadi (F10, Windows sozlamalari). Uning ishlatmayotgan xotirasini Windows'ga qaytaramiz -
+         * 2-4 GB li kompyuterlarda o'yinga ko'proq RAM qoladi. 20 soniyadan keyin (o'yin yuklanib bo'lgach), keyin 5 daqiqada bir;
+         * video yozilayotganda tegmaymiz. Kerakli sahifalar so'ralganda Windows ularni o'zi qaytaradi */
+        {
+            DWORD wt = 20000;
+            while (WaitForSingleObject(pi.hProcess, wt) == WAIT_TIMEOUT) {
+                if (!g_rec_run) { HeapCompact(GetProcessHeap(), 0); SetProcessWorkingSetSize(GetCurrentProcess(), (SIZE_T)-1, (SIZE_T)-1); }
+                wt = 300000;
+            }
+        }
         tune_end();
         DWORD code = 0; GetExitCodeProcess(pi.hProcess, &code);
         rec_session_end();
@@ -1978,6 +1989,13 @@ static DWORD WINAPI launch_ping(LPVOID unused) { (void)unused; api_call("launch"
 static BOOL g_relaunch = FALSE, g_play = TRUE;
 static wchar_t g_err[256] = L"";
 
+static DWORD WINAPI side_jobs(LPVOID unused)
+{
+    (void)unused;
+    menu_site_check();
+    clean_hpk();
+    return 0;
+}
 static DWORD WINAPI worker(LPVOID unused)
 {
     (void)unused;
@@ -2009,12 +2027,14 @@ static DWORD WINAPI worker(LPVOID unused)
 
     prune_demos();                                /* ro'yxat saytga to'g'ri ketsin - o'chiriladiganlar oldin o'chadi */
     radar_start();                                /* fonda: overview'i yo'q xaritalarga radar rasmi */
+    /* menyu sayti tekshiruvi va .hpk tozalash - yangilanish tekshiruvi bilan bir vaqtda (launcher tezroq ochiladi,
+     * ayniqsa sekin internet/disk bo'lgan kompyuterlarda). O'yin ochilishidan oldin kutib olinadi */
+    HANDLE side = CreateThread(NULL, 0, side_jobs, NULL, 0, NULL);
+    if (!side) side_jobs(NULL);
     fetch_opts();
-    menu_site_check();
     if (o_beta >= 0) { lstrcpynA(g_chan, o_beta ? "beta" : "stable", sizeof(g_chan)); ini_save(); }
     if (o_start >= 0) set_autostart(o_start);
     if (o_clean) { status(L"Kesh tozalanmoqda...", 1); clean_cache(); }   /* eskilarini avtomatik tozalash - o'yin ochilgach fonda (cache_maint) */
-    clean_hpk();
     if (o_ok) {                                   /* internet bo'lmasa paketlarga tegmaymiz */
         install_spray();
         apply_packs();
@@ -2050,6 +2070,7 @@ static DWORD WINAPI worker(LPVOID unused)
         lstrcpyW(g_err, L"CS 1.6 o‘yin fayllarini o‘rnatib bo‘lmadi. Internetni tekshirib, X CLIENT ni qayta oching.");
         g_play = FALSE;
     }
+    if (side) { WaitForSingleObject(side, 20000); CloseHandle(side); }   /* menyu keshi tozalanib bo'lsin */
     status(L"O‘yin ochilmoqda...", 100);
     if (!g_relaunch) { HANDLE th = CreateThread(NULL, 0, launch_ping, NULL, 0, NULL); if (th) CloseHandle(th); }   /* o'yinni kutdirmaydi; yangi launcher o'zi yuboradi */
     /* g_net yopilmaydi: o'yin yopilgach run_game() undan foydalanadi (sozlamalar, skrinshotlar) */
