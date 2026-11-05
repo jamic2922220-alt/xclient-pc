@@ -1,12 +1,3 @@
 #!/bin/bash
-O=diag/out; mkdir -p $O; : > $O/summary.txt
-python3 - >> $O/summary.txt 2>&1 <<'P'
-import socket,time
-for ip in ['212.47.58.40','212.47.58.89','157.22.130.26']:
-  for k in range(3):
-    s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(3)
-    try:
-        t=time.time();s.sendto(b'\xff\xff\xff\xffTSource Engine Query\x00',(ip,27015));d=s.recv(1400);print(ip,'OK',int((time.time()-t)*1000),'ms',d[:70]);break
-    except Exception as e: print(ip,'try',k,'ERR',e)
-P
-for h in 212.47.58.40 212.47.58.89; do echo "ping $h: $(ping -c3 -W2 $h | tail -2 | tr '\n' ' ')" >> $O/summary.txt; done
+O=diag/out; mkdir -p $O/el; : > $O/summary.txt
+curl -sS -o $O/el/p2.mp3 "https://elevenlabsusercontent.com/database/workspace/f6a0d35706c649839d24af33b5a8ef91/content_generation/OgtyWIwt86dmM6ts5Qg9/AAAPEGzJmBluQOmrL44f/content.mp3?Expires=1793890800&KeyName=assets-cdn-key-1&Signature=ak2ZX0U1ziRMz5xOJszRzVIs7rE=" && echo "p2 $(stat -c %s $O/el/p2.mp3)" >> $O/summary.txt
