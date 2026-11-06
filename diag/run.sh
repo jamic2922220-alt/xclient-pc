@@ -1,7 +1,9 @@
 #!/bin/bash
-O=diag/out; mkdir -p $O; : > $O/summary.txt
-for p in ver.txt xc.html xc.js xc.css xc_lang.js hero_b.png hero_f.png radar_prev.jpg logo.png yuklab.html; do
-  u=https://mmb.boost-top.com/$p; echo "$p $(curl -s -m 20 -o /tmp/o -w '%{http_code} %{size_download} %{content_type}' $u) $(head -c 60 /tmp/o | tr -dc '[:print:]')" >> $O/summary.txt
-done
-curl -s -m 20 https://mmb.boost-top.com/ > $O/index.html; curl -s -m 20 https://mmb.boost-top.com/xc.js > $O/xc.js
-node -e "new Function(require('fs').readFileSync('$O/xc.js','utf8'))" >> $O/summary.txt 2>&1 && echo "xc.js syntax ok" >> $O/summary.txt
+O=diag/out; mkdir -p $O/live; : > $O/summary.txt
+B=https://mmb.boost-top.com
+curl -s -m 20 $B/xc.html -o $O/live/xc.html
+grep -o 'rel/[0-9]*/[a-z_.]*?v=[0-9]*\|var V = .[0-9]*.' $O/live/xc.html | sort -u >> $O/summary.txt
+for p in $(grep -o 'rel/[0-9]*/[a-z_.]*' $O/live/xc.html | sort -u); do curl -s -m 30 $B/$p -o $O/live/$(basename $p); echo "$p $(stat -c %s $O/live/$(basename $p)) $(md5sum < $O/live/$(basename $p))" >> $O/summary.txt; done
+curl -s -m 20 "$B/xc_api.php" -X POST -d 'a=opts&d=diagdev0000001' | head -c 600 >> $O/summary.txt; echo >> $O/summary.txt
+curl -s -m 20 "$B/xc_api.php" -X POST -d 'a=menuver' | head -c 300 >> $O/summary.txt; echo >> $O/summary.txt
+for f in hero_b.png hero_f.png hero_fb.png hero_bb.png radar_prev.jpg; do echo "$f $(curl -s -m 20 -o /dev/null -w '%{http_code} %{size_download}' $B/$f)" >> $O/summary.txt; done
