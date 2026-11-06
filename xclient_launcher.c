@@ -97,8 +97,14 @@ static void url_escape(char *out, size_t cap, const char *in)
 }
 
 /* ---------------------------------------------------------------- HTTP */
+/* Sekin/uzilib-ulanayotgan internet: o'yin ochilishidan oldingi tarmoq ishlari (sozlamalar, yangilanish, serverlar ro'yxati)
+ * shu muddatdan keyin darhol "internet yo'q" deb o'tkazib yuboriladi - launcher "Yangilanish tekshirilmoqda" da qotib turmaydi,
+ * o'yin bor fayllar bilan ochiladi. 0 - cheklov yo'q (yangilanishni yuklash, o'yin yopilgandan keyingi ishlar) */
+static volatile DWORD g_net_dl = 0;
+static volatile LONG g_probe_ok = 0;
 static HINTERNET open_url_raw(const char *url)
 {
+    if (g_net_dl && (LONG)(GetTickCount() - g_net_dl) > 0) return NULL;
     DWORD fl = INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_NO_UI | INTERNET_FLAG_KEEP_CONNECTION;
     if (!_strnicmp(url, "https://", 8)) fl |= INTERNET_FLAG_SECURE;
     HINTERNET h = InternetOpenUrlA(g_net, url, NULL, 0, fl, 0);
@@ -2031,6 +2037,14 @@ static void menu_site_check(void)
 }
 
 /* ---------------------------------------------------------------- ish oqimi */
+/* sayt 8 s ichida javob beradimi (DNS osilib qolsa WinINet o'z vaqt chegarasiga ham qaramaydi - shuning uchun alohida oqimda) */
+static DWORD WINAPI net_probe(LPVOID unused)
+{
+    (void)unused;
+    HINTERNET h = open_url_raw("http://mmb.boost-top.com/ver.txt");
+    if (h) { InterlockedExchange(&g_probe_ok, 1); InternetCloseHandle(h); }
+    return 0;
+}
 static DWORD WINAPI launch_ping(LPVOID unused) { (void)unused; api_call("launch", NULL); return 0; }
 static BOOL g_relaunch = FALSE, g_play = TRUE;
 static wchar_t g_err[256] = L"";
@@ -2069,6 +2083,15 @@ static DWORD WINAPI worker(LPVOID unused)
     InternetSetOptionA(g_net, INTERNET_OPTION_CONNECT_TIMEOUT, &to, sizeof(to));
     InternetSetOptionA(g_net, INTERNET_OPTION_RECEIVE_TIMEOUT, &rto, sizeof(rto));
 
+    /* internet tekshiruvi: javob 8 s da kelmasa (sekin/uzilgan) - tarmoq ishlarini o'tkazib, o'yinni darhol ochamiz.
+     * Yangi o'rnatishda kutamiz (fayllar kerak). Yaxshi internetda ham hammasi 25 s dan oshmaydi */
+    BOOL slow = FALSE;
+    if (!fresh) {
+        status(L"Internet tekshirilmoqda...", 1);
+        HANDLE pr = CreateThread(NULL, 0, net_probe, NULL, 0, NULL);
+        if (pr) { if (WaitForSingleObject(pr, 8000) != WAIT_OBJECT_0 || !g_probe_ok) slow = TRUE; CloseHandle(pr); }
+        DWORD dl = GetTickCount() + (slow ? 1 : 25000); g_net_dl = dl ? dl : 1;
+    }
     if (fresh) { g_fresh = TRUE; status(L"O‘rnatilmoqda...", 1); api_call("install", NULL); }
 
     prune_demos();                                /* ro'yxat saytga to'g'ri ketsin - o'chiriladiganlar oldin o'chadi */
@@ -2097,7 +2120,9 @@ static DWORD WINAPI worker(LPVOID unused)
         BOOL must = fresh || o_verify || (u.min && g_build < u.min);
         if (u.build && u.base[0] && u.manifest[0] && (u.build != g_build || must) && (o_auto || must)) {
             BOOL selfUp = FALSE;
+            DWORD keep = g_net_dl; g_net_dl = 0;             /* yangilanish ma'lumoti keldi - internet bor, fayllarni oxirigacha yuklaymiz */
             int fails = sync_files(&u, &selfUp);
+            if (keep) { DWORD dl = GetTickCount() + 10000; g_net_dl = dl ? dl : 1; }
             if (fails == 0) {
                 g_build = u.build;
                 lstrcpynA(g_version, u.version, sizeof(g_version));
@@ -2112,11 +2137,12 @@ static DWORD WINAPI worker(LPVOID unused)
     }
     if (!g_relaunch) write_master_js();
     if (!g_relaunch && (o_clean || o_verify || o_beta >= 0)) opts_done(cache_mb());
+    g_net_dl = 0;                                 /* o'yin fayllari yo'q bo'lsa - yuklash kerak; keyingi ishlar ham cheklovsiz */
     if (!g_relaunch && !ensure_game(u.game)) {
         lstrcpyW(g_err, L"CS 1.6 o‘yin fayllarini o‘rnatib bo‘lmadi. Internetni tekshirib, X CLIENT ni qayta oching.");
         g_play = FALSE;
     }
-    if (side) { WaitForSingleObject(side, 20000); CloseHandle(side); }   /* menyu keshi tozalanib bo'lsin */
+    if (side) { WaitForSingleObject(side, slow ? 3000 : 20000); CloseHandle(side); }   /* menyu keshi tozalanib bo'lsin */
     status(L"O‘yin ochilmoqda...", 100);
     if (!g_relaunch) { HANDLE th = CreateThread(NULL, 0, launch_ping, NULL, 0, NULL); if (th) CloseHandle(th); }   /* o'yinni kutdirmaydi; yangi launcher o'zi yuboradi */
     /* g_net yopilmaydi: o'yin yopilgach run_game() undan foydalanadi (sozlamalar, skrinshotlar) */
