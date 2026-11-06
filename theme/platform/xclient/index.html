@@ -14,34 +14,58 @@
 <script>
 /* O'yin brauzeri (CEF) sahifani soatlab xotiradan ochishi mumkin - yangilanish ko'rinmay qoladi.
  * Har ochilishda server "qaysi versiya" deb so'raladi (beta testerlarga - beta, boshqalarga - barqaror, admin panel > Menyu versiyalari).
- * Boshqa bo'lsa - o'sha versiyaning sahifasi (rel/<versiya>/index.html) yuklanib, joriy sahifa shu bilan almashtiriladi. */
+ * Boshqa bo'lsa - o'sha versiyaning sahifasi (rel/<versiya>/index.html) yuklanib, joriy sahifa shu bilan almashtiriladi.
+ * MUHIM: tekshiruv ASINXRON (vaqt chegarasi bilan). Oldin sinxron so'rov edi - internet sekinlashsa/paket yo'qolsa
+ * o'yin brauzeri cheksiz kutib, ekran ko'k bo'lib qolardi. Sinxron yuklash faqat server hozirgina javob bergandan keyin.
+ * Qo'riqchi: menyu (xc.js) 20 s ichida ishga tushmasa - sahifa qayta yuklanadi (4 martagacha, oraliq oshib boradi). */
 (function () {
-  var V = '10202300';
+  var V = '10202400';
   window.XC_V = V;
+  function nm() { try { return String(window.name || ''); } catch (e) { return ''; } }
+  function has(t) { return ('|' + nm() + '|').indexOf('|' + t + '|') >= 0; }
+  function setTok(re, t) { var a = nm().split('|'), r = []; for (var i = 0; i < a.length; i++) if (a[i] && !re.test(a[i])) r.push(a[i]); if (t) r.push(t); try { window.name = r.join('|'); } catch (e) {} }
+  window.XC_NM = setTok;
+  var ok = function (v) { return /^\d{6,12}$/.test(v); };
+  var m = /(?:^|\|)xcwd(\d)(?:\||$)/.exec(nm()), n = m ? +m[1] : 0;
+  if (n < 4) setTimeout(function () {
+    if (window.XC_UP) return;
+    setTok(/^xcwd\d$/, 'xcwd' + (n + 1));
+    try { location.reload(); } catch (e) {}
+  }, [20000, 30000, 45000, 60000][n]);
   try {
-    if (window.name === 'xcfresh' + V) return;
-    var t = new Date().getTime(), get = function (u) { var x = new XMLHttpRequest(); x.open('GET', u, false); x.send(null); return x; }, ok = function (v) { return /^\d{6,12}$/.test(v); };
-    var v = '';
-    try { var a = get('xc_api.php?a=menuver&t=' + t); if (a.status === 200) v = String(a.responseText || '').replace(/\s+/g, ''); } catch (e) {}
-    if (!ok(v)) { var b = get('ver.txt?t=' + t); v = b.status === 200 ? String(b.responseText || '').replace(/\s+/g, '') : ''; }
-    if (!ok(v) || v === V || window.name === 'xcfresh' + v) return;
-    window.name = 'xcfresh' + v;
-    var y = null;
-    try { y = get('rel/' + v + '/index.html?t=' + t); } catch (e) {}
-    if (!y || y.status !== 200 || y.responseText.indexOf('id="app"') < 0) {
-      var me = (/[^\/]+\.html$/.exec(location.pathname) || ['index.html'])[0];   // xc.html (X CLIENT launcheri) yoki index.html
-      y = get(me + '?t=' + t);
+    var t = new Date().getTime();
+    var w = /(?:^|\|)xcwant(\d{6,12})(?:\||$)/.exec(nm());
+    if (w) {                                         // oldingi ochilishda server yangi versiyani aytdi - endi o'shani yuklaymiz
+      var v = w[1]; setTok(/^xc(want|fresh)\d+$/, 'xcfresh' + v);
+      if (v === V) return;
+      var get = function (u) { var x = new XMLHttpRequest(); x.open('GET', u, false); x.send(null); return x; };
+      var y = null;
+      try { y = get('rel/' + v + '/index.html?t=' + t); } catch (e) {}
+      if (!y || y.status !== 200 || y.responseText.indexOf('id="app"') < 0) {
+        var me = (/[^\/]+\.html$/.exec(location.pathname) || ['index.html'])[0];   // xc.html (X CLIENT launcheri) yoki index.html
+        try { y = get(me + '?t=' + t); } catch (e) { y = null; }
+      }
+      if (y && y.status === 200 && y.responseText.indexOf('id="app"') > 0) {
+        // eski sahifaning qolgan qismi ishlamasin (plaintext), yuklanib bo'lgach - yangisi bilan almashtiramiz
+        var fresh = y.responseText;
+        document.write('<plaintext style="display:none">');
+        window.addEventListener('load', function () { document.open(); document.write(fresh); document.close(); }, false);
+      }
+      return;
     }
-    if (y.status === 200 && y.responseText.indexOf('id="app"') > 0) {
-      // eski sahifaning qolgan qismi ishlamasin (plaintext), yuklanib bo'lgach - yangisi bilan almashtiramiz
-      var fresh = y.responseText;
-      document.write('<plaintext style="display:none">');
-      window.addEventListener('load', function () { document.open(); document.write(fresh); document.close(); }, false);
-    }
+    if (has('xcfresh' + V)) return;
+    var aget = function (u, cb) {                    // asinxron, 6 s chegarasi bilan
+      var x = new XMLHttpRequest(), done = false;
+      var tm = setTimeout(function () { if (done) return; done = true; try { x.abort(); } catch (e) {} cb(''); }, 6000);
+      x.onreadystatechange = function () { if (x.readyState !== 4 || done) return; done = true; clearTimeout(tm); cb(x.status === 200 ? String(x.responseText || '').replace(/\s+/g, '') : ''); };
+      try { x.open('GET', u, true); x.send(null); } catch (e) { if (!done) { done = true; clearTimeout(tm); cb(''); } }
+    };
+    var apply = function (v) { if (!ok(v) || v === V || has('xcfresh' + v)) return; setTok(/^xcwant\d+$/, 'xcwant' + v); try { location.reload(); } catch (e) {} };
+    aget('xc_api.php?a=menuver&t=' + t, function (v) { if (ok(v)) return apply(v); aget('ver.txt?t=' + t, apply); });
   } catch (e) {}
 })();
 </script>
-<link rel="stylesheet" href="xc.css?v=10202300">
+<link rel="stylesheet" href="xc.css?v=10202400">
 <script>
 /* Xato bo'lsa ekranning tepasida ko'rsatamiz (o'yin brauzerida konsol yo'q) */
 window.XC_ERRS = [];
@@ -58,7 +82,7 @@ window.onerror = function (msg, url, line) {
   return false;
 };
 </script>
-<script src="xc_lang.js?v=10202300"></script>
+<script src="xc_lang.js?v=10202400"></script>
 </head>
 <body>
 <div id="app">
@@ -273,6 +297,6 @@ window.onerror = function (msg, url, line) {
   <div id="dbg"></div>
 </div>
 <script src="master.js"></script>
-<script src="xc.js?v=10202300"></script>
+<script src="xc.js?v=10202400"></script>
 </body>
 </html>

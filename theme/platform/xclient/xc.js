@@ -3971,4 +3971,6 @@ setInterval(function () { if (!playing()) { loadFriends(); loadWeek(); } }, 6000
 setInterval(function () { if (!playing()) loadTop(); }, 10 * 60 * 1000);
 setInterval(function () { if (!playing()) loadAnn(); }, 5 * 60 * 1000);
 setTimeout(sendStats, 90000); setInterval(function () { if (!playing()) sendStats(); }, 10 * 60 * 1000);
+/* menyu to'liq ishga tushdi - index.html dagi qo'riqchi sahifani qayta yuklamaydi, hisoblagich tozalanadi */
+window.XC_UP = 1; try { if (window.XC_NM) window.XC_NM(/^xcwd\d$/, ''); } catch (e) {}
 })();
