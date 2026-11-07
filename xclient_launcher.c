@@ -104,7 +104,7 @@ static void url_escape(char *out, size_t cap, const char *in)
  * o'yin bor fayllar bilan ochiladi. 0 - cheklov yo'q (yangilanishni yuklash, o'yin yopilgandan keyingi ishlar) */
 static wchar_t g_err[256];                         /* launcher yopilishida ko'rsatiladigan xato (pastda ham e'lon qilingan) */
 static void prob_send(const char *kind, DWORD wait);   /* admin panel > Muammolar (pastda) */
-static char g_probx[200];   /* prob_send uchun qo'shimcha tafsilot (url-escape qilingan), bo'lmasa bo'sh */
+static char g_probx[480];   /* prob_send uchun qo'shimcha tafsilot (url-escape qilingan), bo'lmasa bo'sh */
 static volatile DWORD g_net_dl = 0;
 static volatile LONG g_probe_ok = 0;
 static HINTERNET open_url_raw(const char *url)
@@ -2077,6 +2077,59 @@ static void crash_detail(char *out, size_t cap, DWORD since)
     if (!out[0]) lstrcpynA(out, "noevent", (int)cap);
 }
 
+/* Windows jurnali bo'sh bo'lsa ("noevent" - o'yin DLL'lar yuklanayotganda yiqilgan): o'yinni bir marta kuzatuv
+ * (debug) rejimida ochamiz va qaysi modulda, qaysi DLL yuklangandan keyin yiqilganini o'zimiz ushlaymiz.
+ * Natija: "dbg=c0000005 mod=xyz.dll+1a2b last=abc.dll n=37" (2-imkoniyat - aniq yiqilish; 1-imkoniyat - "fc") */
+typedef struct { ULONG_PTR base; char name[48]; } DbgMod;
+static void dbg_name(HANDLE f, char *out, size_t cap)
+{
+    char path[MAX_PATH] = "";
+    if (!f || !GetFinalPathNameByHandleA(f, path, MAX_PATH, 0)) { lstrcpynA(out, "?", (int)cap); return; }
+    char *b = strrchr(path, '\\'); lstrcpynA(out, b ? b + 1 : path, (int)cap);
+}
+static void dbg_probe(const wchar_t *exe, const wchar_t *cmd, char *out, size_t cap)
+{
+    static DbgMod mods[400]; int nm = 0;
+    char last[48] = "", fc[160] = "", sc[160] = "";
+    wchar_t c[1024]; lstrcpynW(c, cmd, 1024);
+    STARTUPINFOW si = { sizeof(si) }; PROCESS_INFORMATION pi;
+    if (!CreateProcessW(exe, c, NULL, NULL, FALSE, DEBUG_ONLY_THIS_PROCESS, NULL, g_dir, &si, &pi)) { _snprintf(out, cap, "dbgfail=%lu", GetLastError()); out[cap - 1] = 0; return; }
+    DWORD t0 = GetTickCount(), exitc = 0; BOOL done = FALSE;
+    while (!done && GetTickCount() - t0 < 25000) {
+        DEBUG_EVENT de;
+        if (!WaitForDebugEvent(&de, 1000)) continue;
+        DWORD cont = DBG_CONTINUE;
+        switch (de.dwDebugEventCode) {
+        case CREATE_PROCESS_DEBUG_EVENT:
+            if (nm < 400) { mods[nm].base = (ULONG_PTR)de.u.CreateProcessInfo.lpBaseOfImage; dbg_name(de.u.CreateProcessInfo.hFile, mods[nm].name, sizeof(mods[nm].name)); nm++; }
+            if (de.u.CreateProcessInfo.hFile) CloseHandle(de.u.CreateProcessInfo.hFile);
+            break;
+        case LOAD_DLL_DEBUG_EVENT:
+            if (nm < 400) { mods[nm].base = (ULONG_PTR)de.u.LoadDll.lpBaseOfDll; dbg_name(de.u.LoadDll.hFile, mods[nm].name, sizeof(mods[nm].name)); lstrcpynA(last, mods[nm].name, sizeof(last)); nm++; }
+            if (de.u.LoadDll.hFile) CloseHandle(de.u.LoadDll.hFile);
+            break;
+        case EXCEPTION_DEBUG_EVENT: {
+            EXCEPTION_RECORD *er = &de.u.Exception.ExceptionRecord;
+            DWORD code = er->ExceptionCode;
+            if (code == EXCEPTION_BREAKPOINT || code == 0x4000001F || code == 0x406D1388 || code == 0xE06D7363) break;   /* boshlang'ich to'xtash, oqim nomi, C++ - o'tkazamiz */
+            ULONG_PTR a = (ULONG_PTR)er->ExceptionAddress; int bi = -1;
+            for (int i = 0; i < nm; i++) if (mods[i].base <= a && (bi < 0 || mods[i].base > mods[bi].base)) bi = i;
+            char *dst = de.u.Exception.dwFirstChance ? fc : sc;
+            if (!dst[0]) { _snprintf(dst, 160, "%08lx mod=%s+%lx", code, bi >= 0 ? mods[bi].name : "?", bi >= 0 ? (unsigned long)(a - mods[bi].base) : (unsigned long)a); dst[159] = 0; }
+            cont = DBG_EXCEPTION_NOT_HANDLED;        /* o'yin o'zi ushlasa - davom etsin (himoya tizimlari ataylab ishlatadi) */
+            if (!de.u.Exception.dwFirstChance) done = TRUE;
+            break; }
+        case EXIT_PROCESS_DEBUG_EVENT: exitc = de.u.ExitProcess.dwExitCode; done = TRUE; break;
+        default: break;
+        }
+        ContinueDebugEvent(de.dwProcessId, de.dwThreadId, cont);
+    }
+    if (!done || sc[0]) TerminateProcess(pi.hProcess, 1);
+    CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+    _snprintf(out, cap, "%s%s%s%s exit=%08lx last=%s n=%d%s", sc[0] ? "dbg=" : "", sc, fc[0] ? " fc=" : "", fc, (unsigned long)exitc, last[0] ? last : "-", nm, done ? "" : " timeout");
+    out[cap - 1] = 0;
+}
+
 static BOOL run_game(void)
 {
     wchar_t exe[MAX_PATH], cmd[1024];
@@ -2177,7 +2230,11 @@ static BOOL run_game(void)
             { FILETIME fe; GetSystemTimeAsFileTime(&fe);   /* jurnal yozilishiga ulgursin */
               Sleep(1500);
               DWORD since = (DWORD)((((ULONGLONG)ft0.dwHighDateTime << 32 | ft0.dwLowDateTime) / 10000000ULL) - 11644473600ULL);
-              (void)fe; crash_detail(g_probx, sizeof(g_probx), since); }
+              (void)fe; crash_detail(g_probx, sizeof(g_probx), since);
+              if (!strcmp(g_probx, "noevent") || !strcmp(g_probx, "nolog")) {   /* jurnal bo'sh - o'yinni kuzatuv rejimida bir marta ochamiz */
+                  status(L"Xato sababi aniqlanmoqda...", 100);
+                  char raw[300]; dbg_probe(exe, cmd, raw, sizeof(raw)); url_escape(g_probx, sizeof(g_probx), raw);
+              } }
             prob_send("start_fail", 3000);
             g_probx[0] = 0;
             wchar_t hl[MAX_PATH]; path_join(hl, g_dir, L"hl.exe");
@@ -2273,7 +2330,7 @@ static char g_prob[24];
 static DWORD WINAPI prob_th(LPVOID unused)
 {
     (void)unused;
-    char url[768];
+    char url[1024];
     _snprintf(url, sizeof(url), "http://mmb.boost-top.com/xc_api.php?a=prob&k=%s&d=%s&v=%s%s%s", g_prob, g_id, g_version[0] ? g_version : "0", g_probx[0] ? "&x=" : "", g_probx);
     url[sizeof(url) - 1] = 0;
     HINTERNET h = open_url(url);
