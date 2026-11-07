@@ -841,7 +841,7 @@ function pump() {
         srvq(ip, function (r) {
           if (done) return;
           if (r && r.ok) {
-            s.prevPl = s.ok ? s.pl : null; s.ok = true; s.fail = false; s.ping = s.ping || 0;
+            s.prevPl = s.ok ? s.pl : null; s.ok = true; s.fail = false; s.ping = s.ping || 0; s.blk = true;   // server ishlayapti (sayt ko'radi), lekin bu kompyuterdan javob yo'q
             s.name = clean(r.name) || ip; s.map = clean(r.map); s.pl = r.pl || 0; s.max = r.max || 0; s.bots = r.bots || 0;
             if (r.players) PLAYERS[ip] = r.players.map(function (x) { return { name: x.name, score: x.score, timePlayedSeconds: x.time }; });
           } else { s.ok = false; s.fail = true; }
@@ -854,7 +854,7 @@ function pump() {
         NC.matchmaking.getServerInfo(ip).then(function (r) {
           clearTimeout(tm);
           r = r || {};
-          s.prevPl = s.ok ? s.pl : null; s.ok = true; s.fail = false; s.ping = now() - t0; netStat(s, s.ping);
+          s.prevPl = s.ok ? s.pl : null; s.ok = true; s.fail = false; s.blk = false; s.ping = now() - t0; netStat(s, s.ping);
           s.name = clean(r.hostname) || ip; s.map = clean(r.map);
           s.pl = r.playersOnline || 0; s.max = r.playersMax || 0; s.bots = r.botsOnline || 0; s.pass = !!r.isPasswordProtected;
           fin();
@@ -1084,7 +1084,7 @@ function netCheck(ip, go) {
     var avg = 0; each(pings, function (p) { avg += p; }); avg = pings.length ? Math.round(avg / pings.length) : 0;
     var loss = Math.round(lost * 100 / 3);
     if (loss < 34 && avg < 180) return go();
-    ask(T(pings.length ? 'nc_bad' : 'nc_dead').replace('{p}', avg).replace('{l}', loss), go, false, false, true);
+    ask(T(pings.length ? 'nc_bad' : srv(ip).blk ? 'nc_blk' : 'nc_dead').replace('{p}', avg).replace('{l}', loss), go, false, false, true);
   }
   probe();
 }
@@ -1632,7 +1632,7 @@ function renderServers() {
       c1row(s, (s.name || (h && h.name) || s.ip), s.pass ? '<span class="vb">PW</span>' : '') +
       '<span class="c2">' + (s.ok ? pbar(s) + s.pl + '/' + s.max : (s.fail ? '<span class="rd">' + T('offline') + '</span>' : '...')) + '</span>' +
       '<span class="c3">' + esc(s.map || (h && h.map) || '') + '</span>' +
-      '<span class="c4">' + (s.ok ? '<i class="dot ' + pc + '"></i>' + s.ping : '') + '</span>' +
+      '<span class="c4">' + (s.ok ? (s.blk ? '<i class="dot r"></i>\u2715' : '<i class="dot ' + pc + '"></i>' + s.ping) : '') + '</span>' +
       '<span class="c5">' + c5 + '</span><span class="c6">' + c6 + '</span></div>';
     return html;
   }

@@ -19,7 +19,7 @@
  * o'yin brauzeri cheksiz kutib, ekran ko'k bo'lib qolardi. Sinxron yuklash faqat server hozirgina javob bergandan keyin.
  * Qo'riqchi: menyu (xc.js) 20 s ichida ishga tushmasa - sahifa qayta yuklanadi (4 martagacha, oraliq oshib boradi). */
 (function () {
-  var V = '10202600';
+  var V = '10202700';
   window.XC_V = V;
   function nm() { try { return String(window.name || ''); } catch (e) { return ''; } }
   function has(t) { return ('|' + nm() + '|').indexOf('|' + t + '|') >= 0; }
@@ -66,7 +66,7 @@
   } catch (e) {}
 })();
 </script>
-<link rel="stylesheet" href="xc.css?v=10202600">
+<link rel="stylesheet" href="xc.css?v=10202700">
 <script>
 /* Xato bo'lsa ekranning tepasida ko'rsatamiz (o'yin brauzerida konsol yo'q) */
 window.XC_ERRS = [];
@@ -83,7 +83,7 @@ window.onerror = function (msg, url, line) {
   return false;
 };
 </script>
-<script src="xc_lang.js?v=10202600"></script>
+<script src="xc_lang.js?v=10202700"></script>
 </head>
 <body>
 <div id="app">
@@ -298,6 +298,6 @@ window.onerror = function (msg, url, line) {
   <div id="dbg"></div>
 </div>
 <script src="master.js"></script>
-<script src="xc.js?v=10202600"></script>
+<script src="xc.js?v=10202700"></script>
 </body>
 </html>
