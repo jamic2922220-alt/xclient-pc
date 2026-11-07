@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>X CLIENT — profil rasmi</title>
+<!-- O'yin ichida (CEF) fayl tanlash oynasi o'yin ortida ochilib qotib qoladi - shuning uchun rasm oddiy brauzerda shu sahifadan yuklanadi -->
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: #0d0a0e; color: #f2eef0; font: 16px/1.5 "Segoe UI", Roboto, Arial, sans-serif; display: flex; align-items: center; justify-content: center; padding: 20px 16px; }
+.box { width: 100%; max-width: 400px; background: #17121a; border: 1px solid #2a2026; border-radius: 14px; padding: 26px 22px; }
+h1 { margin: 0 0 4px; font-size: 22px; } h1 b { color: #ff3b3b; }
+p { color: #a39aa0; margin: 0 0 18px; font-size: 14px; }
+label { display: block; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: #ff6a5a; margin: 12px 0 6px; }
+input[type=text], input[type=password] { width: 100%; height: 44px; padding: 0 12px; border: 1px solid #3a2e34; border-radius: 8px; background: #0f0d12; color: #fff; font-size: 16px; }
+button, .pick { display: block; width: 100%; height: 46px; margin-top: 18px; border: 0; border-radius: 9px; background: linear-gradient(180deg, #ff4a4a, #c4262e); color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; text-align: center; line-height: 46px; }
+.pick input { display: none; }
+.av { width: 128px; height: 128px; border-radius: 50%; margin: 6px auto 4px; background: #2a2026 center/cover; border: 3px solid #ff3b3b; }
+.msg { margin-top: 14px; font-size: 14px; min-height: 20px; text-align: center; }
+.ok { color: #7ee35a; } .err { color: #ff7a6a; }
+.hide { display: none; }
+.who { text-align: center; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="box">
+  <h1><b>X</b> CLIENT — profil rasmi</h1>
+  <p>Akkauntingizga kiring va rasm tanlang. Rasm o'yindagi profilingizda ham chiqadi.</p>
+  <form id="lf">
+    <label for="lg">Login yoki e-mail</label><input id="lg" type="text" autocomplete="username" required>
+    <label for="pw">Parol</label><input id="pw" type="password" autocomplete="current-password" required>
+    <button type="submit">Kirish</button>
+  </form>
+  <div id="up" class="hide">
+    <div class="av" id="av"></div>
+    <div class="who" id="who"></div>
+    <label class="pick">Rasm tanlash<input id="fi" type="file" accept="image/*"></label>
+  </div>
+  <div class="msg" id="msg"></div>
+</div>
+<script>
+(function () {
+  var tok = '', $ = function (i) { return document.getElementById(i); };
+  function say(t, ok) { $('msg').textContent = t; $('msg').className = 'msg ' + (ok ? 'ok' : 'err'); }
+  function api(params, cb) {
+    var b = []; for (var k in params) b.push(k + '=' + encodeURIComponent(params[k]));
+    var x = new XMLHttpRequest(); x.open('POST', 'xc_api.php', true); x.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    x.onload = function () { var r = null; try { r = JSON.parse(x.responseText); } catch (e) {} cb(r || { ok: false, msg: 'Server xatosi' }); };
+    x.onerror = function () { cb({ ok: false, msg: 'Internet xatosi' }); };
+    x.send(b.join('&'));
+  }
+  function show(me) {
+    $('lf').className = 'hide'; $('up').className = '';
+    $('who').textContent = me.name;
+    $('av').style.backgroundImage = me.av ? 'url(' + me.av + ')' : 'none';
+  }
+  $('lf').onsubmit = function (e) {
+    e.preventDefault(); say('Kirilmoqda...', true);
+    api({ a: 'login', login: $('lg').value, pass: $('pw').value, device: 'web' + Math.random().toString(36).slice(2, 12) }, function (r) {
+      if (!r.ok) return say(r.msg || 'Login yoki parol noto\'g\'ri');
+      tok = r.token; say(''); show(r.me);
+    });
+  };
+  $('fi').onchange = function () {
+    var f = this.files && this.files[0]; if (!f) return;
+    if (!/^image\//.test(f.type)) return say('Bu rasm emas');
+    var rd = new FileReader();
+    rd.onload = function () {
+      var im = new Image();
+      im.onload = function () {
+        var c = document.createElement('canvas'); c.width = 128; c.height = 128;
+        var g = c.getContext('2d'), s = Math.min(im.width, im.height);
+        g.fillStyle = '#000'; g.fillRect(0, 0, 128, 128);
+        g.drawImage(im, (im.width - s) / 2, (im.height - s) / 2, s, s, 0, 0, 128, 128);
+        say('Yuklanmoqda...', true);
+        api({ a: 'avatar', token: tok, device: 'web', img: c.toDataURL('image/jpeg', 0.85) }, function (r) {
+          if (!r.ok) return say(r.msg || 'Xato');
+          show(r.me); say('Tayyor! Rasm o\'yinda ham chiqadi ✓', true);
+        });
+      };
+      im.onerror = function () { say('Rasmni ochib bo\'lmadi'); };
+      im.src = rd.result;
+    };
+    rd.readAsDataURL(f);
+  };
+})();
+</script>
+</body>
+</html>
