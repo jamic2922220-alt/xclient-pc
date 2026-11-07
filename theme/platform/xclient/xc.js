@@ -2319,6 +2319,12 @@ function hwLight() {
 /* bir martalik takliflar (bittadan, "Bezovta qilmaslik" yoqilmagan bo'lsa): kuchsiz kompyuter, Windows Game Bar fon yozuvi */
 function tuneHints() {
   if (!CONNECTED && HW && hwClass() === 'weak' && !DB.hwAsk && S) { DB.hwAsk = 1; persist(); return hwLight(); }
+  /* 3 GB dan kam xotira (admin > Yiqilishlar: 2 GB li Windows 7 da 17 marta yiqilish) - "Ultra yengil" ham bir marta o'zi yoqiladi */
+  if (!CONNECTED && HW && HW.ram && HW.ram < 3000 && !DB.ulAsk && S && !S.ultra) {
+    DB.ulAsk = 1; E = copy(S);
+    E.ultra = 1; E.detail = 0; E.shadows = 0; E.dyn = 0; E.vsync = 0; E.decals = 300; E.hisnd = 0; E.mixa = 0.15; E.bob = 0; if (!(E.fps >= 100)) E.fps = 100;
+    S = copy(E); DB.set = S; persist(); applySettings(S); cloudSave(); toast(T('pr_ulok'), 7000); return;
+  }
   if (DB.dnd || CONNECTED || curModal || !HW) return;   // kuchsiz kompyuter - so'ramasdan yengil grafika (Sozlamalarda qaytarsa bo'ladi)
   if (OPTS.dvr && !OPTS.dvroff && !DB.dvrAsk && verGE(VERSION, '1.0.96')) {
     DB.dvrAsk = 1; persist();
