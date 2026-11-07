@@ -1,3 +1,10 @@
 #!/bin/bash
-O=diag/out; mkdir -p $O/el; : > $O/summary.txt
-curl -sS -o $O/el/p3.mp3 "https://elevenlabsusercontent.com/database/workspace/f6a0d35706c649839d24af33b5a8ef91/content_generation/l7WnLAhAg1Jw5q3XqTQ0/IhIuolQq7jR38ygOElf3/content.mp3?Expires=1794042000&KeyName=assets-cdn-key-1&Signature=F9G7Ps72AC2JIRg-HIAc_rQSR6Q=" && echo "p3 $(stat -c %s $O/el/p3.mp3)" >> $O/summary.txt
+O=diag/out; mkdir -p $O; : > $O/summary.txt
+S(){ echo "$*" >> $O/summary.txt; }
+S "mmb IP: $(getent hosts mmb.boost-top.com | awk '{print $1}') | boost-top.com: $(getent hosts boost-top.com | awk '{print $1}') | cssborka: $(getent hosts cssborka.uz | awk '{print $1}')"
+for ip in $(getent hosts mmb.boost-top.com | awk '{print $1}') 51.89.39.107; do
+ for port in 8888 8889 8443 443 80 22; do
+  S "$ip:$port -> $(timeout 8 bash -c "echo > /dev/tcp/$ip/$port" 2>/dev/null && echo OCHIQ || echo yopiq)"
+ done
+ S "https://$ip:8888 -> $(curl -sk -m 15 -o /tmp/o -w '%{http_code}' https://$ip:8888/) $(grep -o '<title>[^<]*' /tmp/o | head -1)"
+done
