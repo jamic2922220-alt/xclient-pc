@@ -809,6 +809,8 @@ function pingPresence() {
 var PINNED = ['157.22.130.26:27015'];       // X CLIENT o'z serverlari
 var SRV = {}, MASTER = [], TOP = [];
 var queue = [], running = 0, MAXQ = 12;
+/* o'yin ustida (ESC) server so'rovlari o'yin oqimida bajariladi - bir vaqtda 12 ta so'rov kuchsiz kompyuterda qotishga sabab bo'lardi */
+function qmax() { return !CONNECTED ? MAXQ : (DB.fx === 0 || (HW && hwClass() === 'weak')) ? 2 : 4; }
 function srv(ip) { if (!SRV[ip]) SRV[ip] = { ip: ip }; return SRV[ip]; }
 function query(ip, force) {
   if (!ip) return;
@@ -833,7 +835,7 @@ function queryViaSite(ip, force) {
   });
 }
 function pump() {
-  while (running < MAXQ && queue.length) {
+  while (running < qmax() && queue.length) {
     (function (ip) {
       running++;
       var s = srv(ip), t0 = now(), done = false;
@@ -1053,6 +1055,32 @@ function queueBar() {
   var s = srv(QUEUE_IP);
   b.innerHTML = ico('clock') + ' ' + esc(T('q_wait')) + ' <b>' + esc(s.name || QUEUE_IP) + '</b>' + (s.ok ? ' \u00b7 ' + s.pl + '/' + s.max : '') + ' <a data-act="qstop">' + esc(T('q_stop')) + '</a>';
   b.style.display = 'block';
+}
+
+/* Menyu ochilganda ('show') yangilash. O'yin ustida (ESC) o'yin brauzeri har chizishni o'yinning asosiy oqimida qiladi:
+ * hammasini bir yo'la (to'liq qayta chizish + do'stlar + hafta + serverlar) qilish kuchsiz kompyuterda ESC bosilganda
+ * 1-2 soniya qotishga olib kelardi. O'yin ustida - bo'laklab (350 ms oraliq), menyu yopilsa to'xtaydi; kuchsiz
+ * kompyuterda o'yin ustida haftalik reyting va server so'rovlari umuman qilinmaydi (menyudan chiqqach yangilanadi) */
+var SHOW_TM = 0;
+function showWork() {
+  clearTimeout(SHOW_TM);
+  var weak = !!CONNECTED && (DB.fx === 0 || (HW && hwClass() === 'weak'));
+  var steps = [
+    function () { if (UI_DIRTY) { UI_DIRTY = false; renderAll(); renderBar(); } },
+    function () { if (weak) return; each(TOP.concat(PINNED).concat(DB.fav), function (ip) { query(ip); }); },
+    function () { if (curModal === 'mdServers') { each(tabIps(), function (ip) { query(ip, true); }); if (srvSel) loadPlayers(srvSel); } if (CHAT && curModal === 'mdSide' && sideMode === 'chat') chatLoad(); },
+    function () { loadFriends(); },
+    function () { if (!weak) loadWeek(); },
+    function () { ngFit(); }
+  ];
+  if (!CONNECTED) { each(steps, function (f) { try { f(); } catch (e) {} }); return; }
+  var i = 0;
+  function next() {
+    if (i >= steps.length || !uiShown()) return;
+    try { steps[i++](); } catch (e) {}
+    SHOW_TM = setTimeout(next, 350);
+  }
+  SHOW_TM = setTimeout(next, 200);   // avval menyuning o'zi chizilib olsin
 }
 
 /* ============================================================ ulanish, tarix, K/D */
@@ -3962,8 +3990,8 @@ if (DB.token) api('me', {}, function (r) { if (r.ok) { setMe(r.me); loadFriends(
 
 if (NC) {
   // o'yin ekrani ochildi (NextClient'ning o'z ro'yxatidan yoki konsoldan kirilsa ham) - menyu musiqasi o'chsin
-  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('hide', function () { UI_VIS = false; ESC_OPEN = false; musicSync(); }); } catch (e) {}
-  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('show', function () { UI_VIS = true; ESC_OPEN = !!CONNECTED; musicSync(); restCheck(); if (UI_DIRTY) { UI_DIRTY = false; renderAll(); renderBar(); } each(TOP.concat(PINNED).concat(DB.fav), function (ip) { query(ip); }); if (curModal === 'mdServers') { each(tabIps(), function (ip) { query(ip, true); }); if (srvSel) loadPlayers(srvSel); } if (CHAT && curModal === 'mdSide' && sideMode === 'chat') chatLoad(); loadFriends(); loadWeek(); ngFit(); }); } catch (e) {}
+  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('hide', function () { UI_VIS = false; ESC_OPEN = false; clearTimeout(SHOW_TM); musicSync(); }); } catch (e) {}
+  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('show', function () { UI_VIS = true; ESC_OPEN = !!CONNECTED; musicSync(); restCheck(); showWork(); }); } catch (e) {}
   try {
     if (NC.addEventListener) {
       NC.addEventListener('connect', function (e) { onConnectEvt(e && e.detail && e.detail.address, false); });
