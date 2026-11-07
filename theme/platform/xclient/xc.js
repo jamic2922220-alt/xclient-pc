@@ -1060,7 +1060,19 @@ function connect(ip) {
   if (!ip) return;
   if (S.queue && isFull(srv(ip))) { startQueue(ip); return; }
   stopQueue();
+  var alt = srv(ip).blk ? altAddr(ip) : null;
+  if (alt) {                                       // bu manzil sizdan yopiq, shu serverning boshqa manzili ochiq - o'shanga
+    toast(T('nc_alt').replace('{ip}', alt.ip), 6000);
+    netCheck(alt.ip, function () { doConnect(alt.ip); }); return;
+  }
   netCheck(ip, function () { doConnect(ip); });
+}
+/* bir server bir nechta manzilda (masalan 212.47.58.89 va proksi 157.22.130.26): nomi bir xil, bu kompyuterdan javob beradigani */
+function srvKey(s) { var n = String(s && s.name || '').replace(/[^A-Za-z0-9]/g, '').toLowerCase(); return n.length >= 6 ? n : ''; }
+function altAddr(ip) {
+  var k = srvKey(srv(ip)), best = null; if (!k) return null;
+  for (var i in SRV) if (SRV.hasOwnProperty(i) && i !== ip) { var o = SRV[i]; if (o.ok && !o.blk && srvKey(o) === k && (!best || o.ping < best.ping)) best = o; }
+  return best;
 }
 /* kirishdan oldin aloqani tekshirish: serverga 3 ta qisqa so'rov (0.3 s oraliq). Yo'qotish yoki ping juda yuqori bo'lsa -
  * o'yinchiga aytamiz (lag kutilmasdan), u baribir kirishni tanlashi mumkin. Hammasi joyida bo'lsa - darhol kiradi */
