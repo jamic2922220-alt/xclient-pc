@@ -123,6 +123,17 @@ function ip_dev($maxAge) { $m = rd(ip_key(), null); return ($m && time() - $m['t
  * mobil internet) boshqa odam IP orqali kira olmasin. Kalitni menyu launcher ochilgach bir marta oladi (opts) */
 function dev_ok($d, $o) { $k = p('k'); return $k !== '' && !empty($o['k']) && hash_equals($o['k'], $k); }
 function ukey($login) { return 'users/' . strtolower($login); }
+/* login: bo'shliq -> _, tutuq belgilar (o', g') olib tashlanadi, kirill harflari lotinchaga - o'yinchi "Ali Valiyev" yoki
+ * "Шерзод" yozsa ham ro'yxatdan o'tadi (oldin "Login 3-20 belgi" xatosi chiqib, ko'pchilik to'xtab qolardi) */
+function login_norm($s) {
+    $s = trim((string)$s);
+    $tr = array('А'=>'A','Б'=>'B','В'=>'V','Г'=>'G','Д'=>'D','Е'=>'E','Ё'=>'Yo','Ж'=>'J','З'=>'Z','И'=>'I','Й'=>'Y','К'=>'K','Л'=>'L','М'=>'M','Н'=>'N','О'=>'O','П'=>'P','Р'=>'R','С'=>'S','Т'=>'T','У'=>'U','Ф'=>'F','Х'=>'X','Ц'=>'Ts','Ч'=>'Ch','Ш'=>'Sh','Щ'=>'Sh','Ъ'=>'','Ы'=>'I','Ь'=>'','Э'=>'E','Ю'=>'Yu','Я'=>'Ya','Ў'=>'O','Қ'=>'Q','Ғ'=>'G','Ҳ'=>'H',
+        'а'=>'a','б'=>'b','в'=>'v','г'=>'g','д'=>'d','е'=>'e','ё'=>'yo','ж'=>'j','з'=>'z','и'=>'i','й'=>'y','к'=>'k','л'=>'l','м'=>'m','н'=>'n','о'=>'o','п'=>'p','р'=>'r','с'=>'s','т'=>'t','у'=>'u','ф'=>'f','х'=>'x','ц'=>'ts','ч'=>'ch','ш'=>'sh','щ'=>'sh','ъ'=>'','ы'=>'i','ь'=>'','э'=>'e','ю'=>'yu','я'=>'ya','ў'=>'o','қ'=>'q','ғ'=>'g','ҳ'=>'h');
+    $s = strtr($s, $tr);
+    $s = str_replace(array("'", '`', "\xCA\xBB", "\xCA\xBC", "\xE2\x80\x98", "\xE2\x80\x99"), '', $s);   // o' g' tutuqlari
+    $s = preg_replace('/[\s\-\.]+/', '_', $s);
+    return substr(preg_replace('/_+/', '_', $s), 0, 20);
+}
 function user($login) { return preg_match('/^[A-Za-z0-9_]{3,20}$/', (string)$login) ? rd(ukey($login), null) : null; }   // login fayl nomi bo'ladi: ../ bilan boshqa fayllarni o'qib bo'lmasin
 function save_user($u) { wr(ukey($u['login']), $u); }
 function week_id() { return date('o-W'); }
@@ -662,14 +673,20 @@ tg_bot_poll();
 switch ($a) {
 
 case 'register':
-    $login = p('login'); $pass = p('pass'); $email = p('email');
+    $login = login_norm(p('login')); $pass = p('pass'); $email = trim(p('email'));
     if (!preg_match('/^[A-Za-z0-9_]{3,20}$/', $login)) fail('login', 'Login 3-20 belgi: harf, raqam, _');
     if (strlen($pass) < 6) fail('pass', 'Parol kamida 6 belgi');
     if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) fail('email', 'Email noto\'g\'ri');
-    if (rl_count('reg' . client_ip(), 3600) >= 5) fail('limit', 'Bir soatda juda ko\'p ro\'yxatdan o\'tish. Keyinroq urinib ko\'ring');
+    /* Limit: bitta IP ortida (mobil internet, provayder NAT, internet-kafe) yuzlab o'yinchi bo'ladi - IP ga 40/soat,
+     * bitta qurilmaga 3/soat (avval IP ga 5/soat edi: bir mahalladagi o'yinchilar ro'yxatdan o'ta olmay qolardi) */
+    $rdev = preg_match('/^[a-z0-9]{8,40}$/', p('device')) ? 'regd' . p('device') : '';
+    if (rl_count('reg' . client_ip(), 3600) >= 40 || ($rdev && rl_count($rdev, 3600) >= 3)) fail('limit', 'Bir soatda juda ko\'p ro\'yxatdan o\'tish. Keyinroq urinib ko\'ring');
     lock();
-    if (user($login)) fail('exists', 'Bu login band');
-    rl_add('reg' . client_ip(), 3600);
+    if (user($login)) {                                  // band - bo'sh variantini taklif qilamiz
+        $sug = ''; for ($i = 0; $i < 20 && $sug === ''; $i++) { $c = substr($login, 0, 16) . mt_rand(10, 999); if (!user($c)) $sug = $c; }
+        fail('exists', 'Bu login band' . ($sug !== '' ? '. Masalan: ' . $sug : ''));
+    }
+    rl_add('reg' . client_ip(), 3600); if ($rdev) rl_add($rdev, 3600);
     $meta = rd('meta', array('next' => 100001));
     $u = array(
         'id' => 'X-' . $meta['next'], 'login' => $login, 'name' => $login, 'email' => $email,
@@ -685,7 +702,8 @@ case 'register':
     out(array('ok' => true, 'token' => new_token($login), 'me' => pub($u, true)));
 
 case 'login':
-    $login = p('login'); $pass = p('pass');
+    $login = trim(p('login')); $pass = p('pass');
+    if (strpos($login, '@') === false) $login = login_norm($login);
     if (strpos($login, '@') !== false) {                 // email bilan kirish
         foreach (glob(XC_DIR . '/users/*.php') as $f) {
             $x = rd('users/' . basename($f, '.php'), null);
@@ -694,7 +712,7 @@ case 'login':
     }
     if (!preg_match('/^[A-Za-z0-9_]{3,20}$/', $login)) fail('bad', 'Login yoki parol noto\'g\'ri');
     $kip = 'lf' . client_ip(); $kl = 'lfu' . strtolower($login);
-    if (rl_count($kip, 900) >= 20 || rl_count($kl, 900) >= 10) fail('limit', 'Juda ko\'p noto\'g\'ri urinish. 15 daqiqadan keyin qayta urinib ko\'ring');
+    if (rl_count($kip, 900) >= 60 || rl_count($kl, 900) >= 10) fail('limit', 'Juda ko\'p noto\'g\'ri urinish. 15 daqiqadan keyin qayta urinib ko\'ring');
     $u = user($login);
     if (!$u || !password_verify($pass, $u['pass'])) { rl_add($kip, 900); rl_add($kl, 900); usleep(400000); fail('bad', 'Login yoki parol noto\'g\'ri'); }
     lock();                                              // qulf faqat yozish uchun - noto'g'ri urinishlar boshqalarni to'xtatmasin

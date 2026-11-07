@@ -515,6 +515,8 @@ function api(a, params, cb) {
     try { r = JSON.parse(x.responseText); } catch (e) {}
     if (!r) r = { ok: false, err: 'net', msg: T('lg_neterr') };
     if (r.err === 'auth') { DB.token = ''; ME = null; persist(); renderAll(); }
+    var sx = r.msg && /^(.*?)\. Masalan: (\S+)$/.exec(r.msg);   // "Bu login band. Masalan: Ali_123" - tarjima + taklif
+    if (sx && window.SRVMSG && SRVMSG[sx[1]] && CUR_LANG !== 'uz') { var lj = CUR_LANG === 'en' || LFALL[CUR_LANG] === 'en' ? 1 : 0; r.msg = SRVMSG[sx[1]][lj] + (lj ? '. For example: ' : '. Например: ') + sx[2]; }
     if (r.msg && window.SRVMSG && SRVMSG[r.msg] && CUR_LANG !== 'uz') {   // sayt xabarlari o'zbekcha - tanlangan tilga
       var li = CUR_LANG === 'en' || LFALL[CUR_LANG] === 'en' ? 1 : 0;
       r.msg = SRVMSG[r.msg][li];
@@ -1481,6 +1483,7 @@ function doLogin() {
   $('lgErr').innerHTML = esc(T('lg_wait'));
   api(lgReg ? 'register' : 'login', lgReg ? { login: lg, pass: pw, email: $('lgEmail').value } : { login: lg, pass: pw }, function (r) {
     if (!r.ok) { $('lgErr').innerHTML = esc(r.msg || 'Xato'); return; }
+    if (lgReg && r.me && r.me.login && r.me.login !== lg) toast(T('lg_norm').replace('{l}', r.me.login), 9000);   // "Ali Valiyev" -> Ali_Valiyev
     $('lgPass').value = '';
     DB.forget = $('lgRemember').className.indexOf('on') >= 0 ? 0 : 1;
     afterLogin(r);
