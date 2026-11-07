@@ -1984,6 +1984,7 @@ static void start_failed(const wchar_t *exe, DWORD err)
  * qayta qo'yishi mumkin, shuning uchun o'yin davomida 5 soniyada bir tekshiramiz (arzon: bitta xabar). Ikonka launcher
  * jarayonida yaratiladi - launcher o'yin yopilguncha ishlab turadi, shuning uchun u o'chib qolmaydi */
 typedef struct { DWORD pid; HWND w; } GameWin;
+static volatile LONG g_game_seen = 0;   /* o'yin oynasi paydo bo'ldimi (ishga tushishdagi xatoni o'yin ichidagi yiqilishdan ajratish) */
 static BOOL CALLBACK game_win_cb(HWND h, LPARAM l)
 {
     GameWin *g = (GameWin *)l; DWORD pid = 0;
@@ -2007,6 +2008,7 @@ static DWORD WINAPI game_icon_thread(LPVOID arg)
         if (WaitForSingleObject(proc, 2000) != WAIT_TIMEOUT) goto out;
         g.w = NULL; EnumWindows(game_win_cb, (LPARAM)&g); found = g.w != NULL;
     }
+    if (found) InterlockedExchange(&g_game_seen, 1);
     for (k = 0; found && k < 4; k++) {
         if (WaitForSingleObject(proc, waits[k]) != WAIT_TIMEOUT) break;
         g.w = NULL; EnumWindows(game_win_cb, (LPARAM)&g);
@@ -2041,6 +2043,9 @@ static BOOL run_game(void)
     { int rs = ini_int(L"rsk"); if (!o_ok && rs > 0) o_rsk = rs - 1; }   /* sayt javob bermasa - oxirgi tanlov */
     radar_skin(o_rsk);
     path_join(exe, g_dir, L"cstrike.exe");
+    /* cstrike.exe bu kompyuterda ochilishdayoq yiqilgan bo'lsa (Windows 7: "Ошибка при запуске приложения 0xc0000005") -
+     * o'sha o'yinni klassik hl.exe orqali ochamiz */
+    if (ini_int(L"usehl")) { wchar_t hl[MAX_PATH]; path_join(hl, g_dir, L"hl.exe"); if (GetFileAttributesW(hl) != INVALID_FILE_ATTRIBUTES) lstrcpyW(exe, hl); }
     if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) path_join(exe, g_dir, L"hl.exe");
     if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) {
         MessageBoxW(NULL, L"O‘yin fayllari (cstrike.exe) topilmadi. X CLIENT ni to‘liq paketdan qayta o‘rnating.", L"X CLIENT", MB_ICONERROR);
@@ -2087,6 +2092,7 @@ static BOOL run_game(void)
     if (o_ok && !safe) compat_flags(exe, o_prio);
     BOOL again = FALSE;
     FILETIME ft0; GetSystemTimeAsFileTime(&ft0);
+    InterlockedExchange(&g_game_seen, 0);
     if (CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, g_dir, &si, &pi)) {
         if (g_one) { CloseHandle(g_one); g_one = NULL; }   /* o'yin ochildi - endi yana bosilsa, yangi launcher uni topib oldinga chiqaradi */
         if (o_prio && !safe) SetPriorityClass(pi.hProcess, ABOVE_NORMAL_PRIORITY_CLASS);   /* "O'yinni tezlashtirish": HIGH Windows ovoz xizmatini (audiodg) siqib, ovoz qotishi va chirsillashiga sabab bo'lardi */
@@ -2116,6 +2122,26 @@ static BOOL run_game(void)
         FILETIME ft1; GetSystemTimeAsFileTime(&ft1);
         ULONGLONG played = ((((ULONGLONG)ft1.dwHighDateTime << 32) | ft1.dwLowDateTime) - t0) / 10000000ULL;   /* soniya */
         BOOL crashed = game_crashed(code, t0);
+        /* ochilishdayoq yiqildi (o'yin oynasi umuman paydo bo'lmadi, xotira xatosi): bu o'yin ichidagi xato emas - exe bu Windows'da ishga tushmayapti */
+        if (crashed && code == 0xC0000005 && !g_game_seen && played < 300) {
+            prob_send("start_fail", 3000);
+            wchar_t hl[MAX_PATH]; path_join(hl, g_dir, L"hl.exe");
+            BOOL isHl = !_wcsicmp(wcsrchr(exe, L'\\') ? wcsrchr(exe, L'\\') + 1 : exe, L"hl.exe");
+            if (!isHl && GetFileAttributesW(hl) != INVALID_FILE_ATTRIBUTES) {   /* 1-chora: hl.exe bilan avtomatik qayta */
+                ini_set_int(L"usehl", 1);
+                CloseHandle(pi.hProcess);
+                return TRUE;
+            }
+            ini_set_int(L"usehl", 0);
+            BOOL ru = !strncmp(g_lang, "ru", 2);
+            if (MessageBoxW(NULL, ru ? L"Игра не запускается на этом компьютере (ошибка 0xc0000005 при запуске).\n\nЧаще всего помогает:\n1) Установить Microsoft Visual C++ 2015-2022 (x86) - откроется страница загрузки.\n2) Windows 7: установить обновления (Центр обновления Windows), особенно KB2999226 и SP1.\n3) Временно отключить антивирус (360, Avast и др.) или добавить папку игры в исключения.\n4) Перезагрузить компьютер.\n\nОткрыть страницу Visual C++ сейчас?"
+                                 : L"O‘yin bu kompyuterda ishga tushmayapti (ishga tushishda 0xc0000005 xatosi).\n\nKo‘pincha yordam beradi:\n1) Microsoft Visual C++ 2015-2022 (x86) ni o‘rnatish - yuklash sahifasi ochiladi.\n2) Windows 7: yangilanishlarni o‘rnatish (Windows Update), ayniqsa KB2999226 va SP1.\n3) Antivirusni (360, Avast va boshq.) vaqtincha o‘chirish yoki o‘yin papkasini istisnoga qo‘shish.\n4) Kompyuterni qayta yoqish.\n\nVisual C++ sahifasi hozir ochilsinmi?",
+                            L"X CLIENT", MB_YESNO | MB_ICONWARNING | MB_SETFOREGROUND) == IDYES)
+                ShellExecuteW(NULL, L"open", L"https://aka.ms/vs/17/release/vc_redist.x86.exe", NULL, NULL, SW_SHOWNORMAL);
+            ini_set_int(L"crs", 0);                  /* bu yiqilish emas - xavfsiz rejim zanjiriga qo'shilmaydi */
+            CloseHandle(pi.hProcess);
+            return FALSE;
+        }
         if (crashed) {
             int c = ini_int(L"crs") + 1; ini_set_int(L"crs", c);
             if (c >= 2) ini_set_int(L"autover", 1);   /* 7. ikkinchi yiqilishdan keyin - keyingi ochilishda X CLIENT fayllari tekshiriladi */
