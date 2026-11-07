@@ -104,6 +104,7 @@ static void url_escape(char *out, size_t cap, const char *in)
  * o'yin bor fayllar bilan ochiladi. 0 - cheklov yo'q (yangilanishni yuklash, o'yin yopilgandan keyingi ishlar) */
 static wchar_t g_err[256];                         /* launcher yopilishida ko'rsatiladigan xato (pastda ham e'lon qilingan) */
 static void prob_send(const char *kind, DWORD wait);   /* admin panel > Muammolar (pastda) */
+static char g_probx[200];   /* prob_send uchun qo'shimcha tafsilot (url-escape qilingan), bo'lmasa bo'sh */
 static volatile DWORD g_net_dl = 0;
 static volatile LONG g_probe_ok = 0;
 static HINTERNET open_url_raw(const char *url)
@@ -2027,6 +2028,55 @@ out:
 }
 
 /* qaytaradi TRUE - o'yin yiqildi va o'yinchi "qayta ochish" ni tanladi */
+/* O'yin ishga tushishda yiqilsa - Windows "Application" jurnalidagi oxirgi "Application Error" (1000) yozuvidan
+ * qaysi modul (DLL) yiqilganini olamiz: "mod=nvoglv32.dll code=c0000005 off=0001a2b3 app=cstrike.exe". Admin > Muammolar */
+static void crash_detail(char *out, size_t cap, DWORD since)
+{
+    out[0] = 0;
+    HANDLE ev = OpenEventLogW(NULL, L"Application");
+    if (!ev) { lstrcpynA(out, "nolog", (int)cap); return; }
+    static BYTE buf[65536]; DWORD rd = 0, need = 0; int seen = 0;
+    while (!out[0] && seen < 400 && ReadEventLogW(ev, EVENTLOG_BACKWARDS_READ | EVENTLOG_SEQUENTIAL_READ, 0, buf, sizeof(buf), &rd, &need)) {
+        for (BYTE *p = buf; p < buf + rd && !out[0]; p += ((EVENTLOGRECORD *)p)->Length) {
+            EVENTLOGRECORD *r = (EVENTLOGRECORD *)p; seen++;
+            if (r->TimeGenerated + 5 < since) { seen = 9999; break; }          /* bu ishga tushirishdan oldingilar */
+            if ((r->EventID & 0xFFFF) != 1000 || r->NumStrings < 7) continue;
+            const wchar_t *src = (const wchar_t *)(p + sizeof(EVENTLOGRECORD));
+            if (_wcsicmp(src, L"Application Error")) continue;
+            const wchar_t *st[12] = {0}; const wchar_t *q = (const wchar_t *)(p + r->StringOffset);
+            for (int i = 0; i < (int)r->NumStrings && i < 12; i++) { st[i] = q; q += wcslen(q) + 1; }
+            if (!st[0] || (_wcsicmp(st[0], L"cstrike.exe") && _wcsicmp(st[0], L"hl.exe"))) continue;
+            char a[64], m[96], c[24], o[24];
+            WideCharToMultiByte(CP_UTF8, 0, st[0], -1, a, sizeof(a), NULL, NULL);
+            WideCharToMultiByte(CP_UTF8, 0, st[3] ? st[3] : L"?", -1, m, sizeof(m), NULL, NULL);
+            WideCharToMultiByte(CP_UTF8, 0, st[6] ? st[6] : L"?", -1, c, sizeof(c), NULL, NULL);
+            WideCharToMultiByte(CP_UTF8, 0, st[7] ? st[7] : L"?", -1, o, sizeof(o), NULL, NULL);
+            char raw[200]; _snprintf(raw, sizeof(raw), "mod=%s code=%s off=%s app=%s", m, c, o, a); raw[sizeof(raw) - 1] = 0;
+            url_escape(out, cap, raw);
+        }
+    }
+    CloseEventLog(ev);
+    /* ishga tushish xatosi (loader) ko'pincha "System" jurnaliga "Application Popup" (26) bo'lib yoziladi */
+    if (!out[0] && (ev = OpenEventLogW(NULL, L"System")) != NULL) {
+        seen = 0;
+        while (!out[0] && seen < 400 && ReadEventLogW(ev, EVENTLOG_BACKWARDS_READ | EVENTLOG_SEQUENTIAL_READ, 0, buf, sizeof(buf), &rd, &need)) {
+            for (BYTE *p = buf; p < buf + rd && !out[0]; p += ((EVENTLOGRECORD *)p)->Length) {
+                EVENTLOGRECORD *r = (EVENTLOGRECORD *)p; seen++;
+                if (r->TimeGenerated + 5 < since) { seen = 9999; break; }
+                if ((r->EventID & 0xFFFF) != 26 || r->NumStrings < 2) continue;
+                const wchar_t *q = (const wchar_t *)(p + r->StringOffset), *t1 = q, *t2 = q + wcslen(q) + 1;
+                wchar_t lw[400]; _snwprintf(lw, 400, L"%s | %s", t1, t2); lw[399] = 0; CharLowerW(lw);
+                if (!wcsstr(lw, L"cstrike") && !wcsstr(lw, L"hl.exe")) continue;
+                char raw[200]; WideCharToMultiByte(CP_UTF8, 0, lw, -1, raw, sizeof(raw) - 1, NULL, NULL); raw[sizeof(raw) - 1] = 0;
+                char tmp[200]; _snprintf(tmp, sizeof(tmp), "popup=%s", raw); tmp[120] = 0;
+                url_escape(out, cap, tmp);
+            }
+        }
+        CloseEventLog(ev);
+    }
+    if (!out[0]) lstrcpynA(out, "noevent", (int)cap);
+}
+
 static BOOL run_game(void)
 {
     wchar_t exe[MAX_PATH], cmd[1024];
@@ -2124,7 +2174,12 @@ static BOOL run_game(void)
         BOOL crashed = game_crashed(code, t0);
         /* ochilishdayoq yiqildi (o'yin oynasi umuman paydo bo'lmadi, xotira xatosi): bu o'yin ichidagi xato emas - exe bu Windows'da ishga tushmayapti */
         if (crashed && code == 0xC0000005 && !g_game_seen && played < 300) {
+            { FILETIME fe; GetSystemTimeAsFileTime(&fe);   /* jurnal yozilishiga ulgursin */
+              Sleep(1500);
+              DWORD since = (DWORD)((((ULONGLONG)ft0.dwHighDateTime << 32 | ft0.dwLowDateTime) / 10000000ULL) - 11644473600ULL);
+              (void)fe; crash_detail(g_probx, sizeof(g_probx), since); }
             prob_send("start_fail", 3000);
+            g_probx[0] = 0;
             wchar_t hl[MAX_PATH]; path_join(hl, g_dir, L"hl.exe");
             BOOL isHl = !_wcsicmp(wcsrchr(exe, L'\\') ? wcsrchr(exe, L'\\') + 1 : exe, L"hl.exe");
             if (!isHl && GetFileAttributesW(hl) != INVALID_FILE_ATTRIBUTES) {   /* 1-chora: hl.exe bilan avtomatik qayta */
@@ -2218,8 +2273,8 @@ static char g_prob[24];
 static DWORD WINAPI prob_th(LPVOID unused)
 {
     (void)unused;
-    char url[512];
-    _snprintf(url, sizeof(url), "http://mmb.boost-top.com/xc_api.php?a=prob&k=%s&d=%s&v=%s", g_prob, g_id, g_version[0] ? g_version : "0");
+    char url[768];
+    _snprintf(url, sizeof(url), "http://mmb.boost-top.com/xc_api.php?a=prob&k=%s&d=%s&v=%s%s%s", g_prob, g_id, g_version[0] ? g_version : "0", g_probx[0] ? "&x=" : "", g_probx);
     url[sizeof(url) - 1] = 0;
     HINTERNET h = open_url(url);
     if (h) InternetCloseHandle(h);
@@ -2230,6 +2285,7 @@ static void prob_send(const char *kind, DWORD wait)
     if (!g_net) return;
     lstrcpynA(g_prob, kind, sizeof(g_prob));
     HANDLE th = CreateThread(NULL, 0, prob_th, NULL, 0, NULL);
+    if (th && !wait) Sleep(50);                  /* oqim url'ni yasab olsin, keyin g_probx tozalanadi */
     if (th) { if (wait) WaitForSingleObject(th, wait); CloseHandle(th); }
 }
 /* sayt 8 s ichida javob beradimi (DNS osilib qolsa WinINet o'z vaqt chegarasiga ham qaramaydi - shuning uchun alohida oqimda) */

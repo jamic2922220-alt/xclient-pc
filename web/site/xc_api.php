@@ -1223,6 +1223,8 @@ case 'prob':
     lock(); $f = 'probs/' . date('Y-m-d'); $x = rd($f, array()); if (!isset($x[$k])) $x[$k] = array();
     if (count($x[$k]) < 5000) $x[$k][$who] = 1;
     wr($f, $x);
+    $det = clean_str(p('x'), 160);                       // tafsilot: qaysi modul yiqildi (launcher Windows jurnalidan oladi)
+    if ($det !== '') { $l = rd('probs_x', array()); $l[] = array('t' => time(), 'k' => $k, 'd' => $who, 'v' => clean_str(p('v'), 20), 'x' => $det); if (count($l) > 60) $l = array_slice($l, -60); wr('probs_x', $l); }
     /* 8. Telegram: bugun shu muammo 5, 20, 50, 100 ta kompyuterga yetsa - adminga darhol xabar */
     $n = count($x[$k]); $nm = array('dl_net' => "CS 1.6 yuklanmadi (internet)", 'dl_disk' => "diskda joy yo'q", 'dl_perm' => "papkaga yozib bo'lmadi", 'av_del' => "antivirus faylni o'chirdi",
         'setup_no' => "o'rnatishga ruxsat berilmadi", 'setup_fail' => "o'rnatuvchi ishga tushmadi", 'menu_wd' => "menyu 20 s da ochilmadi", 'gpu_nodrv' => "videokarta drayveri yo'q", 'safe_mode' => "3 marta ketma-ket yiqilish (xavfsiz rejim)", 'start_fail' => "o'yin ishga tushmayapti (0xc0000005, ko'pincha Windows 7)", 'dl_mirror' => "cssborka.uz dan yuklanmadi - zaxira manzil ishlatildi");

@@ -878,6 +878,11 @@ if ($P === 'prob') {
     echo '</tr>';
     foreach ($days as $k => $r) { echo '<tr><td>' . h($k) . '</td><td><b>' . $r['d'] . '</b></td>'; foreach ($ks as $t) { $n = isset($r['x'][$t]) ? count($r['x'][$t]) : 0; echo '<td' . ($n ? ' class="red"' : ' class="mut"') . '>' . ($n ? $n : '·') . '</td>'; } echo '</tr>'; }
     echo '</table><div class="mut small" style="margin-top:8px">O\'yin yiqilishlari - «Yiqilishlar» sahifasida. Menyu JavaScript xatolari - «Xatolar» sahifasida.</div></div>';
+    $dx = array_reverse(rd('probs_x', array()));
+    echo '<div class="panel"><div class="ph">Tafsilotlar - nima aynan yiqildi (Windows jurnalidan, oxirgi 30)</div><table class="list"><tr><th>Vaqt</th><th>Kompyuter</th><th>Versiya</th><th>Muammo</th><th>Tafsilot</th></tr>';
+    foreach (array_slice($dx, 0, 30) as $r) echo '<tr><td>' . dt($r['t']) . '</td><td><a href="?p=player&id=' . h($r['d']) . '">' . h(substr($r['d'], 0, 10)) . '</a></td><td>' . h($r['v']) . '</td><td>' . h(isset($nm[$r['k']]) ? $nm[$r['k']] : $r['k']) . '</td><td class="mono small">' . h($r['x']) . '</td></tr>';
+    if (!$dx) echo '<tr><td class="mut" colspan="5">Hali yo\'q - launcher 1.0.122 dan boshlab yig\'iladi</td></tr>';
+    echo '</table><div class="mut small" style="margin-top:8px">mod= - yiqilgan fayl (masalan ig4icd32.dll - Intel videokarta drayveri, nvoglv32.dll - NVIDIA, atioglxx.dll - AMD, hw.dll - o\'yin dvigateli). noevent - Windows hech narsa yozmagan.</div></div>';
 }
 
 /* ===== TUGMALAR: menyuda nima ko'p bosiladi (7 kun) ===== */
