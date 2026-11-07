@@ -37,6 +37,8 @@
 /* asl PC CS 1.6 (boost-top PRO) o'rnatuvchisi - o'yin yo'q bo'lsa shundan o'rnatiladi; panel "game=" bilan almashtirishi mumkin */
 #define XC_GAME_URL "https://cssborka.uz/uploads/files/1791198609_6ac38591b615c_CS_1_6_boost-top_PRO_2_5_3.exe"
 #endif
+/* 1. zaxira manzil: cssborka.uz ishlamasa yoki juda sekin bo'lsa (GitHub Releases, Range qo'llaydi) */
+#define XC_GAME_MIRROR "https://github.com/jamic2922220-alt/xclient-pc/releases/download/cs16/CS_1_6_boost-top_PRO_2_5_3.exe"
 #define XC_VERSION_FILE L"xclient_version.txt"
 /* Launcher fayli nomi. Eski nomi "XClient.exe" ba'zi server himoyalarida (Vanga/ReChecker) 5 yil oldingi
  * shu nomli cheat sifatida ro'yxatda turibdi - o'yin papkasida bu nomdagi fayl qolmasligi kerak. */
@@ -671,25 +673,77 @@ static BOOL run_setup(const wchar_t *exe, const wchar_t *params)
     return TRUE;
 }
 
-/* O'yin yo'q bo'lsa - asl boost-top PRO o'rnatuvchisini yuklab, shu papkaga o'rnatamiz */
+/* Oflayn paket: CS 1.6 o'rnatuvchisi (CS_1_6_boost-top_PRO*.exe) launcher yonida, Yuklamalar yoki Ish stolida bo'lsa -
+ * internetdan yuklamasdan shuni ishlatamiz (internet-kafe, sekin internet). 100 MB dan kichigi - chala fayl, hisobga olinmaydi */
+static BOOL find_local_setup(wchar_t *out)
+{
+    wchar_t dirs[4][MAX_PATH], pat[MAX_PATH], prof[MAX_PATH] = L"";
+    int nd = 0;
+    lstrcpynW(dirs[nd], g_self, MAX_PATH); { wchar_t *bs = wcsrchr(dirs[nd], L'\\'); if (bs) { *bs = 0; nd++; } }
+    lstrcpynW(dirs[nd++], g_dir, MAX_PATH);
+    if (GetEnvironmentVariableW(L"USERPROFILE", prof, MAX_PATH)) {
+        _snwprintf(dirs[nd++], MAX_PATH, L"%s\\Downloads", prof);
+        _snwprintf(dirs[nd++], MAX_PATH, L"%s\\Desktop", prof);
+    }
+    for (int i = 0; i < nd; i++) {
+        _snwprintf(pat, MAX_PATH, L"%s\\CS_1_6_boost-top_PRO*.exe", dirs[i]); pat[MAX_PATH - 1] = 0;
+        WIN32_FIND_DATAW fd; HANDLE h = FindFirstFileW(pat, &fd);
+        if (h == INVALID_HANDLE_VALUE) continue;
+        do {
+            ULONGLONG sz = ((ULONGLONG)fd.nFileSizeHigh << 32) | fd.nFileSizeLow;
+            if (sz > (100ULL << 20)) { _snwprintf(out, MAX_PATH, L"%s\\%s", dirs[i], fd.cFileName); out[MAX_PATH - 1] = 0; FindClose(h); return TRUE; }
+        } while (FindNextFileW(h, &fd));
+        FindClose(h);
+    }
+    return FALSE;
+}
+
+/* O'yin yo'q bo'lsa - asl boost-top PRO o'rnatuvchisini yuklab, shu papkaga o'rnatamiz.
+ * Avval tekshiruv (diskda joy, papkaga yozish), keyin oflayn fayl, keyin cssborka.uz, ishlamasa - GitHub'dagi zaxira nusxa */
 static BOOL ensure_game(const char *url)
 {
     if (has_game()) return TRUE;
     if (!url || !*url) url = XC_GAME_URL;
+    /* 4. o'rnatishdan oldin tekshiruv */
+    ULARGE_INTEGER fr; wchar_t root[8] = L"C:\\";
+    if (g_dir[0] && g_dir[1] == L':') root[0] = g_dir[0];
+    if (GetDiskFreeSpaceExW(root, &fr, NULL, NULL) && fr.QuadPart < (2048ULL << 20)) {
+        prob_send("dl_disk", 4000);
+        _snwprintf(g_err, 256, L"%c: diskda joy yetmayapti (%u MB bo‘sh). CS 1.6 uchun kamida 2 GB kerak - keraksiz fayllarni o‘chirib, X CLIENT ni qayta oching.", root[0], (unsigned)(fr.QuadPart >> 20));
+        return FALSE;
+    }
+    {
+        wchar_t t[MAX_PATH]; path_join(t, g_dir, L"xc_write_test.tmp");
+        HANDLE f = CreateFileW(t, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE, NULL);
+        if (f == INVALID_HANDLE_VALUE) {
+            prob_send("dl_perm", 4000);
+            lstrcpyW(g_err, L"O‘yin papkasiga yozib bo‘lmadi. X CLIENT ni o‘ng tugma > «Запуск от имени администратора» bilan oching yoki antivirusni vaqtincha o‘chiring.");
+            return FALSE;
+        }
+        CloseHandle(f);
+    }
     wchar_t tmp[MAX_PATH], params[1024];
-    GetTempPathW(MAX_PATH, tmp);
-    wcscat(tmp, L"xc_cs16_setup.exe");
-    BOOL ok = FALSE;
-    for (int i = 0; i < 6 && !ok; i++) {          /* uzilsa - qolgan joyidan davom etadi */
-        ok = http_download_pct(url, tmp, L"CS 1.6 yuklanmoqda:");
-        if (!ok && g_dl_err != 1) break;          /* disk/papka xatosi - qayta urinish foyda bermaydi */
-        if (!ok) { status(L"Internet uzildi, davom ettirilmoqda...", 0); Sleep(3000 + i * 2000); }
+    BOOL local = find_local_setup(tmp), ok = local;
+    if (local) { status(L"CS 1.6 kompyuterdagi fayldan o‘rnatiladi (internetsiz)...", 100); prob_send("offline", 0); }
+    else {
+        GetTempPathW(MAX_PATH, tmp);
+        wcscat(tmp, L"xc_cs16_setup.exe");
+        const char *src[2] = { url, XC_GAME_MIRROR };
+        for (int s2 = 0; s2 < 2 && !ok; s2++) {
+            for (int i = 0; i < (s2 ? 6 : 4) && !ok; i++) {   /* uzilsa - qolgan joyidan davom etadi */
+                ok = http_download_pct(src[s2], tmp, s2 ? L"CS 1.6 yuklanmoqda (zaxira):" : L"CS 1.6 yuklanmoqda:");
+                if (!ok && g_dl_err != 1) break;          /* disk/papka xatosi - qayta urinish foyda bermaydi */
+                if (!ok) { status(L"Internet uzildi, davom ettirilmoqda...", 0); Sleep(3000 + i * 2000); }
+            }
+            if (!ok && g_dl_err != 1) break;
+            if (!ok && !s2) { DeleteFileW(tmp); prob_send("dl_mirror", 0); }   /* boshqa manzil - qismni boshidan (fayl bir xil bo'lishiga ishonmaymiz) */
+        }
     }
     if (!ok) {                                    /* yuklangan qism o'chirilmaydi: keyingi ochilishda davomidan */
         prob_send(g_dl_err == 2 ? "dl_disk" : g_dl_err == 3 ? "dl_perm" : "dl_net", 4000);
         if (g_dl_err == 2) lstrcpyW(g_err, L"Diskda joy yetmayapti. CS 1.6 uchun kamida 2 GB bo‘sh joy kerak - keraksiz fayllarni o‘chirib, X CLIENT ni qayta oching.");
         else if (g_dl_err == 3) lstrcpyW(g_err, L"Papkaga yozib bo‘lmadi. X CLIENT ni o‘ng tugma > «Запуск от имени администратора» bilan oching yoki antivirusni vaqtincha o‘chiring.");
-        else lstrcpyW(g_err, L"CS 1.6 yuklanmadi: internet juda sekin yoki uzilib qolyapti. X CLIENT ni qayta oching - yuklash qolgan joyidan davom etadi.");
+        else lstrcpyW(g_err, L"CS 1.6 yuklanmadi: internet juda sekin yoki uzilib qolyapti. X CLIENT ni qayta oching - yuklash qolgan joyidan davom etadi. Internet yomon bo‘lsa - cssborka.uz dagi «Oflayn paket» ni oling.");
         return FALSE;
     }
     if (GetFileAttributesW(tmp) == INVALID_FILE_ATTRIBUTES) {   /* yuklandi, lekin fayl yo'qoldi - antivirus o'chirdi */
@@ -706,7 +760,7 @@ static BOOL ensure_game(const char *url)
         _snwprintf(params, 1024, L"/SP- /NOICONS /LANG=uzbek /DIR=\"%s\"", g_dir);
         run_setup(tmp, params);
     }
-    DeleteFileW(tmp);
+    if (!local) DeleteFileW(tmp);                 /* o'yinchining o'z (oflayn) faylini o'chirmaymiz */
     if (!has_game()) {
         if (g_setup_err) prob_send(g_setup_err == ERROR_CANCELLED ? "setup_no" : "setup_fail", 4000);
         if (g_setup_err == ERROR_CANCELLED) lstrcpyW(g_err, L"O‘rnatish uchun ruxsat berilmadi. X CLIENT ni qayta ochib, Windows so‘raganda «Да / Ha» ni bosing.");
@@ -1156,7 +1210,7 @@ static void fetch_opts(void)
     wchar_t wcr[24]; char cr[24] = ""; ini_get(L"t_cr", wcr, 24);         /* oxirgi yiqilish: "kod~fayllar" - bir marta yuboriladi */
     WideCharToMultiByte(CP_UTF8, 0, wcr, -1, cr, sizeof(cr), NULL, NULL);
     if (strspn(cr, "0123456789abcdef~") != strlen(cr)) cr[0] = 0;
-    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=hello&d=%s&v=%s&cache=%u&dvr=%d%s%s%s%s", g_id, v, cmb, dvr_state(), cr[0] ? "&cr=" : "", cr, hw, dm); url[sizeof(url) - 1] = 0;
+    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=hello&d=%s&v=%s&cache=%u&dvr=%d&safe=%d%s%s%s%s", g_id, v, cmb, dvr_state(), ini_int(L"crs") >= 3 ? 1 : 0, cr[0] ? "&cr=" : "", cr, hw, dm); url[sizeof(url) - 1] = 0;
     char *r = http_get(url, NULL);
     if (!r || !strstr(r, "\"ok\":true")) { free(r); return; }
     o_beta = jint(r, "beta", -1); o_auto = jint(r, "auto", 1); o_start = jint(r, "start", -1);
@@ -1911,6 +1965,7 @@ static DWORD WINAPI cache_maint(LPVOID unused)
  * o'yinchiga nima qilishni aniq aytamiz (aks holda "launcher ochilmayapti" deyishadi va sababini bilishmaydi) */
 static void start_failed(const wchar_t *exe, DWORD err)
 {
+    ini_set_int(L"autover", 1);                    /* 7. o'yin ochilmadi - keyingi safar fayllar tekshiriladi */
     const wchar_t *nm = wcsrchr(exe, L'\\'); nm = nm ? nm + 1 : exe;
     wchar_t m[900];
     if (err == 225 || err == 226 || err == ERROR_ACCESS_DENIED || err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND || err == 1260)
@@ -2011,16 +2066,30 @@ static BOOL run_game(void)
             if (m.dmPelsWidth == w && m.dmPelsHeight == h && m.dmBitsPerPel >= 32 && m.dmDisplayFrequency > best && m.dmDisplayFrequency <= 500) best = m.dmDisplayFrequency;
         if (best > 60) { size_t l = wcslen(vid); _snwprintf(vid + l, 96 - l, L" -freq %lu", best); }
     }
-    _snwprintf(cmd, 1024, L"\"%s\" -game cstrike%s -noforcemparms -noforcemaccel +exec xclient_launcher.cfg", exe, vid);
+    /* 6. xavfsiz rejim: o'yin ketma-ket 3 marta yiqilgan bo'lsa - oyna rejimi, 1024x768, yengil grafika, ustuvorliksiz.
+     * Bir marta 2 daqiqadan ko'proq yiqilmay o'ynalsa - keyingi safar odatiy holga qaytadi */
+    BOOL safe = ini_int(L"crs") >= 3;
+    if (safe) {
+        lstrcpyW(vid, L" -width 1024 -height 768 -window");
+        wchar_t sc[MAX_PATH]; path_join(sc, g_dir, L"cstrike\\xclient_safe.cfg");
+        FILE *sf = _wfopen(sc, L"wb");
+        if (sf) { fprintf(sf, "// X CLIENT xavfsiz rejim (ketma-ket yiqilishlardan keyin)\nfps_max 100\nr_dynamic 0\nmp_decals 100\ngl_max_size 512\ncl_minmodels 1\n"); fclose(sf); }
+        prob_send("safe_mode", 0);
+        BOOL ru = !strncmp(g_lang, "ru", 2);
+        MessageBoxW(NULL, ru ? L"Игра вылетела 3 раза подряд.\n\nX CLIENT откроет её в безопасном режиме: окно 1024x768 и лёгкая графика. Если всё будет нормально - в следующий раз вернётся обычный режим."
+                             : L"O‘yin ketma-ket 3 marta yiqildi.\n\nX CLIENT uni xavfsiz rejimda ochadi: 1024x768 oyna va yengil grafika. Hammasi joyida bo‘lsa - keyingi safar odatiy holga qaytadi.",
+                    L"X CLIENT", MB_ICONINFORMATION | MB_SETFOREGROUND);
+    }
+    _snwprintf(cmd, 1024, L"\"%s\" -game cstrike%s -noforcemparms -noforcemaccel +exec xclient_launcher.cfg%s", exe, vid, safe ? L" +exec xclient_safe.cfg" : L"");
     STARTUPINFOW si = { sizeof(si) };
     PROCESS_INFORMATION pi;
     meta_save();
-    if (o_ok) compat_flags(exe, o_prio);
+    if (o_ok && !safe) compat_flags(exe, o_prio);
     BOOL again = FALSE;
     FILETIME ft0; GetSystemTimeAsFileTime(&ft0);
     if (CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, g_dir, &si, &pi)) {
         if (g_one) { CloseHandle(g_one); g_one = NULL; }   /* o'yin ochildi - endi yana bosilsa, yangi launcher uni topib oldinga chiqaradi */
-        if (o_prio) SetPriorityClass(pi.hProcess, ABOVE_NORMAL_PRIORITY_CLASS);   /* "O'yinni tezlashtirish": HIGH Windows ovoz xizmatini (audiodg) siqib, ovoz qotishi va chirsillashiga sabab bo'lardi */
+        if (o_prio && !safe) SetPriorityClass(pi.hProcess, ABOVE_NORMAL_PRIORITY_CLASS);   /* "O'yinni tezlashtirish": HIGH Windows ovoz xizmatini (audiodg) siqib, ovoz qotishi va chirsillashiga sabab bo'lardi */
         CloseHandle(pi.hThread);
         /* guard_theme olib tashlandi: nDirect fayllarini qayta yozish har ochilishda yangilanishga sabab bo'lardi */
         /* O'yin yopilgach skrinshotlarni (F5) darhol galereyaga yuklaymiz - keyingi ishga tushishni kutmasdan.
@@ -2044,7 +2113,14 @@ static BOOL run_game(void)
         DWORD code = 0; GetExitCodeProcess(pi.hProcess, &code);
         rec_session_end();
         ULONGLONG t0 = ((ULONGLONG)ft0.dwHighDateTime << 32) | ft0.dwLowDateTime;
-        if (game_crashed(code, t0)) {
+        FILETIME ft1; GetSystemTimeAsFileTime(&ft1);
+        ULONGLONG played = ((((ULONGLONG)ft1.dwHighDateTime << 32) | ft1.dwLowDateTime) - t0) / 10000000ULL;   /* soniya */
+        BOOL crashed = game_crashed(code, t0);
+        if (crashed) {
+            int c = ini_int(L"crs") + 1; ini_set_int(L"crs", c);
+            if (c >= 2) ini_set_int(L"autover", 1);   /* 7. ikkinchi yiqilishdan keyin - keyingi ochilishda X CLIENT fayllari tekshiriladi */
+        } else if (played > 120) ini_set_int(L"crs", 0);
+        if (crashed) {
             int n = crash_fix(t0);
             wchar_t w[24], m[640]; _snwprintf(w, 24, L"%lx~%d", (unsigned long)code, n); w[23] = 0; ini_str(L"t_cr", w);
             BOOL ru = !strncmp(g_lang, "ru", 2);
@@ -2082,6 +2158,35 @@ static void menu_site_check(void)
 }
 
 /* ---------------------------------------------------------------- ish oqimi */
+/* 5. videokarta drayveri o'rnatilmagan (Windows o'zining "Basic Display"/"Standard VGA" drayverida) - CS 1.6 OpenGL
+ * bilan sekin ishlaydi va tez-tez yiqiladi. O'yinchiga 3 kunda bir marta aytamiz, xohlasa Windows Update ochiladi */
+static void gpu_check(void)
+{
+    DISPLAY_DEVICEW dd; wchar_t gpu[128] = L"";
+    for (DWORD i = 0; ; i++) {
+        ZeroMemory(&dd, sizeof(dd)); dd.cb = sizeof(dd);
+        if (!EnumDisplayDevicesW(NULL, i, &dd, 0)) break;
+        if (!gpu[0] || (dd.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE)) lstrcpynW(gpu, dd.DeviceString, 128);
+        if (dd.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE) break;
+    }
+    CharLowerW(gpu);
+    if (!gpu[0] || !(wcsstr(gpu, L"basic display") || wcsstr(gpu, L"basic render") || wcsstr(gpu, L"standard vga") ||
+                     wcsstr(gpu, L"\x0441\x0442\x0430\x043d\x0434\x0430\x0440\x0442\x043d\x044b\x0439 vga") ||   /* стандартный vga */
+                     wcsstr(gpu, L"\x0431\x0430\x0437\x043e\x0432\x044b\x0439 \x0432\x0438\x0434\x0435\x043e"))) return;   /* базовый видео... */
+    prob_send("gpu_nodrv", 0);
+    FILETIME ft; GetSystemTimeAsFileTime(&ft);
+    int day = (int)(((((ULONGLONG)ft.dwHighDateTime << 32) | ft.dwLowDateTime) / 10000000ULL) / 86400ULL);
+    if (day - ini_int(L"gpuw") < 3) return;
+    ini_set_int(L"gpuw", day);
+    BOOL ru = !strncmp(g_lang, "ru", 2);
+    if (MessageBoxW(g_wnd, ru ? L"На этом компьютере не установлен драйвер видеокарты (работает стандартный драйвер Windows).\n\nИз-за этого CS 1.6 может тормозить и вылетать. Установите драйвер видеокарты (Windows Update или сайт производителя ноутбука/видеокарты).\n\nОткрыть Windows Update сейчас?"
+                           : L"Bu kompyuterda videokarta drayveri o‘rnatilmagan (Windows’ning oddiy drayveri ishlayapti).\n\nShu sababli CS 1.6 sekin ishlashi va yiqilishi mumkin. Videokarta drayverini o‘rnating (Windows Update yoki noutbuk/videokarta ishlab chiqaruvchisi sayti).\n\nWindows Update hozir ochilsinmi?",
+                    L"X CLIENT", MB_YESNO | MB_ICONWARNING | MB_SETFOREGROUND) == IDYES) {
+        if ((INT_PTR)ShellExecuteW(NULL, L"open", L"ms-settings:windowsupdate", NULL, NULL, SW_SHOWNORMAL) <= 32)
+            ShellExecuteW(NULL, L"open", L"control.exe", L"/name Microsoft.WindowsUpdate", NULL, SW_SHOWNORMAL);   /* Windows 7 */
+    }
+}
+
 /* muammo hisoboti (admin panel > Muammolar): fonda, 4 s dan ortiq kutilmaydi */
 static char g_prob[24];
 static DWORD WINAPI prob_th(LPVOID unused)
@@ -2181,13 +2286,16 @@ static DWORD WINAPI worker(LPVOID unused)
             MultiByteToWideChar(CP_UTF8, 0, u.msg, -1, w, 256);
             MessageBoxW(g_wnd, w, L"X CLIENT", MB_ICONWARNING);
         }
-        BOOL must = fresh || o_verify || (u.min && g_build < u.min);
+        BOOL autov = ini_int(L"autover") != 0;    /* 7. yiqilish/ochilmaslikdan keyin - hamma fayl tekshiriladi, buzilgani qayta yuklanadi */
+        if (autov) { status(L"O‘yin fayllari tekshirilmoqda...", 1); prob_send("autover", 0); }
+        BOOL must = fresh || o_verify || autov || (u.min && g_build < u.min);
         if (u.build && u.base[0] && u.manifest[0] && (u.build != g_build || must) && (o_auto || must)) {
             BOOL selfUp = FALSE;
             DWORD keep = g_net_dl; g_net_dl = 0;             /* yangilanish ma'lumoti keldi - internet bor, fayllarni oxirigacha yuklaymiz */
             int fails = sync_files(&u, &selfUp);
             if (keep) { DWORD dl = GetTickCount() + 10000; g_net_dl = dl ? dl : 1; }
             if (fails == 0) {
+                if (autov) ini_set_int(L"autover", 0);
                 g_build = u.build;
                 lstrcpynA(g_version, u.version, sizeof(g_version));
                 ini_save();
@@ -2206,7 +2314,8 @@ static DWORD WINAPI worker(LPVOID unused)
         if (!g_err[0]) lstrcpyW(g_err, L"CS 1.6 o‘yin fayllarini o‘rnatib bo‘lmadi. Internetni tekshirib, X CLIENT ni qayta oching.");
         g_play = FALSE;
     }
-    if (side) { WaitForSingleObject(side, slow ? 3000 : 20000); CloseHandle(side); }   /* menyu keshi tozalanib bo'lsin */
+    if (side) { WaitForSingleObject(side, slow ? 3000 : 20000); CloseHandle(side); }
+    if (!g_relaunch && g_play) gpu_check();   /* menyu keshi tozalanib bo'lsin */
     status(L"O‘yin ochilmoqda...", 100);
     if (!g_relaunch) { HANDLE th = CreateThread(NULL, 0, launch_ping, NULL, 0, NULL); if (th) CloseHandle(th); }
     if (slow) prob_send("net_slow", 0);           /* fonda: internet qaytsa yetib boradi */   /* o'yinni kutdirmaydi; yangi launcher o'zi yuboradi */

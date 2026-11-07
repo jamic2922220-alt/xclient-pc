@@ -251,7 +251,8 @@ function loadFeat() {
 var UI_VIS = true;
 function uiShown() { try { if (NC && NC.gameUi && typeof NC.gameUi.shown === 'boolean') return NC.gameUi.shown; } catch (e) {} return UI_VIS; }
 /* serverda o'ynalayotganda (ESC menyusi o'yin ustida) - effektlarsiz: aks holda o'yin FPS'i tushadi */
-function lowFx() { return DB.fx === 0 || !!FX.off || !!CONNECTED; }
+var SAFE = 0;   // launcher xavfsiz rejimda (o'yin 3 marta ketma-ket yiqilgan) - shu safar effektsiz, odamchalarsiz
+function lowFx() { return DB.fx === 0 || !!FX.off || !!CONNECTED || !!SAFE; }
 function fxClass() { var h = document.documentElement; h.className = (h.className || '').replace(/(^|\s)lowfx(?=\s|$)/g, '') + (lowFx() ? ' lowfx' : ''); }
 function fxVisible() {
   if (curModal || document.webkitHidden) return false;
@@ -279,7 +280,7 @@ var HERO_T1 = now() + 10000;
 /* odamchalar rasmlari faqat kuchli/o'rtacha kompyuterda yuklanadi. Kuchsiz kompyuter, Windows 7/8 yoki "Yengil menyu" -
  * umuman yo'q (yuklanmaydi ham): o'yin brauzeri xotirasi kamayadi, eski kompyuterlarda yiqilishlar kamayadi */
 var HERO_LD = 0;
-function heroWeak() { return DB.fx === 0 || (DB.fx == null && HW && hwClass() === 'weak'); }   // o'yinchi Tizim'da effektlarni o'zi yoqsa - ko'rinadi
+function heroWeak() { return DB.fx === 0 || !!SAFE || (DB.fx == null && HW && hwClass() === 'weak'); }   // o'yinchi Tizim'da effektlarni o'zi yoqsa - ko'rinadi
 function heroLoad() {
   var h = $('hero'); if (!h) return;
   if (heroWeak()) { h.className = 'hnone'; HERO_OFF = true; return; }
@@ -428,6 +429,7 @@ function loadOpts() {
     if (r.o.ver && !qparam('v')) { VERSION = r.o.ver; renderBar(); }
     if (r.o.age != null) setTimeout(function () { launchCheck(r.o.age); }, 3500);
     if (r.o.cachemb != null && !qparam('c')) CACHE_MB = r.o.cachemb;
+    if (r.o.safe && !SAFE) { SAFE = 1; fxClass(); sparks(); }
     if (r.o.hw) { HW = r.o.hw; if (r.o.os) HW.os = r.o.os; if (DB.fx == null && hwClass() === 'weak') { DB.fx = 0; persist(); sparks(); api('prob', { k: 'menu_lite', d: PCID || '' }, function () {}); } }   // kuchsiz kompyuter - yengil menyu
     heroLoad();
     if (!DB.lang && /^(ru|uz|en)$/.test(r.o.ilang || '')) { DB.lang = r.o.ilang; setLang(DB.lang); persist(); }   // o'rnatishda tanlangan til

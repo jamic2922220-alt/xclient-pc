@@ -1197,7 +1197,7 @@ case 'tg_unlink':
  * Kunlik fayl: probs/<sana> = [tur => [kompyuter => 1]] - har tur bo'yicha nechta kompyuterda bo'lgani ---------- */
 case 'prob':
     $k = p('k');
-    if (!in_array($k, array('net_slow', 'dl_net', 'dl_disk', 'dl_perm', 'av_del', 'setup_no', 'setup_fail', 'menu_wd', 'menu_lite'), true)) out(array('ok' => true));
+    if (!in_array($k, array('net_slow', 'dl_net', 'dl_disk', 'dl_perm', 'av_del', 'setup_no', 'setup_fail', 'menu_wd', 'menu_lite', 'offline', 'dl_mirror', 'gpu_nodrv', 'safe_mode', 'autover'), true)) out(array('ok' => true));
     if (rl_count('pb' . client_ip(), 3600) >= 30) out(array('ok' => true));
     rl_add('pb' . client_ip(), 3600);
     $who = strtolower(p('d')); if (!preg_match('/^[a-z0-9]{8,40}$/', $who)) $who = 'ip' . substr(md5(client_ip()), 0, 10);
@@ -1205,6 +1205,10 @@ case 'prob':
     lock(); $f = 'probs/' . date('Y-m-d'); $x = rd($f, array()); if (!isset($x[$k])) $x[$k] = array();
     if (count($x[$k]) < 5000) $x[$k][$who] = 1;
     wr($f, $x);
+    /* 8. Telegram: bugun shu muammo 5, 20, 50, 100 ta kompyuterga yetsa - adminga darhol xabar */
+    $n = count($x[$k]); $nm = array('dl_net' => "CS 1.6 yuklanmadi (internet)", 'dl_disk' => "diskda joy yo'q", 'dl_perm' => "papkaga yozib bo'lmadi", 'av_del' => "antivirus faylni o'chirdi",
+        'setup_no' => "o'rnatishga ruxsat berilmadi", 'setup_fail' => "o'rnatuvchi ishga tushmadi", 'menu_wd' => "menyu 20 s da ochilmadi", 'gpu_nodrv' => "videokarta drayveri yo'q", 'safe_mode' => "3 marta ketma-ket yiqilish (xavfsiz rejim)", 'dl_mirror' => "cssborka.uz dan yuklanmadi - zaxira manzil ishlatildi");
+    if (isset($nm[$k]) && in_array($n, array(5, 20, 50, 100), true)) tg_notify('report', "X CLIENT muammo: bugun " . $n . " ta kompyuterda - " . $nm[$k] . ". Admin panel > Muammolar");
     out(array('ok' => true));
 
 /* ---------- menyu xatolari (avtomatik): bir xil xato bir yozuvga yig'iladi, admin panel > Xatolar ---------- */
@@ -1711,6 +1715,7 @@ case 'opts_done':
             $o['scr'] = p('res');
         }
         if (p('os') !== '') $o['os'] = clean_str(p('os'), 80);
+        if (p('safe') !== '') $o['safe'] = p('safe') === '1' ? 1 : 0;   // launcher xavfsiz rejimda (3 marta ketma-ket yiqilgan) - menyu ham yengil
         if (p('dvr') !== '') { $o['dvr'] = p('dvr') === '1' ? 1 : 0; if (!$o['dvr']) unset($o['dvroff']); }   // Windows Game Bar fon yozuvi (FPS ni tushiradi)
         if (preg_match('/^([0-9a-f]{8})~(\d{1,4})$/', p('cr'), $cm)) {   // launcher: o'yin yiqildi (Windows xato kodi ~ chetga olingan fayllar)
             $o['cr'] = array('t' => time(), 'c' => $cm[1], 'n' => (int)$cm[2]); $o['crn'] = (isset($o['crn']) ? $o['crn'] : 0) + 1;
