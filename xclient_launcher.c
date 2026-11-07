@@ -100,6 +100,8 @@ static void url_escape(char *out, size_t cap, const char *in)
 /* Sekin/uzilib-ulanayotgan internet: o'yin ochilishidan oldingi tarmoq ishlari (sozlamalar, yangilanish, serverlar ro'yxati)
  * shu muddatdan keyin darhol "internet yo'q" deb o'tkazib yuboriladi - launcher "Yangilanish tekshirilmoqda" da qotib turmaydi,
  * o'yin bor fayllar bilan ochiladi. 0 - cheklov yo'q (yangilanishni yuklash, o'yin yopilgandan keyingi ishlar) */
+static wchar_t g_err[256];                         /* launcher yopilishida ko'rsatiladigan xato (pastda ham e'lon qilingan) */
+static void prob_send(const char *kind, DWORD wait);   /* admin panel > Muammolar (pastda) */
 static volatile DWORD g_net_dl = 0;
 static volatile LONG g_probe_ok = 0;
 static HINTERNET open_url_raw(const char *url)
@@ -179,22 +181,45 @@ static BOOL http_download(const char *url, const wchar_t *dst)
 }
 
 /* katta faylni foiz bilan yuklash (o'yin o'rnatuvchisi) */
+/* Katta faylni (CS 1.6 o'rnatuvchisi) yuklash: internet uzilsa - keyingi urinishda (yoki launcher keyingi ochilganda)
+ * qolgan joyidan davom etadi (HTTP Range). Xato sababi g_dl_err da: 1 internet, 2 diskda joy yo'q, 3 papkaga yozib bo'lmadi */
+static int g_dl_err = 0;
 static BOOL http_download_pct(const char *url, const wchar_t *dst, const wchar_t *label)
 {
-    HINTERNET h = open_url(url);
-    if (!h) return FALSE;
-    DWORD total = 0, len = sizeof(total);
-    HttpQueryInfoA(h, HTTP_QUERY_CONTENT_LENGTH | HTTP_QUERY_FLAG_NUMBER, &total, &len, NULL);
-    HANDLE f = CreateFileW(dst, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (f == INVALID_HANDLE_VALUE) { InternetCloseHandle(h); return FALSE; }
+    g_dl_err = 1;
+    ULONGLONG have = 0;
+    WIN32_FILE_ATTRIBUTE_DATA fa;
+    if (GetFileAttributesExW(dst, GetFileExInfoStandard, &fa)) have = ((ULONGLONG)fa.nFileSizeHigh << 32) | fa.nFileSizeLow;
+    HINTERNET h = NULL;
+    DWORD code = 0, len;
+    if (have > 0) {                                  /* oldingi yuklashdan qolgan qism - davomini so'raymiz */
+        char hdr[64]; _snprintf(hdr, sizeof(hdr), "Range: bytes=%I64u-\r\n", have); hdr[sizeof(hdr) - 1] = 0;
+        DWORD fl = INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_NO_UI | INTERNET_FLAG_KEEP_CONNECTION;
+        if (!_strnicmp(url, "https://", 8)) fl |= INTERNET_FLAG_SECURE;
+        if (!(g_net_dl && (LONG)(GetTickCount() - g_net_dl) > 0)) h = InternetOpenUrlA(g_net, url, hdr, (DWORD)-1L, fl, 0);
+        if (!h) return FALSE;
+        len = sizeof(code); HttpQueryInfoA(h, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &code, &len, NULL);
+        if (code != 206 && code != 200) { InternetCloseHandle(h); h = NULL; DeleteFileW(dst); have = 0; }   /* 416 va h.k. - boshidan */
+        else if (code == 200) have = 0;            /* server davom ettirishni bilmaydi - boshidan */
+    }
+    if (!h) { h = open_url(url); if (!h) return FALSE; }
+    DWORD part = 0; len = sizeof(part);
+    HttpQueryInfoA(h, HTTP_QUERY_CONTENT_LENGTH | HTTP_QUERY_FLAG_NUMBER, &part, &len, NULL);
+    ULONGLONG total = part ? have + part : 0;
+    /* diskda joy: fayl + o'rnatish uchun zaxira (o'yin ~1 GB) */
+    ULARGE_INTEGER fr; wchar_t dir[MAX_PATH]; lstrcpynW(dir, dst, MAX_PATH); { wchar_t *bs = wcsrchr(dir, L'\\'); if (bs) bs[1] = 0; }
+    if (total && GetDiskFreeSpaceExW(dir, &fr, NULL, NULL) && fr.QuadPart < (total - have) + (64ULL << 20)) { InternetCloseHandle(h); g_dl_err = 2; return FALSE; }
+    HANDLE f = CreateFileW(dst, GENERIC_WRITE, 0, NULL, have ? OPEN_ALWAYS : CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (f == INVALID_HANDLE_VALUE) { InternetCloseHandle(h); g_dl_err = 3; return FALSE; }
+    if (have) { LARGE_INTEGER z; z.QuadPart = 0; SetFilePointerEx(f, z, NULL, FILE_END); }
     static char buf[65536];
     DWORD got, wr;
-    ULONGLONG n = 0;
+    ULONGLONG n = have;
     int lastPct = -1;
     BOOL ok = TRUE;
     while ((ok = InternetReadFile(h, buf, sizeof(buf), &got)) != FALSE) {
         if (!got) break;
-        if (!WriteFile(f, buf, got, &wr, NULL) || wr != got) { ok = FALSE; break; }
+        if (!WriteFile(f, buf, got, &wr, NULL) || wr != got) { ok = FALSE; g_dl_err = GetLastError() == ERROR_DISK_FULL ? 2 : 3; break; }
         n += got;
         int pct = total ? (int)(n * 100 / total) : 0;
         if (pct != lastPct) {
@@ -208,6 +233,7 @@ static BOOL http_download_pct(const char *url, const wchar_t *dst, const wchar_t
     CloseHandle(f);
     InternetCloseHandle(h);
     if (ok && total && n != total) ok = FALSE;
+    if (ok) g_dl_err = 0;
     return ok;
 }
 
@@ -629,15 +655,17 @@ static BOOL has_game(void)
     return GetFileAttributesW(p) != INVALID_FILE_ATTRIBUTES;
 }
 
+static DWORD g_setup_err = 0;
 static BOOL run_setup(const wchar_t *exe, const wchar_t *params)
 {
+    g_setup_err = 0;
     SHELLEXECUTEINFOW sei = { sizeof(sei) };
     sei.fMask = SEE_MASK_NOCLOSEPROCESS;
     sei.lpVerb = L"runas";               /* o'rnatuvchi administrator huquqini so'raydi */
     sei.lpFile = exe;
     sei.lpParameters = params;
     sei.nShow = SW_SHOWNORMAL;
-    if (!ShellExecuteExW(&sei) || !sei.hProcess) return FALSE;
+    if (!ShellExecuteExW(&sei) || !sei.hProcess) { g_setup_err = GetLastError(); if (!g_setup_err) g_setup_err = 1; return FALSE; }
     WaitForSingleObject(sei.hProcess, INFINITE);
     CloseHandle(sei.hProcess);
     return TRUE;
@@ -652,11 +680,23 @@ static BOOL ensure_game(const char *url)
     GetTempPathW(MAX_PATH, tmp);
     wcscat(tmp, L"xc_cs16_setup.exe");
     BOOL ok = FALSE;
-    for (int i = 0; i < 3 && !ok; i++) {
+    for (int i = 0; i < 6 && !ok; i++) {          /* uzilsa - qolgan joyidan davom etadi */
         ok = http_download_pct(url, tmp, L"CS 1.6 yuklanmoqda:");
-        if (!ok) { status(L"Yuklab bo‘lmadi, qayta urinilmoqda...", 0); Sleep(2000); }
+        if (!ok && g_dl_err != 1) break;          /* disk/papka xatosi - qayta urinish foyda bermaydi */
+        if (!ok) { status(L"Internet uzildi, davom ettirilmoqda...", 0); Sleep(3000 + i * 2000); }
     }
-    if (!ok) { DeleteFileW(tmp); return FALSE; }
+    if (!ok) {                                    /* yuklangan qism o'chirilmaydi: keyingi ochilishda davomidan */
+        prob_send(g_dl_err == 2 ? "dl_disk" : g_dl_err == 3 ? "dl_perm" : "dl_net", 4000);
+        if (g_dl_err == 2) lstrcpyW(g_err, L"Diskda joy yetmayapti. CS 1.6 uchun kamida 2 GB bo‘sh joy kerak - keraksiz fayllarni o‘chirib, X CLIENT ni qayta oching.");
+        else if (g_dl_err == 3) lstrcpyW(g_err, L"Papkaga yozib bo‘lmadi. X CLIENT ni o‘ng tugma > «Запуск от имени администратора» bilan oching yoki antivirusni vaqtincha o‘chiring.");
+        else lstrcpyW(g_err, L"CS 1.6 yuklanmadi: internet juda sekin yoki uzilib qolyapti. X CLIENT ni qayta oching - yuklash qolgan joyidan davom etadi.");
+        return FALSE;
+    }
+    if (GetFileAttributesW(tmp) == INVALID_FILE_ATTRIBUTES) {   /* yuklandi, lekin fayl yo'qoldi - antivirus o'chirdi */
+        prob_send("av_del", 4000);
+        lstrcpyW(g_err, L"Antivirus yuklangan o‘yin faylini o‘chirib yubordi. Antivirusda X CLIENT papkasini istisnoga qo‘shing (yoki vaqtincha o‘chiring) va qayta oching.");
+        return FALSE;
+    }
     status(L"CS 1.6 o‘rnatilmoqda... (ruxsat so‘ralsa \"Ha\" ni bosing)", 100);
     SetWindowPos(g_wnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     _snwprintf(params, 1024, L"/VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /NOICONS /TASKS=\"\" /LANG=uzbek /DIR=\"%s\"", g_dir);
@@ -667,6 +707,11 @@ static BOOL ensure_game(const char *url)
         run_setup(tmp, params);
     }
     DeleteFileW(tmp);
+    if (!has_game()) {
+        if (g_setup_err) prob_send(g_setup_err == ERROR_CANCELLED ? "setup_no" : "setup_fail", 4000);
+        if (g_setup_err == ERROR_CANCELLED) lstrcpyW(g_err, L"O‘rnatish uchun ruxsat berilmadi. X CLIENT ni qayta ochib, Windows so‘raganda «Да / Ha» ni bosing.");
+        else if (g_setup_err) lstrcpyW(g_err, L"O‘rnatuvchi ishga tushmadi - ko‘pincha antivirus to‘sadi. Antivirusda X CLIENT ni istisnoga qo‘shib, qayta oching.");
+    }
     return has_game();
 }
 
@@ -2037,6 +2082,25 @@ static void menu_site_check(void)
 }
 
 /* ---------------------------------------------------------------- ish oqimi */
+/* muammo hisoboti (admin panel > Muammolar): fonda, 4 s dan ortiq kutilmaydi */
+static char g_prob[24];
+static DWORD WINAPI prob_th(LPVOID unused)
+{
+    (void)unused;
+    char url[512];
+    _snprintf(url, sizeof(url), "http://mmb.boost-top.com/xc_api.php?a=prob&k=%s&d=%s&v=%s", g_prob, g_id, g_version[0] ? g_version : "0");
+    url[sizeof(url) - 1] = 0;
+    HINTERNET h = open_url(url);
+    if (h) InternetCloseHandle(h);
+    return 0;
+}
+static void prob_send(const char *kind, DWORD wait)
+{
+    if (!g_net) return;
+    lstrcpynA(g_prob, kind, sizeof(g_prob));
+    HANDLE th = CreateThread(NULL, 0, prob_th, NULL, 0, NULL);
+    if (th) { if (wait) WaitForSingleObject(th, wait); CloseHandle(th); }
+}
 /* sayt 8 s ichida javob beradimi (DNS osilib qolsa WinINet o'z vaqt chegarasiga ham qaramaydi - shuning uchun alohida oqimda) */
 static DWORD WINAPI net_probe(LPVOID unused)
 {
@@ -2139,12 +2203,13 @@ static DWORD WINAPI worker(LPVOID unused)
     if (!g_relaunch && (o_clean || o_verify || o_beta >= 0)) opts_done(cache_mb());
     g_net_dl = 0;                                 /* o'yin fayllari yo'q bo'lsa - yuklash kerak; keyingi ishlar ham cheklovsiz */
     if (!g_relaunch && !ensure_game(u.game)) {
-        lstrcpyW(g_err, L"CS 1.6 o‘yin fayllarini o‘rnatib bo‘lmadi. Internetni tekshirib, X CLIENT ni qayta oching.");
+        if (!g_err[0]) lstrcpyW(g_err, L"CS 1.6 o‘yin fayllarini o‘rnatib bo‘lmadi. Internetni tekshirib, X CLIENT ni qayta oching.");
         g_play = FALSE;
     }
     if (side) { WaitForSingleObject(side, slow ? 3000 : 20000); CloseHandle(side); }   /* menyu keshi tozalanib bo'lsin */
     status(L"O‘yin ochilmoqda...", 100);
-    if (!g_relaunch) { HANDLE th = CreateThread(NULL, 0, launch_ping, NULL, 0, NULL); if (th) CloseHandle(th); }   /* o'yinni kutdirmaydi; yangi launcher o'zi yuboradi */
+    if (!g_relaunch) { HANDLE th = CreateThread(NULL, 0, launch_ping, NULL, 0, NULL); if (th) CloseHandle(th); }
+    if (slow) prob_send("net_slow", 0);           /* fonda: internet qaytsa yetib boradi */   /* o'yinni kutdirmaydi; yangi launcher o'zi yuboradi */
     /* g_net yopilmaydi: o'yin yopilgach run_game() undan foydalanadi (sozlamalar, skrinshotlar) */
     PostMessageW(g_wnd, WM_XC_DONE, 0, 0);
     return 0;

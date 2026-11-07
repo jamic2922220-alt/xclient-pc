@@ -19,7 +19,7 @@
  * o'yin brauzeri cheksiz kutib, ekran ko'k bo'lib qolardi. Sinxron yuklash faqat server hozirgina javob bergandan keyin.
  * Qo'riqchi: menyu (xc.js) 20 s ichida ishga tushmasa - sahifa qayta yuklanadi (4 martagacha, oraliq oshib boradi). */
 (function () {
-  var V = '10202400';
+  var V = '10202500';
   window.XC_V = V;
   function nm() { try { return String(window.name || ''); } catch (e) { return ''; } }
   function has(t) { return ('|' + nm() + '|').indexOf('|' + t + '|') >= 0; }
@@ -27,6 +27,7 @@
   window.XC_NM = setTok;
   var ok = function (v) { return /^\d{6,12}$/.test(v); };
   var m = /(?:^|\|)xcwd(\d)(?:\||$)/.exec(nm()), n = m ? +m[1] : 0;
+  window.XC_WDN = n;                               // necha marta qayta yuklandi (admin > Muammolar)
   if (n < 4) setTimeout(function () {
     if (window.XC_UP) return;
     setTok(/^xcwd\d$/, 'xcwd' + (n + 1));
@@ -65,7 +66,7 @@
   } catch (e) {}
 })();
 </script>
-<link rel="stylesheet" href="xc.css?v=10202400">
+<link rel="stylesheet" href="xc.css?v=10202500">
 <script>
 /* Xato bo'lsa ekranning tepasida ko'rsatamiz (o'yin brauzerida konsol yo'q) */
 window.XC_ERRS = [];
@@ -82,7 +83,7 @@ window.onerror = function (msg, url, line) {
   return false;
 };
 </script>
-<script src="xc_lang.js?v=10202400"></script>
+<script src="xc_lang.js?v=10202500"></script>
 </head>
 <body>
 <div id="app">
@@ -122,7 +123,7 @@ window.onerror = function (msg, url, line) {
   </div>
 
   <!-- ===== o'ng tomonda qahramonlar (sekin "nafas oladi") ===== -->
-  <div id="hero"><div class="hglow"></div><div class="hl" id="heroB"><img src="hero_b.png" alt=""><img class="bl" id="heroBB" src="hero_bb.png" alt=""></div><div class="hl" id="heroF"><img src="hero_f.png" alt=""><img class="bl" id="heroFB" src="hero_fb.png" alt=""></div></div>
+  <div id="hero" class="hnone"><div class="hglow"></div><div class="hl" id="heroB"><img data-src="hero_b.png" alt=""><img class="bl" id="heroBB" data-src="hero_bb.png" alt=""></div><div class="hl" id="heroF"><img data-src="hero_f.png" alt=""><img class="bl" id="heroFB" data-src="hero_fb.png" alt=""></div></div>
 
   <!-- ===== o'ng ustun ===== -->
   <div id="col">
@@ -297,6 +298,6 @@ window.onerror = function (msg, url, line) {
   <div id="dbg"></div>
 </div>
 <script src="master.js"></script>
-<script src="xc.js?v=10202400"></script>
+<script src="xc.js?v=10202500"></script>
 </body>
 </html>

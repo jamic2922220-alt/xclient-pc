@@ -921,6 +921,7 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 
 /* o'ng tomondagi qahramonlar rasmi: kartalar ostida, bosilmaydi */
 #hero { position: absolute; right: 0; bottom: 52px; width: 480px; height: 584px; pointer-events: none; }
+#hero.hnone { display: none; }   /* kuchsiz kompyuter / Windows 7: odamchalar umuman yuklanmaydi (xotira, yiqilishlar) */
 #hero .hl { position: absolute; left: 0; top: 0; width: 480px; height: 584px; -webkit-transform-origin: 50% 100%; }
 #hero .hl img { position: absolute; left: 0; top: 0; width: 480px; height: 584px; }
 #hero .hl img.bl { visibility: hidden; }

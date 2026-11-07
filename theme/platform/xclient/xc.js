@@ -276,7 +276,21 @@ function heroBlink(el, at) {   // ko'z yumiladi ~130 ms; ba'zan ikki marta
  * chizadi - CSS animatsiya kadr tezligida (100+) qayta chizib, kuchsizroq kompyuterda o'yinni "не отвечает" holatiga tushirardi.
  * Menyu ochilgandan 10 s keyin boshlanadi (o'yin yuklanib bo'lgach); admin > Funksiyalar > Animatsiyalar o'chiq bo'lsa - qimirlamaydi */
 var HERO_T1 = now() + 10000;
+/* odamchalar rasmlari faqat kuchli/o'rtacha kompyuterda yuklanadi. Kuchsiz kompyuter, Windows 7/8 yoki "Yengil menyu" -
+ * umuman yo'q (yuklanmaydi ham): o'yin brauzeri xotirasi kamayadi, eski kompyuterlarda yiqilishlar kamayadi */
+var HERO_LD = 0;
+function heroWeak() { return DB.fx === 0 || (DB.fx == null && HW && hwClass() === 'weak'); }   // o'yinchi Tizim'da effektlarni o'zi yoqsa - ko'rinadi
+function heroLoad() {
+  var h = $('hero'); if (!h) return;
+  if (heroWeak()) { h.className = 'hnone'; HERO_OFF = true; return; }
+  if (HERO_LD) return; HERO_LD = 1; HERO_OFF = false;
+  var im = h.getElementsByTagName('img');
+  for (var i = 0; i < im.length; i++) { var u = im[i].getAttribute('data-src'); if (u) im[i].src = u; }
+  h.className = 'hoff'; if (HERO) HERO.cls = 'hoff';
+}
+setTimeout(heroLoad, 4000);   // sayt javob bermasa (kompyuter quvvati noma'lum) - 4 s dan keyin
 function heroTick() {
+  if (!HERO_LD) return 1000;
   if (!HERO) { HERO = heroInit(); if (!HERO) return 1000; HERO.el = $('hero'); }
   var tn = now(), off = HERO_OFF || lowFx() || !feat('anim') || tn < HERO_T1;
   var cls = off ? 'hoff' : !fxVisible() ? 'hp' : '';
@@ -414,7 +428,8 @@ function loadOpts() {
     if (r.o.ver && !qparam('v')) { VERSION = r.o.ver; renderBar(); }
     if (r.o.age != null) setTimeout(function () { launchCheck(r.o.age); }, 3500);
     if (r.o.cachemb != null && !qparam('c')) CACHE_MB = r.o.cachemb;
-    if (r.o.hw) { HW = r.o.hw; if (DB.fx == null && hwClass() === 'weak') { DB.fx = 0; persist(); sparks(); } }   // kuchsiz kompyuter - yengil menyu
+    if (r.o.hw) { HW = r.o.hw; if (r.o.os) HW.os = r.o.os; if (DB.fx == null && hwClass() === 'weak') { DB.fx = 0; persist(); sparks(); api('prob', { k: 'menu_lite', d: PCID || '' }, function () {}); } }   // kuchsiz kompyuter - yengil menyu
+    heroLoad();
     if (!DB.lang && /^(ru|uz|en)$/.test(r.o.ilang || '')) { DB.lang = r.o.ilang; setLang(DB.lang); persist(); }   // o'rnatishda tanlangan til
     var rt = OPTS.rsk ? 1 : 0;                   // radar foni launcherda (1.0.91+); cl_radartype unga mos bo'lsin (qora fonlar - to'liq radar)
     if (S && S.radar !== rt && verGE(r.o.ver, '1.0.91') && !radarNC()) { S.radar = rt; DB.set = S; persist(); cmd('cl_radartype ' + rt); }
@@ -2214,7 +2229,8 @@ function applyStyle(id) {
 function hwClass() {
   if (!HW) return 'mid';
   var weakGpu = /intel.*(hd|gma|uhd)|sis |via |radeon.*(hd [2-5]|x[0-9])|geforce (6|7|8|9|2[0-9]{2}) /i.test(HW.gpu || '');
-  if (HW.ram < 4600 || HW.cpu <= 2 || (weakGpu && HW.ram < 6000)) return 'weak';   // 4 GB li kompyuterlar ham (CS + menyu brauzeri)
+  if (HW.ram < 4600 || HW.cpu <= 2 || (weakGpu && HW.ram < 6000)) return 'weak';
+  if (/windows (7|8|vista|xp)\b/i.test(HW.os || '')) return 'weak';   // eski Windows: o'yin brauzeri (CEF) bu yerda ko'proq yiqiladi (admin > Yiqilishlar)   // 4 GB li kompyuterlar ham (CS + menyu brauzeri)
   if (HW.ram >= 8000 && HW.cpu >= 4 && !weakGpu) return 'strong';
   return 'mid';
 }
@@ -3704,7 +3720,7 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-mcall'))) { var mc = el; api('miss_call', { to: el.getAttribute('data-mcall') }, function (r) { toast(r.ok ? T('mc_ok') : (r.msg || 'Xato'), 5000); if (r.ok && mc.parentNode) mc.parentNode.removeChild(mc); }); return; }
   if ((el = closest(t, 'data-fbk'))) { FBK = el.getAttribute('data-fbk'); var sib = el.parentNode.childNodes; for (var fi = 0; fi < sib.length; fi++) sib[fi].className = sib[fi] === el ? 'on' : ''; return; }
   if ((el = closest(t, 'data-frdel'))) { api('friend_del', { login: el.getAttribute('data-frdel') }, function () { loadFriends(); }); return; }
-  if ((el = closest(t, 'data-dbtg'))) { var dk = el.getAttribute('data-dbtg'); var cur = dk === 'fx' ? (DB.fx !== 0 && !FX.off) : (dk === 'autosave' || dk === 'dnd' ? !!DB[dk] : DB[dk] !== 0); DB[dk] = cur ? 0 : 1; persist(); if (dk === 'fx') { FX.off = 0; FX.slow = 0; sparks(); } if (dk === 'hol') applyBg(); if (dk === 'autosave') $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local')); el.className = 'tg' + (DB[dk] ? ' on' : ''); return; }
+  if ((el = closest(t, 'data-dbtg'))) { var dk = el.getAttribute('data-dbtg'); var cur = dk === 'fx' ? (DB.fx !== 0 && !FX.off) : (dk === 'autosave' || dk === 'dnd' ? !!DB[dk] : DB[dk] !== 0); DB[dk] = cur ? 0 : 1; persist(); if (dk === 'fx') { FX.off = 0; FX.slow = 0; sparks(); heroLoad(); } if (dk === 'hol') applyBg(); if (dk === 'autosave') $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local')); el.className = 'tg' + (DB[dk] ? ' on' : ''); return; }
   if ((el = closest(t, 'data-misclaim'))) {
     var mid = el.getAttribute('data-misclaim');
     sendStat(null, function () { api('mission_claim', { id: mid }, function (r) {   // sayt bajarilganini o'zi tekshiradi - oxirgi o'yin natijasi avval yetib borsin
@@ -3973,4 +3989,5 @@ setInterval(function () { if (!playing()) loadAnn(); }, 5 * 60 * 1000);
 setTimeout(sendStats, 90000); setInterval(function () { if (!playing()) sendStats(); }, 10 * 60 * 1000);
 /* menyu to'liq ishga tushdi - index.html dagi qo'riqchi sahifani qayta yuklamaydi, hisoblagich tozalanadi */
 window.XC_UP = 1; try { if (window.XC_NM) window.XC_NM(/^xcwd\d$/, ''); } catch (e) {}
+if (window.XC_WDN > 0) setTimeout(function () { api('prob', { k: 'menu_wd', d: PCID || '' }, function () {}); }, 5000);
 })();

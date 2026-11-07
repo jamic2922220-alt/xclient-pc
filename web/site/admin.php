@@ -407,7 +407,7 @@ if ($P === 'installs' && g('csv')) {
 
 /* ---------- sahifa ---------- */
 $NAV = array('dash' => array('Infopanel', '⌂'), 'online' => array('Onlayn', '●'), 'players' => array("O'yinchilar", '☺'), 'installs' => array("O'rnatishlar", '↓'), 'accounts' => array('Akkauntlar', '✉'),
-    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'stats' => array('Statistika', '★'), 'churn' => array('Ketganlar', '↘'), 'fb' => array('Fikrlar', '✎'), 'clips' => array('Kliplar', '▶'), 'crash' => array('Yiqilishlar', '✖'), 'clicks' => array('Tugmalar', '⊙'), 'ret' => array('Natijalar', '↗'), 'menuver' => array('Menyu versiyalari', '⇅'), 'feat' => array('Funksiyalar', '◧'), 'speed' => array('Tezlik', '⚡'), 'promo' => array('Reklama', '$'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
+    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'stats' => array('Statistika', '★'), 'churn' => array('Ketganlar', '↘'), 'fb' => array('Fikrlar', '✎'), 'clips' => array('Kliplar', '▶'), 'crash' => array('Yiqilishlar', '✖'), 'clicks' => array('Tugmalar', '⊙'), 'ret' => array('Natijalar', '↗'), 'prob' => array('Muammolar', '⚑'), 'menuver' => array('Menyu versiyalari', '⇅'), 'feat' => array('Funksiyalar', '◧'), 'speed' => array('Tezlik', '⚡'), 'promo' => array('Reklama', '$'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
 $devCount = count((array)glob(XC_DIR . '/dev/*.php')); $ncCount = count((array)glob(XC_DIR . '/nc/*.php')); $accCount = count((array)glob(XC_DIR . '/users/*.php')); $repCount = count((array)glob(XC_DIR . '/reports/*.php'));
 $fbCount = count((array)glob(XC_DIR . '/feedback/*.php'));
 $badge = array('players' => $devCount + $ncCount, 'installs' => $devCount, 'accounts' => $accCount, 'reports' => $repCount, 'fb' => $fbCount);
@@ -856,6 +856,26 @@ if ($P === 'ret') {
     arsort($w);
     echo '<div class="panel"><div class="ph">Nega o\'chirishdi - oxirgi 7 kun (' . array_sum($w) . ' ta javob)</div>' . ($w ? pie($w) : '<div class="mut">Bu hafta javob yo\'q</div>') . '</div>';
     echo '<div class="mut small">Ertasi kuni qaytish yangi menyu (10200200+) ishlay boshlagan kundan hisoblanadi. Tugmalar soni menyu yuborgan statistikadan.</div>';
+}
+
+/* ===== MUAMMOLAR: o'rnatish, internet, menyu ochilishi - nechta kompyuterda (14 kun). Launcher 1.0.118+, menyu 10202500+ ===== */
+if ($P === 'prob') {
+    @date_default_timezone_set('Asia/Tashkent'); $D = 14;
+    $nm = array('dl_net' => "O'rnatish: CS 1.6 yuklanmadi (internet sekin/uzildi)", 'dl_disk' => "O'rnatish: diskda joy yo'q", 'dl_perm' => "O'rnatish: papkaga yozib bo'lmadi (ruxsat/antivirus)",
+        'av_del' => "O'rnatish: antivirus yuklangan faylni o'chirdi", 'setup_no' => "O'rnatish: Windows ruxsatiga \"Yo'q\" bosildi", 'setup_fail' => "O'rnatish: o'rnatuvchi ishga tushmadi",
+        'net_slow' => "Launcher: internet sekin - yangilanishsiz ochildi", 'menu_wd' => "Menyu: 20 s da ochilmadi, o'zi qayta yuklandi", 'menu_lite' => "Menyu: kuchsiz kompyuter - yengil rejim");
+    $days = array(); $sum = array();
+    for ($i = 0; $i < $D; $i++) { $k = date('Y-m-d', strtotime("-$i day")); $x = rd('probs/' . $k, array()); $dd = rd('daily/' . $k, array()); $days[$k] = array('x' => $x, 'd' => isset($dd['d']) ? count($dd['d']) : 0);
+        foreach ($x as $t => $ids) $sum[$t] = (isset($sum[$t]) ? $sum[$t] : 0) + count($ids); }
+    arsort($sum);
+    echo '<h1>Muammolar</h1><div class="panel"><div class="ph">Oxirgi ' . $D . ' kun - nechta kompyuterda bo\'ldi (eng ko\'pi tepada)</div><table class="list"><tr><th>Muammo</th><th>Kompyuterlar</th></tr>';
+    foreach ($sum as $t => $n) echo '<tr><td>' . h(isset($nm[$t]) ? $nm[$t] : $t) . '</td><td><b>' . $n . '</b></td></tr>';
+    if (!$sum) echo '<tr><td class="mut" colspan="2">Hali muammo yozilmagan (launcher 1.0.118 va menyu 10202500 dan boshlab yig\'iladi)</td></tr>';
+    echo '</table></div><div class="panel"><div class="ph">Kunlar bo\'yicha</div><table class="list"><tr><th>Kun</th><th>Launcher ochganlar</th>';
+    $ks = array_keys($nm); foreach ($ks as $t) echo '<th class="small">' . h(preg_replace('/^[^:]+: /', '', $nm[$t])) . '</th>';
+    echo '</tr>';
+    foreach ($days as $k => $r) { echo '<tr><td>' . h($k) . '</td><td><b>' . $r['d'] . '</b></td>'; foreach ($ks as $t) { $n = isset($r['x'][$t]) ? count($r['x'][$t]) : 0; echo '<td' . ($n ? ' class="red"' : ' class="mut"') . '>' . ($n ? $n : '·') . '</td>'; } echo '</tr>'; }
+    echo '</table><div class="mut small" style="margin-top:8px">O\'yin yiqilishlari - «Yiqilishlar» sahifasida. Menyu JavaScript xatolari - «Xatolar» sahifasida.</div></div>';
 }
 
 /* ===== TUGMALAR: menyuda nima ko'p bosiladi (7 kun) ===== */

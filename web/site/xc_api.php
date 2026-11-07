@@ -1193,6 +1193,20 @@ case 'tg_code':
 case 'tg_unlink':
     lock(); $u = auth(); unset($u['tgid']); save_user($u); out(array('ok' => true));
 
+/* ---------- muammolar hisoboti (admin panel > Muammolar): launcher va menyu nima bo'lganini yuboradi.
+ * Kunlik fayl: probs/<sana> = [tur => [kompyuter => 1]] - har tur bo'yicha nechta kompyuterda bo'lgani ---------- */
+case 'prob':
+    $k = p('k');
+    if (!in_array($k, array('net_slow', 'dl_net', 'dl_disk', 'dl_perm', 'av_del', 'setup_no', 'setup_fail', 'menu_wd', 'menu_lite'), true)) out(array('ok' => true));
+    if (rl_count('pb' . client_ip(), 3600) >= 30) out(array('ok' => true));
+    rl_add('pb' . client_ip(), 3600);
+    $who = strtolower(p('d')); if (!preg_match('/^[a-z0-9]{8,40}$/', $who)) $who = 'ip' . substr(md5(client_ip()), 0, 10);
+    @date_default_timezone_set('Asia/Tashkent'); @mkdir(XC_DIR . '/probs', 0755, true);
+    lock(); $f = 'probs/' . date('Y-m-d'); $x = rd($f, array()); if (!isset($x[$k])) $x[$k] = array();
+    if (count($x[$k]) < 5000) $x[$k][$who] = 1;
+    wr($f, $x);
+    out(array('ok' => true));
+
 /* ---------- menyu xatolari (avtomatik): bir xil xato bir yozuvga yig'iladi, admin panel > Xatolar ---------- */
 case 'jserr':
     if (rl_count('je' . client_ip(), 3600) >= 20) out(array('ok' => true));
