@@ -2231,9 +2231,11 @@ static BOOL run_game(void)
               Sleep(1500);
               DWORD since = (DWORD)((((ULONGLONG)ft0.dwHighDateTime << 32 | ft0.dwLowDateTime) / 10000000ULL) - 11644473600ULL);
               (void)fe; crash_detail(g_probx, sizeof(g_probx), since);
-              if (!strcmp(g_probx, "noevent") || !strcmp(g_probx, "nolog")) {   /* jurnal bo'sh - o'yinni kuzatuv rejimida bir marta ochamiz */
+              /* jurnalda modul nomi yo'q (bo'sh yoki faqat "Ошибка при запуске приложения" oynasi) - o'yinni kuzatuv rejimida bir marta ochamiz */
+              if (!strcmp(g_probx, "noevent") || !strcmp(g_probx, "nolog") || !strncmp(g_probx, "popup", 5)) {
                   status(L"Xato sababi aniqlanmoqda...", 100);
-                  char raw[300]; dbg_probe(exe, cmd, raw, sizeof(raw)); url_escape(g_probx, sizeof(g_probx), raw);
+                  char raw[300], esc[400]; dbg_probe(exe, cmd, raw, sizeof(raw)); url_escape(esc, sizeof(esc), raw);
+                  lstrcpynA(g_probx, esc, sizeof(g_probx));   /* modul ma'lumoti muhimroq - popup matni o'rniga */
               } }
             prob_send("start_fail", 3000);
             g_probx[0] = 0;
