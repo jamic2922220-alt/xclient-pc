@@ -1,20 +1,25 @@
 #!/bin/bash
-O=diag/out; mkdir -p $O; : > $O/summary.txt
-sudo apt-get install -y -qq innoextract p7zip-full binutils-mingw-w64-i686 >/dev/null 2>&1
-W=/tmp/cs; mkdir -p $W; cd $W
+O=$PWD/diag/out; mkdir -p $O; : > $O/summary.txt
+sudo dpkg --add-architecture i386 >/dev/null 2>&1; sudo apt-get update -qq >/dev/null 2>&1
+sudo apt-get install -y -qq wine32:i386 wine binutils-mingw-w64-i686 xvfb >/dev/null 2>&1
+echo "wine: $(wine --version 2>&1)" >> $O/summary.txt
+W=/tmp/cs; mkdir -p $W
 gh release download cs16 --repo jamic2922220-alt/xclient-pc -p 'CS_1_6_boost-top_PRO_2_5_3.exe' -D $W 2>&1 | tail -1
-cd - >/dev/null
-ls -la $W >> $O/summary.txt
-file $W/*.exe >> $O/summary.txt
-strings -n 8 $W/CS_1_6_boost-top_PRO_2_5_3.exe | grep -iE "inno setup|nullsoft|7-zip|smart install|setup factory|wise|installshield" | sort | uniq -c | head >> $O/summary.txt
-(cd $W && innoextract -d x CS_1_6_boost-top_PRO_2_5_3.exe 2>&1 | tail -3) >> $O/summary.txt
-[ -d $W/x ] || (cd $W && 7z x -y -ox CS_1_6_boost-top_PRO_2_5_3.exe 2>&1 | tail -5) >> $O/summary.txt
-find $W/x -type f | head -5 >> $O/summary.txt; find $W/x -type f | wc -l >> $O/summary.txt
-echo "== exe/dll at root" >> $O/summary.txt
-find $W/x -maxdepth 4 -iname '*.exe' -o -maxdepth 4 -iname 'tier0.dll' -o -maxdepth 4 -iname 'vstdlib.dll' -o -maxdepth 4 -iname 'hw.dll' | head -30 >> $O/summary.txt
-for f in $(find $W/x -iname 'tier0.dll' -o -iname 'hl.exe' -o -iname 'cstrike.exe' | head -6); do
-  echo "=== $f $(stat -c %s $f) $(md5sum $f | cut -c1-12)" >> $O/summary.txt
-  i686-w64-mingw32-objdump -p "$f" | grep -E "DLL Name|MajorOSVersion|MinorOSVersion|MajorSubsystemVersion|MinorSubsystemVersion|DllCharacteristics|Time/Date" >> $O/summary.txt
-  i686-w64-mingw32-objdump -p "$f" | awk '/DLL Name: (ADVAPI32|advapi32)/{f=1;next} /DLL Name/{f=0} f' | head -40 >> $O/summary.txt
-  i686-w64-mingw32-objdump -d "$f" 2>/dev/null | grep -cE "\b(pinsrd|pextrd|ptest|pcmpeq q|crc32|vmov|vxor|popcnt|lzcnt|tzcnt|blsr|pmulld)\b" | sed 's/^/sse4avx_insn=/' >> $O/summary.txt
+export WINEDEBUG=-all WINEPREFIX=/tmp/wp
+timeout 900 xvfb-run -a wine $W/CS_1_6_boost-top_PRO_2_5_3.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- '/DIR=C:\cs' >/dev/null 2>&1
+G=/tmp/wp/drive_c/cs
+echo "files: $(find $G -type f 2>/dev/null | wc -l)" >> $O/summary.txt
+ls $G >> $O/summary.txt 2>&1
+for f in $(find $G -maxdepth 1 \( -iname '*.exe' -o -iname '*.dll' \) | sort); do
+  echo "=== $(basename $f) $(stat -c %s $f) md5=$(md5sum $f | cut -c1-12) $(i686-w64-mingw32-objdump -p $f | grep -E 'MajorOSVersion|MajorSubsystemVersion' | awk '{print $2}' | tr '\n' ' ')" >> $O/summary.txt
+  i686-w64-mingw32-objdump -p "$f" | grep "DLL Name" | awk '{print $3}' | tr '\n' ' ' >> $O/summary.txt; echo >> $O/summary.txt
 done
+T=$(find $G -maxdepth 1 -iname tier0.dll | head -1)
+if [ -n "$T" ]; then
+ echo "== tier0 advapi32 imports" >> $O/summary.txt
+ i686-w64-mingw32-objdump -p "$T" | awk '/DLL Name: [Aa][Dd][Vv][Aa][Pp][Ii]32/{f=1;next} /DLL Name/{f=0} f && NF>=3{print $NF}' | tr '\n' ' ' >> $O/summary.txt; echo >> $O/summary.txt
+ echo "== tier0 kernel32 imports" >> $O/summary.txt
+ i686-w64-mingw32-objdump -p "$T" | awk '/DLL Name: [Kk][Ee][Rr][Nn][Ee][Ll]32/{f=1;next} /DLL Name/{f=0} f && NF>=3{print $NF}' | tr '\n' ' ' >> $O/summary.txt; echo >> $O/summary.txt
+ i686-w64-mingw32-objdump -d "$T" | grep -cE "\s(pinsrd|pextrd|ptest|crc32|vmov[a-z]*|popcnt|lzcnt|tzcnt|pmulld|pshufb|palignr)\s" | sed 's/^/tier0 sse4+ insn=/' >> $O/summary.txt
+ strings -n 6 "$T" | grep -iE "^(Windows|SSE|AVX|Valve|Steam|build)|version" | head -15 >> $O/summary.txt
+fi
