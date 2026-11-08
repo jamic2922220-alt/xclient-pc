@@ -105,7 +105,8 @@ static void url_escape(char *out, size_t cap, const char *in)
 static wchar_t g_err[256];                         /* launcher yopilishida ko'rsatiladigan xato (pastda ham e'lon qilingan) */
 static void prob_send(const char *kind, DWORD wait);   /* admin panel > Muammolar (pastda) */
 static char g_probx[1200];
-static DWORD g_played_s = 0;   /* oxirgi o'yin necha soniya davom etdi (muammo hisobotiga) */   /* prob_send uchun qo'shimcha tafsilot (url-escape qilingan), bo'lmasa bo'sh */
+static DWORD g_played_s = 0;
+static char g_cmod[64];   /* oxirgi yiqilishda aybdor modul (aqlli tuzatish uchun), bo'lmasa bo'sh */   /* oxirgi o'yin necha soniya davom etdi (muammo hisobotiga) */   /* prob_send uchun qo'shimcha tafsilot (url-escape qilingan), bo'lmasa bo'sh */
 static volatile DWORD g_net_dl = 0;
 static volatile LONG g_probe_ok = 0;
 static HINTERNET open_url_raw(const char *url)
@@ -2056,6 +2057,7 @@ static void crash_detail(char *out, size_t cap, DWORD since)
             WideCharToMultiByte(CP_UTF8, 0, st[6] ? st[6] : L"?", -1, c, sizeof(c), NULL, NULL);
             WideCharToMultiByte(CP_UTF8, 0, st[7] ? st[7] : L"?", -1, o, sizeof(o), NULL, NULL);
             char raw[200]; _snprintf(raw, sizeof(raw), "mod=%s code=%s off=%s app=%s", m, c, o, a); raw[sizeof(raw) - 1] = 0;
+            lstrcpynA(g_cmod, m, sizeof(g_cmod));
             url_escape(out, cap, raw);
         }
     }
@@ -2119,7 +2121,8 @@ static void dbg_probe(const wchar_t *exe, const wchar_t *cmd, char *out, size_t 
             ULONG_PTR a = (ULONG_PTR)er->ExceptionAddress; int bi = -1;
             for (int i = 0; i < nm; i++) if (mods[i].base <= a && (bi < 0 || mods[i].base > mods[bi].base)) bi = i;
             char *dst = de.u.Exception.dwFirstChance ? fc : sc;
-            if (!dst[0]) { _snprintf(dst, 160, "%08lx mod=%s+%lx", code, bi >= 0 ? mods[bi].name : "?", bi >= 0 ? (unsigned long)(a - mods[bi].base) : (unsigned long)a); dst[159] = 0; }
+            if (!dst[0]) { _snprintf(dst, 160, "%08lx mod=%s+%lx", code, bi >= 0 ? mods[bi].name : "?", bi >= 0 ? (unsigned long)(a - mods[bi].base) : (unsigned long)a); dst[159] = 0;
+                           if (bi >= 0 && (!de.u.Exception.dwFirstChance || !g_cmod[0])) lstrcpynA(g_cmod, mods[bi].name, sizeof(g_cmod)); }
             cont = DBG_EXCEPTION_NOT_HANDLED;        /* o'yin o'zi ushlasa - davom etsin (himoya tizimlari ataylab ishlatadi) */
             if (!de.u.Exception.dwFirstChance) done = TRUE;
             break; }
@@ -2132,6 +2135,70 @@ static void dbg_probe(const wchar_t *exe, const wchar_t *cmd, char *out, size_t 
     CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
     _snprintf(out, cap, "%s%s%s%s exit=%08lx last=%s n=%d%s", sc[0] ? "dbg=" : "", sc, fc[0] ? " fc=" : "", fc, (unsigned long)exitc, last[0] ? last : "-", nm, done ? "" : " timeout");
     out[cap - 1] = 0;
+}
+
+/* ---- Aqlli tuzatish: yiqilgan modulga qarab o'yinchiga aniq yo'l-yo'riq (har tur kuniga 1 marta) ----
+ * 1 Intel / 2 NVIDIA / 3 AMD videokarta drayveri, 4 ekran yozuvchi/overlay, 5 antivirus, 6 o'yin fayli, 7 Windows 7 SP1 yo'q */
+static int crash_kind(BOOL startup)
+{
+    char m[64]; lstrcpynA(m, g_cmod, sizeof(m)); CharLowerA(m);
+    if (!m[0]) return 0;
+    if (!strncmp(m, "ig4", 3) || !strncmp(m, "ig7", 3) || !strncmp(m, "ig9", 3) || !strncmp(m, "igx", 3) || !strncmp(m, "igd", 3) || !strncmp(m, "ig75", 4)) return 1;
+    if (!strncmp(m, "nvogl", 5) || !strncmp(m, "nvd3d", 5) || !strncmp(m, "nvwgf", 5) || !strncmp(m, "nvumd", 5)) return 2;
+    if (!strncmp(m, "atio", 4) || !strncmp(m, "atiu", 4) || !strncmp(m, "amdx", 4) || !strncmp(m, "atig", 4)) return 3;
+    static const char *ov[] = { "rtsshooks", "obs-graphics-hook", "graphics-hook", "bdcam", "gameoverlayrenderer", "discord", "nvspcap", "fraps", "action_x86", "overwolf", "mirillis", "playclaw", "dxtory", "reshade" };
+    for (size_t i = 0; i < sizeof(ov) / sizeof(ov[0]); i++) if (strstr(m, ov[i])) return 4;
+    static const char *av[] = { "360", "safemon", "qhsafe", "aswhook", "avghook", "sbiedll", "cmdvrt", "hmpalert", "klhk", "eppapi", "bdhkm", "atcuf", "ekrn" };
+    for (size_t i = 0; i < sizeof(av) / sizeof(av[0]); i++) if (strstr(m, av[i])) return 5;
+    if (!strcmp(m, "hw.dll") || !strcmp(m, "sw.dll") || !strcmp(m, "client.dll") || !strcmp(m, "mp.dll") || !strcmp(m, "cstrike.exe") || !strcmp(m, "hl.exe") || !strcmp(m, "filesystem_stdio.dll") || !strncmp(m, "vgui", 4)) return 6;
+    if (startup && !strcmp(m, "ntdll.dll")) {
+        RTL_OSVERSIONINFOEXW vi; ZeroMemory(&vi, sizeof(vi)); vi.dwOSVersionInfoSize = sizeof(vi);
+        typedef LONG (WINAPI *RGV)(RTL_OSVERSIONINFOEXW *);
+        RGV rgv = (RGV)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetVersion"); if (rgv) rgv(&vi);
+        if (vi.dwMajorVersion == 6 && vi.dwMinorVersion == 1 && vi.wServicePackMajor == 0) return 7;
+    }
+    return 0;
+}
+/* TRUE - yo'l-yo'riq ko'rsatildi (umumiy xabar shart emas) */
+static BOOL smart_fix(BOOL startup)
+{
+    int k = crash_kind(startup);
+    if (!k) return FALSE;
+    if (k == 6) ini_set_int(L"autover", 1);          /* o'yin faylida - keyingi ochilishda fayllar tekshiriladi */
+    FILETIME ft; GetSystemTimeAsFileTime(&ft);
+    int day = (int)(((((ULONGLONG)ft.dwHighDateTime << 32) | ft.dwLowDateTime) / 10000000ULL) / 86400ULL);
+    wchar_t key[16]; _snwprintf(key, 16, L"hint%d", k); key[15] = 0;
+    if (ini_int(key) == day) return FALSE;            /* bugun aytilgan */
+    ini_set_int(key, day);
+    BOOL ru = !strncmp(g_lang, "ru", 2);
+    wchar_t mod[64]; MultiByteToWideChar(CP_UTF8, 0, g_cmod, -1, mod, 64);
+    static const wchar_t *url[] = { NULL, L"https://www.intel.com/content/www/us/en/support/detect.html", L"https://www.nvidia.com/Download/index.aspx",
+        L"https://www.amd.com/en/support", NULL, NULL, NULL, L"ms-settings:windowsupdate" };
+    static const wchar_t *uz[] = { NULL,
+        L"O‘yin Intel videokarta drayverida (%s) yiqildi.\n\nDrayver eski yoki buzilgan. Intel saytidan yangi drayverni o‘rnating - sahifa ochilsinmi?",
+        L"O‘yin NVIDIA videokarta drayverida (%s) yiqildi.\n\nDrayver eski yoki buzilgan. NVIDIA saytidan yangi drayverni o‘rnating - sahifa ochilsinmi?",
+        L"O‘yin AMD videokarta drayverida (%s) yiqildi.\n\nDrayver eski yoki buzilgan. AMD saytidan yangi drayverni o‘rnating - sahifa ochilsinmi?",
+        L"O‘yinni ekran yozuvchi yoki overlay dastur (%s) yiqitdi - OBS, Bandicam, RivaTuner/MSI Afterburner, Discord, Steam overlay va h.k.\n\nO‘yin paytida shu dasturni yoping yoki undagi overlay'ni o‘chiring. Video yozish uchun X CLIENT'ning F10 tugmasidan foydalaning.",
+        L"O‘yinni antivirus (%s) yiqitdi - u o‘yinga aralashyapti.\n\nAntivirusda o‘yin papkasini (C:\\Games\\X CLIENT) istisnoga qo‘shing yoki o‘yin paytida antivirusni vaqtincha o‘chiring.",
+        L"O‘yin o‘z faylida (%s) yiqildi - fayl buzilgan bo‘lishi mumkin.\n\nX CLIENT keyingi ochilishda fayllarni o‘zi tekshiradi. Yana takrorlansa - X CLIENT ni saytdan qayta o‘rnating.",
+        L"Bu kompyuterda Windows 7 Service Pack 1 o‘rnatilmagan - o‘yin shuning uchun ishga tushmayapti (%s).\n\n«Пуск» → «Центр обновления Windows» → barcha yangilanishlarni (Service Pack 1 ham) o‘rnating va kompyuterni qayta yoqing." };
+    static const wchar_t *rus[] = { NULL,
+        L"Игра вылетела в драйвере видеокарты Intel (%s).\n\nДрайвер устарел или повреждён. Установите новый драйвер с сайта Intel - открыть страницу?",
+        L"Игра вылетела в драйвере видеокарты NVIDIA (%s).\n\nДрайвер устарел или повреждён. Установите новый драйвер с сайта NVIDIA - открыть страницу?",
+        L"Игра вылетела в драйвере видеокарты AMD (%s).\n\nДрайвер устарел или повреждён. Установите новый драйвер с сайта AMD - открыть страницу?",
+        L"Игру уронила программа записи экрана или оверлей (%s) - OBS, Bandicam, RivaTuner/MSI Afterburner, Discord, оверлей Steam и т.п.\n\nЗакройте её во время игры или отключите оверлей. Для записи видео используйте F10 в X CLIENT.",
+        L"Игру уронил антивирус (%s) - он вмешивается в игру.\n\nДобавьте папку игры (C:\\Games\\X CLIENT) в исключения антивируса или временно отключайте его во время игры.",
+        L"Игра вылетела в собственном файле (%s) - файл может быть повреждён.\n\nX CLIENT проверит файлы при следующем запуске. Если повторится - переустановите X CLIENT с сайта.",
+        L"На этом компьютере не установлен Windows 7 Service Pack 1 - из-за этого игра не запускается (%s).\n\n«Пуск» → «Центр обновления Windows» → установите все обновления (включая Service Pack 1) и перезагрузите компьютер." };
+    wchar_t msg[900]; _snwprintf(msg, 900, ru ? rus[k] : uz[k], mod); msg[899] = 0;
+    { char raw[48]; _snprintf(raw, sizeof(raw), "kind=%d mod=%s", k, g_cmod); raw[47] = 0; url_escape(g_probx, sizeof(g_probx), raw); prob_send("smart_fix", 2000); g_probx[0] = 0; }
+    if (url[k] && k != 7) {
+        if (MessageBoxW(NULL, msg, L"X CLIENT", MB_YESNO | MB_ICONWARNING | MB_SETFOREGROUND) == IDYES) ShellExecuteW(NULL, L"open", url[k], NULL, NULL, SW_SHOWNORMAL);
+    } else {
+        MessageBoxW(NULL, msg, L"X CLIENT", MB_OK | MB_ICONWARNING | MB_SETFOREGROUND);
+        if (k == 7 && (INT_PTR)ShellExecuteW(NULL, L"open", L"control.exe", L"/name Microsoft.WindowsUpdate", NULL, SW_SHOWNORMAL) <= 32) {}
+    }
+    return TRUE;
 }
 
 static BOOL run_game(void)
@@ -2235,7 +2302,7 @@ static BOOL run_game(void)
             { FILETIME fe; GetSystemTimeAsFileTime(&fe);   /* jurnal yozilishiga ulgursin */
               Sleep(1500);
               DWORD since = (DWORD)((((ULONGLONG)ft0.dwHighDateTime << 32 | ft0.dwLowDateTime) / 10000000ULL) - 11644473600ULL);
-              (void)fe; crash_detail(g_probx, sizeof(g_probx), since);
+              (void)fe; g_cmod[0] = 0; crash_detail(g_probx, sizeof(g_probx), since);
               /* jurnalda modul nomi yo'q (bo'sh yoki faqat "Ошибка при запуске приложения" oynasi) - o'yinni kuzatuv rejimida bir marta ochamiz */
               if (!strcmp(g_probx, "noevent") || !strcmp(g_probx, "nolog") || !strncmp(g_probx, "popup", 5)) {
                   status(L"Xato sababi aniqlanmoqda...", 100);
@@ -2252,6 +2319,7 @@ static BOOL run_game(void)
                 return TRUE;
             }
             ini_set_int(L"usehl", 0);
+            if (smart_fix(TRUE)) { ini_set_int(L"crs", 0); CloseHandle(pi.hProcess); return FALSE; }   /* sabab aniq - o'shaning yo'l-yo'rig'i */
             BOOL ru = !strncmp(g_lang, "ru", 2);
             if (MessageBoxW(NULL, ru ? L"Игра не запускается на этом компьютере (ошибка 0xc0000005 при запуске).\n\nЧаще всего помогает:\n1) Установить Microsoft Visual C++ 2015-2022 (x86) - откроется страница загрузки.\n2) Windows 7: установить обновления (Центр обновления Windows), особенно KB2999226 и SP1.\n3) Временно отключить антивирус (360, Avast и др.) или добавить папку игры в исключения.\n4) Перезагрузить компьютер.\n\nОткрыть страницу Visual C++ сейчас?"
                                  : L"O‘yin bu kompyuterda ishga tushmayapti (ishga tushishda 0xc0000005 xatosi).\n\nKo‘pincha yordam beradi:\n1) Microsoft Visual C++ 2015-2022 (x86) ni o‘rnatish - yuklash sahifasi ochiladi.\n2) Windows 7: yangilanishlarni o‘rnatish (Windows Update), ayniqsa KB2999226 va SP1.\n3) Antivirusni (360, Avast va boshq.) vaqtincha o‘chirish yoki o‘yin papkasini istisnoga qo‘shish.\n4) Kompyuterni qayta yoqish.\n\nVisual C++ sahifasi hozir ochilsinmi?",
@@ -2267,8 +2335,9 @@ static BOOL run_game(void)
         } else if (played > 120) ini_set_int(L"crs", 0);
         if (crashed) {                               /* o'yin ichidagi yiqilish: Windows jurnalidan qaysi modulda yiqilganini olib, admin > Muammolar > Tafsilotlar ga */
             DWORD since = (DWORD)((t0 / 10000000ULL) - 11644473600ULL);
-            Sleep(1500); crash_detail(g_probx, sizeof(g_probx), since);
+            g_cmod[0] = 0; Sleep(1500); crash_detail(g_probx, sizeof(g_probx), since);
             prob_send("game_crash", 3000); g_probx[0] = 0;
+            smart_fix(FALSE);                        /* sabab ma'lum bo'lsa (drayver, overlay, antivirus...) - aniq yo'l-yo'riq */
         }
         if (crashed) {
             int n = crash_fix(t0);
