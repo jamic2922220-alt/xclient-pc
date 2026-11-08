@@ -661,6 +661,8 @@ static BOOL has_game(void)
 }
 
 static DWORD g_setup_err = 0;
+/* Inno Setup chiqish kodi: 0 ok, 1-3 ishga tushmadi, 2/5 bekor qilindi, 4 o'rnatish paytida xato, 6 to'xtatildi, 7 tayyorlashda xato */
+static DWORD g_setup_exit = 0;
 static BOOL run_setup(const wchar_t *exe, const wchar_t *params)
 {
     g_setup_err = 0;
@@ -672,6 +674,7 @@ static BOOL run_setup(const wchar_t *exe, const wchar_t *params)
     sei.nShow = SW_SHOWNORMAL;
     if (!ShellExecuteExW(&sei) || !sei.hProcess) { g_setup_err = GetLastError(); if (!g_setup_err) g_setup_err = 1; return FALSE; }
     WaitForSingleObject(sei.hProcess, INFINITE);
+    if (!GetExitCodeProcess(sei.hProcess, &g_setup_exit)) g_setup_exit = 999;
     CloseHandle(sei.hProcess);
     return TRUE;
 }
@@ -758,10 +761,21 @@ static BOOL ensure_game(const char *url)
     SetWindowPos(g_wnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     _snwprintf(params, 1024, L"/VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /NOICONS /TASKS=\"\" /LANG=uzbek /DIR=\"%s\"", g_dir);
     run_setup(tmp, params);
+    DWORD ex1 = g_setup_exit, ex2 = 0;
     if (!has_game()) {
         /* jim rejim ishlamasa - oddiy oynali o'rnatish (papka oldindan tanlangan) */
         _snwprintf(params, 1024, L"/SP- /NOICONS /LANG=uzbek /DIR=\"%s\"", g_dir);
         run_setup(tmp, params);
+        ex2 = g_setup_exit;
+    }
+    if (!has_game() && !g_setup_err) {            /* o'rnatuvchi ishladi, lekin o'yin paydo bo'lmadi - sababi admin panelga */
+        ULARGE_INTEGER fr; fr.QuadPart = 0; GetDiskFreeSpaceExW(g_dir, &fr, NULL, NULL);
+        WIN32_FILE_ATTRIBUTE_DATA fa; ULONGLONG sz = 0;
+        if (GetFileAttributesExW(tmp, GetFileExInfoStandard, &fa)) sz = ((ULONGLONG)fa.nFileSizeHigh << 32) | fa.nFileSizeLow;
+        char raw[200]; _snprintf(raw, sizeof(raw), "inno=%lu/%lu local=%d size=%lluMB free=%lluMB", (unsigned long)ex1, (unsigned long)ex2, local ? 1 : 0, sz >> 20, (unsigned long long)(fr.QuadPart >> 20)); raw[199] = 0;
+        url_escape(g_probx, sizeof(g_probx), raw); prob_send("setup_fail", 4000); g_probx[0] = 0;
+        if (ex2 == 2 || ex2 == 5) lstrcpyW(g_err, L"O‘rnatish oynasi yopib yuborildi. X CLIENT ni qayta oching va o‘rnatish oxirigacha kuting.");
+        else if (ex1 == 4 || ex2 == 4 || ex1 == 7 || ex2 == 7) lstrcpyW(g_err, L"CS 1.6 o‘rnatishda xato bo‘ldi (diskda joy yoki antivirus). Kamida 2 GB joy bo‘shating, antivirusni vaqtincha o‘chirib X CLIENT ni qayta oching.");
     }
     if (!local) DeleteFileW(tmp);                 /* o'yinchining o'z (oflayn) faylini o'chirmaymiz */
     if (!has_game()) {
