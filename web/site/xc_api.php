@@ -1274,14 +1274,14 @@ case 'notif':
     $calls = array();                                    // "Sizni sog'indik": uzoq kirmagan paytda do'stlar chaqirgan
     if (!empty($u['calls'])) { lock(); $u = auth(); $calls = $u['calls']; $u['calls'] = array(); save_user($u); }
     $dinv = null; $duel = null; $dres = null;
-    if (!empty($u['dinv'])) { $x = rd('duels/' . $u['dinv'], null); if ($x && $x['st'] === 'wait' && time() - $x['t'] < 60) $dinv = array('id' => $x['id'], 'from' => $x['an'], 'login' => $x['a'], 'mins' => $x['mins']); }
+    if (!empty($u['dinv'])) { $x = rd('duels/' . $u['dinv'], null); if ($x && $x['st'] === 'wait' && time() - $x['t'] < 90) $dinv = array('id' => $x['id'], 'from' => $x['an'], 'login' => $x['a'], 'mins' => $x['mins']); }
     if (!empty($u['duel'])) { lock(); $duel = duel_pub(duel_finish($u['duel']), strtolower($u['login'])); $u = auth(); }
     if (!empty($u['dres'])) { lock(); $u = auth(); $dres = duel_pub(rd('duels/' . $u['dres'], null), strtolower($u['login'])); unset($u['dres']); save_user($u); }
     $wn = 0; if (!empty($u['wallnew'])) { lock(); $u = auth(); $wn = (int)$u['wallnew']; $u['wallnew'] = 0; save_user($u); }
     $ring = null; $ans = array();                        // qo'ng'iroq: do'st menyuda qo'ng'iroq qilyapti / javob berdi
     if (!empty($u['ring']) || !empty($u['ringans'])) {
         lock(); $u = auth();
-        if (!empty($u['ring']) && time() - $u['ring']['t'] < 45) $ring = $u['ring'];
+        if (!empty($u['ring']) && time() - $u['ring']['t'] < 90) $ring = $u['ring'];   // o'yin paytida menyu daqiqada bir so'raydi - 45 s da qo'ng'iroq yetib bormay qolardi
         if (!empty($u['ringans'])) foreach ($u['ringans'] as $x) if (time() - $x['t'] < 120) $ans[] = $x;
         unset($u['ring']); $u['ringans'] = array(); save_user($u);
     }

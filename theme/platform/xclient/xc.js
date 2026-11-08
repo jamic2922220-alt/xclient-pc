@@ -2601,7 +2601,7 @@ function showRing(r) {
     '<div class="rgb"><a class="btn red" data-ringok="1">' + esc(T('rg_ans')) + '</a><a class="btn" data-ringok="0">' + esc(T('rg_dec')) + '</a></div>';
   b.style.display = 'block';
   var n = 0; clearInterval(RING_TM);
-  var beep = function () { if (++n > 15 || !RING) { clearInterval(RING_TM); if (RING && n > 15) ringAnswer(false, true); return; } cmd('play buttons/bell1.wav'); };
+  var beep = function () { if (++n > 15 || !RING) { clearInterval(RING_TM); if (RING && n > 15) ringAnswer(false); /* javob berilmadi - qo'ng'iroq qilganga "band" deb boradi */ return; } cmd('play buttons/bell1.wav'); };
   beep(); RING_TM = setInterval(beep, 2000);
 }
 function ringAnswer(ok, silent) {
@@ -2780,14 +2780,6 @@ function layoutCheck(where) {
       if (bad && !LAYOUT_SENT[where]) { LAYOUT_SENT[where] = 1; api('jserr', { msg: 'layout: ' + where + ' (' + String(bad).slice(0, 60) + ')', src: 'layout', line: 0, ver: window.XC_V || '' }, function () {}); }
     } catch (e) {}
   }, 400);
-}
-/* menyu musiqasi: ro'yxat admin panelda (Sozlamalar > Menyu musiqasi), fayllar o'yin papkasida (Paketlar orqali) */
-var MUSICS = null, MTRACK_DEF = 'media/xclient_theme.mp3';   // launcher xc_theme/cstrike/media dan o'rnatadi
-function musicPick() {
-  if (MUSICS === null) { MUSICS = []; api('music', {}, function (r) { MUSICS = (r.ok && r.list) || []; if (curModal === 'mdSettings' && setTab === 'sound' && MUSICS.length) showSetTab('sound'); }); }
-  var cur = DB.mtrack || MTRACK_DEF, h = '<div class="ph2 m">' + esc(T('mu_title')) + '</div><div class="mul">';
-  each([[T('mu_xc'), MTRACK_DEF], [T('mu_def'), 'media/gamestartup.mp3']].concat(MUSICS), function (m) { h += '<a class="sgo' + (cur === m[1] ? ' on' : '') + '" data-mtrack="' + esc(m[1]) + '">\u266b ' + esc(m[0]) + '</a>'; });
-  return h + '</div>';
 }
 /* CFG kodini qo'yish (kod yozilganda yoki "Mashhur CFGlar" dan) */
 function cfgUse(code) {
@@ -3760,7 +3752,6 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-bgs'))) { DB.bgs = el.getAttribute('data-bgs'); persist(); applyBg(); showSetTab('system'); return; }
   if ((el = closest(t, 'data-ptc'))) { DB.ptc = el.getAttribute('data-ptc'); persist(); applyBg(); showSetTab('system'); return; }
   if ((el = closest(t, 'data-fs'))) { DB.fs = Number(el.getAttribute('data-fs')); persist(); applyTheme(DB.theme || 'red'); showSetTab('system'); return; }
-  if ((el = closest(t, 'data-mtrack'))) { DB.mtrack = el.getAttribute('data-mtrack'); persist(); MUSIC_ON = null; cmd('mp3 stop'); musicSync(); showSetTab('sound'); return; }
   if ((el = closest(t, 'data-wallsend'))) { var wto = el.getAttribute('data-wallsend'), wv = clean($('wlIn') ? $('wlIn').value : ''); if (!wv) return; api('wall_add', { to: wto, text: wv }, function (r) { if (!r.ok) return toast(r.msg || 'Xato'); openFrProfile(wto); }); return; }
   if ((el = closest(t, 'data-walldel'))) { var wt2 = el.getAttribute('data-wallto'); api('wall_del', { to: wt2, id: el.getAttribute('data-walldel') }, function () { openFrProfile(wt2); }); return; }
   if ((el = closest(t, 'data-xgal'))) { if (applyCode(el.getAttribute('data-xgal'))) { if (typeof xLive === 'function') xLive(); showSetTab('hud'); toast(T('xg_ok'), 3000); } return; }
