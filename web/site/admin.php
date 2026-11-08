@@ -865,7 +865,7 @@ if ($P === 'prob') {
         'av_del' => "O'rnatish: antivirus yuklangan faylni o'chirdi", 'setup_no' => "O'rnatish: Windows ruxsatiga \"Yo'q\" bosildi", 'setup_fail' => "O'rnatish: o'rnatuvchi ishga tushmadi",
         'net_slow' => "Launcher: internet sekin - yangilanishsiz ochildi", 'menu_wd' => "Menyu: 20 s da ochilmadi, o'zi qayta yuklandi", 'menu_lite' => "Menyu: kuchsiz kompyuter - yengil rejim",
         'dl_mirror' => "O'rnatish: cssborka.uz ishlamadi - zaxira manzildan yuklandi", 'offline' => "O'rnatish: oflayn paketdan (internetsiz)", 'gpu_nodrv' => "O'yin: videokarta drayveri o'rnatilmagan",
-        'safe_mode' => "O'yin: 3 marta ketma-ket yiqildi - xavfsiz rejimda ochildi", 'autover' => "O'yin: yiqilishdan keyin fayllar avtomatik tekshirildi", 'start_fail' => "O'yin: ishga tushishda 0xc0000005 (Windows 7 va h.k.) - hl.exe bilan urinildi", 'game_crash' => "O'yin: o'ynab turganda yiqildi");
+        'safe_mode' => "O'yin: 3 marta ketma-ket yiqildi - xavfsiz rejimda ochildi", 'autover' => "O'yin: yiqilishdan keyin fayllar avtomatik tekshirildi", 'start_fail' => "O'yin: ishga tushishda 0xc0000005 (Windows 7 va h.k.) - hl.exe bilan urinildi", 'game_crash' => "O'yin: o'ynab turganda yiqildi", 'proc_fail' => "O'yin: ochib bo'lmadi (fayl yo'q / antivirus to'sdi)", 'launch_err' => "Launcher: xato oynasi ko'rsatildi");
     $days = array(); $sum = array();
     for ($i = 0; $i < $D; $i++) { $k = date('Y-m-d', strtotime("-$i day")); $x = rd('probs/' . $k, array()); $dd = rd('daily/' . $k, array()); $days[$k] = array('x' => $x, 'd' => isset($dd['d']) ? count($dd['d']) : 0);
         foreach ($x as $t => $ids) $sum[$t] = (isset($sum[$t]) ? $sum[$t] : 0) + count($ids); }
@@ -879,8 +879,8 @@ if ($P === 'prob') {
     foreach ($days as $k => $r) { echo '<tr><td>' . h($k) . '</td><td><b>' . $r['d'] . '</b></td>'; foreach ($ks as $t) { $n = isset($r['x'][$t]) ? count($r['x'][$t]) : 0; echo '<td' . ($n ? ' class="red"' : ' class="mut"') . '>' . ($n ? $n : '·') . '</td>'; } echo '</tr>'; }
     echo '</table><div class="mut small" style="margin-top:8px">O\'yin yiqilishlari - «Yiqilishlar» sahifasida. Menyu JavaScript xatolari - «Xatolar» sahifasida.</div></div>';
     $dx = array_reverse(rd('probs_x', array()));
-    echo '<div class="panel"><div class="ph">Tafsilotlar - nima aynan yiqildi (Windows jurnalidan, oxirgi 30)</div><table class="list"><tr><th>Vaqt</th><th>Kompyuter</th><th>Versiya</th><th>Muammo</th><th>Tafsilot</th></tr>';
-    foreach (array_slice($dx, 0, 30) as $r) echo '<tr><td>' . dt($r['t']) . '</td><td><a href="?p=player&id=' . h($r['d']) . '">' . h(substr($r['d'], 0, 10)) . '</a></td><td>' . h($r['v']) . '</td><td>' . h(isset($nm[$r['k']]) ? $nm[$r['k']] : $r['k']) . '</td><td class="mono small">' . h($r['x']) . '</td></tr>';
+    echo '<div class="panel"><div class="ph">Tafsilotlar - har bir muammo: sababi va kompyuter holati (oxirgi 30)</div><table class="list"><tr><th>Vaqt</th><th>Kompyuter</th><th>Versiya</th><th>Muammo</th><th>Tafsilot</th></tr>';
+    foreach (array_slice($dx, 0, 30) as $r) echo '<tr><td>' . dt($r['t']) . '</td><td><a href="?p=player&id=' . h($r['d']) . '">' . h(substr($r['d'], 0, 10)) . '</a></td><td>' . h($r['v']) . '</td><td>' . h(isset($nm[$r['k']]) ? $nm[$r['k']] : $r['k']) . '</td><td class="mono small" style="white-space:normal;word-break:break-all;max-width:620px">' . h(str_replace(' | ', "\n", $r['x'])) . '</td></tr>';
     if (!$dx) echo '<tr><td class="mut" colspan="5">Hali yo\'q - launcher 1.0.122 dan boshlab yig\'iladi</td></tr>';
     echo '</table><div class="mut small" style="margin-top:8px">mod= - yiqilgan fayl (masalan ig4icd32.dll - Intel videokarta drayveri, nvoglv32.dll - NVIDIA, atioglxx.dll - AMD, hw.dll - o\'yin dvigateli). noevent - Windows hech narsa yozmagan.</div></div>';
 }

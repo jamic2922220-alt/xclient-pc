@@ -104,7 +104,8 @@ static void url_escape(char *out, size_t cap, const char *in)
  * o'yin bor fayllar bilan ochiladi. 0 - cheklov yo'q (yangilanishni yuklash, o'yin yopilgandan keyingi ishlar) */
 static wchar_t g_err[256];                         /* launcher yopilishida ko'rsatiladigan xato (pastda ham e'lon qilingan) */
 static void prob_send(const char *kind, DWORD wait);   /* admin panel > Muammolar (pastda) */
-static char g_probx[480];   /* prob_send uchun qo'shimcha tafsilot (url-escape qilingan), bo'lmasa bo'sh */
+static char g_probx[1200];
+static DWORD g_played_s = 0;   /* oxirgi o'yin necha soniya davom etdi (muammo hisobotiga) */   /* prob_send uchun qo'shimcha tafsilot (url-escape qilingan), bo'lmasa bo'sh */
 static volatile DWORD g_net_dl = 0;
 static volatile LONG g_probe_ok = 0;
 static HINTERNET open_url_raw(const char *url)
@@ -1968,6 +1969,9 @@ static void start_failed(const wchar_t *exe, DWORD err)
 {
     ini_set_int(L"autover", 1);                    /* 7. o'yin ochilmadi - keyingi safar fayllar tekshiriladi */
     const wchar_t *nm = wcsrchr(exe, L'\\'); nm = nm ? nm + 1 : exe;
+    { char raw[160], n8[64]; WideCharToMultiByte(CP_UTF8, 0, nm, -1, n8, sizeof(n8), NULL, NULL);
+      _snprintf(raw, sizeof(raw), "createprocess err=%lu exe=%s", (unsigned long)err, n8); raw[sizeof(raw) - 1] = 0;
+      url_escape(g_probx, sizeof(g_probx), raw); prob_send("proc_fail", 3000); g_probx[0] = 0; }
     wchar_t m[900];
     if (err == 225 || err == 226 || err == ERROR_ACCESS_DENIED || err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND || err == 1260)
         _snwprintf(m, 900, L"%s ni ochib bo‘lmadi (xato %lu). Ko‘pincha sabab - antivirus faylni to‘xtatgan yoki karantinga olgan.\n\n"
@@ -2224,6 +2228,7 @@ static BOOL run_game(void)
         ULONGLONG t0 = ((ULONGLONG)ft0.dwHighDateTime << 32) | ft0.dwLowDateTime;
         FILETIME ft1; GetSystemTimeAsFileTime(&ft1);
         ULONGLONG played = ((((ULONGLONG)ft1.dwHighDateTime << 32) | ft1.dwLowDateTime) - t0) / 10000000ULL;   /* soniya */
+        g_played_s = (DWORD)played;
         BOOL crashed = game_crashed(code, t0);
         /* ochilishdayoq yiqildi (o'yin oynasi umuman paydo bo'lmadi, xotira xatosi): bu o'yin ichidagi xato emas - exe bu Windows'da ishga tushmayapti */
         if (crashed && code == 0xC0000005 && !g_game_seen && played < 300) {
@@ -2337,17 +2342,51 @@ static char g_prob[24];
 static DWORD WINAPI prob_th(LPVOID unused)
 {
     (void)unused;
-    char url[1024];
+    char url[1600];
     _snprintf(url, sizeof(url), "http://mmb.boost-top.com/xc_api.php?a=prob&k=%s&d=%s&v=%s%s%s", g_prob, g_id, g_version[0] ? g_version : "0", g_probx[0] ? "&x=" : "", g_probx);
     url[sizeof(url) - 1] = 0;
     HINTERNET h = open_url(url);
     if (h) InternetCloseHandle(h);
     return 0;
 }
+/* Har bir muammo hisobotiga kompyuter holati: Windows (build, SP, 64-bit), xotira (jami/bo'sh), protsessor, videokarta,
+ * ishlab turgan antiviruslar, qaysi exe bilan ochilgan, xavfsiz rejim, o'yin davomiyligi. Admin > Muammolar > Tafsilotlar */
+static void sys_ctx(char *out, size_t cap)
+{
+    RTL_OSVERSIONINFOEXW vi; ZeroMemory(&vi, sizeof(vi)); vi.dwOSVersionInfoSize = sizeof(vi);
+    typedef LONG (WINAPI *RGV)(RTL_OSVERSIONINFOEXW *);
+    RGV rgv = (RGV)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetVersion"); if (rgv) rgv(&vi);
+    BOOL w64 = FALSE; IsWow64Process(GetCurrentProcess(), &w64);
+    MEMORYSTATUSEX ms; ms.dwLength = sizeof(ms); GlobalMemoryStatusEx(&ms);
+    SYSTEM_INFO si; GetSystemInfo(&si);
+    DISPLAY_DEVICEA dd; char gpu[64] = "?";
+    for (DWORD i = 0; ; i++) { ZeroMemory(&dd, sizeof(dd)); dd.cb = sizeof(dd); if (!EnumDisplayDevicesA(NULL, i, &dd, 0)) break;
+        if (gpu[0] == '?' || (dd.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE)) lstrcpynA(gpu, dd.DeviceString, sizeof(gpu)); if (dd.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE) break; }
+    static const char *avs[][2] = { {"360tray.exe","360"}, {"360sd.exe","360"}, {"zhudongfangyu.exe","360"}, {"avastui.exe","avast"}, {"avgui.exe","avg"}, {"avp.exe","kaspersky"},
+        {"ekrn.exe","eset"}, {"msmpeng.exe","defender"}, {"dwservice.exe","drweb"}, {"mbamservice.exe","malwarebytes"}, {"bdagent.exe","bitdefender"}, {"psuaservice.exe","panda"}, {"qhsafetray.exe","360"} };
+    char av[96] = "";
+    HANDLE sn = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (sn != INVALID_HANDLE_VALUE) {
+        PROCESSENTRY32W pe; pe.dwSize = sizeof(pe);
+        for (BOOL ok = Process32FirstW(sn, &pe); ok; ok = Process32NextW(sn, &pe)) {
+            char n8[64]; WideCharToMultiByte(CP_ACP, 0, pe.szExeFile, -1, n8, sizeof(n8), NULL, NULL); CharLowerA(n8);
+            for (size_t k = 0; k < sizeof(avs) / sizeof(avs[0]); k++) if (!strcmp(n8, avs[k][0]) && !strstr(av, avs[k][1]) && strlen(av) + strlen(avs[k][1]) + 2 < sizeof(av)) { if (av[0]) strcat(av, ","); strcat(av, avs[k][1]); }
+        }
+        CloseHandle(sn);
+    }
+    _snprintf(out, cap, "os=%lu.%lu.%lu sp=%u x64=%d ram=%u/%uMB cpu=%lu gpu=%s av=%s hl=%d safe=%d t=%lus",
+        vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber, (unsigned)vi.wServicePackMajor, w64 ? 1 : 0,
+        (unsigned)(ms.ullTotalPhys >> 20), (unsigned)(ms.ullAvailPhys >> 20), si.dwNumberOfProcessors, gpu, av[0] ? av : "-",
+        ini_int(L"usehl"), ini_int(L"crs") >= 3 ? 1 : 0, (unsigned long)g_played_s);
+    out[cap - 1] = 0;
+}
 static void prob_send(const char *kind, DWORD wait)
 {
     if (!g_net) return;
     lstrcpynA(g_prob, kind, sizeof(g_prob));
+    { char ctx[300], esc[600]; sys_ctx(ctx, sizeof(ctx)); url_escape(esc, sizeof(esc), ctx);
+      size_t l = strlen(g_probx);
+      if (l + strlen(esc) + 8 < sizeof(g_probx)) { if (l) strcat(g_probx, "%20%7C%20"); strcat(g_probx, esc); } }
     HANDLE th = CreateThread(NULL, 0, prob_th, NULL, 0, NULL);
     if (th && !wait) Sleep(50);                  /* oqim url'ni yasab olsin, keyin g_probx tozalanadi */
     if (th) { if (wait) WaitForSingleObject(th, wait); CloseHandle(th); }
@@ -2598,7 +2637,11 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, LPWSTR cmdline, int show)
     while (GetMessageW(&msg, NULL, 0, 0) > 0) { TranslateMessage(&msg); DispatchMessageW(&msg); }
     WaitForSingleObject(th, 5000);
 
-    if (g_err[0]) MessageBoxW(NULL, g_err, L"X CLIENT", MB_ICONERROR);
+    if (g_err[0]) {                                     /* launcher ko'rsatgan har qanday xato - admin > Muammolar ga matni bilan */
+        char raw[400]; WideCharToMultiByte(CP_UTF8, 0, g_err, -1, raw, sizeof(raw), NULL, NULL); raw[sizeof(raw) - 1] = 0;
+        url_escape(g_probx, sizeof(g_probx), raw); prob_send("launch_err", 4000); g_probx[0] = 0;
+        MessageBoxW(NULL, g_err, L"X CLIENT", MB_ICONERROR);
+    }
     if (g_relaunch && g_one) { CloseHandle(g_one); g_one = NULL; }   /* yangilangan launcher ochila olsin */
     if (g_relaunch) {
         /* yangi launcher bilan qayta ishga tushamiz */
