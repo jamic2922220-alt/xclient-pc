@@ -1287,7 +1287,7 @@ case 'prob':
     lock(); $f = 'probs/' . date('Y-m-d'); $x = rd($f, array()); if (!isset($x[$k])) $x[$k] = array();
     if (count($x[$k]) < 5000) $x[$k][$who] = 1;
     wr($f, $x);
-    $det = clean_str(p('x'), 600);                       // tafsilot: qaysi modul yiqildi (launcher Windows jurnalidan oladi)
+    $det = clean_str(p('x'), 1100);                       // tafsilot: qaysi modul yiqildi (launcher Windows jurnalidan oladi)
     if ($det !== '') probx_add($k, $who, $det);
     /* 8. Telegram: bugun shu muammo 5, 20, 50, 100 ta kompyuterga yetsa - adminga darhol xabar */
     $n = count($x[$k]); $nm = array('dl_net' => "CS 1.6 yuklanmadi (internet)", 'dl_disk' => "diskda joy yo'q", 'dl_perm' => "papkaga yozib bo'lmadi", 'av_del' => "antivirus faylni o'chirdi",

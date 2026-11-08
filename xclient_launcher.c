@@ -106,7 +106,7 @@ static void url_escape(char *out, size_t cap, const char *in)
 static wchar_t g_err[256];                         /* launcher yopilishida ko'rsatiladigan xato (pastda ham e'lon qilingan) */
 static void prob_send(const char *kind, DWORD wait);   /* admin panel > Muammolar (pastda) */
 static void fn_send(const char *stage);   /* admin panel > Voronka: birinchi ochilish bosqichlari (har bosqich bir marta) */
-static char g_probx[1200];
+static char g_probx[1800];
 static DWORD g_played_s = 0;
 static char g_cmod[64];   /* oxirgi yiqilishda aybdor modul (aqlli tuzatish uchun), bo'lmasa bo'sh */   /* oxirgi o'yin necha soniya davom etdi (muammo hisobotiga) */   /* prob_send uchun qo'shimcha tafsilot (url-escape qilingan), bo'lmasa bo'sh */
 static volatile DWORD g_net_dl = 0;
@@ -2142,10 +2142,46 @@ static BOOL dbg_name(HANDLE f, char *out, size_t cap)
     char *pp = path; if (!strncmp(pp, "\\\\?\\", 4)) pp += 4;
     return !(wl && wl < MAX_PATH && !_strnicmp(pp, win, wl));
 }
+/* Yiqilish paytidagi stek: ESP dan 1 KB o'qib, modullar ichiga tushgan qaytish manzillari (mod+offset) - qaysi DLL ntdll'ni
+ * chaqirganini ko'rsatadi (masalan tier0.dll+1a2b -> ntdll). Modul hajmi PE sarlavhasidan (SizeOfImage) */
+static void dbg_stack(HANDLE proc, DWORD tid, DbgMod *mods, int nm, char *out, size_t cap)
+{
+    out[0] = 0;
+    static DWORD msz[400];
+    for (int i = 0; i < nm && i < 400; i++) {
+        DWORD lf = 0, sz = 0; SIZE_T rd = 0; msz[i] = 0;
+        if (ReadProcessMemory(proc, (LPCVOID)(mods[i].base + 0x3C), &lf, 4, &rd) && lf && lf < 0x1000 &&
+            ReadProcessMemory(proc, (LPCVOID)(mods[i].base + lf + 0x50), &sz, 4, &rd)) msz[i] = sz;
+    }
+    HANDLE th = OpenThread(THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, tid);
+    if (!th) return;
+    DWORD sp = 0, ip = 0;
+#ifdef _WIN64
+    WOW64_CONTEXT c; ZeroMemory(&c, sizeof(c)); c.ContextFlags = WOW64_CONTEXT_CONTROL;
+    if (Wow64GetThreadContext(th, &c)) { sp = c.Esp; ip = c.Eip; }
+#else
+    CONTEXT c; ZeroMemory(&c, sizeof(c)); c.ContextFlags = CONTEXT_CONTROL;
+    if (GetThreadContext(th, &c)) { sp = c.Esp; ip = c.Eip; }
+#endif
+    CloseHandle(th);
+    if (!sp) return;
+    DWORD st[256]; SIZE_T got = 0;
+    if (!ReadProcessMemory(proc, (LPCVOID)(ULONG_PTR)sp, st, sizeof(st), &got)) return;
+    int n = (int)(got / 4), hits = 0; size_t len = 0;
+    (void)ip;
+    for (int k = 0; k < n && hits < 8; k++) {
+        ULONG_PTR a = st[k]; int bi = -1;
+        for (int i = 0; i < nm && i < 400; i++) if (msz[i] && a >= mods[i].base && a < mods[i].base + msz[i]) { bi = i; break; }
+        if (bi < 0) continue;
+        char one[72]; _snprintf(one, sizeof(one), "%s%s+%lx", hits ? "," : "", mods[bi].name, (unsigned long)(a - mods[bi].base)); one[71] = 0;
+        if (len + strlen(one) + 1 >= cap) break;
+        strcat(out, one); len += strlen(one); hits++;
+    }
+}
 static void dbg_probe(const wchar_t *exe, const wchar_t *cmd, char *out, size_t cap)
 {
     static DbgMod mods[400]; int nm = 0;
-    char last[48] = "", fc[160] = "", sc[160] = "", ext[160] = "", acc[40] = "";
+    char last[48] = "", fc[160] = "", sc[160] = "", ext[160] = "", acc[40] = "", stk[300] = "";
     wchar_t c[1024]; lstrcpynW(c, cmd, 1024);
     STARTUPINFOW si = { sizeof(si) }; PROCESS_INFORMATION pi;
     if (!CreateProcessW(exe, c, NULL, NULL, FALSE, DEBUG_ONLY_THIS_PROCESS, NULL, g_dir, &si, &pi)) { _snprintf(out, cap, "dbgfail=%lu", GetLastError()); out[cap - 1] = 0; return; }
@@ -2173,6 +2209,7 @@ static void dbg_probe(const wchar_t *exe, const wchar_t *cmd, char *out, size_t 
             ULONG_PTR a = (ULONG_PTR)er->ExceptionAddress; int bi = -1;
             for (int i = 0; i < nm; i++) if (mods[i].base <= a && (bi < 0 || mods[i].base > mods[bi].base)) bi = i;
             char *dst = de.u.Exception.dwFirstChance ? fc : sc;
+            if (code == EXCEPTION_ACCESS_VIOLATION && !stk[0]) dbg_stack(pi.hProcess, de.dwThreadId, mods, nm, stk, sizeof(stk));   /* birinchi xotira xatosi - stek */
             if (!de.u.Exception.dwFirstChance && code == EXCEPTION_ACCESS_VIOLATION && er->NumberParameters >= 2 && !acc[0]) {   /* o'qish/yozish/ishga tushirish va manzil */
                 _snprintf(acc, sizeof(acc), " acc=%c@%lx", er->ExceptionInformation[0] == 0 ? 'r' : er->ExceptionInformation[0] == 1 ? 'w' : 'x', (unsigned long)er->ExceptionInformation[1]); acc[sizeof(acc) - 1] = 0; }
             if (!dst[0]) { _snprintf(dst, 160, "%08lx mod=%s+%lx", code, bi >= 0 ? mods[bi].name : "?", bi >= 0 ? (unsigned long)(a - mods[bi].base) : (unsigned long)a); dst[159] = 0;
@@ -2187,7 +2224,7 @@ static void dbg_probe(const wchar_t *exe, const wchar_t *cmd, char *out, size_t 
     }
     if (!done || sc[0]) TerminateProcess(pi.hProcess, 1);
     CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
-    _snprintf(out, cap, "%s%s%s%s%s exit=%08lx last=%s n=%d ext=%s%s", sc[0] ? "dbg=" : "", sc, acc, fc[0] ? " fc=" : "", fc, (unsigned long)exitc, last[0] ? last : "-", nm, ext[0] ? ext : "-", done ? "" : " timeout");
+    _snprintf(out, cap, "%s%s%s%s%s exit=%08lx last=%s n=%d ext=%s stk=%s%s", sc[0] ? "dbg=" : "", sc, acc, fc[0] ? " fc=" : "", fc, (unsigned long)exitc, last[0] ? last : "-", nm, ext[0] ? ext : "-", stk[0] ? stk : "-", done ? "" : " timeout");
     out[cap - 1] = 0;
 }
 
@@ -2364,7 +2401,7 @@ static BOOL run_game(void)
               /* jurnalda modul nomi yo'q (bo'sh yoki faqat "Ошибка при запуске приложения" oynasi) - o'yinni kuzatuv rejimida bir marta ochamiz */
               if (!strcmp(g_probx, "noevent") || !strcmp(g_probx, "nolog") || !strncmp(g_probx, "popup", 5)) {
                   status(L"Xato sababi aniqlanmoqda...", 100);
-                  char raw[480], esc[900]; dbg_probe(exe, cmd, raw, sizeof(raw)); url_escape(esc, sizeof(esc), raw);
+                  char raw[760], esc[1100]; dbg_probe(exe, cmd, raw, sizeof(raw)); url_escape(esc, sizeof(esc), raw);
                   lstrcpynA(g_probx, esc, sizeof(g_probx));   /* modul ma'lumoti muhimroq - popup matni o'rniga */
               } }
             prob_send("start_fail", 3000);
@@ -2490,7 +2527,7 @@ static void fn_send(const char *stage)
 static DWORD WINAPI prob_th(LPVOID unused)
 {
     (void)unused;
-    char url[1600];
+    char url[2400];
     _snprintf(url, sizeof(url), "http://mmb.boost-top.com/xc_api.php?a=prob&k=%s&d=%s&v=%s%s%s", g_prob, g_id, g_version[0] ? g_version : XC_VERSTR, g_probx[0] ? "&x=" : "", g_probx);
     url[sizeof(url) - 1] = 0;
     HINTERNET h = open_url(url);
