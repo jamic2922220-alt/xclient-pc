@@ -865,7 +865,7 @@ if ($P === 'prob') {
         'av_del' => "O'rnatish: antivirus yuklangan faylni o'chirdi", 'setup_no' => "O'rnatish: Windows ruxsatiga \"Yo'q\" bosildi", 'setup_fail' => "O'rnatish: o'rnatuvchi ishga tushmadi",
         'net_slow' => "Launcher: internet sekin - yangilanishsiz ochildi", 'menu_wd' => "Menyu: 20 s da ochilmadi, o'zi qayta yuklandi", 'menu_lite' => "Menyu: kuchsiz kompyuter - yengil rejim",
         'dl_mirror' => "O'rnatish: cssborka.uz ishlamadi - zaxira manzildan yuklandi", 'offline' => "O'rnatish: oflayn paketdan (internetsiz)", 'gpu_nodrv' => "O'yin: videokarta drayveri o'rnatilmagan",
-        'safe_mode' => "O'yin: 3 marta ketma-ket yiqildi - xavfsiz rejimda ochildi", 'autover' => "O'yin: yiqilishdan keyin fayllar avtomatik tekshirildi", 'start_fail' => "O'yin: ishga tushishda 0xc0000005 (Windows 7 va h.k.) - hl.exe bilan urinildi");
+        'safe_mode' => "O'yin: 3 marta ketma-ket yiqildi - xavfsiz rejimda ochildi", 'autover' => "O'yin: yiqilishdan keyin fayllar avtomatik tekshirildi", 'start_fail' => "O'yin: ishga tushishda 0xc0000005 (Windows 7 va h.k.) - hl.exe bilan urinildi", 'game_crash' => "O'yin: o'ynab turganda yiqildi");
     $days = array(); $sum = array();
     for ($i = 0; $i < $D; $i++) { $k = date('Y-m-d', strtotime("-$i day")); $x = rd('probs/' . $k, array()); $dd = rd('daily/' . $k, array()); $days[$k] = array('x' => $x, 'd' => isset($dd['d']) ? count($dd['d']) : 0);
         foreach ($x as $t => $ids) $sum[$t] = (isset($sum[$t]) ? $sum[$t] : 0) + count($ids); }

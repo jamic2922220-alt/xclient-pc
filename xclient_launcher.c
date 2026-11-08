@@ -2260,6 +2260,11 @@ static BOOL run_game(void)
             int c = ini_int(L"crs") + 1; ini_set_int(L"crs", c);
             if (c >= 2) ini_set_int(L"autover", 1);   /* 7. ikkinchi yiqilishdan keyin - keyingi ochilishda X CLIENT fayllari tekshiriladi */
         } else if (played > 120) ini_set_int(L"crs", 0);
+        if (crashed) {                               /* o'yin ichidagi yiqilish: Windows jurnalidan qaysi modulda yiqilganini olib, admin > Muammolar > Tafsilotlar ga */
+            DWORD since = (DWORD)((t0 / 10000000ULL) - 11644473600ULL);
+            Sleep(1500); crash_detail(g_probx, sizeof(g_probx), since);
+            prob_send("game_crash", 3000); g_probx[0] = 0;
+        }
         if (crashed) {
             int n = crash_fix(t0);
             wchar_t w[24], m[640]; _snwprintf(w, 24, L"%lx~%d", (unsigned long)code, n); w[23] = 0; ini_str(L"t_cr", w);
