@@ -188,6 +188,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($u && $act === 'acc_del') { @unlink(XC_DIR . '/users/' . $l . '.php'); flash($l . " o'chirildi"); }
         go('?p=accounts&q=' . urlencode(g('q')));
     }
+    if ($act === 'repkey_new') { $k = rnd(20); wr('repkey', array('h' => hash('sha256', $k), 't' => time())); flash('Yangi o\'qish kaliti (faqat hozir ko\'rinadi, nusxa oling): ' . $k); go('?p=prob'); }
+    if ($act === 'repkey_del') { @unlink(XC_DIR . '/repkey.php'); flash('O\'qish kaliti o\'chirildi'); go('?p=prob'); }
     if ($act === 'ann_add' && pp('text') !== '') {
         $a = rd('announce', array());
         array_unshift($a, array('id' => substr(rnd(4), 0, 8), 'text' => mb_substr(pp('text'), 0, 400, 'UTF-8'), 'type' => in_array(pp('type'), array('info', 'warn', 'promo')) ? pp('type') : 'info',
@@ -883,6 +885,11 @@ if ($P === 'prob') {
     foreach (array_slice($dx, 0, 30) as $r) echo '<tr><td>' . dt($r['t']) . '</td><td><a href="?p=player&id=' . h($r['d']) . '">' . h(substr($r['d'], 0, 10)) . '</a></td><td>' . h($r['v']) . '</td><td>' . h(isset($nm[$r['k']]) ? $nm[$r['k']] : $r['k']) . '</td><td class="mono small" style="white-space:normal;word-break:break-all;max-width:620px">' . h(str_replace(' | ', "\n", $r['x'])) . '</td></tr>';
     if (!$dx) echo '<tr><td class="mut" colspan="5">Hali yo\'q - launcher 1.0.122 dan boshlab yig\'iladi</td></tr>';
     echo '</table><div class="mut small" style="margin-top:8px">mod= - yiqilgan fayl (masalan ig4icd32.dll - Intel videokarta drayveri, nvoglv32.dll - NVIDIA, atioglxx.dll - AMD, hw.dll - o\'yin dvigateli). noevent - Windows hech narsa yozmagan.</div></div>';
+    $rk = rd('repkey', null);
+    echo '<div class="panel"><div class="ph">Claude uchun o\'qish kaliti</div><div class="mut small" style="margin-bottom:8px">Bu kalit bilan faqat shu sahifadagi ma\'lumotni o\'qish mumkin - hech narsani o\'zgartirib bo\'lmaydi. Kalitni chatga yozmang: Claude ko\'rsatgan himoyalangan oynaga kiriting.</div>'
+        . ($rk ? '<div style="margin-bottom:8px">Kalit faol (yaratilgan: ' . dt($rk['t']) . ')</div>' : '<div class="mut" style="margin-bottom:8px">Kalit yo\'q</div>')
+        . '<form method="post" style="display:inline"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="act" value="repkey_new"><button class="btn">' . ($rk ? 'Yangi kalit (eskisi o\'chadi)' : 'Kalit yaratish') . '</button></form> '
+        . ($rk ? '<form method="post" style="display:inline"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="act" value="repkey_del"><button class="btn red">Kalitni o\'chirish</button></form>' : '') . '</div>';
 }
 
 /* ===== TUGMALAR: menyuda nima ko'p bosiladi (7 kun) ===== */

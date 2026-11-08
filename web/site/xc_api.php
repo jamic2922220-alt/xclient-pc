@@ -673,6 +673,16 @@ tg_bot_poll();
 switch ($a) {
 
 /* ro'yxatdan o'tish oynasi: login yozilayotganda bo'sh/bandligini ko'rsatadi (bo'sh variant taklifi bilan) */
+case 'probrep':                                         // faqat o'qish: Muammolar hisoboti (admin panelda yaratilgan kalit bilan, Authorization: Bearer)
+    if (rl_count('pr' . client_ip(), 600) >= 10) { http_response_code(429); out(array('ok' => false, 'err' => 'rl')); }
+    $hd = isset($_SERVER['HTTP_AUTHORIZATION']) ? $_SERVER['HTTP_AUTHORIZATION'] : (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION']) ? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] : '');
+    if ($hd === '' && function_exists('getallheaders')) foreach ((array)getallheaders() as $hk => $hv) if (strtolower($hk) === 'authorization') $hd = $hv;
+    $rk = rd('repkey', null); $tok = preg_match('/^Bearer\s+([a-f0-9]{32,64})$/i', trim($hd), $mm) ? strtolower($mm[1]) : '';
+    if (!$rk || empty($rk['h']) || $tok === '' || !hash_equals($rk['h'], hash('sha256', $tok))) { rl_add('pr' . client_ip(), 600); http_response_code(403); out(array('ok' => false, 'err' => 'key')); }
+    @date_default_timezone_set('Asia/Tashkent'); $days = array();
+    for ($i = 0; $i < 14; $i++) { $k = date('Y-m-d', strtotime("-$i day")); $x = rd('probs/' . $k, array()); $dd = rd('daily/' . $k, array()); $c = array(); foreach ($x as $t => $ids) $c[$t] = count($ids);
+        $days[$k] = array('launch' => isset($dd['d']) ? count($dd['d']) : 0, 'p' => $c); }
+    out(array('ok' => true, 'now' => date('Y-m-d H:i'), 'days' => $days, 'x' => rd('probs_x', array())));
 case 'login_check':
     if (rl_count('lc' . client_ip(), 60) >= 60) out(array('ok' => false));
     rl_add('lc' . client_ip(), 60);
