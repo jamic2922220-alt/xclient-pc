@@ -672,10 +672,19 @@ tg_bot_poll();
 
 switch ($a) {
 
+/* ro'yxatdan o'tish oynasi: login yozilayotganda bo'sh/bandligini ko'rsatadi (bo'sh variant taklifi bilan) */
+case 'login_check':
+    if (rl_count('lc' . client_ip(), 60) >= 60) out(array('ok' => false));
+    rl_add('lc' . client_ip(), 60);
+    $l = login_norm(p('login'));
+    if (!preg_match('/^[A-Za-z0-9_]{3,20}$/', $l)) out(array('ok' => true, 'free' => false, 'login' => $l, 'sug' => ''));
+    $free = !user($l); $sug = '';
+    if (!$free) for ($i = 0; $i < 20 && $sug === ''; $i++) { $c = substr($l, 0, 16) . mt_rand(10, 999); if (!user($c)) $sug = $c; }
+    out(array('ok' => true, 'free' => $free, 'login' => $l, 'sug' => $sug));
 case 'register':
     $login = login_norm(p('login')); $pass = p('pass'); $email = trim(p('email'));
     if (!preg_match('/^[A-Za-z0-9_]{3,20}$/', $login)) fail('login', 'Login 3-20 belgi: harf, raqam, _');
-    if (strlen($pass) < 6) fail('pass', 'Parol kamida 6 belgi');
+    if (strlen($pass) < 4) fail('pass', 'Parol kamida 4 belgi');
     if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) fail('email', 'Email noto\'g\'ri');
     /* Limit: bitta IP ortida (mobil internet, provayder NAT, internet-kafe) yuzlab o'yinchi bo'ladi - IP ga 40/soat,
      * bitta qurilmaga 3/soat (avval IP ga 5/soat edi: bir mahalladagi o'yinchilar ro'yxatdan o'ta olmay qolardi) */
@@ -777,7 +786,7 @@ case 'reset_req':                                        // parolni tiklash: 1) 
 case 'reset_do':                                         // 2) kod + yangi parol
     $login = p('login'); $code = preg_replace('/\D/', '', p('code')); $np = p('newpass');
     if (!preg_match('/^[A-Za-z0-9_]{3,20}$/', $login)) fail('bad', 'Bunday akkaunt topilmadi');
-    if (strlen($np) < 6) fail('pass', 'Yangi parol kamida 6 belgi');
+    if (strlen($np) < 4) fail('pass', 'Yangi parol kamida 4 belgi');
     lock();
     $u = user($login);
     if (!$u || empty($u['rst'])) fail('code', 'Avval kod so\'rang');
@@ -826,7 +835,7 @@ case 'profile':                                          // nom / email / parol
     if ($email !== '') { if (!filter_var($email, FILTER_VALIDATE_EMAIL)) fail('email', 'Email noto\'g\'ri'); $u['email'] = $email; }
     if (p('newpass') !== '') {
         if (!password_verify(p('oldpass'), $u['pass'])) fail('pass', 'Eski parol noto\'g\'ri');
-        if (strlen(p('newpass')) < 6) fail('pass', 'Parol kamida 6 belgi');
+        if (strlen(p('newpass')) < 4) fail('pass', 'Parol kamida 4 belgi');
         $u['pass'] = password_hash(p('newpass'), PASSWORD_DEFAULT); $u['pwchanged'] = time();
     }
     save_user($u);

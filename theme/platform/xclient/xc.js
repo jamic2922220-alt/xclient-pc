@@ -1498,13 +1498,48 @@ function renderBar() {
 
 /* ============================================================ KIRISH ekrani */
 var lgReg = false;
-function openLogin() { openModal('mdLogin'); renderLoginForm(); setTimeout(function () { try { $('lgLogin').focus(); } catch (e) {} }, 50); }
+function openLogin() { openModal('mdLogin'); renderLoginForm(); setTimeout(function () { try { (lgReg && $('lgLogin').value ? $('lgPass') : $('lgLogin')).focus(); } catch (e) {} }, 50); }
+/* login: saytdagi login_norm bilan bir xil - bo'shliq -> _, o'/g' tutuqlari olib tashlanadi, kirill -> lotin */
+var LG_TR = { 'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'j', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'x', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sh', 'ъ': '', 'ы': 'i', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya', 'ў': 'o', 'қ': 'q', 'ғ': 'g', 'ҳ': 'h' };
+function loginNorm(v) {
+  v = String(v || '').replace(/^\s+|\s+$/g, ''); var o = '';
+  for (var i = 0; i < v.length; i++) { var c = v.charAt(i), l = c.toLowerCase(); if (LG_TR.hasOwnProperty(l)) { var t = LG_TR[l]; o += c !== l && t ? t.charAt(0).toUpperCase() + t.slice(1) : t; } else o += c; }
+  o = o.replace(/['`\u02bb\u02bc\u2018\u2019]/g, '').replace(/[\s.\-]+/g, '_').replace(/[^A-Za-z0-9_]/g, '').replace(/_+/g, '_');
+  return o.slice(0, 20);
+}
+/* ro'yxatdan o'tishda: login maydoniga o'yindagi nik (klan tegisiz) o'zi yoziladi; yozilayotganda band/bo'shligi tekshiriladi */
+var LGCHK_TM = 0, LGCHK_V = '';
+function lgCheck() {
+  clearTimeout(LGCHK_TM); var el = $('lgChk'); if (!el) return;
+  if (!lgReg) { el.innerHTML = ''; el.className = 'lchk'; return; }
+  var v = loginNorm($('lgLogin').value);
+  if (v.length < 3) { el.innerHTML = $('lgLogin').value ? esc(T('lg_short')) : ''; el.className = 'lchk no'; return; }
+  LGCHK_TM = setTimeout(function () {
+    LGCHK_V = v;
+    api('login_check', { login: v }, function (r) {
+      if (!lgReg || LGCHK_V !== v || !r.ok) return;
+      if (r.free) { el.className = 'lchk ok'; el.innerHTML = '\u2713 ' + esc(T('lg_free').replace('{l}', r.login)); }
+      else { el.className = 'lchk no'; el.innerHTML = '\u2717 ' + esc(T('lg_busy')) + (r.sug ? ' <a data-lgsug="' + esc(r.sug) + '">' + esc(r.sug) + '</a>' : ''); }
+    });
+  }, 450);
+}
+function lgKbCheck() {
+  var el = $('lgKb'); if (!el) return;
+  el.innerHTML = /[\u0400-\u04FF]/.test($('lgPass').value) ? '\u26a0 ' + esc(T('lg_kbru')) : '';
+}
+(function () {
+  var lg = $('lgLogin'), pw = $('lgPass');
+  if (lg) lg.addEventListener('input', lgCheck, false);
+  if (pw) { pw.addEventListener('input', lgKbCheck, false); pw.addEventListener('keyup', lgKbCheck, false); }
+})();
 function renderLoginForm() {
   $('lgTitle').innerHTML = esc(T(lgReg ? 'lg_reg' : 'lg_title'));
   $('lgGo').innerHTML = esc(T(lgReg ? 'lg_regbtn' : 'lg_go'));
   $('lgSwitch').innerHTML = esc(T(lgReg ? 'lg_tolog' : 'lg_toreg'));
   $('lgEmail').style.display = $('lgEmailL').style.display = lgReg ? '' : 'none';
   $('lgErr').innerHTML = '';
+  if (lgReg && !$('lgLogin').value) { var nk = (S && S.name) || MYNAME || ''; nk = loginNorm(nk); if (nk.length >= 3 && !/^player/i.test(nk)) $('lgLogin').value = nk; }
+  lgCheck(); lgKbCheck();
 }
 function doLogin() {
   var lg = $('lgLogin').value.replace(/^\s+|\s+$/g, ''), pw = $('lgPass').value;
@@ -3394,6 +3429,7 @@ function act(a) {
   if (a === 'close') return closeModal();
   if (a === 'guest') { DB.guest = 1; persist(); return closeModal(); }
   if (a === 'dologin') return doLogin();
+  if (a === 'pweye') { var pe = $('lgPass'), on = pe.type === 'password'; try { pe.type = on ? 'text' : 'password'; } catch (e2) {} $('lgEye').className = 'peye' + (on ? ' on' : ''); return; }
   if (a === 'lgswitch') { lgReg = !lgReg; return renderLoginForm(); }
   if (a === 'forgot') return forgot();
   if (a === 'refresh') { each(tabIps(), function (ip) { query(ip, true); }); if (srvSel) loadPlayers(srvSel); if (srvTab === 'friends') loadFriends(); return; }
@@ -3752,6 +3788,7 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-bgs'))) { DB.bgs = el.getAttribute('data-bgs'); persist(); applyBg(); showSetTab('system'); return; }
   if ((el = closest(t, 'data-ptc'))) { DB.ptc = el.getAttribute('data-ptc'); persist(); applyBg(); showSetTab('system'); return; }
   if ((el = closest(t, 'data-fs'))) { DB.fs = Number(el.getAttribute('data-fs')); persist(); applyTheme(DB.theme || 'red'); showSetTab('system'); return; }
+  if ((el = closest(t, 'data-lgsug'))) { $('lgLogin').value = el.getAttribute('data-lgsug'); lgCheck(); try { $('lgPass').focus(); } catch (e3) {} return; }
   if ((el = closest(t, 'data-wallsend'))) { var wto = el.getAttribute('data-wallsend'), wv = clean($('wlIn') ? $('wlIn').value : ''); if (!wv) return; api('wall_add', { to: wto, text: wv }, function (r) { if (!r.ok) return toast(r.msg || 'Xato'); openFrProfile(wto); }); return; }
   if ((el = closest(t, 'data-walldel'))) { var wt2 = el.getAttribute('data-wallto'); api('wall_del', { to: wt2, id: el.getAttribute('data-walldel') }, function () { openFrProfile(wt2); }); return; }
   if ((el = closest(t, 'data-xgal'))) { if (applyCode(el.getAttribute('data-xgal'))) { if (typeof xLive === 'function') xLive(); showSetTab('hud'); toast(T('xg_ok'), 3000); } return; }
