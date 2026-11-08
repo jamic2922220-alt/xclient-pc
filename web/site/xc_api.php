@@ -241,7 +241,7 @@ function frames_rare() { return array('ffire', 'fice', 'fneon', 'ftoxic', 'flege
 /* ---- duel: 2 do'st N daqiqa ichida kim ko'p kill qilsa (istalgan serverda) ---- */
 function duel_finish($id) {
     $d = rd('duels/' . $id, null);
-    if (!$d || $d['st'] !== 'on' || time() < $d['end']) return $d;
+    if (!$d || $d['st'] !== 'on' || time() < $d['end'] + 60) return $d;   // 60 s kutish: oxirgi daqiqadagi kill'lar ham yetib kelsin
     $d['st'] = 'end'; $w = $d['ka'] > $d['kb'] ? 'a' : ($d['kb'] > $d['ka'] ? 'b' : '');
     $d['win'] = $w; wr('duels/' . $id, $d);
     foreach (array('a', 'b') as $side) {
@@ -1569,7 +1569,7 @@ case 'stat':
     ksort($dsa); if (count($dsa) > 3) $dsa = array_slice($dsa, -3, 3, true); $u['dst'] = $dsa;
     if (!empty($u['duel']) && $dk > 0) {                                       // duel davom etyapti - kill hisobga
         $dl = rd('duels/' . $u['duel'], null);
-        if ($dl && $dl['st'] === 'on' && time() <= $dl['end']) { $side = strtolower($dl['a']) === strtolower($u['login']) ? 'ka' : 'kb'; $dl[$side] += $dk; wr('duels/' . $u['duel'], $dl); }
+        if ($dl && $dl['st'] === 'on' && time() <= $dl['end'] + 60) { $side = strtolower($dl['a']) === strtolower($u['login']) ? 'ka' : 'kb'; $dl[$side] += $dk; wr('duels/' . $u['duel'], $dl); }
     }
     $wk = week_id(); if (!isset($u['wkkid']) || $u['wkkid'] !== $wk) { if (isset($u['wkkid'])) { $u['wkkpid'] = $u['wkkid']; $u['wkkp'] = (int)$u['wkk']; } $u['wkkid'] = $wk; $u['wkk'] = 0; } $u['wkk'] += $dk;
     if ($dk > 0) {                                        // har kill uchun XP (vaqt XP siga qo'shimcha)

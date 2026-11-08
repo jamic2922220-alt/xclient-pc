@@ -4033,7 +4033,10 @@ setInterval(function () {                          // "Serverlar" oynasi ochiq v
   if (srvSel) loadPlayers(srvSel);
 }, 15000);
 var PP_N = 0; setInterval(function () { if (!playing() || ++PP_N % 3 === 0) pingPresence(); }, 60000);   // o'yin paytida 3 daqiqada bir
-var SS_N = 0; setInterval(function () { if (CONNECTED && (!playing() || ++SS_N % 3 === 0)) sendStat(); }, 120000);   // menyu ochiq - 2 daqiqada, o'yin paytida 6 daqiqada bir (o'yin qulab tushsa ham yo'qolmasin)
+var SS_N = 0; setInterval(function () { if (CONNECTED && (!playing() || ++SS_N % 3 === 0)) sendStat(); }, 120000);
+/* duel davom etyapti - kill'lar saytga tez-tez (30 s) yetib borsin: 6 daqiqada bir yuborilsa 5 daqiqalik duel 0:0 bo'lardi.
+ * Kill o'zgarmagan bo'lsa sendStat so'rov yubormaydi (STAT_LAST) */
+setInterval(function () { if (CONNECTED && DUEL && DUEL.st === 'on') sendStat(); }, 30000);   // menyu ochiq - 2 daqiqada, o'yin paytida 6 daqiqada bir (o'yin qulab tushsa ham yo'qolmasin)
 setInterval(function () { if (!playing()) { loadFriends(); loadWeek(); } }, 60000);   // o'yinda xabarlar pollNotif orqali keladi
 setInterval(function () { if (!playing()) loadTop(); }, 10 * 60 * 1000);
 setInterval(function () { if (!playing()) loadAnn(); }, 5 * 60 * 1000);
