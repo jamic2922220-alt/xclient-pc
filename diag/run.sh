@@ -6,8 +6,10 @@ echo "wine: $(wine --version 2>&1)" >> $O/summary.txt
 W=/tmp/cs; mkdir -p $W
 gh release download cs16 --repo jamic2922220-alt/xclient-pc -p 'CS_1_6_boost-top_PRO_2_5_3.exe' -D $W 2>&1 | tail -1
 export WINEDEBUG=-all WINEPREFIX=/tmp/wp
-timeout 900 xvfb-run -a wine $W/CS_1_6_boost-top_PRO_2_5_3.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- '/DIR=C:\cs' >/dev/null 2>&1
-G=/tmp/wp/drive_c/cs
+wineboot -i >/dev/null 2>&1
+timeout 1200 xvfb-run -a wine $W/CS_1_6_boost-top_PRO_2_5_3.exe /VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /NOICONS '/TASKS=""' /LANG=uzbek '/DIR=C:\cs' '/LOG=C:\inst.log' > $O/wine.txt 2>&1; echo "rc=$?" >> $O/summary.txt
+tail -15 /tmp/wp/drive_c/inst.log >> $O/summary.txt 2>&1
+G=$(find /tmp/wp/drive_c -maxdepth 4 -iname 'hl.exe' -printf '%h\n' | head -1); echo "G=$G" >> $O/summary.txt
 echo "files: $(find $G -type f 2>/dev/null | wc -l)" >> $O/summary.txt
 ls $G >> $O/summary.txt 2>&1
 for f in $(find $G -maxdepth 1 \( -iname '*.exe' -o -iname '*.dll' \) | sort); do
