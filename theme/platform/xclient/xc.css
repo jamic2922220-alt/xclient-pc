@@ -967,3 +967,6 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .rkg .rkc:hover { border-color: #ff5a5a; }
 .rkg .rkc.on { border-color: #ff3b3b; background: #2a1418; }
 .rkg .rkc.on span { color: #fff; }
+/* birinchi o'yin savoli */
+.fqw { padding: 6px 4px; }
+.fqw .fqb { display: block; height: auto; line-height: 22px; margin: 0 0 8px; text-align: left; padding: 9px 14px; font-size: 15px; }

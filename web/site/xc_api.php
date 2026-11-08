@@ -45,6 +45,16 @@ function probx_add($k, $who, $det) {
         $l[$i]['n'] = (isset($l[$i]['n']) ? $l[$i]['n'] : 1) + 1; $l[$i]['t'] = time(); $l[$i]['x'] = $det; $l[$i]['v'] = clean_str(p('v'), 20); wr('probs_x', $l); return; }
     $l[] = array('t' => time(), 'k' => $k, 'd' => $who, 'v' => clean_str(p('v'), 20), 'x' => $det); if (count($l) > 60) $l = array_slice($l, -60); wr('probs_x', $l);
 }
+/* Voronka: oxirgi $days kunda birinchi marta ochgan kompyuterlar (kun bo'yicha) - qaysi bosqichgacha yetdi */
+function funnel_cohorts($days) {
+    @date_default_timezone_set('Asia/Tashkent'); $c = array();
+    for ($i = 0; $i < $days; $i++) $c[date('Y-m-d', strtotime("-$i day"))] = array('n' => 0, 'inst' => 0, 'game' => 0, 'p10' => 0, 'ret' => 0);
+    foreach ((array)glob(XC_DIR . '/dev/*.php') as $f) { $o = json_decode(substr((string)@file_get_contents($f), strlen(XC_GUARD)), true);
+        if (!$o || empty($o['first'])) continue; $k = date('Y-m-d', (int)$o['first']); if (!isset($c[$k])) continue;
+        $c[$k]['n']++; foreach (array('inst', 'game', 'p10') as $st) if (!empty($o['fn'][$st])) $c[$k][$st]++;
+        if (!empty($o['seen']) && date('Y-m-d', (int)$o['seen']) !== $k) $c[$k]['ret']++; }
+    return $c;
+}
 function out($a) { $j = json_encode($a); if ($j === false) $j = json_encode(utf8_fix($a)); echo $j === false ? '{"ok":false,"err":"enc"}' : $j; exit; }
 function fail($code, $msg) { out(array('ok' => false, 'err' => $code, 'msg' => $msg)); }
 function p($k, $def = '') { return isset($_POST[$k]) ? trim((string)$_POST[$k]) : (isset($_GET[$k]) ? trim((string)$_GET[$k]) : $def); }
@@ -708,6 +718,7 @@ case 'probrep':                                         // faqat o'qish: Muammol
         $act[$src] = $a; }
     $dl = array(); for ($i = 0; $i < 30; $i++) { $k = date('Y-m-d', strtotime("-$i day")); $x = rd('daily/' . $k, array()); $dl[$k] = array();
         foreach (array('d', 'n', 'm', 'mn') as $t) $dl[$k][$t] = isset($x[$t]) ? count($x[$t]) : 0; }
+    $act['funnel'] = funnel_cohorts(14);
     $act['daily'] = $dl; $act['users'] = count((array)glob(XC_DIR . '/users/*.php'));
     out(array('ok' => true, 'now' => date('Y-m-d H:i'), 'days' => $days, 'act' => $act, 'x' => rd('probs_x', array()), 'jserr' => $js, 'crash' => array_slice($cr, 0, 60), 'fb' => $fb, 'rep' => $rp, 'jshour' => rd('jserr_hour', array())));
 case 'login_check':
@@ -1544,14 +1555,14 @@ case 'feedback':
     if (rl_count('fb' . client_ip(), 3600) >= 5) fail('limit', 'Bir soatda 5 tadan ko\'p yozib bo\'lmaydi');
     $txt = trim(clean_str(p('text'), 1500));
     if (mb_strlen($txt, 'UTF-8') < 3) fail('bad', 'Matn juda qisqa');
-    $kind = in_array(p('kind'), array('idea', 'bug', 'complain'), true) ? p('kind') : 'idea';
+    $kind = in_array(p('kind'), array('idea', 'bug', 'complain', 'first'), true) ? p('kind') : 'idea';
     rl_add('fb' . client_ip(), 3600);
     $who = ''; $tok = p('token');
     if (preg_match('/^[a-f0-9]{40}$/', $tok)) { $tks = rd('tokens', array()); if (!empty($tks[$tok])) $who = $tks[$tok]; }
     @mkdir(XC_DIR . '/feedback', 0755, true);
     cap_dir(XC_DIR . '/feedback', 1000);
     wr('feedback/' . date('Ymd-His') . '-' . mt_rand(1000, 9999), array('t' => time(), 'kind' => $kind, 'text' => $txt, 'who' => $who, 'nick' => clean_str(p('nick'), 40), 'ver' => clean_str(p('ver'), 20), 'ip' => client_ip()));
-    $kn = array('idea' => 'Taklif', 'bug' => 'Xatolik', 'complain' => 'Shikoyat');
+    $kn = array('idea' => 'Taklif', 'bug' => 'Xatolik', 'complain' => 'Shikoyat', 'first' => 'Birinchi o\'yin');
     tg_notify('feedback', 'X CLIENT - ' . $kn[$kind] . ' (' . ($who !== '' ? $who : (p('nick') !== '' ? clean_str(p('nick'), 40) : 'mehmon')) . "):\n" . $txt);
     out(array('ok' => true));
 
@@ -1751,6 +1762,15 @@ case 'report':                                           // "Xatolik haqida xaba
 /* ---- XClient.exe <-> menyu: bir kompyuter (bir IP) bo'yicha bog'lanadi ----
  * XClient.exe ishga tushganda 'hello' yuboradi (kompyuter id, versiya, kesh hajmi).
  * Menyu 'opts' / 'opts_set' ni id'siz chaqiradi - server shu IP dan oxirgi kelgan XClient.exe id'sini oladi. */
+/* ---------- Voronka (admin > Voronka): launcher birinchi ochilish bosqichlarini bir martadan yuboradi ---------- */
+case 'fn':
+    $d = (string)p('d'); $st = (string)p('s');
+    if (!preg_match('/^[a-z0-9]{8,40}$/', $d) || !in_array($st, array('inst', 'game', 'p10'), true)) out(array('ok' => true));
+    if (rl_count('fn' . client_ip(), 3600) >= 30) out(array('ok' => true));
+    rl_add('fn' . client_ip(), 3600);
+    lock(); $o = rd('dev/' . $d, null);
+    if (is_array($o)) { if (!isset($o['fn']) || !is_array($o['fn'])) $o['fn'] = array(); if (empty($o['fn'][$st])) { $o['fn'][$st] = time(); wr('dev/' . $d, $o); } }
+    out(array('ok' => true));
 case 'hello':
 case 'opts':
 case 'opts_set':

@@ -396,6 +396,8 @@ function setLite(on) {
   var h = document.documentElement;
   h.className = (h.className || '').replace(/(^|\s)(gate|lite)(?=\s|$)/g, '') + (on ? ' lite' : '');
   if (on && curModal === 'mdLogin') closeModal();
+  /* serverlar X CLIENT o'yinchisini taniydi (server plagini xclient_bonus: [X] belgisi, bonuslar). Faqat launcher bilan o'ynayotganlarda */
+  try { cmd('setinfo _xc ' + (on ? '""' : '1')); } catch (e) {}
 }
 document.documentElement.className += ' gate';
 setTimeout(function () { if (LITE === null) setLite(false); }, 8000);
@@ -1343,6 +1345,7 @@ function onDisconnectEvt() {
   if (fin && !DEMO_PLAY) { VIDS_T = 0; setTimeout(vidsRefresh, 2000); }
   if (fin && !DEMO_PLAY) setTimeout(function () { if (!CONNECTED && !DEMO_PLAY) gameSummary(fin); }, 5000);   // qayta ulanish bo'lmasa - xulosa
   if (fin && !DEMO_PLAY && !ME) setTimeout(function () { if (!CONNECTED && !DEMO_PLAY && !ME && !curModal && regOfferDue()) { regOfferMark(); openSide('rgo', T('ro_btn'), '<div class="ydc">' + regOfferHtml(1) + '</div>'); } }, 6500);
+  if (fin && !DEMO_PLAY && !DB.fq && fin.d >= 60) { DB.fq = 1; persist(); setTimeout(function () { firstAskLater(0); }, 1000); }   // birinchi o'yin: "qanday bo'ldi?" (bir marta)
   CUR = null;                                        // demo ko'rganda konsoldagi kill'lar oxirgi o'yinga qo'shilmasin
   CONNECTED = ''; renderAll(); pingPresence(); sparks();
   // o'yinchi o'zi menyudan chiqmagan bo'lsa (menyu yopiq) - qayta ulanamiz
@@ -3369,6 +3372,14 @@ function openModal(id) {
   curModal = id; $(id).className = 'modal on';
   sfx('open');
 }
+/* Birinchi o'yindan keyin bitta savol (o'rnatganlarning 70% i qaytmayapti - sababini bilish uchun). Javob admin > Fikrlar ga */
+function firstAskLater(n) {
+  if (CONNECTED || DEMO_PLAY || n > 30) return;
+  if (curModal) return setTimeout(function () { firstAskLater(n + 1); }, 2000);   // o'yin xulosasi / ro'yxat taklifi yopilgach
+  setTimeout(function () { if (CONNECTED || curModal) return firstAskLater(n + 1);
+    var b = ''; each(['good', 'lag', 'crash', 'nosrv', 'hard'], function (k) { b += '<a class="btn fqb" data-fq="' + k + '">' + esc(T('fq_' + k)) + '</a>'; });
+    openSide('fq', T('fq_t'), '<div class="fqw"><div class="mut" style="margin-bottom:12px">' + esc(T('fq_s')) + '</div>' + b + '</div>'); }, n ? 300 : 3000);
+}
 function closeModal() {
   if (DD) ddClose();
   if (!curModal) return;
@@ -3824,6 +3835,7 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-mcall'))) { var mc = el; api('miss_call', { to: el.getAttribute('data-mcall') }, function (r) { toast(r.ok ? T('mc_ok') : (r.msg || 'Xato'), 5000); if (r.ok && mc.parentNode) mc.parentNode.removeChild(mc); }); return; }
   if ((el = closest(t, 'data-fbk'))) { FBK = el.getAttribute('data-fbk'); var sib = el.parentNode.childNodes; for (var fi = 0; fi < sib.length; fi++) sib[fi].className = sib[fi] === el ? 'on' : ''; return; }
   if ((el = closest(t, 'data-frdel'))) { api('friend_del', { login: el.getAttribute('data-frdel') }, function () { loadFriends(); }); return; }
+  if ((el = closest(t, 'data-fq'))) { var fk = el.getAttribute('data-fq'); api('feedback', { text: 'Birinchi o\'yin: ' + fk + ' - ' + T('fq_' + fk), kind: 'first', nick: MYNAME || (S && S.name) || '', ver: VERSION }, function () {}); closeModal(); toast(T(fk === 'good' ? 'fq_thx_g' : 'fq_thx'), 6000); return; }
   if ((el = closest(t, 'data-dbtg'))) { var dk = el.getAttribute('data-dbtg'); var cur = dk === 'fx' ? (DB.fx !== 0 && !FX.off) : (dk === 'autosave' || dk === 'dnd' ? !!DB[dk] : DB[dk] !== 0); DB[dk] = cur ? 0 : 1; persist(); if (dk === 'fx') { FX.off = 0; FX.slow = 0; sparks(); heroLoad(); } if (dk === 'hol') applyBg(); if (dk === 'autosave') $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local')); el.className = 'tg' + (DB[dk] ? ' on' : ''); return; }
   if ((el = closest(t, 'data-misclaim'))) {
     var mid = el.getAttribute('data-misclaim');

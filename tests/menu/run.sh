@@ -21,6 +21,7 @@ export XC_SHOTS="$W/shots"; mkdir -p "$XC_SHOTS"
 node "$HERE/crawl.js" || rc=1
 node "$HERE/ingame.js" || rc=1
 node "$HERE/aimnet.js" || rc=1
+node "$HERE/firstask.js" || rc=1
 python3 "$HERE/visual.py" "$XC_SHOTS" ${1:-} || rc=1
 echo "Skrinshotlar: $XC_SHOTS"
 kill $SRV 2>/dev/null

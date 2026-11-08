@@ -27,6 +27,16 @@ function wr($name, $data) {                            // vaqtinchalik fayl + no
     $j = json_encode($data); if ($j === false) return;   // noto'g'ri UTF-8 - eski faylni bo'sh bilan almashtirmaymiz
     if (@file_put_contents($tmp, XC_GUARD . $j, LOCK_EX) !== false) @rename($tmp, $f);
 }
+/* Voronka: oxirgi $days kunda birinchi marta ochgan kompyuterlar (kun bo'yicha) - qaysi bosqichgacha yetdi */
+function funnel_cohorts($days) {
+    @date_default_timezone_set('Asia/Tashkent'); $c = array();
+    for ($i = 0; $i < $days; $i++) $c[date('Y-m-d', strtotime("-$i day"))] = array('n' => 0, 'inst' => 0, 'game' => 0, 'p10' => 0, 'ret' => 0);
+    foreach ((array)glob(XC_DIR . '/dev/*.php') as $f) { $o = json_decode(substr((string)@file_get_contents($f), strlen(XC_GUARD)), true);
+        if (!$o || empty($o['first'])) continue; $k = date('Y-m-d', (int)$o['first']); if (!isset($c[$k])) continue;
+        $c[$k]['n']++; foreach (array('inst', 'game', 'p10') as $st) if (!empty($o['fn'][$st])) $c[$k][$st]++;
+        if (!empty($o['seen']) && date('Y-m-d', (int)$o['seen']) !== $k) $c[$k]['ret']++; }
+    return $c;
+}
 function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 function g($k, $d = '') { return isset($_GET[$k]) ? (string)$_GET[$k] : $d; }
 function pp($k, $d = '') { return isset($_POST[$k]) ? (is_array($_POST[$k]) ? $_POST[$k] : trim((string)$_POST[$k])) : $d; }
@@ -409,7 +419,7 @@ if ($P === 'installs' && g('csv')) {
 
 /* ---------- sahifa ---------- */
 $NAV = array('dash' => array('Infopanel', '⌂'), 'online' => array('Onlayn', '●'), 'players' => array("O'yinchilar", '☺'), 'installs' => array("O'rnatishlar", '↓'), 'accounts' => array('Akkauntlar', '✉'),
-    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'stats' => array('Statistika', '★'), 'churn' => array('Ketganlar', '↘'), 'fb' => array('Fikrlar', '✎'), 'clips' => array('Kliplar', '▶'), 'crash' => array('Yiqilishlar', '✖'), 'clicks' => array('Tugmalar', '⊙'), 'ret' => array('Natijalar', '↗'), 'prob' => array('Muammolar', '⚑'), 'menuver' => array('Menyu versiyalari', '⇅'), 'feat' => array('Funksiyalar', '◧'), 'speed' => array('Tezlik', '⚡'), 'promo' => array('Reklama', '$'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
+    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'stats' => array('Statistika', '★'), 'churn' => array('Ketganlar', '↘'), 'fb' => array('Fikrlar', '✎'), 'clips' => array('Kliplar', '▶'), 'crash' => array('Yiqilishlar', '✖'), 'clicks' => array('Tugmalar', '⊙'), 'ret' => array('Natijalar', '↗'), 'funnel' => array('Voronka', '▽'), 'prob' => array('Muammolar', '⚑'), 'menuver' => array('Menyu versiyalari', '⇅'), 'feat' => array('Funksiyalar', '◧'), 'speed' => array('Tezlik', '⚡'), 'promo' => array('Reklama', '$'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
 $devCount = count((array)glob(XC_DIR . '/dev/*.php')); $ncCount = count((array)glob(XC_DIR . '/nc/*.php')); $accCount = count((array)glob(XC_DIR . '/users/*.php')); $repCount = count((array)glob(XC_DIR . '/reports/*.php'));
 $fbCount = count((array)glob(XC_DIR . '/feedback/*.php'));
 $badge = array('players' => $devCount + $ncCount, 'installs' => $devCount, 'accounts' => $accCount, 'reports' => $repCount, 'fb' => $fbCount);
@@ -892,6 +902,22 @@ if ($P === 'prob') {
         . ($rk ? '<form method="post" style="display:inline"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="act" value="repkey_del"><button class="btn red">Kalitni o\'chirish</button></form>' : '') . '</div>';
 }
 
+/* ===== VORONKA: o'rnatganlar qaysi bosqichgacha yetdi (launcher 1.0.133+) ===== */
+if ($P === 'funnel') {
+    $c = funnel_cohorts(14); $tot = array('n' => 0, 'inst' => 0, 'game' => 0, 'p10' => 0, 'ret' => 0);
+    foreach ($c as $r) foreach ($tot as $k => $v) $tot[$k] += $r[$k];
+    $pc = function ($a, $b) { return $b ? round($a * 100 / $b) . '%' : '—'; };
+    echo '<h1>Voronka</h1><div class="panel"><div class="ph">Birinchi marta X CLIENT ni ochganlar - qaysi bosqichgacha yetishdi (14 kun)</div>'
+        . '<div class="mut small" style="margin-bottom:10px">Bosqichlar launcher 1.0.133 dan boshlab yoziladi - undan oldingi kunlarda faqat "Ochdi" va "Qaytdi" to\'g\'ri. Eng ko\'p odam tushib qolgan bosqich - tuzatish kerak bo\'lgan joy.</div>'
+        . '<table class="list"><tr><th>Kun</th><th>Ochdi</th><th>CS 1.6 o\'rnatildi</th><th>O\'yin ochildi</th><th>10+ daqiqa o\'ynadi</th><th>Boshqa kuni qaytdi</th></tr>';
+    $row = function ($k, $r, $b) use ($pc) { return '<tr><td>' . ($b ? '<b>' . h($k) . '</b>' : h($k)) . '</td><td><b>' . $r['n'] . '</b></td>'
+        . '<td>' . $r['inst'] . ' <span class="mut small">' . $pc($r['inst'], $r['n']) . '</span></td><td>' . $r['game'] . ' <span class="mut small">' . $pc($r['game'], $r['n']) . '</span></td>'
+        . '<td>' . $r['p10'] . ' <span class="mut small">' . $pc($r['p10'], $r['n']) . '</span></td><td>' . $r['ret'] . ' <span class="mut small">' . $pc($r['ret'], $r['n']) . '</span></td></tr>'; };
+    echo $row('Jami 14 kun', $tot, true);
+    foreach ($c as $k => $r) echo $row($k, $r, false);
+    echo '</table></div>';
+}
+
 /* ===== TUGMALAR: menyuda nima ko'p bosiladi (7 kun) ===== */
 if ($P === 'clicks') {
     $days = max(1, min(30, (int)g('d', '7'))); $sum = array();
@@ -908,7 +934,7 @@ if ($P === 'clicks') {
 if ($P === 'fb') {
     $l = array(); foreach ((array)glob(XC_DIR . '/feedback/*.php') as $f) { $id = basename($f, '.php'); $o = rd('feedback/' . $id, null); if ($o) { $o['id'] = $id; $l[] = $o; } }
     usort($l, function ($a, $b) { return $b['t'] - $a['t']; });
-    $kn = array('idea' => array('Taklif', ''), 'bug' => array('Xatolik', 'red'), 'complain' => array('Shikoyat', 'red'));
+    $kn = array('idea' => array('Taklif', ''), 'bug' => array('Xatolik', 'red'), 'complain' => array('Shikoyat', 'red'), 'first' => array('Birinchi o\'yin', ''));
     echo '<h1>Fikrlar</h1><div class="panel"><div class="ph">O\'yinchilarning taklif va shikoyatlari (' . count($l) . ')</div>'
         . '<form method="post" onsubmit="return confirm(\'Belgilanganlar o\\\'chirilsinmi?\')">' . csrf_in() . '<input type="hidden" name="act" value="fb_del"><table class="list"><tr><th><input type="checkbox" onclick="var c=document.querySelectorAll(\'.ck\');for(var i=0;i<c.length;i++)c[i].checked=this.checked"></th><th>Sana</th><th>Turi</th><th>Kim</th><th>Matn</th><th>Javob</th></tr>';
     foreach ($l as $o) { $k = isset($kn[$o['kind']]) ? $kn[$o['kind']] : $kn['idea']; echo '<tr><td><input type="checkbox" class="ck" name="ids[]" value="' . h($o['id']) . '"></td><td>' . dt($o['t']) . '</td><td class="' . $k[1] . '">' . $k[0] . '</td><td>' . ($o['who'] !== '' ? '<b>' . h($o['who']) . '</b>' : h($o['nick'] !== '' ? $o['nick'] : 'mehmon')) . ' <span class="mut small">v' . h($o['ver']) . '</span></td><td style="white-space:pre-wrap">' . h($o['text']) . '</td><td style="min-width:280px">'

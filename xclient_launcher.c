@@ -105,6 +105,7 @@ static void url_escape(char *out, size_t cap, const char *in)
  * o'yin bor fayllar bilan ochiladi. 0 - cheklov yo'q (yangilanishni yuklash, o'yin yopilgandan keyingi ishlar) */
 static wchar_t g_err[256];                         /* launcher yopilishida ko'rsatiladigan xato (pastda ham e'lon qilingan) */
 static void prob_send(const char *kind, DWORD wait);   /* admin panel > Muammolar (pastda) */
+static void fn_send(const char *stage);   /* admin panel > Voronka: birinchi ochilish bosqichlari (har bosqich bir marta) */
 static char g_probx[1200];
 static DWORD g_played_s = 0;
 static char g_cmod[64];   /* oxirgi yiqilishda aybdor modul (aqlli tuzatish uchun), bo'lmasa bo'sh */   /* oxirgi o'yin necha soniya davom etdi (muammo hisobotiga) */   /* prob_send uchun qo'shimcha tafsilot (url-escape qilingan), bo'lmasa bo'sh */
@@ -682,24 +683,41 @@ static BOOL run_setup(const wchar_t *exe, const wchar_t *params)
 
 /* Oflayn paket: CS 1.6 o'rnatuvchisi (CS_1_6_boost-top_PRO*.exe) launcher yonida, Yuklamalar yoki Ish stolida bo'lsa -
  * internetdan yuklamasdan shuni ishlatamiz (internet-kafe, sekin internet). 100 MB dan kichigi - chala fayl, hisobga olinmaydi */
+static BOOL setup_in_dir(const wchar_t *dir, wchar_t *out)
+{
+    wchar_t pat[MAX_PATH];
+    _snwprintf(pat, MAX_PATH, L"%s\\CS_1_6_boost-top_PRO*.exe", dir); pat[MAX_PATH - 1] = 0;
+    WIN32_FIND_DATAW fd; HANDLE h = FindFirstFileW(pat, &fd);
+    if (h == INVALID_HANDLE_VALUE) return FALSE;
+    do {
+        ULONGLONG sz = ((ULONGLONG)fd.nFileSizeHigh << 32) | fd.nFileSizeLow;
+        if (sz > (100ULL << 20)) { _snwprintf(out, MAX_PATH, L"%s\\%s", dir, fd.cFileName); out[MAX_PATH - 1] = 0; FindClose(h); return TRUE; }
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+    return FALSE;
+}
 static BOOL find_local_setup(wchar_t *out)
 {
-    wchar_t dirs[4][MAX_PATH], pat[MAX_PATH], prof[MAX_PATH] = L"";
-    int nd = 0;
+    wchar_t dirs[4][MAX_PATH], prof[MAX_PATH] = L"";
+    int nd = 0, deep = 0;
     lstrcpynW(dirs[nd], g_self, MAX_PATH); { wchar_t *bs = wcsrchr(dirs[nd], L'\\'); if (bs) { *bs = 0; nd++; } }
     lstrcpynW(dirs[nd++], g_dir, MAX_PATH);
     if (GetEnvironmentVariableW(L"USERPROFILE", prof, MAX_PATH)) {
+        deep = nd;
         _snwprintf(dirs[nd++], MAX_PATH, L"%s\\Downloads", prof);
         _snwprintf(dirs[nd++], MAX_PATH, L"%s\\Desktop", prof);
     }
-    for (int i = 0; i < nd; i++) {
-        _snwprintf(pat, MAX_PATH, L"%s\\CS_1_6_boost-top_PRO*.exe", dirs[i]); pat[MAX_PATH - 1] = 0;
-        WIN32_FIND_DATAW fd; HANDLE h = FindFirstFileW(pat, &fd);
+    for (int i = 0; i < nd; i++) if (setup_in_dir(dirs[i], out)) return TRUE;
+    /* oflayn paket (zip) ochilganda o'rnatuvchi ichki papkada qoladi: Yuklamalar\X-CLIENT-oflayn\CS_1_6_...exe - bir pog'ona ichkarini ham qaraymiz */
+    for (int i = deep; deep && i < nd; i++) {
+        wchar_t pat[MAX_PATH], sub[MAX_PATH]; _snwprintf(pat, MAX_PATH, L"%s\\*", dirs[i]); pat[MAX_PATH - 1] = 0;
+        WIN32_FIND_DATAW fd; HANDLE h = FindFirstFileW(pat, &fd); int n = 0;
         if (h == INVALID_HANDLE_VALUE) continue;
         do {
-            ULONGLONG sz = ((ULONGLONG)fd.nFileSizeHigh << 32) | fd.nFileSizeLow;
-            if (sz > (100ULL << 20)) { _snwprintf(out, MAX_PATH, L"%s\\%s", dirs[i], fd.cFileName); out[MAX_PATH - 1] = 0; FindClose(h); return TRUE; }
-        } while (FindNextFileW(h, &fd));
+            if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || fd.cFileName[0] == L'.') continue;
+            _snwprintf(sub, MAX_PATH, L"%s\\%s", dirs[i], fd.cFileName); sub[MAX_PATH - 1] = 0;
+            if (setup_in_dir(sub, out)) { FindClose(h); return TRUE; }
+        } while (++n < 300 && FindNextFileW(h, &fd));
         FindClose(h);
     }
     return FALSE;
@@ -2041,7 +2059,7 @@ static DWORD WINAPI game_icon_thread(LPVOID arg)
         if (WaitForSingleObject(proc, 2000) != WAIT_TIMEOUT) goto out;
         g.w = NULL; EnumWindows(game_win_cb, (LPARAM)&g); found = g.w != NULL;
     }
-    if (found) InterlockedExchange(&g_game_seen, 1);
+    if (found) { InterlockedExchange(&g_game_seen, 1); fn_send("game"); }
     for (k = 0; found && k < 4; k++) {
         if (WaitForSingleObject(proc, waits[k]) != WAIT_TIMEOUT) break;
         g.w = NULL; EnumWindows(game_win_cb, (LPARAM)&g);
@@ -2335,6 +2353,7 @@ static BOOL run_game(void)
         FILETIME ft1; GetSystemTimeAsFileTime(&ft1);
         ULONGLONG played = ((((ULONGLONG)ft1.dwHighDateTime << 32) | ft1.dwLowDateTime) - t0) / 10000000ULL;   /* soniya */
         g_played_s = (DWORD)played;
+        if (played >= 600) fn_send("p10");
         BOOL crashed = game_crashed(code, t0);
         /* ochilishdayoq yiqildi (o'yin oynasi umuman paydo bo'lmadi, xotira xatosi): bu o'yin ichidagi xato emas - exe bu Windows'da ishga tushmayapti */
         if (crashed && code == 0xC0000005 && !g_game_seen && played < 300) {
@@ -2447,6 +2466,27 @@ static void gpu_check(void)
 
 /* muammo hisoboti (admin panel > Muammolar): fonda, 4 s dan ortiq kutilmaydi */
 static char g_prob[24];
+/* Voronka: o'rnatgan o'yinchi qaysi bosqichgacha yetdi - inst (CS 1.6 bor), game (o'yin oynasi ochildi), p10 (10+ daqiqa o'ynadi).
+ * Har bosqich shu kompyuterdan faqat bir marta yuboriladi (xclient.ini fn_*) */
+static DWORD WINAPI fn_th(LPVOID arg)
+{
+    char url[400]; const char *st = (const char *)arg;
+    _snprintf(url, sizeof(url), "http://mmb.boost-top.com/xc_api.php?a=fn&s=%s&d=%s&v=%s", st, g_id, g_version[0] ? g_version : XC_VERSTR); url[sizeof(url) - 1] = 0;
+    HINTERNET h = open_url(url);
+    if (h) InternetCloseHandle(h);
+    return 0;
+}
+static void fn_send(const char *stage)
+{
+    static const char *ok[] = { "inst", "game", "p10" };
+    const char *st = NULL; for (int i = 0; i < 3; i++) if (!strcmp(stage, ok[i])) st = ok[i];
+    if (!st || !g_net || !g_id[0]) return;
+    wchar_t k[16]; _snwprintf(k, 16, L"fn_%S", st); k[15] = 0;
+    if (ini_int(k)) return;
+    ini_set_int(k, 1);
+    HANDLE th = CreateThread(NULL, 0, fn_th, (LPVOID)st, 0, NULL);
+    if (th) CloseHandle(th);
+}
 static DWORD WINAPI prob_th(LPVOID unused)
 {
     (void)unused;
@@ -2603,7 +2643,8 @@ static DWORD WINAPI worker(LPVOID unused)
     if (!g_relaunch) write_master_js();
     if (!g_relaunch && (o_clean || o_verify || o_beta >= 0)) opts_done(cache_mb());
     g_net_dl = 0;                                 /* o'yin fayllari yo'q bo'lsa - yuklash kerak; keyingi ishlar ham cheklovsiz */
-    if (!g_relaunch && !ensure_game(u.game)) {
+    if (!g_relaunch && ensure_game(u.game)) fn_send("inst");
+    else if (!g_relaunch) {
         if (!g_err[0]) lstrcpyW(g_err, L"CS 1.6 o‘yin fayllarini o‘rnatib bo‘lmadi. Internetni tekshirib, X CLIENT ni qayta oching.");
         g_play = FALSE;
     }
