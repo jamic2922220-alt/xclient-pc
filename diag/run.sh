@@ -6,3 +6,4 @@ for f in 1 2 3 4; do
   W=$(cygpath -w "$O/vf/v$f.mp4")
   ./diag/vf/xcl_test.exe --vftest $f "$W"; echo "fmt$f rc=$? size=$(stat -c %s $O/vf/v$f.mp4)" >> $O/summary.txt
 done
+# 2
