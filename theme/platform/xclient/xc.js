@@ -280,7 +280,10 @@ var HERO_T1 = now() + 10000;
 /* odamchalar rasmlari faqat kuchli/o'rtacha kompyuterda yuklanadi. Kuchsiz kompyuter, Windows 7/8 yoki "Yengil menyu" -
  * umuman yo'q (yuklanmaydi ham): o'yin brauzeri xotirasi kamayadi, eski kompyuterlarda yiqilishlar kamayadi */
 var HERO_LD = 0;
-function heroWeak() { return DB.fx === 0 || !!SAFE || (DB.fx == null && HW && hwClass() === 'weak'); }   // o'yinchi Tizim'da effektlarni o'zi yoqsa - ko'rinadi
+/* odamchalar har doim ko'rinadi (faqat 3 marta yiqilgandan keyingi xavfsiz rejimda yo'q). Kuchsiz kompyuterda va o'yin ichida (ESC) -
+ * harakatsiz rasm: har kadr qayta chizilmaydi, o'yin sekinlashmaydi */
+function heroWeak() { return !!SAFE; }
+function heroStill() { return DB.fx === 0 || !!LITE || (DB.fx == null && HW && hwClass() === 'weak'); }
 function heroLoad() {
   var h = $('hero'); if (!h) return;
   if (heroWeak()) { h.className = 'hnone'; HERO_OFF = true; return; }
@@ -293,7 +296,7 @@ setTimeout(heroLoad, 4000);   // sayt javob bermasa (kompyuter quvvati noma'lum)
 function heroTick() {
   if (!HERO_LD) return 1000;
   if (!HERO) { HERO = heroInit(); if (!HERO) return 1000; HERO.el = $('hero'); }
-  var tn = now(), off = HERO_OFF || lowFx() || !feat('anim') || tn < HERO_T1;
+  var tn = now(), off = HERO_OFF || lowFx() || heroStill() || !feat('anim') || tn < HERO_T1;
   var cls = off ? 'hoff' : !fxVisible() ? 'hp' : '';
   if (HERO.cls !== cls) { HERO.cls = cls; HERO.el.className = cls; }
   if (cls) { HERO_LAST = 0; return 1000; }
@@ -1114,10 +1117,10 @@ function netCheck(ip, go) {
   var pings = [], lost = 0, n = 0;
   function probe() {
     var t0 = now(), done = false;
-    var tm = setTimeout(function () { if (!done) { done = true; lost++; next(); } }, 2500);
+    var tm = setTimeout(function () { if (!done) { done = true; lost++; netStat(srv(ip), -1); next(); } }, 2500);
     try {
-      NC.matchmaking.getServerInfo(ip).then(function () { if (done) return; done = true; clearTimeout(tm); pings.push(now() - t0); next(); },
-        function () { if (done) return; done = true; clearTimeout(tm); lost++; next(); });
+      NC.matchmaking.getServerInfo(ip).then(function () { if (done) return; done = true; clearTimeout(tm); pings.push(now() - t0); netStat(srv(ip), now() - t0); next(); },
+        function () { if (done) return; done = true; clearTimeout(tm); lost++; netStat(srv(ip), -1); next(); });
     } catch (e) { done = true; clearTimeout(tm); lost++; next(); }
   }
   function next() {
@@ -1327,7 +1330,7 @@ function onConnectEvt(addr, inGame) {
   if (DEMO_PLAY) return;
   cmd('host_framerate 0');          // demo o'zi ham ulanish hodisasini berishi mumkin - demo paytida tegmaymiz (serverga ulanish 'Connecting to' bilan ushlanadi)
   if (QUEUE_IP && addr !== QUEUE_IP && addr !== CONNECTED) stopQueue();   // hozirgi serverning o'z hodisalari (xarita almashishi) bekor qilmaydi   // boshqa serverga (konsol, o'yin ro'yxati) kirildi - navbat bekor
-  if (addr !== CONNECTED) { CONNECTED = addr; ESC_OPEN = false; setTimeout(restCheck, 3000); if (!inGame) applyPw(addr); startGame(addr); musicSync();   // serverda mp3 chalinmasin: o'yin ovozlarini bo'g'adi
+  if (addr !== CONNECTED) { CONNECTED = addr; ESC_OPEN = false; setTimeout(restCheck, 3000); setTimeout(function () { if (CONNECTED === addr) aimNetApply(addr); }, inGame ? 1500 : 6000); if (!inGame) applyPw(addr); startGame(addr); musicSync();   // serverda mp3 chalinmasin: o'yin ovozlarini bo'g'adi
     pingPresence(); renderAll(); sparks(); voiceWarm(); }
   if (S.demo) startRecord(inGame ? 1500 : 25000);   // 'connect' dan keyin 'putinserver' kelmasa ham 25 soniyadan so'ng urinamiz
 }
@@ -2034,7 +2037,7 @@ function openAvatars() {
 
 /* ============================================================ SOZLAMALAR */
 var DEF = {
-  name: '', tag: 'X | ', net: 'fast', dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, buykeys: 0, queue: 1, reconn: 1, rest: 0, demo: 0, dmig: 0, dmig2: 0,
+  name: '', tag: 'X | ', net: 'fast', aimnet: 1, dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, buykeys: 0, queue: 1, reconn: 1, rest: 0, demo: 0, dmig: 0, dmig2: 0,
   sens: 2.5, zoom: 1.2, raw: 1, filter: 0, inv: 0,
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1, micwarm: 1, micfix: 0,
   fps: 100, showfps: 0, uisnd: 1, uics: 0, uimig: 0, ultra: 0, ann: 1, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
@@ -2117,6 +2120,27 @@ var BUY = [['F1', 'buy m4a1; buy ak47; buyammo1; buyammo1'], ['F2', 'buy awp; bu
 function fullName(s) { return ((s.tag || '') + s.name).slice(0, 31); }
 var ULTRA_WAS = false;  // asl qiymatlar faqat o'yinchi "Ultra yengil" ni o'chirganda yuboriladi (qon va h.k. ni o'zi o'chirganlarga tegmaymiz)
 function sndSet(c, cv, v) { var cur = parseFloat(readCvar(cv)); if (!isNaN(cur) && Math.abs(cur - Number(v)) > 1e-6) c.push(cv + ' ' + v); }
+/* Aniq tegish: o'q tekkan-tekmagani serverda hal bo'ladi - CFG uni "kuchaytira" olmaydi. Lekin noto'g'ri tarmoq sozlamasi
+ * (internetga mos kelmaydigan updaterate/interp) o'yinchi ko'rgan raqib joyini serverdagidan siljitadi va "o'q tegmadi" bo'ladi.
+ * Serverga kirganda shu serverning ping/yo'qotish/tebranishiga mos qiymatlar qo'yiladi; cl_lc/cl_lw (lag kompensatsiyasi) doim yoqiq */
+var AIMNET = null;
+function aimNetCalc(ip) {
+  var s = srv(ip), q = netQual(s), p = q.n ? q.ping : (s.ping || 0), l = q.loss, j = q.jit;
+  if (!p && !q.n) return null;
+  var t = (l >= 10 || p > 150 || j > 40) ? 'bad' : (l >= 3 || p > 80 || j > 20) ? 'mid' : 'good';
+  var v = { good: [100000, 101, 105, 0.01], mid: [50000, 101, 101, 0.02], bad: [30000, 60, 66, 0.04] }[t];
+  return { t: t, p: p, l: l, rate: v[0], up: v[1], cmd: v[2], interp: v[3] };
+}
+window.XC_NETHIST = function (ip, nh) { srv(ip).nh = nh; };   // avtomatik test uchun (tests/menu/aimnet.js)
+function aimNetCmds(a) { return ['rate ' + a.rate, 'cl_updaterate ' + a.up, 'cl_cmdrate ' + a.cmd, 'ex_interp ' + a.interp, 'cl_lc 1', 'cl_lw 1']; }
+function aimNetApply(ip, quiet) {
+  if (!S.aimnet || !ip) { AIMNET = null; return; }
+  var a = aimNetCalc(ip);
+  if (!a) { var n = NETS[S.net] || NETS.fast; AIMNET = null; each(['rate ' + n[0], 'cl_updaterate ' + n[1], 'cl_cmdrate ' + n[2], 'ex_interp ' + S.interp, 'cl_lc 1', 'cl_lw 1'], function (c) { cmd(c); }); return; }   // ma'lumot yo'q - o'yinchining o'z sozlamasi
+  var same = AIMNET && AIMNET.ip === ip && AIMNET.t === a.t; a.ip = ip; AIMNET = a;
+  each(aimNetCmds(a), function (c) { cmd(c); });
+  if (!quiet && !same) toast(T('an_set').replace('{t}', T('an_' + a.t)).replace('{p}', a.p).replace('{l}', a.l), 4500);
+}
 function settingsCmds(s) {
   var n = NETS[s.net] || NETS.fast, c = [];
   if (PW_NAME && CONNECTED) c.push('name ' + q(PW_NAME));      // shu serverda VIP nik bilan kirilgan - tegli nik bilan almashtirmaymiz
@@ -2140,6 +2164,7 @@ function settingsCmds(s) {
   c.push('cl_bob ' + s.bob, 'gl_picmip 0', 'r_detailtextures ' + s.detail, 'cl_shadows ' + s.shadows, 'cl_minmodels 0',
     'ex_interp ' + s.interp, 'cl_lw ' + s.lw, 'cl_lc ' + s.lc, 'voice_loopback ' + s.loop,
     'hud_saytext_time ' + s.saytm, 'net_graphpos ' + s.ngpos);
+  if (s.aimnet && AIMNET && CONNECTED === AIMNET.ip) each(aimNetCmds(AIMNET), function (x) { c.push(x); });   // o'yin ichida saqlansa - serverga mos qiymatlar qolsin
   c.push('net_graph ' + (s.netg ? 3 : 0), 'hud_deathnotice_old ' + (s.hs ? 0 : 1), 'hud_deathnotice_max ' + s.dmax, 'cl_radartype ' + s.radar, 'hud_centerid ' + s.cid, 'scr_drawversion ' + (s.nover ? 0 : 1));
   // PRO CFG qo'shimchasi: to'liq yugurish tezligi, eski ovoz tezlatkichlari o'chiq (qotish beradi), keraksiz effektlarsiz - yuqori va barqaror FPS
   if (s.pro) c.push('cl_forwardspeed 400', 'cl_sidespeed 400', 'cl_backspeed 400', 'cl_upspeed 400', 'cl_pitchup 89', 'cl_pitchdown 89',
@@ -2919,7 +2944,7 @@ var PANES = {
       '<div class="fr"><div class="lb">' + esc(T('g_name')) + '</div><div class="ct2"><input class="tx" id="fName" maxlength="28" value="' + esc(E.name) + '"></div></div>' +
       seg('tag', 'g_tag', [['X | ', 'X |'], ['[UZ] ', '[UZ]']].concat(ME && ME.clan ? [['[' + ME.clan.tag + '] ', '[' + ME.clan.tag + ']']] : []).concat([['', 'g_none']])) +
       '<div class="ph2 m">' + esc(T('g_net')) + '</div><div class="big">' + nets + '</div>' +
-      '<div class="mut" style="margin:10px 0 14px;font-size:12px">' + esc(T('g_net_note')) + '</div>' + tg('reconn', 'g_reconn') + tg('rest', 'g_rest', 'g_rest2') + '</div>' +
+      '<div class="mut" style="margin:10px 0 14px;font-size:12px">' + esc(T('g_net_note')) + '</div>' + tg('aimnet', 'g_aimnet', 'g_aimnet2') + tg('reconn', 'g_reconn') + tg('rest', 'g_rest', 'g_rest2') + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('g_server')) + '</div>' +
       tg('queue', 'g_queue', 'g_queue2') + tg('mp3off', 'g_mp3', 'g_mp32') + tg('hand', 'g_hand') + tg('fastsw', 'g_fast') +
       (ncHas('cl_discordrpc') ? '<div class="ph2 m">Discord</div>' + tg('drpc', 'g_drpc', 'g_drpc2') + tg('drpcs', 'g_drpcs') + tg('drpcj', 'g_drpcj') : '') + '</div>';

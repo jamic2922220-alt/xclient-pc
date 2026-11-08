@@ -929,7 +929,7 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 /* o'ng tomondagi qahramonlar rasmi: kartalar ostida, bosilmaydi */
 #hero { position: absolute; right: 0; bottom: 52px; width: 480px; height: 584px; pointer-events: none; }
 #hero.hnone { display: none; }
-.lowfx #hero { display: none; }   /* o'yin ustida (ESC) va yengil menyuda: katta shaffof rasmlar har chizishda qayta qo'shilmasin */   /* kuchsiz kompyuter / Windows 7: odamchalar umuman yuklanmaydi (xotira, yiqilishlar) */
+/* .lowfx (o'yin ustida ESC) - odamchalar ko'rinadi, faqat qimirlamaydi (heroTick 'hoff') */
 #hero .hl { position: absolute; left: 0; top: 0; width: 480px; height: 584px; -webkit-transform-origin: 50% 100%; }
 #hero .hl img { position: absolute; left: 0; top: 0; width: 480px; height: 584px; }
 #hero .hl img.bl { visibility: hidden; }
@@ -938,7 +938,7 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 #hero .hglow { position: absolute; left: 40px; top: 120px; width: 440px; height: 440px; border-radius: 220px;
   background: -webkit-radial-gradient(center, circle, rgba(255,40,40,0.22) 0%, rgba(255,40,40,0.08) 45%, rgba(255,40,40,0) 70%); }
 #col { z-index: 2; }
-.lite #hero, .gate #hero { display: none; }
+.gate #hero { display: none; }   /* ultra yengil rejimda ham odamchalar bor - faqat harakatsiz */
 
 /* qahramonlar harakati: brauzerning o'z animatsiyasi (silliq). Oldingi va orqadagi - har xil tezlik va yo'nalish */
 @-webkit-keyframes hrF { 0%, 100% { -webkit-transform: translate(0, 0) scale(1); } 50% { -webkit-transform: translate(-2px, -5px) scale(1.007); } }
