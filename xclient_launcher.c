@@ -2179,6 +2179,7 @@ static int crash_kind(BOOL startup)
         typedef LONG (WINAPI *RGV)(RTL_OSVERSIONINFOEXW *);
         RGV rgv = (RGV)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetVersion"); if (rgv) rgv(&vi);
         if (vi.dwMajorVersion == 6 && vi.dwMinorVersion == 1 && vi.wServicePackMajor == 0) return 7;
+        if (vi.dwMajorVersion == 6 && vi.dwMinorVersion <= 1) return 8;   /* Win7 SP1 / Vista: tizim fayllari yoki yangilanishlar */
     }
     return 0;
 }
@@ -2196,7 +2197,7 @@ static BOOL smart_fix(BOOL startup)
     BOOL ru = !strncmp(g_lang, "ru", 2);
     wchar_t mod[64]; MultiByteToWideChar(CP_UTF8, 0, g_cmod, -1, mod, 64);
     static const wchar_t *url[] = { NULL, L"https://www.intel.com/content/www/us/en/support/detect.html", L"https://www.nvidia.com/Download/index.aspx",
-        L"https://www.amd.com/en/support", NULL, NULL, NULL, L"ms-settings:windowsupdate" };
+        L"https://www.amd.com/en/support", NULL, NULL, NULL, L"ms-settings:windowsupdate", L"https://mmb.boost-top.com/win7.html" };
     static const wchar_t *uz[] = { NULL,
         L"O‘yin Intel videokarta drayverida (%s) yiqildi.\n\nDrayver eski yoki buzilgan. Intel saytidan yangi drayverni o‘rnating - sahifa ochilsinmi?",
         L"O‘yin NVIDIA videokarta drayverida (%s) yiqildi.\n\nDrayver eski yoki buzilgan. NVIDIA saytidan yangi drayverni o‘rnating - sahifa ochilsinmi?",
@@ -2204,7 +2205,8 @@ static BOOL smart_fix(BOOL startup)
         L"O‘yinni ekran yozuvchi yoki overlay dastur (%s) yiqitdi - OBS, Bandicam, RivaTuner/MSI Afterburner, Discord, Steam overlay va h.k.\n\nO‘yin paytida shu dasturni yoping yoki undagi overlay'ni o‘chiring. Video yozish uchun X CLIENT'ning F10 tugmasidan foydalaning.",
         L"O‘yinni antivirus (%s) yiqitdi - u o‘yinga aralashyapti.\n\nAntivirusda o‘yin papkasini (C:\\Games\\X CLIENT) istisnoga qo‘shing yoki o‘yin paytida antivirusni vaqtincha o‘chiring.",
         L"O‘yin o‘z faylida (%s) yiqildi - fayl buzilgan bo‘lishi mumkin.\n\nX CLIENT keyingi ochilishda fayllarni o‘zi tekshiradi. Yana takrorlansa - X CLIENT ni saytdan qayta o‘rnating.",
-        L"Bu kompyuterda Windows 7 Service Pack 1 o‘rnatilmagan - o‘yin shuning uchun ishga tushmayapti (%s).\n\n«Пуск» → «Центр обновления Windows» → barcha yangilanishlarni (Service Pack 1 ham) o‘rnating va kompyuterni qayta yoqing." };
+        L"Bu kompyuterda Windows 7 Service Pack 1 o‘rnatilmagan - o‘yin shuning uchun ishga tushmayapti (%s).\n\n«Пуск» → «Центр обновления Windows» → barcha yangilanishlarni (Service Pack 1 ham) o‘rnating va kompyuterni qayta yoqing.",
+        L"O‘yin Windows 7 ning o‘zida (%s) ishga tushishda yiqilyapti - Windows tizim fayllari buzilgan yoki muhim yangilanishlar yetishmaydi.\n\nTuzatish yo‘riqnomasi (3 qadam, 20-30 daqiqa) ochilsinmi?" };
     static const wchar_t *rus[] = { NULL,
         L"Игра вылетела в драйвере видеокарты Intel (%s).\n\nДрайвер устарел или повреждён. Установите новый драйвер с сайта Intel - открыть страницу?",
         L"Игра вылетела в драйвере видеокарты NVIDIA (%s).\n\nДрайвер устарел или повреждён. Установите новый драйвер с сайта NVIDIA - открыть страницу?",
@@ -2212,7 +2214,8 @@ static BOOL smart_fix(BOOL startup)
         L"Игру уронила программа записи экрана или оверлей (%s) - OBS, Bandicam, RivaTuner/MSI Afterburner, Discord, оверлей Steam и т.п.\n\nЗакройте её во время игры или отключите оверлей. Для записи видео используйте F10 в X CLIENT.",
         L"Игру уронил антивирус (%s) - он вмешивается в игру.\n\nДобавьте папку игры (C:\\Games\\X CLIENT) в исключения антивируса или временно отключайте его во время игры.",
         L"Игра вылетела в собственном файле (%s) - файл может быть повреждён.\n\nX CLIENT проверит файлы при следующем запуске. Если повторится - переустановите X CLIENT с сайта.",
-        L"На этом компьютере не установлен Windows 7 Service Pack 1 - из-за этого игра не запускается (%s).\n\n«Пуск» → «Центр обновления Windows» → установите все обновления (включая Service Pack 1) и перезагрузите компьютер." };
+        L"На этом компьютере не установлен Windows 7 Service Pack 1 - из-за этого игра не запускается (%s).\n\n«Пуск» → «Центр обновления Windows» → установите все обновления (включая Service Pack 1) и перезагрузите компьютер.",
+        L"Игра падает при запуске внутри самой Windows 7 (%s) - повреждены системные файлы или не хватает важных обновлений.\n\nОткрыть инструкцию по исправлению (3 шага, 20-30 минут)?" };
     wchar_t msg[900]; _snwprintf(msg, 900, ru ? rus[k] : uz[k], mod); msg[899] = 0;
     { char raw[48]; _snprintf(raw, sizeof(raw), "kind=%d mod=%s", k, g_cmod); raw[47] = 0; url_escape(g_probx, sizeof(g_probx), raw); prob_send("smart_fix", 2000); g_probx[0] = 0; }
     if (url[k] && k != 7) {

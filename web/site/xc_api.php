@@ -38,6 +38,13 @@ function with_forced_packs($o, $d) {
     $o['packs'] = implode(',', array_merge($all, $mine));
     return $o;
 }
+/* Muammo tafsiloti: bitta kompyuter bir xil muammoni 3 soat ichida qayta yuborsa - yangi qator emas, hisoblagich (n) oshadi */
+function probx_add($k, $who, $det) {
+    $l = rd('probs_x', array());
+    for ($i = count($l) - 1; $i >= 0 && $i >= count($l) - 30; $i--) if ($l[$i]['k'] === $k && $l[$i]['d'] === $who && time() - $l[$i]['t'] < 3 * 3600) {
+        $l[$i]['n'] = (isset($l[$i]['n']) ? $l[$i]['n'] : 1) + 1; $l[$i]['t'] = time(); $l[$i]['x'] = $det; $l[$i]['v'] = clean_str(p('v'), 20); wr('probs_x', $l); return; }
+    $l[] = array('t' => time(), 'k' => $k, 'd' => $who, 'v' => clean_str(p('v'), 20), 'x' => $det); if (count($l) > 60) $l = array_slice($l, -60); wr('probs_x', $l);
+}
 function out($a) { $j = json_encode($a); if ($j === false) $j = json_encode(utf8_fix($a)); echo $j === false ? '{"ok":false,"err":"enc"}' : $j; exit; }
 function fail($code, $msg) { out(array('ok' => false, 'err' => $code, 'msg' => $msg)); }
 function p($k, $def = '') { return isset($_POST[$k]) ? trim((string)$_POST[$k]) : (isset($_GET[$k]) ? trim((string)$_GET[$k]) : $def); }
@@ -682,7 +689,14 @@ case 'probrep':                                         // faqat o'qish: Muammol
     @date_default_timezone_set('Asia/Tashkent'); $days = array();
     for ($i = 0; $i < 14; $i++) { $k = date('Y-m-d', strtotime("-$i day")); $x = rd('probs/' . $k, array()); $dd = rd('daily/' . $k, array()); $c = array(); foreach ($x as $t => $ids) $c[$t] = count($ids);
         $days[$k] = array('launch' => isset($dd['d']) ? count($dd['d']) : 0, 'p' => $c); }
-    out(array('ok' => true, 'now' => date('Y-m-d H:i'), 'days' => $days, 'x' => rd('probs_x', array())));
+    $js = array_values(rd('jserr', array())); usort($js, function ($a, $b) { return $b['last'] - $a['last']; }); $js = array_slice($js, 0, 40);
+    $cr = array(); foreach ((array)glob(XC_DIR . '/dev/*.php') as $f) { $o = json_decode(substr((string)@file_get_contents($f), strlen(XC_GUARD)), true);
+        if (empty($o['cr']['t']) || time() - $o['cr']['t'] > 30 * 86400) continue;
+        $cr[] = array('d' => substr(basename($f, '.php'), 0, 10), 'cr' => $o['cr'], 'crn' => isset($o['crn']) ? $o['crn'] : 0, 'os' => isset($o['os']) ? $o['os'] : '', 'hw' => isset($o['hw']) ? $o['hw'] : null, 'v' => isset($o['v']) ? $o['v'] : ''); }
+    usort($cr, function ($a, $b) { return $b['cr']['t'] - $a['cr']['t']; });
+    $fb = array(); foreach (array_slice(array_reverse((array)glob(XC_DIR . '/feedback/*.php')), 0, 25) as $f) { $o = rd('feedback/' . basename($f, '.php'), null); if ($o) $fb[] = array('t' => $o['t'], 'kind' => $o['kind'], 'text' => $o['text'], 'ver' => isset($o['ver']) ? $o['ver'] : ''); }
+    $rp = array(); foreach (array_slice(array_reverse((array)glob(XC_DIR . '/reports/*.php')), 0, 8) as $f) { $o = rd('reports/' . basename($f, '.php'), null); if ($o) $rp[] = array('t' => $o['t'], 'ver' => $o['ver'], 'log' => mb_substr((string)$o['log'], 0, 2500, 'UTF-8')); }
+    out(array('ok' => true, 'now' => date('Y-m-d H:i'), 'days' => $days, 'x' => rd('probs_x', array()), 'jserr' => $js, 'crash' => array_slice($cr, 0, 60), 'fb' => $fb, 'rep' => $rp, 'jshour' => rd('jserr_hour', array())));
 case 'login_check':
     if (rl_count('lc' . client_ip(), 60) >= 60) out(array('ok' => false));
     rl_add('lc' . client_ip(), 60);
@@ -1243,11 +1257,11 @@ case 'prob':
     if (count($x[$k]) < 5000) $x[$k][$who] = 1;
     wr($f, $x);
     $det = clean_str(p('x'), 600);                       // tafsilot: qaysi modul yiqildi (launcher Windows jurnalidan oladi)
-    if ($det !== '') { $l = rd('probs_x', array()); $l[] = array('t' => time(), 'k' => $k, 'd' => $who, 'v' => clean_str(p('v'), 20), 'x' => $det); if (count($l) > 60) $l = array_slice($l, -60); wr('probs_x', $l); }
+    if ($det !== '') probx_add($k, $who, $det);
     /* 8. Telegram: bugun shu muammo 5, 20, 50, 100 ta kompyuterga yetsa - adminga darhol xabar */
     $n = count($x[$k]); $nm = array('dl_net' => "CS 1.6 yuklanmadi (internet)", 'dl_disk' => "diskda joy yo'q", 'dl_perm' => "papkaga yozib bo'lmadi", 'av_del' => "antivirus faylni o'chirdi",
         'setup_no' => "o'rnatishga ruxsat berilmadi", 'setup_fail' => "o'rnatuvchi ishga tushmadi", 'menu_wd' => "menyu 20 s da ochilmadi", 'gpu_nodrv' => "videokarta drayveri yo'q", 'safe_mode' => "3 marta ketma-ket yiqilish (xavfsiz rejim)", 'start_fail' => "o'yin ishga tushmayapti (0xc0000005, ko'pincha Windows 7)", 'dl_mirror' => "cssborka.uz dan yuklanmadi - zaxira manzil ishlatildi");
-    if ($det === '' && $k !== 'menu_lite' && $k !== 'offline') { $l = rd('probs_x', array()); $l[] = array('t' => time(), 'k' => $k, 'd' => $who, 'v' => clean_str(p('v'), 20), 'x' => '-'); if (count($l) > 60) $l = array_slice($l, -60); wr('probs_x', $l); }
+    if ($det === '' && $k !== 'menu_lite' && $k !== 'offline') probx_add($k, $who, '-');
     if (isset($nm[$k]) && in_array($n, array(5, 20, 50, 100), true)) tg_notify('report', "X CLIENT muammo: bugun " . $n . " ta kompyuterda - " . $nm[$k] . ". Admin panel > Muammolar");
     out(array('ok' => true));
 
