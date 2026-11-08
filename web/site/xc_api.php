@@ -724,7 +724,7 @@ case 'probrep':                                         // faqat o'qish: Muammol
         $st0 = isset($x['st']) && is_array($x['st']) ? $x['st'] : array(); $ls = 0;
         if (!empty($x['ss']) && is_array($x['ss'])) foreach ($x['ss'] as $sid => $v) $ls = max($ls, (int)(((float)$sid) / 1000));
         $us[] = array('l' => $x['login'], 'lv' => level((int)@$x['xp']), 'k' => (int)@$st0['k'], 'd' => (int)@$st0['d'], 'g' => (int)@$st0['g'], 't' => (int)@$st0['t'],
-            'wkk' => (isset($x['wkkid']) && $x['wkkid'] === $wkn) ? (int)$x['wkk'] : 0, 'last' => $ls, 'seen' => (int)@$x['seen'], 'cr' => (int)@$x['created']); }
+            'wkk' => (isset($x['wkkid']) && $x['wkkid'] === $wkn) ? (int)$x['wkk'] : 0, 'last' => $ls, 'seen' => (int)@$x['seen'], 'cr' => (int)@$x['created'], 'cd' => isset($x['cdiag']) ? $x['cdiag'] : null); }
     $act['users_st'] = $us; $act['week'] = $wkn;
     $act['daily'] = $dl; $act['users'] = count((array)glob(XC_DIR . '/users/*.php'));
     out(array('ok' => true, 'now' => date('Y-m-d H:i'), 'days' => $days, 'act' => $act, 'x' => rd('probs_x', array()), 'jserr' => $js, 'crash' => array_slice($cr, 0, 60), 'fb' => $fb, 'rep' => $rp, 'jshour' => rd('jserr_hour', array())));
@@ -1583,6 +1583,7 @@ case 'stat':
     $sid = preg_replace('/[^0-9]/', '', p('sid')); $ip = p('ip');
     if ($sid === '' || strlen($sid) > 15 || !preg_match('/^[a-z0-9.\-]{3,64}:\d{2,5}$/i', $ip)) fail('bad', 'bad');
     $dur = max(0, min(6 * 3600, (int)p('dur')));
+    if (p('cm') !== '') $u['cdiag'] = array('cm' => (int)p('cm'), 'ck' => (int)p('ck'), 'ks' => (int)p('ks'), 't' => time());   // tashxis: konsol qatorlari / tanilgan killlar / frag bo'yicha killlar
     $ss = isset($u['ss']) && is_array($u['ss']) ? $u['ss'] : array();
     /* soxta statistika: o'yin vaqti saytning o'z soati bilan cheklanadi (o'yin birinchi marta ko'ringan paytdan beri),
      * eski (ro'yxatdan chiqib ketgan) o'yinni qayta yuborib bo'lmaydi, daqiqasiga 10 so'rovdan ko'p emas */

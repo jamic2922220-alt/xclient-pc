@@ -563,6 +563,26 @@ function afterLogin(r) {
 }
 /* ---- jang statistikasi (akkaunt): shu o'yinning jami kill/o'lim/qurollari yuboriladi, sayt farqini qo'shadi ---- */
 var STAT_LAST = '';
+/* Zaxira kill hisobi: ba'zi NextClient versiyalarida konsol qatorlari menyuga kelmaydi - killlar 0 bo'lib qolardi
+ * (admin: hamma akkauntda k=0). Serverga ulangan paytda 90 s da bir sayt orqali (srvq.php - o'yin dvigateli emas, qotish yo'q)
+ * TAB jadvalidagi fragni olamiz: o'sgan qismi kill. Xarita almashsa frag 0 dan boshlanadi - yangi asos */
+var SCORE_T = 0;
+function myNames() { var a = []; each([MYNAME, readCvar('name'), PW_NAME || '', S && S.name ? fullName(S) : ''], function (n) { n = String(n || '').trim(); if (n && a.indexOf(n) < 0) a.push(n); }); return a; }
+function scoreTick() {
+  if (!CONNECTED || !CUR || DEMO_PLAY || CUR.ip !== CONNECTED) return;
+  var g = CUR, ip = CONNECTED;
+  srvq(ip, function (r) {
+    if (!r || !r.ok || !r.players || g !== CUR || CONNECTED !== ip) return;
+    var nm = myNames(), me = null;
+    each(r.players, function (x) { if (!me && nm.indexOf(String(x.name || '').trim()) >= 0) me = x; });
+    if (!me) return;
+    var sc = Math.max(0, me.score | 0);
+    if (g.sl == null || sc < g.sl) { g.sl = sc; return; }        // birinchi o'lchov yoki xarita almashdi - asos
+    g.ks = (g.ks || 0) + (sc - g.sl); g.sl = sc;
+    if (g.ks > (g.k || 0)) { g.k = g.ks; persist(); if (typeof duelSync === 'function') duelSync(); }
+  });
+}
+setInterval(function () { if (CONNECTED && now() - SCORE_T > 85000) { SCORE_T = now(); scoreTick(); } }, 15000);
 function sendStat(g, done) {
   g = g || CUR;
   if (!ME || !g || !g.t || !g.ip) { if (done) done(); return; }
@@ -570,7 +590,7 @@ function sendStat(g, done) {
   var key = g.t + ':' + (g.k || 0) + ':' + (g.x || 0) + ':' + Math.floor(dur / (done ? 1 : 300));
   if (key === STAT_LAST) { if (done) done(); return; }
   STAT_LAST = key;
-  api('stat', { sid: g.t, ip: g.ip, name: g.name || '', map: g.map || '', k: g.k || 0, d: g.x || 0, dur: dur, w: JSON.stringify(g.w || {}) }, function (r) { if (done) done(); if (r.ok && ME) { ME.st = r.st; ME.ach = r.ach; if (r.xp != null) { ME.xp = r.xp; ME.level = r.level; ME.lvlxp = r.lvlxp; renderBar(); } achToast(r.newach); } });
+  api('stat', { sid: g.t, ip: g.ip, name: g.name || '', map: g.map || '', k: g.k || 0, d: g.x || 0, dur: dur, w: JSON.stringify(g.w || {}), cm: CON_N, ck: CON_K, ks: g.ks || 0 }, function (r) { if (done) done(); if (r.ok && ME) { ME.st = r.st; ME.ach = r.ach; if (r.xp != null) { ME.xp = r.xp; ME.level = r.level; ME.lvlxp = r.lvlxp; renderBar(); } achToast(r.newach); } });
 }
 function fmtHours(sec) { var h = Math.floor((sec || 0) / 3600), m = Math.floor((sec || 0) % 3600 / 60); return h ? h + T('ks_h') + ' ' + m + T('ks_m') : m + T('ks_m'); }
 function kdOf(st) { return st && st.d ? (st.k / st.d).toFixed(2) : String(st && st.k || 0); }
@@ -1357,8 +1377,9 @@ function onDisconnectEvt() {
 }
 /* konsoldan o'ldirish/o'lish hisobi: "Player1 killed Player2 with ak47" */
 var MYNAME = '', CONLOG = [];
+var CON_N = 0, CON_K = 0;   // tashxis: konsoldan nechta qator keldi, nechtasi kill deb tanildi (stat bilan serverga)
 function onConsole(txt) {
-  txt = String(txt || '');
+  txt = String(txt || ''); CON_N++;
   CONLOG.push(txt); if (CONLOG.length > 400) CONLOG.shift();
   var r = /Recording to (\S+?)(?:\.dem)?\.?\s*$/i.exec(txt);
   if (r && REC && r[1].indexOf(REC) === 0) demoAdd(REC);
@@ -1370,6 +1391,7 @@ function onConsole(txt) {
   /* "A killed B with ak47", "*** A killed B with a headshot from ak47 ***", "A + C killed B with m4a1" (C - yordam bergan) */
   var m = /^(.+?) killed (.+?) with (a headshot from )?([\w\-]+)/.exec(txt.replace(/^\s*(\*\*\*\s*)?/, ''));
   if (!m) return;
+  CON_K++;
   var kp = m[1].split(' + '), killer = kp.length === 2 && kp[0] !== MYNAME && m[1] !== MYNAME ? kp[0] : m[1];
   if (m[1] !== MYNAME && kp.length === 2 && kp[0] === MYNAME) killer = MYNAME;
   if (killer === MYNAME && m[2] !== MYNAME) { autoClipKill();
