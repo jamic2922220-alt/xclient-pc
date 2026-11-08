@@ -18,6 +18,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define _CRT_SECURE_NO_WARNINGS
 #include <windows.h>
+#include "xc_ver.h"     /* XC_VERSTR - exe versiyasi */
 #include <wininet.h>
 #include <wincrypt.h>
 #include <commctrl.h>
@@ -1219,7 +1220,7 @@ static void fetch_opts(void)
 {
     char url[4400], hw[800], dm[3200];
     char v[48];
-    url_escape(v, sizeof(v), g_version[0] ? g_version : "1.0");
+    url_escape(v, sizeof(v), g_version[0] ? g_version : XC_VERSTR);   /* birinchi ochilish - exe versiyasi */
     hw_query(hw, sizeof(hw));
     vid_list(dm, sizeof(dm));                     /* menyudagi "Videolarim" - papkadagi haqiqiy MP4 lar */
     wchar_t ini[MAX_PATH]; ini_path(ini);
@@ -1248,7 +1249,7 @@ static void fetch_opts(void)
 static void opts_done(unsigned cacheMb)
 {
     char url[320], v[48];
-    url_escape(v, sizeof(v), g_version[0] ? g_version : "1.0");
+    url_escape(v, sizeof(v), g_version[0] ? g_version : XC_VERSTR);   /* birinchi ochilish - exe versiyasi */
     _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=opts_done&d=%s&cache=%u&v=%s", g_id, cacheMb, v); url[sizeof(url) - 1] = 0;
     free(http_get(url, NULL));
 }
@@ -1988,7 +1989,19 @@ static void start_failed(const wchar_t *exe, DWORD err)
       _snprintf(raw, sizeof(raw), "createprocess err=%lu exe=%s", (unsigned long)err, n8); raw[sizeof(raw) - 1] = 0;
       url_escape(g_probx, sizeof(g_probx), raw); prob_send("proc_fail", 3000); g_probx[0] = 0; }
     wchar_t m[900];
-    if (err == 225 || err == 226 || err == ERROR_ACCESS_DENIED || err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND || err == 1260)
+    if (err == ERROR_BAD_EXE_FORMAT || err == 216 || err == 1392 || err == 0xC1) {
+        /* 193 - fayl buzilgan (Windows uni dastur deb tanimaydi): antivirus "tozalab" qo'ygan yoki chala yuklangan.
+         * Buzilgan nusxa chetga olinadi - keyingi ochilishda launcher o'yinni o'zi qayta o'rnatadi (has_game() = yo'q) */
+        wchar_t bad[MAX_PATH + 8]; _snwprintf(bad, MAX_PATH + 8, L"%s.bad", exe); bad[MAX_PATH + 7] = 0;
+        BOOL moved = MoveFileExW(exe, bad, MOVEFILE_REPLACE_EXISTING);
+        _snwprintf(m, 900, L"%s fayli buzilgan (xato %lu) - ko‘pincha antivirus uni «tozalab» qo‘yadi yoki fayl chala yuklangan.\n\n"
+            L"%s\n\nAntivirusda o‘yin papkasini istisnoga qo‘shing: %s\n\n"
+            L"Файл %s повреждён (ошибка %lu) - обычно его «вылечил» антивирус или файл скачан не полностью. %s Добавьте папку игры в исключения антивируса.",
+            nm, (unsigned long)err,
+            moved ? L"X CLIENT uni o‘zi tiklaydi: OK ni bosing va X CLIENT ni qayta oching - o‘yin qayta o‘rnatiladi (sozlamalar saqlanadi)." : L"X CLIENT ni saytdan qayta o‘rnating.",
+            g_dir, nm, (unsigned long)err, moved ? L"Откройте X CLIENT снова - игра будет переустановлена." : L"Переустановите X CLIENT с сайта.");
+    }
+    else if (err == 225 || err == 226 || err == ERROR_ACCESS_DENIED || err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND || err == 1260)
         _snwprintf(m, 900, L"%s ni ochib bo‘lmadi (xato %lu). Ko‘pincha sabab - antivirus faylni to‘xtatgan yoki karantinga olgan.\n\n"
             L"Tuzatish: antivirusni oching → «Karantin» → %s ni toping → «Tiklash» va «Istisnolarga qo‘shish». Keyin X CLIENT ni qayta oching.\n\n"
             L"Не удалось запустить %s (ошибка %lu). Обычно файл заблокировал или поместил в карантин антивирус.\n"
@@ -2438,7 +2451,7 @@ static DWORD WINAPI prob_th(LPVOID unused)
 {
     (void)unused;
     char url[1600];
-    _snprintf(url, sizeof(url), "http://mmb.boost-top.com/xc_api.php?a=prob&k=%s&d=%s&v=%s%s%s", g_prob, g_id, g_version[0] ? g_version : "0", g_probx[0] ? "&x=" : "", g_probx);
+    _snprintf(url, sizeof(url), "http://mmb.boost-top.com/xc_api.php?a=prob&k=%s&d=%s&v=%s%s%s", g_prob, g_id, g_version[0] ? g_version : XC_VERSTR, g_probx[0] ? "&x=" : "", g_probx);
     url[sizeof(url) - 1] = 0;
     HINTERNET h = open_url(url);
     if (h) InternetCloseHandle(h);
