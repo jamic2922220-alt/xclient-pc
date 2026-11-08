@@ -93,7 +93,7 @@ static BOOL rec_load(void)
 /* sifat (menyu > Demo > Video sifati): 2 - yuqori (videokarta, 60 kadr, asl o'lcham), 1 - o'rtacha (videokarta, 30 kadr),
  * 0 - kichik (720p, 30 kadr, kam bitreyt - Telegramga yuborish uchun) */
 static int g_buf_fail = 0;                    /* bufer necha marta ochilmadi (4 dan keyin - bu kompyuterda F9 yo'q) */
-static int g_vq = 1, g_mic = 0, g_rb = 1;   /* g_mic - mikrofon ovozi videoda; g_rb - "oxirgi 30 soniya" (F9) */
+static int g_vq = 1, g_mic = 0, g_rb = 1, g_vfmt = 0;   /* g_vfmt: 0 asl, 1 oddiy 4:3, 2 keng 16:9, 3 tik 9:16, 4 kvadrat 1:1 (menyu > Demo > Video formati) */   /* g_mic - mikrofon ovozi videoda; g_rb - "oxirgi 30 soniya" (F9) */
 static void rec_quality(void)
 {
     char url[200];
@@ -101,9 +101,11 @@ static void rec_quality(void)
     char *r = http_get(url, NULL);
     if (r) {
         g_vq = !strncmp(r, "hi", 2) ? 2 : !strncmp(r, "low", 3) ? 0 : !strncmp(r, "auto", 4) ? (pc_weak() ? 0 : 1) : 1;   /* auto: kuchsiz kompyuterda 720p 30 kadr - yozish paytida FPS tushmasin */
-        char q[8]; int mic = 0, rb = 1, rsk = -1;
+        char q[8]; int mic = 0, rb = 1, rsk = -1, vf = 0;
         /* rb: 0/1 - o'yinchi o'zi tanlagan, 2 - tanlamagan (avto: oddiy kompyuterda o'chiq) */
-        if (sscanf(r, "%7s %d %d %d", q, &mic, &rb, &rsk) >= 2) { g_mic = mic ? 1 : 0; g_rb = rb == 2 ? !pc_weak() : rb ? 1 : 0; }
+        int nf = sscanf(r, "%7s %d %d %d %d", q, &mic, &rb, &rsk, &vf);
+        if (nf >= 2) { g_mic = mic ? 1 : 0; g_rb = rb == 2 ? !pc_weak() : rb ? 1 : 0; }
+        g_vfmt = nf >= 5 && vf >= 0 && vf <= 4 ? vf : 0;
         if (rsk >= 0 && rsk <= 6 && rsk != o_rsk) { o_rsk = rsk; ini_set_int(L"rsk", rsk + 1); radar_skin(rsk); }   /* menyuda radar foni almashdi - keyingi xaritadan ko'rinadi */
         free(r);
     }   /* internet bo'lmasa - oldingi tanlov */
@@ -1095,6 +1097,140 @@ static void buf_stop(void)
 }
 
 /* ---- F10: to'liq yozish (bufer shu vaqtda to'xtaydi, keyin yana ishga tushadi) ---- */
+/* ---- video formati (menyu > Demo): yozish tugagach asl videoni tanlangan ko'rinishga o'tkazadi.
+ * 1 oddiy 4:3 va 2 keng 16:9 - butun kadr shu o'lchamga cho'ziladi/siqiladi (4:3 cho'zib o'ynaganlar uchun asl proporsiya qaytadi);
+ * 3 tik 9:16 (720x1280) va 4 kvadrat 1:1 (1072x1072) - markazdan kesiladi (Reels/TikTok/Shorts, Instagram post).
+ * O'quvchi (MF, Windows 8+) NV12 ni kerakli o'lchamda beradi, kesish - NV12 qatorlarini nusxalash. Xato bo'lsa asl video qoladi */
+static BOOL vid_reformat(const wchar_t *src, int fmt)
+{
+    if (fmt < 1 || fmt > 4 || !rf.MFCreateSourceReaderFromURL) return FALSE;
+    wchar_t dst[MAX_PATH + 16]; _snwprintf(dst, MAX_PATH + 16, L"%s.fmt.mp4", src); dst[MAX_PATH + 15] = 0;
+    IMFAttributes *ra = NULL, *wa = NULL; IMFSourceReader *r = NULL; IMFSinkWriter *w = NULL;
+    IMFMediaType *nv = NULL, *ov = NULL, *iv = NULL, *oa = NULL, *ia = NULL, *wi = NULL;
+    BOOL ok = FALSE, began = FALSE, haveA = FALSE; DWORD sv = 0, sa = 0;
+    CoInitializeEx(NULL, COINIT_MULTITHREADED);
+    BOOL mf = SUCCEEDED(rf.MFStartup(0x00020070, 0));
+    if (!mf || FAILED(rf.MFCreateAttributes(&ra, 1))) goto done;
+    IMFAttributes_SetUINT32(ra, &MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, TRUE);
+    if (FAILED(rf.MFCreateSourceReaderFromURL(src, ra, &r))) goto done;
+    UINT64 fs = 0, fr = 0;
+    if (FAILED(IMFSourceReader_GetNativeMediaType(r, MF_SOURCE_READER_FIRST_VIDEO_STREAM, 0, &nv))) goto done;
+    IMFMediaType_GetUINT64(nv, &MF_MT_FRAME_SIZE, &fs); IMFMediaType_GetUINT64(nv, &MF_MT_FRAME_RATE, &fr);
+    UINT32 sw = (UINT32)(fs >> 32), sh = (UINT32)fs, fn = (UINT32)(fr >> 32), fd = (UINT32)fr;
+    if (sw < 64 || sh < 64) goto done;
+    if (!fn || !fd) { fn = 30; fd = 1; }
+    /* fw x fh - o'quvchi beradigan o'lcham, tw x th - natija, (x0,y0) - kesish boshi */
+    UINT32 fw, fh, tw, th, x0 = 0, y0 = 0, base = sh > 1080 ? 1080 : sh & ~15u;
+    if (fmt == 1) { th = base & ~1u; tw = (th * 4 / 3) & ~1u; fw = tw; fh = th; }
+    else if (fmt == 2) { th = base & ~1u; tw = (th * 16 / 9) & ~1u; fw = tw; fh = th; }
+    else {
+        if (fmt == 3) { tw = 720; th = 1280; } else { tw = 1072; th = 1072; }
+        fh = th; fw = ((UINT32)((double)sw * fh / sh + 15)) & ~15u;
+        if (fw < tw) { fw = (tw + 15) & ~15u; }
+        x0 = ((fw - tw) / 2) & ~1u; y0 = 0;
+    }
+    if (FAILED(rf.MFCreateMediaType(&iv))) goto done;
+    IMFMediaType_SetGUID(iv, &MF_MT_MAJOR_TYPE, &MFMediaType_Video); IMFMediaType_SetGUID(iv, &MF_MT_SUBTYPE, &MFVideoFormat_NV12);
+    IMFMediaType_SetUINT64(iv, &MF_MT_FRAME_SIZE, ((UINT64)fw << 32) | fh);
+    {   /* MF proporsiyani saqlab qora chiziq qo'shadi - "piksel nisbati"ni shunday beramizki, kadr to'liq to'lsin (cho'zish/siqish) */
+        UINT64 pn = (UINT64)sw * fh, pd = (UINT64)sh * fw, a2 = pn, b2 = pd;
+        while (b2) { UINT64 t2 = a2 % b2; a2 = b2; b2 = t2; }
+        if (a2) { pn /= a2; pd /= a2; }
+        while (pn > 0xFFFF || pd > 0xFFFF) { pn >>= 1; pd >>= 1; }
+        if (!pn) pn = 1; if (!pd) pd = 1;
+        IMFMediaType_SetUINT64(iv, &MF_MT_PIXEL_ASPECT_RATIO, (pn << 32) | pd);
+    }
+    if (FAILED(IMFSourceReader_SetCurrentMediaType(r, MF_SOURCE_READER_FIRST_VIDEO_STREAM, NULL, iv))) goto done;
+    if (FAILED(rf.MFCreateAttributes(&wa, 2))) goto done;
+    IMFAttributes_SetGUID(wa, &MF_TRANSCODE_CONTAINERTYPE, &MFTranscodeContainerType_MPEG4);
+    IMFAttributes_SetUINT32(wa, &MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, TRUE);
+    if (FAILED(rf.MFCreateSinkWriterFromURL(dst, NULL, wa, &w))) goto done;
+    double fps = (double)fn / fd, bps = (double)tw * th * fps * 0.14;
+    if (bps < 3000000) bps = 3000000; if (bps > 12000000) bps = 12000000;
+    if (FAILED(rf.MFCreateMediaType(&ov))) goto done;
+    IMFMediaType_SetGUID(ov, &MF_MT_MAJOR_TYPE, &MFMediaType_Video); IMFMediaType_SetGUID(ov, &MF_MT_SUBTYPE, &MFVideoFormat_H264);
+    IMFMediaType_SetUINT32(ov, &MF_MT_AVG_BITRATE, (UINT32)bps);
+    IMFMediaType_SetUINT32(ov, &MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
+    IMFMediaType_SetUINT32(ov, &MF_MT_MPEG2_PROFILE, 77);
+    IMFMediaType_SetUINT64(ov, &MF_MT_FRAME_SIZE, ((UINT64)tw << 32) | th);
+    IMFMediaType_SetUINT64(ov, &MF_MT_FRAME_RATE, ((UINT64)fn << 32) | fd);
+    IMFMediaType_SetUINT64(ov, &MF_MT_PIXEL_ASPECT_RATIO, ((UINT64)1 << 32) | 1);
+    if (FAILED(IMFSinkWriter_AddStream(w, ov, &sv))) goto done;
+    if (FAILED(rf.MFCreateMediaType(&wi))) goto done;
+    IMFMediaType_SetGUID(wi, &MF_MT_MAJOR_TYPE, &MFMediaType_Video); IMFMediaType_SetGUID(wi, &MF_MT_SUBTYPE, &MFVideoFormat_NV12);
+    IMFMediaType_SetUINT32(wi, &MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
+    IMFMediaType_SetUINT64(wi, &MF_MT_FRAME_SIZE, ((UINT64)tw << 32) | th);
+    IMFMediaType_SetUINT64(wi, &MF_MT_FRAME_RATE, ((UINT64)fn << 32) | fd);
+    IMFMediaType_SetUINT64(wi, &MF_MT_PIXEL_ASPECT_RATIO, ((UINT64)1 << 32) | 1);
+    if (FAILED(IMFSinkWriter_SetInputMediaType(w, sv, wi, NULL))) goto done;
+    if (SUCCEEDED(rf.MFCreateMediaType(&ia))) {   /* ovoz: PCM -> AAC 128 kbit */
+        IMFMediaType_SetGUID(ia, &MF_MT_MAJOR_TYPE, &MFMediaType_Audio); IMFMediaType_SetGUID(ia, &MF_MT_SUBTYPE, &MFAudioFormat_PCM);
+        IMFMediaType_SetUINT32(ia, &MF_MT_AUDIO_BITS_PER_SAMPLE, 16);
+        IMFMediaType *ca = NULL; UINT32 ch = 0, sr = 0;
+        if (SUCCEEDED(IMFSourceReader_SetCurrentMediaType(r, MF_SOURCE_READER_FIRST_AUDIO_STREAM, NULL, ia))
+            && SUCCEEDED(IMFSourceReader_GetCurrentMediaType(r, MF_SOURCE_READER_FIRST_AUDIO_STREAM, &ca))
+            && SUCCEEDED(IMFMediaType_GetUINT32(ca, &MF_MT_AUDIO_NUM_CHANNELS, &ch)) && SUCCEEDED(IMFMediaType_GetUINT32(ca, &MF_MT_AUDIO_SAMPLES_PER_SECOND, &sr))
+            && (sr == 44100 || sr == 48000) && ch >= 1 && ch <= 2 && SUCCEEDED(rf.MFCreateMediaType(&oa))) {
+            IMFMediaType_SetGUID(oa, &MF_MT_MAJOR_TYPE, &MFMediaType_Audio); IMFMediaType_SetGUID(oa, &MF_MT_SUBTYPE, &MFAudioFormat_AAC);
+            IMFMediaType_SetUINT32(oa, &MF_MT_AUDIO_BITS_PER_SAMPLE, 16); IMFMediaType_SetUINT32(oa, &MF_MT_AUDIO_SAMPLES_PER_SECOND, sr);
+            IMFMediaType_SetUINT32(oa, &MF_MT_AUDIO_NUM_CHANNELS, ch); IMFMediaType_SetUINT32(oa, &MF_MT_AUDIO_AVG_BYTES_PER_SECOND, 16000);
+            haveA = SUCCEEDED(IMFSinkWriter_AddStream(w, oa, &sa)) && SUCCEEDED(IMFSinkWriter_SetInputMediaType(w, sa, ca, NULL));
+        }
+        SREL(ca);
+    }
+    IMFSourceReader_SetStreamSelection(r, MF_SOURCE_READER_ALL_STREAMS, FALSE);
+    IMFSourceReader_SetStreamSelection(r, MF_SOURCE_READER_FIRST_VIDEO_STREAM, TRUE);
+    if (haveA) IMFSourceReader_SetStreamSelection(r, MF_SOURCE_READER_FIRST_AUDIO_STREAM, TRUE);
+    if (FAILED(IMFSinkWriter_BeginWriting(w))) goto done;
+    began = TRUE;
+    {
+        BOOL vend = FALSE, aend = !haveA, wrote = FALSE, crop = fw != tw || fh != th;
+        DWORD need = fw * fh * 3 / 2, outsz = tw * th * 3 / 2; LONGLONG t0 = -1;
+        while (!vend || !aend) {
+            DWORD idx = 0, fl = 0; LONGLONG ts = 0; IMFSample *smp = NULL;
+            if (FAILED(IMFSourceReader_ReadSample(r, MF_SOURCE_READER_ANY_STREAM, 0, &idx, &fl, &ts, &smp))) break;
+            BOOL isv = idx == (DWORD)MF_SOURCE_READER_FIRST_VIDEO_STREAM || !haveA;
+            { IMFMediaType *mt = NULL; GUID mj; if (SUCCEEDED(IMFSourceReader_GetCurrentMediaType(r, idx, &mt))) { if (SUCCEEDED(IMFMediaType_GetGUID(mt, &MF_MT_MAJOR_TYPE, &mj))) isv = IsEqualGUID(&mj, &MFMediaType_Video); SREL(mt); } }
+            if (fl & MF_SOURCE_READERF_ENDOFSTREAM) { if (isv) vend = TRUE; else aend = TRUE; }
+            if (!smp) continue;
+            if (t0 < 0) t0 = ts;
+            LONGLONG nt = ts - t0; if (nt < 0) { SREL(smp); continue; }
+            if (isv && crop) {   /* NV12 dan markaziy bo'lakni yangi namunaga ko'chiramiz */
+                IMFMediaBuffer *ib = NULL, *ob = NULL; IMFSample *os = NULL; BYTE *ip = NULL, *op = NULL; DWORD il = 0; BOOL good = FALSE;
+                if (SUCCEEDED(IMFSample_ConvertToContiguousBuffer(smp, &ib)) && SUCCEEDED(IMFMediaBuffer_Lock(ib, &ip, NULL, &il)) ) {
+                    if (il >= need && SUCCEEDED(rf.MFCreateMemoryBuffer(outsz, &ob)) && SUCCEEDED(IMFMediaBuffer_Lock(ob, &op, NULL, NULL))) {
+                        for (UINT32 y = 0; y < th; y++) memcpy(op + (size_t)y * tw, ip + (size_t)(y + y0) * fw + x0, tw);
+                        const BYTE *uv = ip + (size_t)fw * fh; BYTE *ouv = op + (size_t)tw * th;
+                        for (UINT32 y = 0; y < th / 2; y++) memcpy(ouv + (size_t)y * tw, uv + (size_t)(y + y0 / 2) * fw + x0, tw);
+                        IMFMediaBuffer_Unlock(ob); IMFMediaBuffer_SetCurrentLength(ob, outsz); good = TRUE;
+                    }
+                    IMFMediaBuffer_Unlock(ib);
+                }
+                if (good && SUCCEEDED(rf.MFCreateSample(&os))) {
+                    LONGLONG dd = 0; IMFSample_GetSampleDuration(smp, &dd);
+                    IMFSample_AddBuffer(os, ob); IMFSample_SetSampleTime(os, nt); if (dd) IMFSample_SetSampleDuration(os, dd);
+                    if (SUCCEEDED(IMFSinkWriter_WriteSample(w, sv, os))) wrote = TRUE;
+                }
+                SREL(os); SREL(ob); SREL(ib); SREL(smp);
+                if (!good) break;                          /* kutilmagan bufer - asl video qoladi */
+                continue;
+            }
+            IMFSample_SetSampleTime(smp, nt);
+            if (SUCCEEDED(IMFSinkWriter_WriteSample(w, isv ? sv : sa, smp)) && isv) wrote = TRUE;
+            SREL(smp);
+        }
+        ok = wrote && vend;
+    }
+done:
+    if (began && FAILED(IMFSinkWriter_Finalize(w))) ok = FALSE;
+    SREL(w); SREL(r); SREL(ra); SREL(wa); SREL(nv); SREL(ov); SREL(iv); SREL(oa); SREL(ia); SREL(wi);
+    if (mf) rf.MFShutdown();
+    CoUninitialize();
+    if (ok) ok = DeleteFileW(src) && MoveFileW(dst, src);
+    if (!ok) DeleteFileW(dst);
+    return ok;
+}
+
 static DWORD WINAPI rec_thread(LPVOID unused)
 {
     (void)unused;
@@ -1146,6 +1282,7 @@ done:
     if (mf) rf.MFShutdown();
     CoUninitialize();
     InterlockedExchange(&g_rec_run, 0);
+    if (ok && g_vfmt) vid_reformat(path, g_vfmt);   /* tanlangan format (4:3 / 16:9 / 9:16 / 1:1); bo'lmasa asl video qoladi */
     if (ok) { vid_report(path, (unsigned)(k / (c.fps ? c.fps : 30))); lstrcpynW(g_rec_last, path, MAX_PATH); g_rec_saved++; PostThreadMessageW(g_hk_tid, WM_REC_STATE, 2, 0); rec_beep(0); }
     else { if (path[0]) DeleteFileW(path); PostThreadMessageW(g_hk_tid, WM_REC_STATE, 3, 0); rec_beep(-1); }
     if (g_buf_want) PostThreadMessageW(g_hk_tid, WM_REC_STATE, 101, 0);   /* bufer qayta */

@@ -3036,6 +3036,10 @@ var PANES = {
   demo: function () {                            // F10 videolari: sifat, ko'rsatma, "Mening videolarim" (ochish / o'chirish / papka - launcher bajaradi)
     var vq = OPTS && OPTS.vq || 'mid', vqs = '', rows = '', vids = OPTS && OPTS.vids || [];
     var vtg = function (k, on, label, sub) { return '<div class="fr w"><div class="lb">' + esc(T(label)) + '<small>' + esc(T(sub)) + '</small></div><div class="tg' + (on ? ' on' : '') + '" data-vopt="' + k + '"><i></i></div></div>'; };
+    var vf = OPTS && OPTS.vf || 'src', vfs = '';   // video formati: yozish tugagach launcher o'zi o'tkazadi
+    each([['src', 'vf_src'], ['43', 'vf_43'], ['169', 'vf_169'], ['916', 'vf_916'], ['11', 'vf_11']], function (o) {
+      vfs += '<a class="' + (vf === o[0] ? 'on' : '') + '" data-ovf="' + o[0] + '"><i class="vfi vf' + o[0] + '"></i>' + esc(T(o[1])) + '</a>';
+    });
     each([['hi', 'vq_hi', 'vq_hi2'], ['mid', 'vq_mid', 'vq_mid2'], ['low', 'vq_low', 'vq_low2']], function (o) {
       vqs += '<a class="' + (vq === o[0] ? 'on' : '') + '" data-ovq="' + o[0] + '">' + esc(T(o[1])) + '<small>' + esc(T(o[2])) + '</small></a>';
     });
@@ -3058,6 +3062,7 @@ var PANES = {
     });
     return '<div class="pane l"><div class="f10box big2"><b>' + esc(T('f10_t')) + '</b>' + esc(T('f10_1')) + '<br>' + esc(T('f10_2')) + '<br>' + esc(T('f10_3')) + '</div>' +
       '<div class="ph2 m">' + esc(T('vq_title')) + '</div><div class="big vqb">' + vqs + '</div>' +
+      '<div class="ph2 m">' + esc(T('vf_title')) + '</div><div class="vfb">' + vfs + '</div><div class="mut" style="font-size:12px;margin:-2px 0 8px">' + esc(T('vf_note')) + '</div>' +
       vtg('mic', OPTS && OPTS.mic, 'vb_mic', 'vb_mic2') + vtg('gsum', DB.gsum !== 0, 'gs_tg', 'gs_tg2') + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('vd_title')) + ' <a class="btn vfold" data-vfold="1">' + ico('folder') + ' ' + esc(T('vd_folder')) + '</a></div>' +
       '<div class="dml dml2">' + (rows || '<div class="empty">' + esc(T(PCID ? 'vd_none' : 'sy_nolaunch')) + '</div>') + '</div>' +
@@ -3791,7 +3796,7 @@ setInterval(function () { if (!CLK_N || !feat('clicks') || playing()) return; va
 
 /* ---- menyu ovozlari: o'yin sound/xclient/*.wav ni chaladi (XCLauncher.exe ularni o'yin papkasiga qo'yadi) ---- */
 var SFX_ATTR = ['data-act', 'data-tab', 'data-hsub', 'data-seg', 'data-tg', 'data-otg', 'data-ohud', 'data-dd', 'data-ddv', 'data-xchk', 'data-pack',
-  'data-sort', 'data-flt', 'data-theme', 'data-daymode', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-dctl', 'data-ovq', 'data-dsel', 'data-vopen', 'data-vdel', 'data-vfold', 'data-vopt', 'data-vtrim', 'data-vshare', 'data-vlink', 'data-orsk', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec', 'data-avpre'];
+  'data-sort', 'data-flt', 'data-theme', 'data-daymode', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-dctl', 'data-ovq', 'data-ovf', 'data-dsel', 'data-vopen', 'data-vdel', 'data-vfold', 'data-vopt', 'data-vtrim', 'data-vshare', 'data-vlink', 'data-orsk', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec', 'data-avpre'];
 var SFX_QUIET = false, sfxLast = null, sfxT = 0;
 /* CS 1.6 ning asl menyu ovozlari (o'yinning o'z fayllari: valve/sound/UI) - standart. Sozlamalarda X CLIENT ovozlariga almashtirsa bo'ladi */
 var SFX_CS = { hover: 'ui/buttonrollover.wav', click: 'ui/buttonclick.wav', tab: 'ui/buttonclick.wav', on: 'ui/buttonclick.wav', off: 'ui/buttonclickrelease.wav',
@@ -3906,6 +3911,7 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-frcmp'))) { openCompare(el.getAttribute('data-frcmp')); return; }
   if ((el = closest(t, 'data-clkick'))) { clanCall('clan_kick', { who: el.getAttribute('data-clkick') }); return; }
   if ((el = closest(t, 'data-copyip'))) { copyIp(el.getAttribute('data-copyip'), el.parentNode.querySelector('input')); return; }
+  if ((el = closest(t, 'data-ovf'))) { OPTS = OPTS || {}; OPTS.vf = el.getAttribute('data-ovf'); saveOpts(T('vf_ok')); showSetTab('demo'); return; }
   if ((el = closest(t, 'data-ovq'))) { OPTS = OPTS || {}; OPTS.vq = el.getAttribute('data-ovq'); OPTS.vqx = 1; saveOpts(T('vq_ok')); showSetTab('demo'); return; }
   if ((el = closest(t, 'data-vopen'))) { vidCmd('open', el.getAttribute('data-vopen')); return; }
   if ((el = closest(t, 'data-vdel'))) { var vn = el.getAttribute('data-vdel'); ask(T('vd_delq'), function () { vidCmd('del', vn); }, false, false, true); return; }

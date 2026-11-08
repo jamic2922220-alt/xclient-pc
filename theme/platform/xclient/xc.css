@@ -970,3 +970,10 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 /* birinchi o'yin savoli */
 .fqw { padding: 6px 4px; }
 .fqw .fqb { display: block; height: auto; line-height: 22px; margin: 0 0 8px; text-align: left; padding: 9px 14px; font-size: 15px; }
+/* F10 video formati */
+.vfb { margin: 0 0 6px; }
+.vfb a { display: inline-block; height: 34px; line-height: 34px; padding: 0 12px; margin: 0 6px 6px 0; border: 1px solid #3a2e34; border-radius: 4px; font-size: 13px; color: #cfc3c8; cursor: pointer; }
+.vfb a.on { border-color: #e63946; color: #fff; background: rgba(230,57,70,.18); }
+.vfb .vfi { display: inline-block; vertical-align: middle; margin: -2px 7px 0 0; border: 2px solid currentColor; border-radius: 2px; }
+.vfb .vfsrc { width: 16px; height: 11px; border-style: dashed; } .vfb .vf43 { width: 14px; height: 11px; } .vfb .vf169 { width: 18px; height: 10px; }
+.vfb .vf916 { width: 9px; height: 15px; } .vfb .vf11 { width: 12px; height: 12px; }

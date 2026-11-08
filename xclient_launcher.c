@@ -2772,6 +2772,11 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, LPWSTR cmdline, int show)
     (void)hp; (void)cmdline; (void)show;
     CoInitialize(NULL);
     GetModuleFileNameW(NULL, g_self, MAX_PATH);
+    if (cmdline && !wcsncmp(cmdline, L"--vftest ", 9)) {   /* avtomatik test (GitHub Windows): --vftest <fmt> <video.mp4> - formatga o'tkazish */
+        int f = _wtoi(cmdline + 9); const wchar_t *fp = wcschr(cmdline + 9, L' ');
+        BOOL r = fp && rec_load() && vid_reformat(fp + 1, f);
+        CoUninitialize(); return r ? 0 : 3;
+    }
     if (migrate_name()) { CoUninitialize(); return 0; }
     remove_legacy_exe();
     if (g_migrated) {                                       /* yorliq uchun ishchi papka - exe turgan papka */

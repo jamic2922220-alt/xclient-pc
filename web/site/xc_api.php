@@ -570,8 +570,9 @@ if ($a === 'vq') {
     /* o'yinchi sifatni o'zi tanlamagan bo'lsa (o'rtacha - standart) - "auto": launcher 1.0.109+ kuchsiz kompyuterda 720p yozadi, eskisi "mid" deb tushunadi */
     $vqv = isset($o['vq']) && in_array($o['vq'], array('hi', 'mid', 'low'), true) ? $o['vq'] : 'mid';
     if ($vqv === 'mid' && empty($o['vqx'])) $vqv = 'auto';
+    $vfm = array('src' => 0, '43' => 1, '169' => 2, '916' => 3, '11' => 4);
     echo $vqv, ' ', empty($o['mic']) ? 0 : 1, ' ',
-        0, ' ', rsk_of($o);
+        0, ' ', rsk_of($o), ' ', isset($o['vf']) && isset($vfm[$o['vf']]) ? $vfm[$o['vf']] : 0;   // 5-so'z: video formati (launcher 1.0.135+)
     exit;
 }
 /* ---- klip ulashish: menyu 'share' buyrug'i chipta (tk) yaratadi, launcher videoni bo'laklab yuklaydi ----
@@ -1868,7 +1869,8 @@ case 'opts_done':
         if (isset($in['rsk'])) $o['rsk'] = max(0, min(6, (int)$in['rsk']));
         if (!empty($in['rskx'])) $o['rskx'] = 1;                                       // radar fonini o'yinchi o'zi tanladi          // klassik radar foni: 0 asl, 1 qora, 2 halqalar, 3 taktik to'r (standart), 4 neon, 5 minimal, 6 kontrast
         if (isset($in['vq'])) $o['vq'] = in_array($in['vq'], array('hi', 'mid', 'low'), true) ? $in['vq'] : 'mid';   // F10 video sifati
-        if (!empty($in['vqx'])) $o['vqx'] = 1;                                         // sifatni o'yinchi o'zi tanladi (bo'lmasa - kuchsiz kompyuterda avto 720p)
+        if (!empty($in['vqx'])) $o['vqx'] = 1;
+        if (isset($in['vf'])) $o['vf'] = in_array($in['vf'], array('src', '43', '169', '916', '11'), true) ? $in['vf'] : 'src';   // F10 video formati                                         // sifatni o'yinchi o'zi tanladi (bo'lmasa - kuchsiz kompyuterda avto 720p)
         if (isset($in['hud'])) $o['hud'] = in_array((int)$in['hud'], array(100, 150, 200)) ? (int)$in['hud'] : 100;   // HUD kattaligi, %
         if (isset($in['res'])) $o['res'] = preg_match('/^\d{3,4}x\d{3,4}$/', $in['res']) ? $in['res'] : '';
         wr('dev/' . $d, $o);
