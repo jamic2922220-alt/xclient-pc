@@ -5,7 +5,8 @@ gh release download cs16 --repo jamic2922220-alt/xclient-pc -p 'CS_1_6_boost-top
 cmd //c "C:\\cs16tmp\\CS_1_6_boost-top_PRO_2_5_3.exe /VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /NOICONS /TASKS=\"\" /DIR=C:\\csgame /LOG=C:\\cs16tmp\\inst.log"
 echo "rc=$?" >> $O/summary.txt
 tail -5 $W/inst.log >> $O/summary.txt 2>&1
-G=$(dirname "$(find /c/csgame -maxdepth 3 -iname hl.exe | head -1)"); echo "G=$G files=$(find /c/csgame -type f | wc -l)" >> $O/summary.txt
+find /c/csgame -maxdepth 4 \( -iname '*.exe' -o -iname 'tier0.dll' -o -iname 'hw.dll' \) >> $O/summary.txt
+G=$(dirname "$(find /c/csgame -maxdepth 4 -iname tier0.dll | head -1)"); echo "G=$G" >> $O/summary.txt
 ls -la "$G" >> $O/summary.txt
 for f in "$G"/*.exe "$G"/*.dll; do cp "$f" $O/bin/ 2>/dev/null; done
 du -sh $O/bin >> $O/summary.txt
