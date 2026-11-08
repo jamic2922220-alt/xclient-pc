@@ -696,7 +696,20 @@ case 'probrep':                                         // faqat o'qish: Muammol
     usort($cr, function ($a, $b) { return $b['cr']['t'] - $a['cr']['t']; });
     $fb = array(); foreach (array_slice(array_reverse((array)glob(XC_DIR . '/feedback/*.php')), 0, 25) as $f) { $o = rd('feedback/' . basename($f, '.php'), null); if ($o) $fb[] = array('t' => $o['t'], 'kind' => $o['kind'], 'text' => $o['text'], 'ver' => isset($o['ver']) ? $o['ver'] : ''); }
     $rp = array(); foreach (array_slice(array_reverse((array)glob(XC_DIR . '/reports/*.php')), 0, 8) as $f) { $o = rd('reports/' . basename($f, '.php'), null); if ($o) $rp[] = array('t' => $o['t'], 'ver' => $o['ver'], 'log' => mb_substr((string)$o['log'], 0, 2500, 'UTF-8')); }
-    out(array('ok' => true, 'now' => date('Y-m-d H:i'), 'days' => $days, 'x' => rd('probs_x', array()), 'jserr' => $js, 'crash' => array_slice($cr, 0, 60), 'fb' => $fb, 'rep' => $rp, 'jshour' => rd('jserr_hour', array())));
+    $act = array(); $now = time();
+    foreach (array('dev', 'nc') as $src) { $a = array('total' => 0, 'd1' => 0, 'd7' => 0, 'd30' => 0, 'new7' => 0, 'new30' => 0, 'old7' => 0, 'old7back' => 0, 'once' => 0, 'ver' => array());
+        foreach ((array)glob(XC_DIR . '/' . $src . '/*.php') as $f) { $o = json_decode(substr((string)@file_get_contents($f), strlen(XC_GUARD)), true); if (!$o) continue;
+            $se = isset($o['seen']) ? (int)$o['seen'] : 0; $fi = isset($o['first']) ? (int)$o['first'] : $se; $a['total']++;
+            if ($now - $se < 86400) $a['d1']++; if ($now - $se < 7 * 86400) $a['d7']++; if ($now - $se < 30 * 86400) $a['d30']++;
+            if ($now - $fi < 7 * 86400) $a['new7']++; if ($now - $fi < 30 * 86400) $a['new30']++;
+            if ($now - $fi >= 7 * 86400) { $a['old7']++; if ($now - $se < 7 * 86400) $a['old7back']++; }
+            if ($se - $fi < 3600) $a['once']++;
+            if ($src === 'dev' && $now - $se < 30 * 86400) { $v = isset($o['ver']) && $o['ver'] !== '' ? $o['ver'] : '?'; $a['ver'][$v] = (isset($a['ver'][$v]) ? $a['ver'][$v] : 0) + 1; } }
+        $act[$src] = $a; }
+    $dl = array(); for ($i = 0; $i < 30; $i++) { $k = date('Y-m-d', strtotime("-$i day")); $x = rd('daily/' . $k, array()); $dl[$k] = array();
+        foreach (array('d', 'n', 'm', 'mn') as $t) $dl[$k][$t] = isset($x[$t]) ? count($x[$t]) : 0; }
+    $act['daily'] = $dl; $act['users'] = count((array)glob(XC_DIR . '/users/*.php'));
+    out(array('ok' => true, 'now' => date('Y-m-d H:i'), 'days' => $days, 'act' => $act, 'x' => rd('probs_x', array()), 'jserr' => $js, 'crash' => array_slice($cr, 0, 60), 'fb' => $fb, 'rep' => $rp, 'jshour' => rd('jserr_hour', array())));
 case 'login_check':
     if (rl_count('lc' . client_ip(), 60) >= 60) out(array('ok' => false));
     rl_add('lc' . client_ip(), 60);
