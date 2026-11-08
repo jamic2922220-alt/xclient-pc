@@ -719,6 +719,13 @@ case 'probrep':                                         // faqat o'qish: Muammol
     $dl = array(); for ($i = 0; $i < 30; $i++) { $k = date('Y-m-d', strtotime("-$i day")); $x = rd('daily/' . $k, array()); $dl[$k] = array();
         foreach (array('d', 'n', 'm', 'mn') as $t) $dl[$k][$t] = isset($x[$t]) ? count($x[$t]) : 0; }
     $act['funnel'] = funnel_cohorts(14);
+    $us = array(); $wkn = week_id();   // akkauntlar: o'yin statistikasi yig'ilyaptimi (kill, o'yin soni, oxirgi o'yin)
+    foreach ((array)glob(XC_DIR . '/users/*.php') as $f) { $x = rd('users/' . basename($f, '.php'), null); if (!$x) continue;
+        $st0 = isset($x['st']) && is_array($x['st']) ? $x['st'] : array(); $ls = 0;
+        if (!empty($x['ss']) && is_array($x['ss'])) foreach ($x['ss'] as $sid => $v) $ls = max($ls, (int)(((float)$sid) / 1000));
+        $us[] = array('l' => $x['login'], 'lv' => level((int)@$x['xp']), 'k' => (int)@$st0['k'], 'd' => (int)@$st0['d'], 'g' => (int)@$st0['g'], 't' => (int)@$st0['t'],
+            'wkk' => (isset($x['wkkid']) && $x['wkkid'] === $wkn) ? (int)$x['wkk'] : 0, 'last' => $ls, 'seen' => (int)@$x['seen'], 'cr' => (int)@$x['created']); }
+    $act['users_st'] = $us; $act['week'] = $wkn;
     $act['daily'] = $dl; $act['users'] = count((array)glob(XC_DIR . '/users/*.php'));
     out(array('ok' => true, 'now' => date('Y-m-d H:i'), 'days' => $days, 'act' => $act, 'x' => rd('probs_x', array()), 'jserr' => $js, 'crash' => array_slice($cr, 0, 60), 'fb' => $fb, 'rep' => $rp, 'jshour' => rd('jserr_hour', array())));
 case 'login_check':
