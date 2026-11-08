@@ -5,7 +5,11 @@ W=/tmp/cs; mkdir -p $W; cd $W
 gh release download cs16 --repo jamic2922220-alt/xclient-pc -p 'CS_1_6_boost-top_PRO_2_5_3.exe' -D $W 2>&1 | tail -1
 cd - >/dev/null
 ls -la $W >> $O/summary.txt
-(cd $W && (innoextract -s -d x CS_1_6_boost-top_PRO_2_5_3.exe >/dev/null 2>&1 || 7z x -y -ox CS_1_6_boost-top_PRO_2_5_3.exe >/dev/null 2>&1))
+file $W/*.exe >> $O/summary.txt
+strings -n 8 $W/CS_1_6_boost-top_PRO_2_5_3.exe | grep -iE "inno setup|nullsoft|7-zip|smart install|setup factory|wise|installshield" | sort | uniq -c | head >> $O/summary.txt
+(cd $W && innoextract -d x CS_1_6_boost-top_PRO_2_5_3.exe 2>&1 | tail -3) >> $O/summary.txt
+[ -d $W/x ] || (cd $W && 7z x -y -ox CS_1_6_boost-top_PRO_2_5_3.exe 2>&1 | tail -5) >> $O/summary.txt
+find $W/x -type f | head -5 >> $O/summary.txt; find $W/x -type f | wc -l >> $O/summary.txt
 echo "== exe/dll at root" >> $O/summary.txt
 find $W/x -maxdepth 4 -iname '*.exe' -o -maxdepth 4 -iname 'tier0.dll' -o -maxdepth 4 -iname 'vstdlib.dll' -o -maxdepth 4 -iname 'hw.dll' | head -30 >> $O/summary.txt
 for f in $(find $W/x -iname 'tier0.dll' -o -iname 'hl.exe' -o -iname 'cstrike.exe' | head -6); do
