@@ -176,6 +176,7 @@ static DWORD WINAPI vthumb_thread(LPVOID delay)
             }
             rf.MFShutdown();
         }
+        sthumb_sweep();                                   /* F11 skrinshotlar (xc_rec.c) */
         GdiplusShutdown(tok);
     }
     CoUninitialize();

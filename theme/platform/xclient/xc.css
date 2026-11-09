@@ -977,3 +977,14 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .vfb .vfi { display: inline-block; vertical-align: middle; margin: -2px 7px 0 0; border: 2px solid currentColor; border-radius: 2px; }
 .vfb .vfsrc { width: 16px; height: 11px; border-style: dashed; } .vfb .vf43 { width: 14px; height: 11px; } .vfb .vf169 { width: 18px; height: 10px; }
 .vfb .vf916 { width: 9px; height: 15px; } .vfb .vf11 { width: 12px; height: 12px; }
+
+/* F11 skrinshotlar (Demo > o'ng ustun, videolar ostida) */
+.ph2.ssh { margin-top: 10px; }
+.dml.dml2.sm { height: 236px; }
+.ssg { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; max-height: 186px; overflow-y: auto; padding-right: 4px; }
+.sst { position: relative; background: #0c0a0d; border: 1px solid #2a2026; border-radius: 4px; overflow: hidden; }
+.sst:hover { border-color: #ff3b3b; }
+.sst .ssi { display: block; height: 0; padding-bottom: 56.25%; background: #08070a no-repeat center; background-size: cover; cursor: pointer; }
+.sst span { display: block; font-size: 11px; color: #a89ea8; padding: 3px 6px; white-space: nowrap; }
+.sst .ssd { position: absolute; right: 4px; bottom: 2px; color: #8f8590; cursor: pointer; padding: 1px 3px; }
+.sst .ssd:hover { color: #ff3b3b; }

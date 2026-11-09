@@ -1234,19 +1234,21 @@ static void hw_query(char *out, size_t cap)
 }
 static unsigned cache_mb(void);
 static void vid_list(char *out, size_t cap);   /* xc_rec.c */
+static void shot_list(char *out, size_t cap);
 static void fetch_opts(void)
 {
-    char url[4400], hw[800], dm[3200];
+    char url[6200], hw[800], dm[3200], sl[1800];
     char v[48];
     url_escape(v, sizeof(v), g_version[0] ? g_version : XC_VERSTR);   /* birinchi ochilish - exe versiyasi */
     hw_query(hw, sizeof(hw));
     vid_list(dm, sizeof(dm));                     /* menyudagi "Videolarim" - papkadagi haqiqiy MP4 lar */
+    shot_list(sl, sizeof(sl));                    /* va F11 skrinshotlar */
     wchar_t ini[MAX_PATH]; ini_path(ini);
     unsigned cmb = (unsigned)GetPrivateProfileIntW(L"x", L"cachemb", 0, ini);   /* o'yin paytida fonda hisoblangan (cache_maint) */
     wchar_t wcr[24]; char cr[24] = ""; ini_get(L"t_cr", wcr, 24);         /* oxirgi yiqilish: "kod~fayllar" - bir marta yuboriladi */
     WideCharToMultiByte(CP_UTF8, 0, wcr, -1, cr, sizeof(cr), NULL, NULL);
     if (strspn(cr, "0123456789abcdef~") != strlen(cr)) cr[0] = 0;
-    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=hello&d=%s&v=%s&cache=%u&dvr=%d&safe=%d%s%s%s%s", g_id, v, cmb, dvr_state(), ini_int(L"crs") >= 3 ? 1 : 0, cr[0] ? "&cr=" : "", cr, hw, dm); url[sizeof(url) - 1] = 0;
+    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=hello&d=%s&v=%s&cache=%u&dvr=%d&safe=%d%s%s%s%s%s", g_id, v, cmb, dvr_state(), ini_int(L"crs") >= 3 ? 1 : 0, cr[0] ? "&cr=" : "", cr, hw, dm, sl); url[sizeof(url) - 1] = 0;
     char *r = http_get(url, NULL);
     if (!r || !strstr(r, "\"ok\":true")) { free(r); return; }
     o_beta = jint(r, "beta", -1); o_auto = jint(r, "auto", 1); o_start = jint(r, "start", -1);
@@ -2534,6 +2536,24 @@ static void gpu_check(void)
         if (dd.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE) break;
     }
     CharLowerW(gpu);
+    /* asosiy ekran virtual drayverda (GameFusion, Parsec, spacedesk, virtual monitor...) - OpenGL o'sha "videokarta"ga tushadi va
+     * cstrike.exe ishga tushishda yiqiladi (1.0.136: GameFusion Driver, cstrike.exe+14833c). Haqiqiy videokarta ekranini asosiy qilish kerak */
+    static const wchar_t *virt[] = { L"gamefusion", L"parsec", L"spacedesk", L"virtual display", L"virtual monitor", L"indirect display", L"idd ", L"usb mobile monitor", L"duet display", L"splashtop", L"meta virtual" };
+    for (size_t i = 0; gpu[0] && i < sizeof(virt) / sizeof(virt[0]); i++) if (wcsstr(gpu, virt[i])) {
+        { char g8[80]; WideCharToMultiByte(CP_UTF8, 0, gpu, -1, g8, sizeof(g8), NULL, NULL); url_escape(g_probx, sizeof(g_probx), g8); }
+        prob_send("gpu_virt", 0); g_probx[0] = 0;
+        FILETIME ft; GetSystemTimeAsFileTime(&ft);
+        int day = (int)(((((ULONGLONG)ft.dwHighDateTime << 32) | ft.dwLowDateTime) / 10000000ULL) / 86400ULL);
+        if (ini_int(L"gpuv") == day) return;
+        ini_set_int(L"gpuv", day);
+        BOOL ru = !strncmp(g_lang, "ru", 2);
+        wchar_t m[700];
+        _snwprintf(m, 700, ru ? L"Основной экран работает через виртуальный драйвер «%s» (программа для стрима/второго монитора/ускорения игр).\n\nCS 1.6 из-за этого вылетает при запуске. Закройте или удалите эту программу (или отключите её виртуальный монитор) и перезагрузите компьютер. Также установите драйвер вашей видеокарты (Intel/NVIDIA/AMD)."
+                              : L"Asosiy ekran «%s» virtual drayveri orqali ishlayapti (strim / ikkinchi monitor / o‘yin tezlatgich dasturi).\n\nShu sababli CS 1.6 ishga tushishda yiqiladi. Shu dasturni yoping yoki o‘chirib tashlang (yoki uning virtual monitorini o‘chiring) va kompyuterni qayta yoqing. Videokartangiz (Intel/NVIDIA/AMD) drayverini ham o‘rnating.", gpu);
+        m[699] = 0;
+        MessageBoxW(g_wnd, m, L"X CLIENT", MB_OK | MB_ICONWARNING | MB_SETFOREGROUND);
+        return;
+    }
     if (!gpu[0] || !(wcsstr(gpu, L"basic display") || wcsstr(gpu, L"basic render") || wcsstr(gpu, L"standard vga") ||
                      wcsstr(gpu, L"\x0441\x0442\x0430\x043d\x0434\x0430\x0440\x0442\x043d\x044b\x0439 vga") ||   /* стандартный vga */
                      wcsstr(gpu, L"\x0431\x0430\x0437\x043e\x0432\x044b\x0439 \x0432\x0438\x0434\x0435\x043e"))) return;   /* базовый видео... */
@@ -2827,6 +2847,12 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, LPWSTR cmdline, int show)
     }
     if (cmdline && !wcsncmp(cmdline, L"--shottest", 10)) {  /* avtomatik test: F11 skrinshot (ekran -> Rasmlar\X CLIENT\*.jpg) */
         shot_thread(NULL); CoUninitialize(); return g_shot_saved ? 0 : 3;
+    }
+    if (cmdline && !wcsncmp(cmdline, L"--sltest ", 9)) {   /* avtomatik test: skrinshotlar ro'yxati (hello &sl=) -> faylga */
+        char sl[1800]; shot_list(sl, sizeof(sl));
+        HANDLE f = CreateFileW(cmdline + 9, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (f != INVALID_HANDLE_VALUE) { DWORD w; WriteFile(f, sl, (DWORD)strlen(sl), &w, NULL); CloseHandle(f); }
+        CoUninitialize(); return 0;
     }
     if (cmdline && !wcsncmp(cmdline, L"--vftest ", 9)) {   /* avtomatik test (GitHub Windows): --vftest <fmt> <video.mp4> - formatga o'tkazish */
         int f = _wtoi(cmdline + 9); const wchar_t *fp = wcschr(cmdline + 9, L' ');

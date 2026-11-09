@@ -1288,8 +1288,23 @@ function vidsRefresh() {
   api('opts', { d: PCID }, function (r) {
     if (!r.ok || !r.o) return;
     OPTS.vids = r.o.vids || [];
+    OPTS.shots = r.o.shots || null;
     if (curModal === 'mdSettings' && setTab === 'demo') $('setBody').innerHTML = PANES.demo();
   });
+}
+/* F11 skrinshotlar: launcher ro'yxat va 320px kichik rasmni yuboradi; bosilsa - launcher rasmni ochadi */
+function shotsBox() {
+  var sh = OPTS && OPTS.shots, g = '';
+  each(sh || [], function (s) {
+    var m = /^xc_(\d{4})(\d\d)(\d\d)_(\d\d)(\d\d)(\d\d)/.exec(s.n || ''); if (!m) return;
+    var thu = PCID && DB.pck ? 'xc_api.php?a=vth&t=s&d=' + encodeURIComponent(PCID) + '&k=' + encodeURIComponent(DB.pck) + '&n=' + encodeURIComponent(s.n) : '';
+    g += '<div class="sst"><a class="ssi" data-sopen="' + esc(s.n) + '" title="' + esc(T('ss_open')) + '"' + (thu ? ' style="background-image:url(\'' + thu + '\')"' : '') + '></a>' +
+      '<span>' + esc(m[4] + ':' + m[5] + ' · ' + m[3] + '.' + m[2]) + '</span><a class="ssd" data-sdel="' + esc(s.n) + '" title="' + esc(T('vd_del')) + '">' + ico('trash') + '</a></div>';
+  });
+  var empty = !PCID ? 'sy_nolaunch' : sh === null || sh === undefined ? 'ss_old' : 'ss_none';
+  return '<div class="ph2 m ssh">' + esc(T('ss_title')) + ' <a class="btn vfold" data-sfold="1">' + ico('folder') + ' ' + esc(T('vd_folder')) + '</a></div>' +
+    (g ? '<div class="ssg">' + g + '</div>' : '<div class="empty">' + esc(T(empty)) + '</div>') +
+    '<div class="mut" style="font-size:12px;margin-top:6px">' + esc(T('ss_note')) + '</div>';
 }
 function vidCmd(c, n, extra, quiet) {
   if (!PCID) { if (!quiet) toast(T('sy_nolaunch'), 4000); return; }
@@ -1298,8 +1313,9 @@ function vidCmd(c, n, extra, quiet) {
   api('vcmd', prm, function (r) {
     if (!r.ok) { if (!quiet) toast(r.msg || 'Xato', 3500); return; }
     if (r.vids) OPTS.vids = r.vids;
+    if (r.shots) OPTS.shots = r.shots;
     if (c === 'trim') { setTimeout(function () { VIDS_T = 0; vidsRefresh(); }, 8000); setTimeout(function () { VIDS_T = 0; vidsRefresh(); }, 20000); }
-    if (!quiet) toast(T({ del: 'vd_deleted', open: 'vd_opening', folder: 'vd_opening2', trim: 'vd_trimming', opt: 'vb_saved', edit: 'vd_editing', share: 'vs_wait' }[c] || 'saved'), c === 'share' ? 7000 : 5000);
+    if (!quiet) toast(T({ del: 'vd_deleted', open: 'vd_opening', folder: 'vd_opening2', sopen: 'vd_opening', sfold: 'vd_opening2', sdel: 'vd_deleted', trim: 'vd_trimming', opt: 'vb_saved', edit: 'vd_editing', share: 'vs_wait' }[c] || 'saved'), c === 'share' ? 7000 : 5000);
     if (curModal === 'mdSettings' && setTab === 'demo') $('setBody').innerHTML = PANES.demo();
   });
 }
@@ -3109,8 +3125,8 @@ var PANES = {
       '<div class="ph2 m">' + esc(T('vf_title')) + '</div><div class="vfb">' + vfs + '</div><div class="mut" style="font-size:12px;margin:-2px 0 8px">' + esc(T('vf_note')) + '</div>' +
       vtg('mic', OPTS && OPTS.mic, 'vb_mic', 'vb_mic2') + vtg('gsum', DB.gsum !== 0, 'gs_tg', 'gs_tg2') + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('vd_title')) + ' <a class="btn vfold" data-vfold="1">' + ico('folder') + ' ' + esc(T('vd_folder')) + '</a></div>' +
-      '<div class="dml dml2">' + (rows || '<div class="empty">' + esc(T(PCID ? 'vd_none' : 'sy_nolaunch')) + '</div>') + '</div>' +
-      '<div class="mut" style="font-size:12px;margin-top:8px">' + esc(T('vd_note')) + '</div></div>';
+      '<div class="dml dml2' + (OPTS && OPTS.shots && OPTS.shots.length ? ' sm' : '') + '">' + (rows || '<div class="empty">' + esc(T(PCID ? 'vd_none' : 'sy_nolaunch')) + '</div>') + '</div>' +
+      '<div class="mut" style="font-size:12px;margin-top:8px">' + esc(T('vd_note')) + '</div>' + shotsBox() + '</div>';
   },
   cont: function () {                             // Kontent: spray, skrinshotlar, mavzu, paketlar
     if (PACKS === null) loadPacks();
@@ -3964,6 +3980,9 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-vopen'))) { vidCmd('open', el.getAttribute('data-vopen')); return; }
   if ((el = closest(t, 'data-vdel'))) { var vn = el.getAttribute('data-vdel'); ask(T('vd_delq'), function () { vidCmd('del', vn); }, false, false, true); return; }
   if ((el = closest(t, 'data-vfold'))) { vidCmd('folder', ''); return; }
+  if ((el = closest(t, 'data-sopen'))) { vidCmd('sopen', el.getAttribute('data-sopen')); return; }
+  if ((el = closest(t, 'data-sdel'))) { var sn = el.getAttribute('data-sdel'); ask(T('ss_delq'), function () { vidCmd('sdel', sn); }, false, false, true); return; }
+  if ((el = closest(t, 'data-sfold'))) { vidCmd('sfold', ''); return; }
   if ((el = closest(t, 'data-vshare'))) {          // klipni saytga va Telegram kanalga
     var vsn = el.getAttribute('data-vshare');
     if (!ME) return toast(T('vs_login'), 5000);

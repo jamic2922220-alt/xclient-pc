@@ -1355,6 +1355,9 @@ static BOOL shot_gdi(HWND game, wchar_t *out)
     DeleteDC(mdc); ReleaseDC(NULL, sdc);
     return ok;
 }
+static void shot_report(const wchar_t *path);
+static void shot_thumb_now(const wchar_t *path);
+static BOOL sthumb_one(const wchar_t *dir, const wchar_t *wname);
 static DWORD WINAPI shot_thread(LPVOID arg)
 {
     HWND game = (HWND)arg; wchar_t out[MAX_PATH] = L""; BOOL ok = FALSE;
@@ -1379,7 +1382,7 @@ static DWORD WINAPI shot_thread(LPVOID arg)
     }
     if (!ok) ok = shot_gdi(game, out);
     CoUninitialize();
-    if (ok) { InterlockedIncrement(&g_shot_saved); Beep(1800, 35); Sleep(40); Beep(2200, 35); }
+    if (ok) { InterlockedIncrement(&g_shot_saved); Beep(1800, 35); Sleep(40); Beep(2200, 35); shot_report(out); shot_thumb_now(out); }   /* menyudagi "Skrinshotlar" - ro'yxat va kichik rasm */
     else Beep(400, 120);
     InterlockedExchange(&g_shot_busy, 0);
     return 0;
@@ -1389,6 +1392,130 @@ static void shot_take(HWND game)
     if (InterlockedExchange(&g_shot_busy, 1)) return;
     HANDLE th = CreateThread(NULL, 0, shot_thread, game, 0, NULL);
     if (th) CloseHandle(th); else InterlockedExchange(&g_shot_busy, 0);
+}
+/* skrinshot nomi: xc_YYYYMMDD_HHMMSS yoki shu soniyada bir nechta bo'lsa xc_..._2 */
+static BOOL shot_name_ok(const char *n)
+{
+    size_t L = strlen(n); char b[20];
+    if (L < 18 || L > 21) return FALSE;
+    lstrcpynA(b, n, 19);
+    if (!vid_name_ok(b)) return FALSE;
+    if (L == 18) return TRUE;
+    if (n[18] != '_' || L == 19) return FALSE;
+    for (size_t i = 19; i < L; i++) if (n[i] < '0' || n[i] > '9') return FALSE;
+    return TRUE;
+}
+/* "&sl=xc_20261109_213045~850,..." - Rasmlar\X CLIENT dagi eng yangi 48 ta skrinshot (nom~KB) - menyudagi "Skrinshotlar" */
+typedef struct { char n[24]; ULONGLONG t; unsigned kb; } ShotF;
+static int shot_cmp(const void *a, const void *b) { ULONGLONG x = ((const ShotF *)a)->t, y = ((const ShotF *)b)->t; return x < y ? 1 : x > y ? -1 : 0; }
+static void shot_list(char *out, size_t cap)
+{
+    wchar_t dir[MAX_PATH], pat[MAX_PATH];
+    lstrcpynA(out, "&sl=", (int)cap);
+    if (!shot_dir(dir)) return;
+    _snwprintf(pat, MAX_PATH, L"%s\\xc_*.jpg", dir); pat[MAX_PATH - 1] = 0;
+    ShotF *l = (ShotF *)malloc(sizeof(ShotF) * 1000); int n = 0;
+    if (!l) return;
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(pat, &fd);
+    if (h != INVALID_HANDLE_VALUE) {
+        do {
+            size_t L = wcslen(fd.cFileName);
+            if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || L < 22 || L > 25 || n >= 1000) continue;
+            WideCharToMultiByte(CP_UTF8, 0, fd.cFileName, (int)(L - 4), l[n].n, 23, NULL, NULL); l[n].n[L - 4] = 0;   /* .jpg siz */
+            if (!shot_name_ok(l[n].n)) continue;
+            l[n].t = ((ULONGLONG)fd.ftLastWriteTime.dwHighDateTime << 32) | fd.ftLastWriteTime.dwLowDateTime;
+            l[n].kb = (unsigned)(((((ULONGLONG)fd.nFileSizeHigh << 32) | fd.nFileSizeLow) + 512) / 1024);
+            n++;
+        } while (FindNextFileW(h, &fd));
+        FindClose(h);
+    }
+    qsort(l, n, sizeof(ShotF), shot_cmp);
+    size_t len = strlen(out);
+    for (int i = 0; i < n && i < 48; i++) {
+        if (len + 36 >= cap) break;
+        len += _snprintf(out + len, cap - len, "%s%s~%u", i ? "," : "", l[i].n, l[i].kb);
+    }
+    out[cap - 1] = 0;
+    free(l);
+}
+/* kichik rasm (320 px) saytga - menyuda ko'rinishi uchun. Yuborilganlar Rasmlar\X CLIENT\.thumbs da belgilanadi.
+ * GDI+ ishga tushirilgan bo'lishi kerak */
+static char *share_post(const char *path, const void *data, DWORD len);
+static BOOL sthumb_one(const wchar_t *dir, const wchar_t *wname)
+{
+    wchar_t td[MAX_PATH], jp[MAX_PATH], mk[MAX_PATH], src[MAX_PATH];
+    _snwprintf(td, MAX_PATH, L"%s\\.thumbs", dir); td[MAX_PATH - 1] = 0;
+    _snwprintf(mk, MAX_PATH, L"%s\\%s.up", td, wname); mk[MAX_PATH - 1] = 0;
+    if (GetFileAttributesW(mk) != INVALID_FILE_ATTRIBUTES) return TRUE;
+    if (CreateDirectoryW(td, NULL)) SetFileAttributesW(td, FILE_ATTRIBUTE_HIDDEN);
+    _snwprintf(src, MAX_PATH, L"%s\\%s.jpg", dir, wname); src[MAX_PATH - 1] = 0;
+    _snwprintf(jp, MAX_PATH, L"%s\\%s.jpg", td, wname); jp[MAX_PATH - 1] = 0;
+    void *img = NULL, *th = NULL; UINT iw = 0, ih = 0; BOOL ok = FALSE;
+    if (GdipLoadImageFromFile(src, &img) != 0 || !img) return FALSE;
+    GdipGetImageWidth(img, &iw); GdipGetImageHeight(img, &ih);
+    if (iw >= 64 && ih >= 64) {
+        UINT tw = 320, thh = (UINT)((ULONGLONG)ih * 320 / iw); if (thh < 32) thh = 32; if (thh > 480) thh = 480;
+        if (GdipGetImageThumbnail(img, tw, thh, &th, NULL, NULL) == 0 && th) {
+            ULONG q = 80; XEncParams ep; ep.Count = 1; ep.Parameter[0].Guid = XC_ENC_QUALITY; ep.Parameter[0].NumberOfValues = 1; ep.Parameter[0].Type = 4; ep.Parameter[0].Value = &q;
+            ok = GdipSaveImageToFile(th, jp, &XC_JPEG, &ep) == 0;
+            GdipDisposeImage(th);
+        }
+    }
+    GdipDisposeImage(img);
+    if (!ok) return FALSE;
+    long len = 0; char *jpg = read_all(jp, &len);
+    ok = FALSE;
+    if (jpg && len > 200 && len < 300000) {
+        char n8[48], path[200]; WideCharToMultiByte(CP_UTF8, 0, wname, -1, n8, sizeof(n8), NULL, NULL);
+        _snprintf(path, sizeof(path), "/xc_api.php?a=vthumb&t=s&d=%s&n=%s", g_id, n8); path[sizeof(path) - 1] = 0;
+        char *r = share_post(path, jpg, (DWORD)len);
+        ok = r && !strncmp(r, "ok", 2);
+        free(r);
+    }
+    free(jpg);
+    if (ok) { HANDLE f = CreateFileW(mk, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL); if (f != INVALID_HANDLE_VALUE) CloseHandle(f); }
+    return ok;
+}
+/* o'yin yopilgach (vthumb_thread): hali yuborilmagan skrinshotlar */
+static void sthumb_sweep(void)
+{
+    wchar_t dir[MAX_PATH], pat[MAX_PATH];
+    if (!shot_dir(dir)) return;
+    _snwprintf(pat, MAX_PATH, L"%s\\xc_*.jpg", dir); pat[MAX_PATH - 1] = 0;
+    WIN32_FIND_DATAW fd; HANDLE h = FindFirstFileW(pat, &fd); int n = 0;
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        wchar_t wn[32]; char an[32]; size_t L = wcslen(fd.cFileName);
+        if (L < 22 || L > 25) continue;
+        lstrcpynW(wn, fd.cFileName, (int)(L - 3));
+        WideCharToMultiByte(CP_UTF8, 0, wn, -1, an, sizeof(an), NULL, NULL);
+        if (shot_name_ok(an)) sthumb_one(dir, wn);
+    } while (++n < 100 && FindNextFileW(h, &fd));
+    FindClose(h);
+}
+static void shot_thumb_now(const wchar_t *path)   /* bitta JPEG ni kichraytirish - bir necha ms, o'yinga ta'sir qilmaydi */
+{
+    wchar_t dir[MAX_PATH], wn[32]; const wchar_t *b = wcsrchr(path, L'\\');
+    if (!b || !shot_dir(dir)) return;
+    lstrcpynW(wn, b + 1, 32); wchar_t *dot = wcsrchr(wn, L'.'); if (dot) *dot = 0;
+    ULONG_PTR tok = 0; XGdipStartupInput si = { 1, NULL, FALSE, FALSE };
+    if (GdiplusStartup(&tok, &si, NULL) != 0) return;
+    sthumb_one(dir, wn);
+    GdiplusShutdown(tok);
+}
+/* menyuga: yangi skrinshot (o'yin paytida - darhol ro'yxatda ko'rinsin) */
+static void shot_report(const wchar_t *path)
+{
+    WIN32_FILE_ATTRIBUTE_DATA fa; char url[300], nm[24] = "";
+    const wchar_t *b = wcsrchr(path, L'\\');
+    if (!b) return;
+    WideCharToMultiByte(CP_UTF8, 0, b + 1, -1, nm, sizeof(nm), NULL, NULL);
+    char *dot = strrchr(nm, '.'); if (dot) *dot = 0;
+    if (!shot_name_ok(nm)) return;
+    ULONGLONG kb = GetFileAttributesExW(path, GetFileExInfoStandard, &fa) ? ((((ULONGLONG)fa.nFileSizeHigh << 32) | fa.nFileSizeLow) + 512) / 1024 : 0;
+    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=vadd&t=s&d=%s&n=%s&kb=%u", g_id, nm, (unsigned)kb); url[sizeof(url) - 1] = 0;
+    free(http_get(url, NULL));
 }
 
 /* F10 - yozish, F9 - oxirgi 30 soniya. RegisterHotKey (klaviatura kuzatuvchisi emas) - faqat o'yin oynasi oldinda bo'lsa ishlaydi.
@@ -1665,6 +1792,20 @@ static void vid_exec(const char *line)
         return;
     }
     wchar_t dir[MAX_PATH], f[MAX_PATH], wn[24];
+    if (c[0] == 's' && (!strcmp(c, "sopen") || !strcmp(c, "sdel") || !strcmp(c, "sfold"))) {   /* F11 skrinshotlar */
+        if (!shot_dir(dir)) return;
+        if (!strcmp(c, "sfold")) { game_minimize_for_shell(); ShellExecuteW(NULL, L"open", dir, NULL, NULL, SW_SHOWNORMAL); return; }
+        if (!shot_name_ok(n)) return;                  /* faqat o'zimiz saqlagan nomlar */
+        MultiByteToWideChar(CP_UTF8, 0, n, -1, wn, 24);
+        _snwprintf(f, MAX_PATH - 2, L"%s\\%s.jpg", dir, wn); f[MAX_PATH - 3] = 0;
+        if (GetFileAttributesW(f) == INVALID_FILE_ATTRIBUTES) return;
+        if (!strcmp(c, "sopen")) { game_minimize_for_shell(); ShellExecuteW(NULL, L"open", f, NULL, NULL, SW_SHOWNORMAL); }
+        else { size_t L = wcslen(f); f[L + 1] = 0;     /* Savatga */
+            SHFILEOPSTRUCTW op = { 0 }; op.wFunc = FO_DELETE; op.pFrom = f;
+            op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI;
+            SHFileOperationW(&op); }
+        return;
+    }
     if (!vid_dir(dir)) return;
     if (!strcmp(c, "folder")) { game_minimize_for_shell(); ShellExecuteW(NULL, L"open", dir, NULL, NULL, SW_SHOWNORMAL); return; }
     if (!vid_name_ok(n)) return;                       /* faqat o'zimiz yozgan nomlar - boshqa fayllarga tegilmaydi */
