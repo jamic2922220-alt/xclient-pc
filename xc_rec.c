@@ -7,6 +7,10 @@
  *  Videolar: Videolar\X CLIENT\xc_YYYYMMDD_HHMMSS.mp4. O'yin yopilgach papka ochiladi.
  * ===================================================================== */
 #define COBJMACROS
+#include <winsock2.h>
+#ifdef _MSC_VER
+#pragma comment(lib, "ws2_32.lib")
+#endif
 #include <d3d11.h>
 #include <d3d10.h>
 #include <dxgi1_2.h>
@@ -93,7 +97,7 @@ static BOOL rec_load(void)
 /* sifat (menyu > Demo > Video sifati): 2 - yuqori (videokarta, 60 kadr, asl o'lcham), 1 - o'rtacha (videokarta, 30 kadr),
  * 0 - kichik (720p, 30 kadr, kam bitreyt - Telegramga yuborish uchun) */
 static int g_buf_fail = 0;                    /* bufer necha marta ochilmadi (4 dan keyin - bu kompyuterda F9 yo'q) */
-static int g_vq = 1, g_mic = 0, g_rb = 1, g_vfmt = 0;   /* g_vfmt: 0 asl, 1 oddiy 4:3, 2 keng 16:9, 3 tik 9:16, 4 kvadrat 1:1 (menyu > Demo > Video formati) */   /* g_mic - mikrofon ovozi videoda; g_rb - "oxirgi 30 soniya" (F9) */
+static int g_vq = 1, g_mic = 0, g_rb = 1, g_vfmt = 0, g_cap_full = 0;   /* g_vfmt: 0 asl, 1 oddiy 4:3, 2 keng 16:9, 3 tik 9:16, 4 kvadrat 1:1 (menyu > Demo > Video formati) */   /* g_mic - mikrofon ovozi videoda; g_rb - "oxirgi 30 soniya" (F9) */
 static void rec_quality(void)
 {
     char url[200];
@@ -231,7 +235,7 @@ static BOOL cap_open(Cap *c, HWND game, BOOL gpu)
         return TRUE;
     }
     double k = 1.0;
-    UINT mw = g_vq ? REC_MAX_W : 1280, mh = g_vq ? REC_MAX_H : 720;
+    UINT mw = g_cap_full ? 8192 : g_vq ? REC_MAX_W : 1280, mh = g_cap_full ? 8192 : g_vq ? REC_MAX_H : 720;   /* F11 skrinshot - asl o'lchamda */
     if (c->sw > mw || c->sh > mh) { double kx = (double)mw / c->sw, ky = (double)mh / c->sh; k = kx < ky ? kx : ky; }
     c->tw = ((UINT)(c->sw * k)) & ~1u; c->th = ((UINT)(c->sh * k)) & ~1u;
     c->frame = (BYTE *)calloc((size_t)c->tw * c->th, 4);
@@ -1303,6 +1307,90 @@ static void rec_toggle(HWND game)
     if (!g_rec_th) InterlockedExchange(&g_rec_run, 0);
 }
 
+/* ---- F11: skrinshot - ekran tiniq (asl o'lchamda, DXGI - to'liq ekranda ham qora emas), JPEG 95% -> Rasmlar\X CLIENT\xc_YYYYMMDD_HHMMSS.jpg.
+ * Oyna rejimida - faqat o'yin oynasi qismi. DXGI ishlamasa (Windows 7) - GDI nusxa */
+int WINAPI GdipCreateBitmapFromScan0(INT w, INT h, INT stride, INT format, BYTE *scan0, void **bitmap);
+typedef struct { GUID Guid; ULONG NumberOfValues; ULONG Type; void *Value; } XEncParam;
+typedef struct { UINT Count; XEncParam Parameter[1]; } XEncParams;
+static const GUID XC_ENC_QUALITY = { 0x1d5be4b5, 0xfa4a, 0x452d, { 0x9c, 0xdd, 0x5d, 0xb3, 0x51, 0x05, 0xe7, 0xeb } };
+static volatile LONG g_shot_busy = 0, g_shot_saved = 0;
+static BOOL shot_dir(wchar_t *dir)
+{
+    if (FAILED(SHGetFolderPathW(NULL, CSIDL_MYPICTURES | CSIDL_FLAG_CREATE, NULL, 0, dir))) return FALSE;
+    wcscat(dir, L"\\X CLIENT"); CreateDirectoryW(dir, NULL);
+    return TRUE;
+}
+static BOOL shot_save(BYTE *bgra, UINT w, UINT h, UINT stride, wchar_t *out)
+{
+    wchar_t dir[MAX_PATH]; SYSTEMTIME t; GetLocalTime(&t);
+    if (!shot_dir(dir)) return FALSE;
+    _snwprintf(out, MAX_PATH, L"%s\\xc_%04u%02u%02u_%02u%02u%02u.jpg", dir, t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond); out[MAX_PATH - 1] = 0;
+    for (int i = 2; GetFileAttributesW(out) != INVALID_FILE_ATTRIBUTES && i < 50; i++) {
+        _snwprintf(out, MAX_PATH, L"%s\\xc_%04u%02u%02u_%02u%02u%02u_%d.jpg", dir, t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond, i); out[MAX_PATH - 1] = 0; }
+    ULONG_PTR tok = 0; XGdipStartupInput si = { 1, NULL, FALSE, FALSE };
+    if (GdiplusStartup(&tok, &si, NULL) != 0) return FALSE;
+    void *bmp = NULL; BOOL ok = FALSE;
+    if (GdipCreateBitmapFromScan0((INT)w, (INT)h, (INT)stride, 0x00022009 /* PixelFormat32bppRGB */, bgra, &bmp) == 0 && bmp) {
+        ULONG q = 95; XEncParams ep; ep.Count = 1; ep.Parameter[0].Guid = XC_ENC_QUALITY; ep.Parameter[0].NumberOfValues = 1; ep.Parameter[0].Type = 4; ep.Parameter[0].Value = &q;
+        ok = GdipSaveImageToFile(bmp, out, &XC_JPEG, &ep) == 0;
+        GdipDisposeImage(bmp);
+    }
+    GdiplusShutdown(tok);
+    return ok;
+}
+/* GDI: ekran (yoki o'yin oynasi) nusxasi - oyna rejimi va eski Windows uchun */
+static BOOL shot_gdi(HWND game, wchar_t *out)
+{
+    RECT r; POINT p0 = { 0, 0 };
+    if (!game || !GetClientRect(game, &r) || !ClientToScreen(game, &p0)) { r.left = r.top = 0; r.right = GetSystemMetrics(SM_CXSCREEN); r.bottom = GetSystemMetrics(SM_CYSCREEN); }
+    else OffsetRect(&r, p0.x, p0.y);
+    int w = r.right - r.left, h = r.bottom - r.top;
+    if (w < 64 || h < 64) return FALSE;
+    HDC sdc = GetDC(NULL), mdc = CreateCompatibleDC(sdc);
+    BITMAPINFO bi; ZeroMemory(&bi, sizeof(bi)); bi.bmiHeader.biSize = sizeof(bi.bmiHeader); bi.bmiHeader.biWidth = w; bi.bmiHeader.biHeight = -h; bi.bmiHeader.biPlanes = 1; bi.bmiHeader.biBitCount = 32;
+    void *bits = NULL; HBITMAP hb = CreateDIBSection(sdc, &bi, DIB_RGB_COLORS, &bits, NULL, 0); BOOL ok = FALSE;
+    if (hb && bits) { HGDIOBJ old = SelectObject(mdc, hb); BitBlt(mdc, 0, 0, w, h, sdc, r.left, r.top, SRCCOPY | CAPTUREBLT); SelectObject(mdc, old); GdiFlush();
+        ok = shot_save((BYTE *)bits, (UINT)w, (UINT)h, (UINT)w * 4, out); }
+    if (hb) DeleteObject(hb);
+    DeleteDC(mdc); ReleaseDC(NULL, sdc);
+    return ok;
+}
+static DWORD WINAPI shot_thread(LPVOID arg)
+{
+    HWND game = (HWND)arg; wchar_t out[MAX_PATH] = L""; BOOL ok = FALSE;
+    CoInitializeEx(NULL, COINIT_MULTITHREADED);
+    if (rec_load()) {
+        Cap c; ZeroMemory(&c, sizeof(c));
+        g_cap_full = 1;                                        /* asl o'lchamda, kichraytirmasdan */
+        if (cap_open(&c, game, FALSE) && c.frame) {
+            for (int i = 0; i < 6; i++) { cap_grab(&c, 60); Sleep(30); }   /* protsessor yo'li bir kadr kechikadi - bir necha marta olamiz */
+            BYTE *f = c.frame; UINT w = c.tw, h = c.th, x0 = 0, y0 = 0;
+            RECT r; POINT p0 = { 0, 0 };
+            if (game && GetClientRect(game, &r) && ClientToScreen(game, &p0) && c.sw && c.sh) {   /* oyna rejimi - faqat o'yin qismi */
+                double kx = (double)c.tw / c.sw, ky = (double)c.th / c.sh;
+                int ax = (int)(p0.x * kx), ay = (int)(p0.y * ky), aw = (int)((r.right - r.left) * kx), ah = (int)((r.bottom - r.top) * ky);
+                if (ax >= 0 && ay >= 0 && aw >= 64 && ah >= 64 && ax + aw <= (int)c.tw && ay + ah <= (int)c.th) { x0 = ax; y0 = ay; w = aw; h = ah; }
+            }
+            BOOL blank = TRUE;   /* butunlay qora kadr - DXGI ushlay olmadi */
+            for (UINT k = 0; k < c.tw * c.th && blank; k += 997) if (((DWORD *)c.frame)[k] & 0xFFFFFF) blank = FALSE;
+            if (!blank) ok = shot_save(f + ((size_t)y0 * c.tw + x0) * 4, w, h, c.tw * 4, out);
+        }
+        cap_close(&c); g_cap_full = 0;
+    }
+    if (!ok) ok = shot_gdi(game, out);
+    CoUninitialize();
+    if (ok) { InterlockedIncrement(&g_shot_saved); Beep(1800, 35); Sleep(40); Beep(2200, 35); }
+    else Beep(400, 120);
+    InterlockedExchange(&g_shot_busy, 0);
+    return 0;
+}
+static void shot_take(HWND game)
+{
+    if (InterlockedExchange(&g_shot_busy, 1)) return;
+    HANDLE th = CreateThread(NULL, 0, shot_thread, game, 0, NULL);
+    if (th) CloseHandle(th); else InterlockedExchange(&g_shot_busy, 0);
+}
+
 /* F10 - yozish, F9 - oxirgi 30 soniya. RegisterHotKey (klaviatura kuzatuvchisi emas) - faqat o'yin oynasi oldinda bo'lsa ishlaydi.
  * Tugmalar o'yinga bormaydi. */
 static HANDLE g_hk_th = NULL;
@@ -1313,6 +1401,7 @@ static DWORD WINAPI rec_hotkey_thread(LPVOID unused)
     MSG m;
     PeekMessageW(&m, NULL, WM_USER, WM_USER, PM_NOREMOVE);              /* navbat yaratilsin */
     BOOL reg = RegisterHotKey(NULL, 0xC10, 0x4000 /* MOD_NOREPEAT */, REC_HOTKEY);
+    BOOL reg11 = RegisterHotKey(NULL, 0xC11, 0x4000 /* MOD_NOREPEAT */, VK_F11);   /* F11 - skrinshot */
     BOOL reg9 = FALSE;                                                  /* F9 (oxirgi 30 soniya) o'chirilgan - orqa fonda doim yozish o'yinni qotirardi */
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     rec_quality();
@@ -1334,6 +1423,7 @@ static DWORD WINAPI rec_hotkey_thread(LPVOID unused)
             if (pid != g_game_pid) continue;
             if (!g_rec_wnd) g_rec_wnd = fg;
             if (m.wParam == 0xC10) rec_toggle(fg);
+            else if (m.wParam == 0xC11) shot_take(fg);
             else if (m.wParam == 0xC09) {
                 if (g_buf_run) { InterlockedExchange(&g_clip_req, 1); Beep(1400, 60); }
                 else if (!g_rec_run) ov_show(!g_rb ? 5 : g_buf_fail >= 4 ? 7 : 8);   /* yoqilgan, lekin bu kompyuterda ishlamadi / o'chirilgan */
@@ -1341,6 +1431,7 @@ static DWORD WINAPI rec_hotkey_thread(LPVOID unused)
         }
     }
     if (reg) UnregisterHotKey(NULL, 0xC10);
+    if (reg11) UnregisterHotKey(NULL, 0xC11);
     if (reg9) UnregisterHotKey(NULL, 0xC09);
     ov_close();
     CoUninitialize();
@@ -1477,12 +1568,97 @@ static DWORD WINAPI share_thread(LPVOID arg)
     return 0;
 }
 
+/* ---- LAN: lokal tarmoqdagi CS 1.6 serverlari (menyu "LAN" bo'limi so'raganda). 27015-27020 portlarga keng tarqatma A2S_INFO,
+ * javoblar ('m' - GoldSrc, 'I' - yangi format, 'A' - challenge -> qayta so'rov) 1.6 soniya yig'iladi va saytga yuboriladi */
+static volatile LONG g_lan_busy = 0;
+static const wchar_t *g_lan_dump = NULL;   /* avtomatik test: ro'yxat faylga ham yoziladi */
+static const char *lan_str(const char *p, const char *end, char *out, int cap)
+{
+    int n = 0; while (p < end && *p) { if (n < cap - 1) { char ch = *p; out[n++] = (ch == '|' || ch == ';' || (unsigned char)ch < 32) ? ' ' : ch; } p++; }
+    out[n] = 0; return p < end ? p + 1 : end;
+}
+static DWORD WINAPI lan_thread(LPVOID unused)
+{
+    (void)unused;
+    WSADATA wd; char list[3000] = ""; size_t ll = 0; int found = 0;
+    if (WSAStartup(MAKEWORD(2, 2), &wd) == 0) {
+        SOCKET s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        if (s != INVALID_SOCKET) {
+            BOOL on = TRUE; setsockopt(s, SOL_SOCKET, SO_BROADCAST, (const char *)&on, sizeof(on));
+            static const char q[] = "\xFF\xFF\xFF\xFFTSource Engine Query";   /* oxiridagi \0 ham yuboriladi */
+            struct sockaddr_in a; ZeroMemory(&a, sizeof(a)); a.sin_family = AF_INET; a.sin_addr.s_addr = INADDR_BROADCAST;
+            for (int port = 27015; port <= 27020; port++) { a.sin_port = htons((u_short)port); sendto(s, q, sizeof(q), 0, (struct sockaddr *)&a, sizeof(a)); }
+            DWORD t0 = GetTickCount(); char seen[40][24]; int ns = 0;
+            while (GetTickCount() - t0 < 1600 && found < 40) {
+                fd_set fs; FD_ZERO(&fs); FD_SET(s, &fs); struct timeval tv = { 0, 200000 };
+                if (select(0, &fs, NULL, NULL, &tv) <= 0) continue;
+                char b[1400]; struct sockaddr_in from; int fl = sizeof(from);
+                int n = recvfrom(s, b, sizeof(b), 0, (struct sockaddr *)&from, &fl);
+                if (n < 6 || *(int *)b != -1) continue;
+                const char *p = b + 5, *end = b + n; char name[64], map[32], tmp[64]; int pl = 0, mx = 0;
+                if (b[4] == 'A' && n >= 9) {                       /* challenge: so'rov + 4 bayt */
+                    char q2[sizeof(q) + 4]; memcpy(q2, q, sizeof(q)); memcpy(q2 + sizeof(q), b + 5, 4);
+                    sendto(s, q2, sizeof(q2), 0, (struct sockaddr *)&from, fl); continue;
+                }
+                if (b[4] == 'm') { p = lan_str(p, end, tmp, sizeof(tmp)); p = lan_str(p, end, name, sizeof(name)); p = lan_str(p, end, map, sizeof(map)); p = lan_str(p, end, tmp, sizeof(tmp)); p = lan_str(p, end, tmp, sizeof(tmp)); if (p + 2 <= end) { pl = (unsigned char)p[0]; mx = (unsigned char)p[1]; } }
+                else if (b[4] == 'I') { p++; p = lan_str(p, end, name, sizeof(name)); p = lan_str(p, end, map, sizeof(map)); p = lan_str(p, end, tmp, sizeof(tmp)); p = lan_str(p, end, tmp, sizeof(tmp)); p += 2; if (p + 2 <= end) { pl = (unsigned char)p[0]; mx = (unsigned char)p[1]; } }
+                else continue;
+                char ip[24]; unsigned long ad = ntohl(from.sin_addr.s_addr);
+                _snprintf(ip, sizeof(ip), "%lu.%lu.%lu.%lu:%u", (ad >> 24) & 255, (ad >> 16) & 255, (ad >> 8) & 255, ad & 255, (unsigned)ntohs(from.sin_port)); ip[23] = 0;
+                int dup = 0; for (int i = 0; i < ns; i++) if (!strcmp(seen[i], ip)) dup = 1;
+                if (dup || ns >= 40) continue;
+                lstrcpynA(seen[ns++], ip, 24);
+                char one[160]; _snprintf(one, sizeof(one), "%s%s|%s|%s|%d|%d", found ? ";" : "", ip, name, map, pl, mx); one[159] = 0;
+                if (ll + strlen(one) + 1 < sizeof(list)) { strcat(list, one); ll += strlen(one); found++; }
+            }
+            closesocket(s);
+        }
+        WSACleanup();
+    }
+    if (g_lan_dump) { FILE *df = _wfopen(g_lan_dump, L"wb"); if (df) { fputs(list, df); fclose(df); } }
+    char esc[9000], url[9400]; url_escape(esc, sizeof(esc), list);
+    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=lanset&d=%s&l=%s", g_id, esc); url[sizeof(url) - 1] = 0;
+    free(http_get(url, NULL));
+    InterlockedExchange(&g_lan_busy, 0);
+    return 0;
+}
+static void lan_scan(void)
+{
+    if (InterlockedExchange(&g_lan_busy, 1)) return;
+    HANDLE th = CreateThread(NULL, 0, lan_thread, NULL, 0, NULL);
+    if (th) CloseHandle(th); else InterlockedExchange(&g_lan_busy, 0);
+}
+typedef struct { DWORD pid; HWND w; } XcGw;
+static BOOL CALLBACK xc_gw_cb(HWND h, LPARAM lp)
+{
+    XcGw *g = (XcGw *)lp; DWORD pid = 0; GetWindowThreadProcessId(h, &pid);
+    if (pid == g->pid && IsWindowVisible(h) && !GetWindow(h, GW_OWNER)) { RECT r; GetWindowRect(h, &r); if (r.right - r.left >= 320) { g->w = h; return FALSE; } }
+    return TRUE;
+}
+/* "Serverga ulanganda": o'yinchi yuklanish paytida boshqa oynaga o'tgan bo'lsa - o'yin oynasi tepaga chiqadi va/yoki ikonka miltillaydi */
+static void game_on_connect(int fl)
+{
+    if (!g_game_pid || !fl) return;
+    XcGw g = { g_game_pid, NULL }; EnumWindows(xc_gw_cb, (LPARAM)&g);
+    if (!g.w || GetForegroundWindow() == g.w) return;
+    if (fl & 2) { FLASHWINFO fi = { sizeof(fi), g.w, FLASHW_ALL | FLASHW_TIMERNOFG, 0, 0 }; FlashWindowEx(&fi); }
+    if (fl & 1) {
+        if (IsIconic(g.w)) ShowWindow(g.w, SW_RESTORE);
+        DWORD me = GetCurrentThreadId(), fg = GetWindowThreadProcessId(GetForegroundWindow(), NULL);
+        if (fg && fg != me) AttachThreadInput(me, fg, TRUE);
+        SetWindowPos(g.w, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE); SetWindowPos(g.w, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        SetForegroundWindow(g.w); BringWindowToTop(g.w);
+        if (fg && fg != me) AttachThreadInput(me, fg, FALSE);
+    }
+}
 static void vid_exec(const char *line)
 {
     char c[8] = "", n[24] = "", tk[40] = ""; int fa = 0, fb = 0;
     if (sscanf(line, "%7s %23s %d %d", c, n, &fa, &fb) < 1) return;
     if (!strcmp(c, "share")) sscanf(line, "%*s %*s %39s", tk);
-    if (!strcmp(c, "clip")) { if (g_buf_run) InterlockedExchange(&g_clip_req, 1); return; }   /* menyu: avtomatik klip (3+ kill) */
+    if (!strcmp(c, "clip")) { if (g_buf_run) InterlockedExchange(&g_clip_req, 1); return; }
+    if (!strcmp(c, "conn")) { game_on_connect(fa); return; }
+    if (!strcmp(c, "lan")) { lan_scan(); return; }   /* menyu: LAN bo'limi ochildi */   /* menyu: serverga to'liq ulandi (1 - oynani tepaga, 2 - ikonka miltillasin) */   /* menyu: avtomatik klip (3+ kill) */
     if (!strcmp(c, "opt")) {                           /* menyuda bufer/mikrofon o'zgardi */
         rec_quality(); g_rb = 0; g_buf_want = 0;
         if (!g_rb) buf_stop(); else PostThreadMessageW(g_hk_tid, WM_REC_STATE, 100, 0);
@@ -1565,4 +1741,7 @@ static void rec_session_end(void)
         _snwprintf(args, MAX_PATH + 16, L"/select,\"%s\"", g_rec_last); args[MAX_PATH + 15] = 0;
         ShellExecuteW(NULL, L"open", L"explorer.exe", args, NULL, SW_SHOWNORMAL);
     }
+    for (int i = 0; i < 50 && g_shot_busy; i++) Sleep(100);
+    if (g_shot_saved && !g_rec_saved) { wchar_t d[MAX_PATH]; if (shot_dir(d)) ShellExecuteW(NULL, L"open", d, NULL, NULL, SW_SHOWNORMAL); }   /* F11 skrinshotlar papkasi */
+    InterlockedExchange(&g_shot_saved, 0);
 }

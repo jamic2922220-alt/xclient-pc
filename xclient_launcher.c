@@ -1157,7 +1157,7 @@ static char *read_all(const wchar_t *path, long *len)
 /* ---------------------------------------------------------------- Tizim sozlamalari (menyudan) */
 /* O'yin ichidagi X CLIENT menyusi (Sozlamalar > Tizim) ularni xc_api.php ga shu kompyuter id'si (g_id)
  * bilan yozadi; XClient.exe har ishga tushganda o'qiydi va bajaradi. */
-static int  o_beta = -1, o_auto = 1, o_start = -1, o_win = 0, o_clean = 0, o_verify = 0;
+static int  o_beta = -1, o_auto = 1, o_start = -1, o_win = 0, o_clean = 0, o_verify = 0, o_stretch = 0;   /* o_win: 0 to'liq ekran, 1 oyna, 2 chegarasiz oyna */
 static int  o_rsk = 3;                          /* klassik radar foni: 0 asl, 1 qora kontrast, 2 qora + halqalar, 3 taktik to'r (standart), 4 neon, 5 minimal, 6 kontrast kvadrat */
 static void radar_skin(int style);              /* xc_radar.c */
 static int  o_tune = 1, o_macc = 1, o_bgp = 1, o_dvroff = 0;   /* xc_tune.c: o'yin paytida Windows'ni moslash (menyu > Tizim) */
@@ -1250,7 +1250,7 @@ static void fetch_opts(void)
     char *r = http_get(url, NULL);
     if (!r || !strstr(r, "\"ok\":true")) { free(r); return; }
     o_beta = jint(r, "beta", -1); o_auto = jint(r, "auto", 1); o_start = jint(r, "start", -1);
-    o_win = jint(r, "win", 0); o_clean = jint(r, "clean", 0); o_verify = jint(r, "verify", 0);
+    o_win = jint(r, "win", 0); o_stretch = jint(r, "stretch", 0); o_clean = jint(r, "clean", 0); o_verify = jint(r, "verify", 0);
     o_rsk = jint(r, "rsk", 3); ini_set_int(L"rsk", o_rsk + 1);   /* +1: 0 - "hali yo'q" */
     o_tune = jint(r, "tune", 1); o_macc = jint(r, "macc", 1); o_bgp = jint(r, "bgp", 1); o_dvroff = jint(r, "dvroff", 0);
     if (cr[0]) ini_str(L"t_cr", NULL);
@@ -2365,7 +2365,13 @@ static BOOL run_game(void)
     }
     wchar_t vid[96] = L"";
     unsigned w = 0, h = 0;
-    if (o_res[0] && sscanf(o_res, "%ux%u", &w, &h) == 2) _snwprintf(vid, 96, L" -width %u -height %u%s", w, h, o_win ? L" -window" : L" -full");
+    if (o_win == 2) {   /* oynali to'liq ekran: chegarasiz oyna monitor o'lchamida - Alt+Tab tez, qora ekransiz */
+        DEVMODEW dm; ZeroMemory(&dm, sizeof(dm)); dm.dmSize = sizeof(dm);
+        if (EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &dm) && dm.dmPelsWidth >= 640) { w = dm.dmPelsWidth; h = dm.dmPelsHeight; }
+        else if (!(o_res[0] && sscanf(o_res, "%ux%u", &w, &h) == 2)) { w = 1024; h = 768; }
+        _snwprintf(vid, 96, L" -width %u -height %u -window -noborder", w, h);
+    }
+    else if (o_res[0] && sscanf(o_res, "%ux%u", &w, &h) == 2) _snwprintf(vid, 96, L" -width %u -height %u%s", w, h, o_win ? L" -window" : L" -full");
     else if (o_win) lstrcpyW(vid, L" -window");
     else {
         /* "Avto": o'yin monitorning haqiqiy o'lchamida ochiladi (Windows masshtabi 125%/150% bo'lsa ham - EnumDisplaySettings) */
@@ -2397,7 +2403,7 @@ static BOOL run_game(void)
                              : L"O‘yin ketma-ket 3 marta yiqildi.\n\nX CLIENT uni xavfsiz rejimda ochadi: 1024x768 oyna va yengil grafika. Hammasi joyida bo‘lsa - keyingi safar odatiy holga qaytadi.",
                     L"X CLIENT", MB_ICONINFORMATION | MB_SETFOREGROUND);
     }
-    _snwprintf(cmd, 1024, L"\"%s\" -game cstrike%s -noforcemparms -noforcemaccel +exec xclient_launcher.cfg%s", exe, vid, safe ? L" +exec xclient_safe.cfg" : L"");
+    _snwprintf(cmd, 1024, L"\"%s\" -game cstrike%s%s -noforcemparms -noforcemaccel +exec xclient_launcher.cfg%s", exe, vid, o_stretch && !safe ? L" -stretchaspect" : L"", safe ? L" +exec xclient_safe.cfg" : L"");
     STARTUPINFOW si = { sizeof(si) };
     PROCESS_INFORMATION pi;
     meta_save();
@@ -2816,6 +2822,12 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, LPWSTR cmdline, int show)
     (void)hp; (void)cmdline; (void)show;
     CoInitialize(NULL);
     GetModuleFileNameW(NULL, g_self, MAX_PATH);
+    if (cmdline && !wcsncmp(cmdline, L"--lantest ", 10)) {   /* avtomatik test: LAN skaner -> faylga */
+        g_lan_dump = cmdline + 10; lan_thread(NULL); CoUninitialize(); return 0;
+    }
+    if (cmdline && !wcsncmp(cmdline, L"--shottest", 10)) {  /* avtomatik test: F11 skrinshot (ekran -> Rasmlar\X CLIENT\*.jpg) */
+        shot_thread(NULL); CoUninitialize(); return g_shot_saved ? 0 : 3;
+    }
     if (cmdline && !wcsncmp(cmdline, L"--vftest ", 9)) {   /* avtomatik test (GitHub Windows): --vftest <fmt> <video.mp4> - formatga o'tkazish */
         int f = _wtoi(cmdline + 9); const wchar_t *fp = wcschr(cmdline + 9, L' ');
         BOOL r = fp && rec_load() && vid_reformat(fp + 1, f);

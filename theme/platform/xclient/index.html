@@ -19,7 +19,7 @@
  * o'yin brauzeri cheksiz kutib, ekran ko'k bo'lib qolardi. Sinxron yuklash faqat server hozirgina javob bergandan keyin.
  * Qo'riqchi: menyu (xc.js) 20 s ichida ishga tushmasa - sahifa qayta yuklanadi (4 martagacha, oraliq oshib boradi). */
 (function () {
-  var V = '10203800';
+  var V = '10203900';
   window.XC_V = V;
   function nm() { try { return String(window.name || ''); } catch (e) { return ''; } }
   function has(t) { return ('|' + nm() + '|').indexOf('|' + t + '|') >= 0; }
@@ -66,7 +66,7 @@
   } catch (e) {}
 })();
 </script>
-<link rel="stylesheet" href="xc.css?v=10203800">
+<link rel="stylesheet" href="xc.css?v=10203900">
 <script>
 /* Xato bo'lsa ekranning tepasida ko'rsatamiz (o'yin brauzerida konsol yo'q) */
 window.XC_ERRS = [];
@@ -83,7 +83,7 @@ window.onerror = function (msg, url, line) {
   return false;
 };
 </script>
-<script src="xc_lang.js?v=10203800"></script>
+<script src="xc_lang.js?v=10203900"></script>
 </head>
 <body>
 <div id="app">
@@ -207,6 +207,7 @@ window.onerror = function (msg, url, line) {
         <a data-tab="internet" data-t="t_internet"></a>
         <a data-tab="favs"><span data-t="t_favs"></span> <small id="favCnt"></small></a>
         <a data-tab="history" data-t="t_history"></a>
+        <a data-tab="lan" data-t="t_lan"></a>
         <a data-tab="friends" data-t="t_friends"></a>
         <a data-tab="top" data-t="t_top"></a>
       </div>
@@ -300,6 +301,6 @@ window.onerror = function (msg, url, line) {
   <div id="dbg"></div>
 </div>
 <script src="master.js"></script>
-<script src="xc.js?v=10203800"></script>
+<script src="xc.js?v=10203900"></script>
 </body>
 </html>

@@ -1352,7 +1352,9 @@ function onConnectEvt(addr, inGame) {
   if (DEMO_PLAY) return;
   cmd('host_framerate 0');          // demo o'zi ham ulanish hodisasini berishi mumkin - demo paytida tegmaymiz (serverga ulanish 'Connecting to' bilan ushlanadi)
   if (QUEUE_IP && addr !== QUEUE_IP && addr !== CONNECTED) stopQueue();   // hozirgi serverning o'z hodisalari (xarita almashishi) bekor qilmaydi   // boshqa serverga (konsol, o'yin ro'yxati) kirildi - navbat bekor
-  if (addr !== CONNECTED) { CONNECTED = addr; ESC_OPEN = false; setTimeout(restCheck, 3000); setTimeout(function () { if (CONNECTED === addr) aimNetApply(addr); }, inGame ? 1500 : 6000); if (!inGame) applyPw(addr); startGame(addr); musicSync();   // serverda mp3 chalinmasin: o'yin ovozlarini bo'g'adi
+  if (addr !== CONNECTED) { CONNECTED = addr; ESC_OPEN = false; setTimeout(restCheck, 3000); setTimeout(function () { if (CONNECTED === addr) aimNetApply(addr); }, inGame ? 1500 : 6000);
+    if (inGame && OPTS && (OPTS.ontop || OPTS.flash)) vidCmd('conn', '', { ta: (OPTS.ontop ? 1 : 0) | (OPTS.flash ? 2 : 0) }, true);   /* serverga ulandi: oyna tepaga / ikonka miltillaydi (launcher) */
+    if (!inGame) applyPw(addr); startGame(addr); musicSync();   // serverda mp3 chalinmasin: o'yin ovozlarini bo'g'adi
     pingPresence(); renderAll(); sparks(); voiceWarm(); }
   if (S.demo) startRecord(inGame ? 1500 : 25000);   // 'connect' dan keyin 'putinserver' kelmasa ham 25 soniyadan so'ng urinamiz
 }
@@ -1605,12 +1607,36 @@ function forgot() {
 /* ============================================================ SERVERLAR oynasi */
 var srvTab = 'internet', srvSel = '', srvSort = 'pl', srvDesc = true;
 var FLT = { ping: false, notempty: false, notfull: false };
+/* LAN: menyu tarmoqni o'zi ko'ra olmaydi - launcher lokal tarmoqqa keng tarqatma so'rov yuboradi (CS ning "Локальная сеть" kabi)
+ * va topganini saytga qo'yadi; menyu 3-9 soniya ichida oladi. Launchersiz (NextClient o'zi) - faqat IP bo'yicha qo'shish */
+var LAN_IPS = [], LAN_T0 = 0, LAN_ST = '';
+function lanStart() {
+  if (!PCID) { LAN_ST = 'nol'; renderServers(); return; }
+  if (now() - LAN_T0 < 5000) return;
+  LAN_T0 = now(); LAN_ST = 'scan'; vidCmd('lan', '', null, true); renderServers();
+  var tries = 0;
+  (function poll() {
+    setTimeout(function () {
+      api('langet', { d: PCID }, function (r) {
+        tries++;
+        if (r && r.ok && r.t && r.now && r.t >= r.now - Math.round((now() - LAN_T0) / 1000) - 2) {
+          LAN_IPS = [];
+          each(r.list || [], function (x) { var s = srv(x.ip); s.ok = true; s.fail = false; s.name = x.name || x.ip; s.map = x.map || ''; s.pl = x.pl | 0; s.max = x.max | 0; LAN_IPS.push(x.ip); query(x.ip, true); });
+          LAN_ST = LAN_IPS.length ? '' : 'none'; if (srvTab === 'lan') { if (!srvSel && LAN_IPS[0]) srvSel = LAN_IPS[0]; renderServers(); }
+          return;
+        }
+        if (tries < 4) poll(); else { LAN_ST = 'none'; if (srvTab === 'lan') renderServers(); }
+      });
+    }, tries ? 3000 : 3500);
+  })();
+}
 function openServers(tab) { openModal('mdServers'); setSrvTab(tab || 'internet'); each(tabIps(), function (ip) { query(ip, true); }); }
 function setSrvTab(tab) {
   if (tab !== srvTab) SORT_USER = false;
   srvTab = tab;
   each(document.querySelectorAll('#srvTabs a'), function (a) { a.className = a.getAttribute('data-tab') === tab ? 'on' : ''; });
   if (tab === 'friends') loadFriends();
+  if (tab === 'lan') lanStart();
   var ips = tabIps();
   each(ips, function (ip) { query(ip); });
   if (!srvSel || ips.indexOf(srvSel) < 0) srvSel = ips[0] || '';
@@ -1620,6 +1646,7 @@ function setSrvTab(tab) {
 function tabIps() {
   if (srvTab === 'favs') { var fv = PROMO_FAV.slice(); each(DB.fav, function (ip) { if (fv.indexOf(ip) < 0) fv.push(ip); }); return fv; }
   if (srvTab === 'top') return TOP.slice();
+  if (srvTab === 'lan') return LAN_IPS.slice();
   if (srvTab === 'friends') { var o = []; each(FRIENDS, function (f) { if (f.server && o.indexOf(f.server) < 0) o.push(f.server); }); return o; }
   if (srvTab === 'history') { var seen = {}, out = []; each(DB.hist, function (h) { if (!seen[h.ip]) { seen[h.ip] = 1; out.push(h.ip); } }); return out; }
   var net = svcIps(); each(MASTER, function (ip) { if (net.indexOf(ip) < 0) net.push(ip); }); return net;
@@ -1645,13 +1672,18 @@ function ddItems(kind) {
     each(SZ, function (z, i) { out.push([z, 'x' + (i + 1)]); });
   } else if (kind === 'res') {
     out.push(['', T('sy_res_auto')]);
-    var sw = screen.width || 1920, sh = screen.height || 1080, seen = {};
-    each([sw + 'x' + sh, '1920x1080', '1680x1050', '1600x900', '1440x900', '1366x768', '1280x1024', '1280x960', '1280x720', '1024x768', '800x600'], function (r) {
-      if (!seen[r]) { seen[r] = 1; out.push([r, r.replace('x', ' \u00d7 ')]); }
+    var sw = screen.width || 1920, sh = screen.height || 1080, seen = {}, ar = scrAr();
+    var RES = { '43': ['1600x1200', '1280x960', '1152x864', '1024x768', '800x600', '640x480'], '169': ['2560x1440', '1920x1080', '1600x900', '1366x768', '1280x720'],
+      '1610': ['1920x1200', '1680x1050', '1440x900', '1280x800'] };
+    each([sw + 'x' + sh].concat(RES[ar] || []), function (r) {
+      if (!seen[r] && (r !== sw + 'x' + sh || resAr(r) === ar)) { seen[r] = 1; out.push([r, r.replace('x', ' \u00d7 ')]); }
     });
   }
   return out;
 }
+/* ekran formati (NextClient "Формат экрана"): 4:3 / 16:9 / 16:10 - o'lchamlar ro'yxatini saralaydi */
+function resAr(r) { var m = /^(\d+)x(\d+)$/.exec(r || ''); if (!m) return ''; var k = m[1] / m[2]; return k < 1.45 ? '43' : k < 1.7 ? '1610' : '169'; }
+function scrAr() { return DB.ar || resAr(OPTS.res) || resAr((screen.width || 1920) + 'x' + (screen.height || 1080)) || '169'; }
 function ddValue(kind) { return kind === 'map' ? FMAP : kind === 'mode' ? FMODE : kind === 'xpre' ? E.xp : kind === 'xsz' ? E.xs : OPTS.res || ''; }
 function ddLabel(kind) {
   var v = ddValue(kind), items = ddItems(kind);
@@ -1690,7 +1722,7 @@ function renderServers() {
   $('h5').innerHTML = esc(isHist || isFav ? T('h_last') : isFr ? T('h_friend') : '');
   $('h6').innerHTML = esc(isHist ? T('h_res') : '');
   $('quickBtn').style.display = isNet ? '' : 'none';
-  $('addIpBtn').style.display = isFav ? '' : 'none';
+  $('addIpBtn').style.display = '';                 // IP bo'yicha qo'shish - hamma bo'limda (sevimlilarga qo'shiladi)
   $('favNote').style.display = isFav && ME ? '' : 'none';
   $('clearHist').style.display = isHist ? '' : 'none';
   $('fMap').style.display = $('fMode').style.display = isNet ? '' : 'none';
@@ -1754,7 +1786,7 @@ function renderServers() {
     each(rows, function (s) { if (!used[s.ip]) rest += rowHtml(s); });
     if (rest) html += (html ? '<div class="sgh">' + esc(T('sv_other')) + '</div>' : '') + rest;
   } else each(rows, function (s) { html += rowHtml(s); });
-  var emptyMsg = isFav ? T('empty_favs') : isHist ? T('empty_hist') : isFr ? (ME ? T('empty_frsrv') : T('no_fr_login')) : (isNet && running ? T('loading') : T('empty_list'));
+  var emptyMsg = srvTab === 'lan' ? T('lan_' + (LAN_ST || 'none')) : isFav ? T('empty_favs') : isHist ? T('empty_hist') : isFr ? (ME ? T('empty_frsrv') : T('no_fr_login')) : (isNet && running ? T('loading') : T('empty_list'));
   var lst = $('srvList'), st = lst.scrollTop;
   lst.innerHTML = html || '<div class="empty">' + esc(emptyMsg) + '</div>';
   lst.scrollTop = st;
@@ -2065,7 +2097,7 @@ var DEF = {
   name: '', tag: 'X | ', net: 'fast', aimnet: 1, dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, buykeys: 0, queue: 1, reconn: 1, rest: 0, demo: 0, dmig: 0, dmig2: 0,
   sens: 2.5, zoom: 1.2, raw: 1, filter: 0, inv: 0,
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1, micwarm: 1, micfix: 0,
-  fps: 100, showfps: 0, uisnd: 1, uics: 0, uimig: 0, ultra: 0, ann: 1, gamma: 2.5, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
+  fps: 100, showfps: 0, uisnd: 1, uics: 0, uimig: 0, ultra: 0, ann: 1, gamma: 2.5, bright: 1, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
   xp: 'pro', xt: 0, xs: 'small', xc: '50 250 50', xtr: 0, xdyn: 0, xthick: 1, xgap: 3, xout: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
   rscale: 115, ropac: 100, rnames: 0, rhp: 0, rmode: 1, rround: 1, rrot: 1, rmap: 0.8,
   vmx: 0, vmy: 0, vmz: 0, vmshift: 0, bobst: 0, lagst: 0, camint: 0,
@@ -2076,7 +2108,7 @@ var DEF = {
 };
 var S = null, E = null;
 var CVARS = { sens: 'sensitivity', zoom: 'zoom_sensitivity_ratio', raw: 'm_rawinput', filter: 'm_filter', vol: 'volume', vscale: 'voice_scale', voice: 'voice_enable',
-  fps: 'fps_max', showfps: 'cl_showfps', gamma: 'gamma', fov: 'fov_angle', vmfov: 'viewmodel_fov', hor: 'fov_horplus', xt: 'cl_crosshair_type', xs: 'cl_crosshair_size',
+  fps: 'fps_max', showfps: 'cl_showfps', gamma: 'gamma', bright: 'brightness', hdm: 'cl_himodels', fov: 'fov_angle', vmfov: 'viewmodel_fov', hor: 'fov_horplus', xt: 'cl_crosshair_type', xs: 'cl_crosshair_size',
   xc: 'cl_crosshair_color', xtr: 'cl_crosshair_translucent', xdyn: 'cl_dynamiccrosshair', hand: 'cl_righthand', fastsw: 'hud_fastswitch', dl: 'cl_allowdownload',
   spray: 'cl_allowupload', mute: 'snd_mute_losefocus', vsync: 'gl_vsync', dyn: 'r_dynamic', cid: 'hud_centerid', radar: 'cl_radartype', dmax: 'hud_deathnotice_max', decals: 'mp_decals',
   ropac: 'hud_radar_opacity', rnames: 'hud_radar_names', rhp: 'hud_radar_health', rmode: 'hud_radar_mode', rround: 'hud_radar_round', rrot: 'hud_radar_rotate', rmap: 'hud_radar_map_scale',
@@ -2178,8 +2210,13 @@ function settingsCmds(s) {
   // fps_override 1 bo'lmasa NextClient FPS ni 100 da ushlab qoladi
   // cl_dlmax standart (512): 1024 ba'zi serverlar himoyasida (DProto/ReChecker) "FakePlayers" deb kick qilinishi mumkin
   c.push('fps_override ' + (s.fps > 100 ? 1 : 0), 'cl_showfps ' + s.showfps, 'cl_dlmax 512', 'm_customaccel 0');
-  c.push('fps_max ' + s.fps, 'gamma ' + s.gamma, 'fov_angle ' + s.fov, 'viewmodel_fov ' + s.vmfov, 'fov_horplus ' + s.hor, 'gl_vsync ' + s.vsync, 'r_dynamic ' + s.dyn, 'mp_decals ' + Math.max(300, s.decals));   // kam bo'lsa spray o'q izlari orasida tez o'chib ketadi
+  c.push('fps_max ' + s.fps, 'gamma ' + s.gamma, 'brightness ' + (s.bright != null ? s.bright : 1), 'fov_angle ' + s.fov, 'viewmodel_fov ' + s.vmfov, 'fov_horplus ' + s.hor, 'gl_vsync ' + s.vsync, 'r_dynamic ' + s.dyn, 'mp_decals ' + Math.max(300, s.decals));   // kam bo'lsa spray o'q izlari orasida tez o'chib ketadi
   each(xhairCmds(s), function (x) { c.push(x); });
+  /* NextClient video sozlamalari (o'z oynasidagi kabi): HD modellar, tashqi kontent, past grafika - dvigatel yozib qo'yadi, o'yin qayta
+   * ochilganda kuchga kiradi. Faqat o'yinchi bu yerda o'zgartirgan bo'lsa yuboriladi (NextClient oynasidagi tanlovni bosib ketmasin) */
+  if (s.hdmx) c.push('_sethdmodels ' + (s.hdm ? 1 : 0));
+  if (s.addons === 0 || s.addons === 1) c.push('_setaddons_folder ' + s.addons);
+  if (s.lowgfx === 0 || s.lowgfx === 1) c.push('_set_vid_level ' + s.lowgfx);
   // gl_picmip 0 va cl_minmodels 0 qotirilgan: aks holda serverning o'yinchi skinlari, qurollari va spray buziladi
   /* ultra yengil: teksturalarga tegmaydi (picmip/minmodels serverning skin va spreylarini buzadi) - faqat effektlar: yomg'ir/qor,
    * sprayt aralashuvi, qon/bo'laklar, jasadlar, oyna/suv akslari. O'chirilsa - CS 1.6 ning asl qiymatlari */
@@ -2942,6 +2979,9 @@ function showSetTab(tab) {
   if (tab === 'hud') { drawXhair(); drawScope(); if (XLIVE || E && S && xcode(E) !== xcode(S)) xLive(); }
   layoutCheck('settings/' + tab);
 }
+/* Video bo'limi: launcher sozlamalari (OPTS - o'yin ochilishida qo'llanadi) va ekran formati */
+function vseg(k, cur, opts) { var h = ''; each(opts, function (o) { h += '<a class="' + (cur === o[0] ? 'on' : '') + '" data-vseg="' + k + '" data-v="' + o[0] + '">' + esc(T(o[1])) + '</a>'; }); return h; }
+function votg(k, label, sub) { return '<div class="fr w"><div class="lb">' + esc(T(label)) + (sub ? '<small>' + esc(T(sub)) + '</small>' : '') + '</div><div class="tg' + (OPTS[k] ? ' on' : '') + '" data-otg="' + k + '"><i></i></div></div>'; }
 function tg(key, label, sub) {
   return '<div class="fr w"><div class="lb">' + esc(T(label)) + (sub ? '<small>' + esc(T(sub)) + '</small>' : '') + '</div>' +
     '<div class="tg' + (E[key] ? ' on' : '') + '" data-tg="' + key + '"><i></i></div></div>';
@@ -3004,10 +3044,14 @@ var PANES = {
     return '<div class="pane l"><div class="ph2">' + esc(T('v_title')) + '</div>' +
       seg('fps', 'v_fps', [[100, '100'], [144, '144'], [200, '200'], [300, '300'], [500, '500']]) +
       '<div class="mut" style="margin:-6px 0 8px;font-size:12px">' + esc(T('v_fps2')) + '</div>' +
-      sl('gamma', 'v_bright', 1.8, 3, 0.1) + sl('fov', 'v_fov', 70, 100, 1, 'v_fov2') + sl('vmfov', 'v_vm', 70, 100, 1) + sl('decals', 'v_dec', 300, 4000, 100) + '</div>' +
-      '<div class="pane r"><div class="ph2">&nbsp;</div>' +
+      sl('bright', 'v_brt', 0, 2, 0.1) + sl('gamma', 'v_gam', 1, 3, 0.1) + sl('fov', 'v_fov', 70, 100, 1, 'v_fov2') + sl('vmfov', 'v_vm', 70, 100, 1) + sl('decals', 'v_dec', 300, 4000, 100) +
+      tg('showfps', 'v_showfps') + tg('dyn', 'v_dyn') + tg('lowgfx', 'v_low', 'v_rs') + '</div>' +
+      '<div class="pane r"><div class="ph2">' + esc(T('v_scr')) + '</div>' +
+      '<div class="fr"><div class="lb">' + esc(T('v_ar')) + '</div><div class="ct2 seg">' + vseg('ar', scrAr(), [['43', 'v_ar43'], ['169', 'v_ar169'], ['1610', 'v_ar1610']]) + '</div></div>' +
       '<div class="fr"><div class="lb">' + esc(T('sy_screen')) + '</div><div class="ct2"><a class="dd wide" data-dd="res"><span>' + esc(ddLabel('res')) + '</span><i>\u25be</i></a></div></div>' +
-      tg('hor', 'v_hor') + tg('vsync', 'v_vsync') + tg('showfps', 'v_showfps') + tg('dyn', 'v_dyn') + '</div>';
+      '<div class="fr"><div class="lb">' + esc(T('v_mode')) + '</div><div class="ct2 seg">' + vseg('win', String(OPTS.win | 0), [['0', 'v_m_full'], ['1', 'v_m_win'], ['2', 'v_m_bl']]) + '</div></div>' +
+      tg('vsync', 'v_vsync') + tg('hdm', 'v_hdm', 'v_rs') + tg('addons', 'v_addons', 'v_rs') + votg('stretch', 'v_stretch', 'v_rs') + tg('hor', 'v_hor') +
+      tg('detail', 'v_detail') + votg('ontop', 'v_ontop') + votg('flash', 'v_flash') + '</div>';
   },
   tools: function () {                            // Qo'shimcha: profillar, kalkulyator, tayyor uslublar, demolar
     var pr = '';
@@ -3060,7 +3104,7 @@ var PANES = {
         '<a class="btn vcut" data-vtrim="' + esc(v.n) + '" data-vsec="' + sec + '" title="' + esc(T('vd_trim')) + '">' + ico('cut') + '</a>' +
         '<a class="btn red" data-vopen="' + esc(v.n) + '">' + ico('play') + ' ' + esc(T('vd_open')) + '</a></div>';
     });
-    return '<div class="pane l"><div class="f10box big2"><b>' + esc(T('f10_t')) + '</b>' + esc(T('f10_1')) + '<br>' + esc(T('f10_2')) + '<br>' + esc(T('f10_3')) + '</div>' +
+    return '<div class="pane l"><div class="f10box big2"><b>' + esc(T('f10_t')) + '</b>' + esc(T('f10_1')) + '<br>' + esc(T('f10_2')) + '<br>' + esc(T('f10_3')) + '<br>' + esc(T('f10_4')) + '</div>' +
       '<div class="ph2 m">' + esc(T('vq_title')) + '</div><div class="big vqb">' + vqs + '</div>' +
       '<div class="ph2 m">' + esc(T('vf_title')) + '</div><div class="vfb">' + vfs + '</div><div class="mut" style="font-size:12px;margin:-2px 0 8px">' + esc(T('vf_note')) + '</div>' +
       vtg('mic', OPTS && OPTS.mic, 'vb_mic', 'vb_mic2') + vtg('gsum', DB.gsum !== 0, 'gs_tg', 'gs_tg2') + '</div>' +
@@ -3234,7 +3278,7 @@ var PANES = {
       '<div class="rowb"><b>' + esc(T('sy_ver')) + ' <span class="vbold">v' + esc(VERSION || '1.0') + '</span></b><small>' + esc(T('sy_new')) + '</small><span class="ok2">\u2713 ' + esc(T('sy_newb')) + '</span></div>' +
       otg('auto', 'sy_auto', 'sy_auto2') + otg('beta', 'sy_beta') + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('sy_start')) + '</div>' +
-      otg('start', 'sy_win') + otg('win', 'sy_windowed') +
+      otg('start', 'sy_win') +
       '<div class="fr w"><div class="lb">' + esc(T('sy_fx')) + '<small>' + esc(T('sy_fx2')) + '</small></div><div class="tg' + (DB.fx !== 0 && !FX.off ? ' on' : '') + '" data-dbtg="fx"><i></i></div></div>' +
       '<div class="fr w"><div class="lb">' + esc(T('sy_dnd')) + '<small>' + esc(T('sy_dnd2')) + '</small></div><div class="tg' + (DB.dnd ? ' on' : '') + '" data-dbtg="dnd"><i></i></div></div>' +
       '<div class="ph2 m">' + esc(T('lk_title')) + '</div>' +
@@ -3500,7 +3544,7 @@ function act(a) {
   if (a === 'togglefav') return toggleFav(srvSel);
   if (a === 'clearhist') { DB.hist = []; CUR = null; persist(); return renderAll(); }
   if (a === 'clearall') { DB.hist = []; DB.fav = []; CUR = null; persist(); cloudSave(); toast(T('sy_ok')); return renderAll(); }
-  if (a === 'addip') return ask(T('ask_ip'), function (v) { var ip = normIp(v); if (!ip) return toast(T('bad_ip')); if (!isFavIp(ip)) toggleFav(ip); srvSel = ip; renderServers(); });
+  if (a === 'addip') return ask(T('ask_ip'), function (v) { var ip = normIp(v); if (!ip) return toast(T('bad_ip')); if (!isFavIp(ip)) toggleFav(ip); srvSel = ip; query(ip, true); if (srvTab !== 'favs' && srvTab !== 'lan') setSrvTab('favs'); else renderServers(); });
   if (a === 'console') { closeModal(); return cmd('toggleconsole'); }
   if (a === 'fradd') {
     var v = ($('frIn').value || '').replace(/\s+/g, '');
@@ -3796,7 +3840,7 @@ setInterval(function () { if (!CLK_N || !feat('clicks') || playing()) return; va
 
 /* ---- menyu ovozlari: o'yin sound/xclient/*.wav ni chaladi (XCLauncher.exe ularni o'yin papkasiga qo'yadi) ---- */
 var SFX_ATTR = ['data-act', 'data-tab', 'data-hsub', 'data-seg', 'data-tg', 'data-otg', 'data-ohud', 'data-dd', 'data-ddv', 'data-xchk', 'data-pack',
-  'data-sort', 'data-flt', 'data-theme', 'data-daymode', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-dctl', 'data-ovq', 'data-ovf', 'data-dsel', 'data-vopen', 'data-vdel', 'data-vfold', 'data-vopt', 'data-vtrim', 'data-vshare', 'data-vlink', 'data-orsk', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec', 'data-avpre'];
+  'data-sort', 'data-flt', 'data-theme', 'data-daymode', 'data-lang', 'data-prload', 'data-prsave', 'data-style', 'data-calc', 'data-avc', 'data-demo', 'data-dctl', 'data-ovq', 'data-ovf', 'data-vseg', 'data-dsel', 'data-vopen', 'data-vdel', 'data-vfold', 'data-vopt', 'data-vtrim', 'data-vshare', 'data-vlink', 'data-orsk', 'data-copyip', 'data-chat', 'data-fradd2', 'data-fracc', 'data-frdec', 'data-avpre'];
 var SFX_QUIET = false, sfxLast = null, sfxT = 0;
 /* CS 1.6 ning asl menyu ovozlari (o'yinning o'z fayllari: valve/sound/UI) - standart. Sozlamalarda X CLIENT ovozlariga almashtirsa bo'ladi */
 var SFX_CS = { hover: 'ui/buttonrollover.wav', click: 'ui/buttonclick.wav', tab: 'ui/buttonclick.wav', on: 'ui/buttonclick.wav', off: 'ui/buttonclickrelease.wav',
@@ -3882,8 +3926,12 @@ document.onclick = function (e) {
     return;
   }
   if ((el = closest(t, 'data-ohud'))) { OPTS.hud = Number(el.getAttribute('data-ohud')); saveOpts(T('h_size4')); showSetTab('hud'); return; }
+  if ((el = closest(t, 'data-vseg'))) { var vk = el.getAttribute('data-vseg'), vv = el.getAttribute('data-v');
+    if (vk === 'ar') { DB.ar = vv; persist(); if (OPTS.res && resAr(OPTS.res) !== vv) { OPTS.res = ''; saveOpts(T('v_rs2')); } }
+    else { OPTS.win = +vv; saveOpts(T('v_rs2')); }
+    showSetTab('video'); return; }
   if ((el = closest(t, 'data-otg'))) { var ok2 = el.getAttribute('data-otg'); OPTS[ok2] = OPTS[ok2] ? 0 : 1; el.className = 'tg' + (OPTS[ok2] ? ' on' : ''); saveOpts(/^(tune|macc|bgp)$/.test(ok2) ? T('tn_next') : ''); if (ok2 === 'tune') showSetTab('pro'); return; }
-  if ((el = closest(t, 'data-tg'))) { var k = el.getAttribute('data-tg'); E[k] = E[k] ? 0 : 1; el.className = 'tg' + (E[k] ? ' on' : ''); if (setTab === 'hud') { drawXhair(); var cd = $('xCode'); if (cd) cd.value = xcode(E); } return; }
+  if ((el = closest(t, 'data-tg'))) { var k = el.getAttribute('data-tg'); E[k] = E[k] ? 0 : 1; if (k === 'hdm') E.hdmx = 1; el.className = 'tg' + (E[k] ? ' on' : ''); if (setTab === 'hud') { drawXhair(); var cd = $('xCode'); if (cd) cd.value = xcode(E); } return; }
   if ((el = closest(t, 'data-avc'))) { api('avatar', { color: el.getAttribute('data-avc') }, function (r) { if (!r.ok) return toast(r.msg); setMe(r.me); showSetTab('account'); }); return; }
   if ((el = closest(t, 'data-newsip')) && el.getAttribute('data-newsip')) { sfx('click'); return doConnect(el.getAttribute('data-newsip')); }
   if ((el = closest(t, 'data-daymode'))) return dayToggle();
@@ -4054,9 +4102,9 @@ step('seedFromGame();', function () { seedFromGame(); });
 // saqlangan sozlamalar har ochilishda qayta qo'yiladi: sborkaning userconfig.cfg / eski xclient_launcher.cfg ularni o'zgartirib yuboradi
 step('demo', function () { if (DB.dplay && now() - DB.dplay.t < 600000) { DEMO_PLAY = true; DEMO_CUR = DB.dplay.n; } });   // demo paytida menyu qayta yuklandi
 step('f10', function () {                          // F10 (video) va F9 (oxirgi 30 soniya) - launcher ushlaydi; o'yinda zararsiz bo'lsin
-  each(['F10'], function (key) {
+  each(['F10', 'F11'], function (key) {
     var used = false; for (var a in BINDS) if (BINDS.hasOwnProperty(a) && (BINDS[a] === key || BINDS2[a] === key)) used = true;
-    if (!used) { cmd('alias xc_' + key.toLowerCase() + ' "echo X CLIENT: ' + key + ' - video (launcher)"'); cmd('bind ' + key + ' xc_' + key.toLowerCase()); }
+    if (!used) { cmd('alias xc_' + key.toLowerCase() + ' "echo X CLIENT: ' + key + (key === 'F11' ? ' - skrinshot' : ' - video') + ' (launcher)"'); cmd('bind ' + key + ' xc_' + key.toLowerCase()); }
   });
 });   // launcher F10 ni ushlay olmasa ham o'yinda "quit prompt" chiqmasin
 /* oldingi versiyada ESC menyusidan chiqilganda "volume 0" config.cfg ga saqlanib qolgan bo'lishi mumkin: o'yin ovozsiz ochiladi.

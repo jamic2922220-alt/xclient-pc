@@ -537,6 +537,21 @@ if ($a === 'menuver') {
  * vadd  - launcher: yangi video saqlandi (n, mb, sec)
  * vpoll - launcher: o'yin paytida har 4 soniyada - menyu yuborgan buyruqlarni oladi ("open|del|folder nom" qatorlari) */
 function vid_name($n) { return is_string($n) && preg_match('/^xc_\d{8}_\d{6}$/', $n) ? $n : ''; }
+/* LAN: launcher lokal tarmoqdagi serverlarni topib yuboradi (menyu "LAN" bo'limi so'raganda) - ip:port|nom|xarita|o'yinchi|max ; ... */
+if ($a === 'lanset') {
+    header('Content-Type: text/plain'); header('Cache-Control: no-store');
+    $d = strtolower(p('d'));
+    if (!preg_match('/^[a-z0-9]{8,40}$/', $d) || !is_file(XC_DIR . '/dev/' . $d . '.php') || rl_count('lan' . $d, 60) >= 20) exit;
+    rl_add('lan' . $d, 60);
+    $l = array();
+    foreach (explode(';', (string)p('l')) as $x) {
+        $f = explode('|', $x);
+        if (count($f) < 5 || !preg_match('/^(10|127|172|192)\.[0-9.]{3,11}:\d{2,5}$/', $f[0]) || count($l) >= 40) continue;
+        $l[] = array('ip' => $f[0], 'name' => clean_str($f[1], 64), 'map' => clean_str($f[2], 32), 'pl' => max(0, min(64, (int)$f[3])), 'max' => max(0, min(64, (int)$f[4])));
+    }
+    lock(); $o = rd('dev/' . $d, array()); $o['lan'] = array('t' => time(), 'l' => $l); wr('dev/' . $d, $o); unlock();
+    echo 'ok'; exit;
+}
 if ($a === 'vadd' || $a === 'vpoll') {
     header('Content-Type: text/plain'); header('Cache-Control: no-store');
     $d = strtolower(p('d'));
@@ -1860,7 +1875,8 @@ case 'opts_done':
     if ($a === 'opts_set') {
         $in = json_decode(p('o'), true);
         if (!is_array($in)) fail('bad', 'bad');
-        foreach (array('beta', 'auto', 'start', 'win', 'clean', 'verify', 'prio', 'shots') as $k) if (isset($in[$k])) $o[$k] = $in[$k] ? 1 : 0;
+        foreach (array('beta', 'auto', 'start', 'clean', 'verify', 'prio', 'shots', 'stretch', 'ontop', 'flash') as $k) if (isset($in[$k])) $o[$k] = $in[$k] ? 1 : 0;   // stretch: yon polosalarsiz (-stretchaspect); ontop/flash: serverga ulanganda oyna tepaga / ikonka miltillaydi
+        if (isset($in['win'])) $o['win'] = in_array((int)$in['win'], array(0, 1, 2), true) ? (int)$in['win'] : 0;   // 0 to'liq ekran, 1 oyna, 2 oynali to'liq ekran (chegarasiz)
         if (isset($in['packs'])) $o['packs'] = preg_match('/^[a-z0-9_,\-]{0,200}$/', $in['packs']) ? $in['packs'] : '';
         foreach (array('tune', 'macc', 'bgp') as $k) if (isset($in[$k])) $o[$k] = $in[$k] ? 1 : 0;   // o'yin paytida Windows'ni moslash (quvvat, sichqoncha, fon dasturlari)
         if (!empty($in['dvroff'])) $o['dvroff'] = 1;                                   // Game Bar fon yozuvini o'chirish - launcher keyingi ochilishda bajaradi
@@ -1910,7 +1926,7 @@ case 'vcmd':
     $o = rd('dev/' . $d, array());
     if (!dev_ok($d, $o)) fail('nolaunch', 'XCLauncher.exe topilmadi');
     $c = p('c'); $n = vid_name(p('n'));
-    if (!in_array($c, array('open', 'del', 'folder', 'trim', 'clip', 'opt', 'edit', 'share'), true) || (in_array($c, array('open', 'del', 'trim', 'edit', 'share'), true) && $n === '')) fail('bad', 'bad');
+    if (!in_array($c, array('open', 'del', 'folder', 'trim', 'clip', 'opt', 'edit', 'share', 'conn', 'lan'), true) || (in_array($c, array('open', 'del', 'trim', 'edit', 'share'), true) && $n === '')) fail('bad', 'bad');
     $tk = '';
     if ($c === 'share') {                                 // ulashish: faqat akkaunt bilan, kuniga 10 ta
         unlock(); $su = auth(); lock(); $o = rd('dev/' . $d, array());
@@ -1929,13 +1945,19 @@ case 'vcmd':
     if ($c === 'clip' && rl_count('vclip' . $d, 60) >= 3) out(array('ok' => true));   // avtomatik klip - daqiqasiga 3 tadan ko'p emas
     if ($c === 'clip') rl_add('vclip' . $d, 60);
     $q = isset($o['vc']) && is_array($o['vc']) ? $o['vc'] : array();
-    $q[] = $c . ' ' . ($n !== '' ? $n : '-') . ($c === 'trim' ? ' ' . $ta . ' ' . $tb : '') . ($c === 'share' ? ' ' . $tk : '');
+    $q[] = $c . ' ' . ($n !== '' ? $n : '-') . ($c === 'trim' ? ' ' . $ta . ' ' . $tb : '') . ($c === 'conn' ? ' ' . min(3, $ta) : '') . ($c === 'share' ? ' ' . $tk : '');
     $o['vc'] = array_slice($q, -5);
     if ($c === 'del' && isset($o['vids'])) $o['vids'] = array_values(array_filter($o['vids'], function ($x) use ($n) { return isset($x['n']) && $x['n'] !== $n; }));
     wr('dev/' . $d, $o);
     out(array('ok' => true, 'vids' => isset($o['vids']) ? $o['vids'] : array()));
 
 /* menyu holati (kirish tokeni, sevimlilar, tarix, tugmalar, til) - kompyuter bo'yicha; o'yin brauzeri localStorage ni yo'qotsa tiklanadi */
+case 'langet':                                           // menyu: launcher topgan LAN serverlar
+    $d = strtolower(p('d'));
+    if (!preg_match('/^[a-z0-9]{8,40}$/', $d) || !is_file(XC_DIR . '/dev/' . $d . '.php')) fail('nolaunch', 'XCLauncher.exe topilmadi');
+    $o = rd('dev/' . $d, array());
+    if (!dev_ok($d, $o)) fail('nolaunch', 'XCLauncher.exe topilmadi');
+    out(array('ok' => true, 't' => isset($o['lan']['t']) ? (int)$o['lan']['t'] : 0, 'list' => isset($o['lan']['l']) ? $o['lan']['l'] : array(), 'now' => time()));
 case 'dstate':
     $d = strtolower(p('d'));
     if (!preg_match('/^[a-z0-9]{8,40}$/', $d) || !is_file(XC_DIR . '/dev/' . $d . '.php')) fail('nolaunch', 'XCLauncher.exe topilmadi');
