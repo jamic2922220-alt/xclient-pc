@@ -19,7 +19,7 @@
  * o'yin brauzeri cheksiz kutib, ekran ko'k bo'lib qolardi. Sinxron yuklash faqat server hozirgina javob bergandan keyin.
  * Qo'riqchi: menyu (xc.js) 20 s ichida ishga tushmasa - sahifa qayta yuklanadi (4 martagacha, oraliq oshib boradi). */
 (function () {
-  var V = '10203900';
+  var V = '10204000';
   window.XC_V = V;
   function nm() { try { return String(window.name || ''); } catch (e) { return ''; } }
   function has(t) { return ('|' + nm() + '|').indexOf('|' + t + '|') >= 0; }
@@ -66,7 +66,7 @@
   } catch (e) {}
 })();
 </script>
-<link rel="stylesheet" href="xc.css?v=10203900">
+<link rel="stylesheet" href="xc.css?v=10204000">
 <script>
 /* Xato bo'lsa ekranning tepasida ko'rsatamiz (o'yin brauzerida konsol yo'q) */
 window.XC_ERRS = [];
@@ -83,7 +83,7 @@ window.onerror = function (msg, url, line) {
   return false;
 };
 </script>
-<script src="xc_lang.js?v=10203900"></script>
+<script src="xc_lang.js?v=10204000"></script>
 </head>
 <body>
 <div id="app">
@@ -220,7 +220,6 @@ window.onerror = function (msg, url, line) {
           <a class="chip" data-flt="notempty" data-t="f_notempty"></a>
           <a class="chip" data-flt="notfull" data-t="f_notfull"></a>
           <a class="btn red" id="quickBtn" data-act="quick"><span data-t="m_quick"></span></a>
-          <a class="btn" id="addIpBtn" data-act="addip">+ <span data-t="add_ip"></span></a>
           <a class="btn" id="clearHist" data-act="clearhist">&#10005; <span data-t="clear_hist"></span></a>
           <span class="mut" id="favNote" data-t="fav_note"></span>
         </div>
@@ -233,6 +232,7 @@ window.onerror = function (msg, url, line) {
       </div>
       <div class="wf">
         <span class="mut" id="srvFoot"></span>
+        <a class="btn" id="addIpBtn" data-act="addip">+ <span data-t="add_ip"></span></a>
         <a class="btn" data-act="refresh"><span data-t="refresh"></span></a>
         <a class="btn" data-act="togglefav" id="favBtn">&#9733; <span data-t="to_favs"></span></a>
         <a class="btn red" data-act="join">&#9654; <span data-t="join"></span></a>
@@ -301,6 +301,6 @@ window.onerror = function (msg, url, line) {
   <div id="dbg"></div>
 </div>
 <script src="master.js"></script>
-<script src="xc.js?v=10203900"></script>
+<script src="xc.js?v=10204000"></script>
 </body>
 </html>
