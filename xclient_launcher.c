@@ -1617,6 +1617,45 @@ static void compat_flags(const wchar_t *exe, int on)
     RegCloseKey(k);
 }
 
+/* 740 (ERROR_ELEVATION_REQUIRED): cstrike.exe xususiyatlarida "Запускать от имени администратора" belgisi qo'yilgan - oddiy
+ * CreateProcess ochmaydi (admin: 12 marta "createprocess err=740"). 1) HKCU dagi RUNASADMIN belgisini olib qayta urinamiz;
+ * 2) bo'lmasa (HKLM yoki exe manifesti) - Windows ruxsat oynasi (UAC) orqali ochamiz, jarayon handle'i bilan kuzatish davom etadi */
+static BOOL drop_runasadmin(const wchar_t *exe)
+{
+    HKEY k; BOOL changed = FALSE;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers", 0, KEY_QUERY_VALUE | KEY_SET_VALUE, &k) != ERROR_SUCCESS) return FALSE;
+    wchar_t cur[512] = L"", out[600] = L""; DWORD sz = sizeof(cur) - sizeof(wchar_t), type = 0;
+    if (RegQueryValueExW(k, exe, NULL, &type, (BYTE *)cur, &sz) == ERROR_SUCCESS && type == REG_SZ) {
+        cur[511] = 0;
+        for (wchar_t *ctx = NULL, *t = wcstok_s(cur, L" ", &ctx); t; t = wcstok_s(NULL, L" ", &ctx)) {
+            if (!wcscmp(t, L"~")) continue;
+            if (!_wcsicmp(t, L"RUNASADMIN")) { changed = TRUE; continue; }
+            if (wcslen(out) + wcslen(t) + 2 < 600) { wcscat(out, L" "); wcscat(out, t); }
+        }
+        if (changed) {
+            if (!out[0]) RegDeleteValueW(k, exe);
+            else { wchar_t val[604]; _snwprintf(val, 604, L"~%s", out); val[603] = 0; RegSetValueExW(k, exe, 0, REG_SZ, (const BYTE *)val, (DWORD)((wcslen(val) + 1) * sizeof(wchar_t))); }
+        }
+    }
+    RegCloseKey(k);
+    return changed;
+}
+static BOOL game_spawn(const wchar_t *exe, wchar_t *cmd, STARTUPINFOW *si, PROCESS_INFORMATION *pi)
+{
+    if (CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, g_dir, si, pi)) return TRUE;
+    if (GetLastError() != ERROR_ELEVATION_REQUIRED) return FALSE;
+    if (drop_runasadmin(exe) && CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, g_dir, si, pi)) { prob_send("elev_fixed", 0); return TRUE; }
+    /* argumentlar: cmd = "\"exe\" -game ..." - exe qismini tashlab, qolganini beramiz */
+    const wchar_t *args = cmd; if (*args == L'"') { args = wcschr(args + 1, L'"'); args = args ? args + 1 : cmd; }
+    while (*args == L' ') args++;
+    SHELLEXECUTEINFOW sei = { sizeof(sei) };
+    sei.fMask = SEE_MASK_NOCLOSEPROCESS; sei.lpVerb = L"runas"; sei.lpFile = exe; sei.lpParameters = args; sei.lpDirectory = g_dir; sei.nShow = SW_SHOWNORMAL;
+    if (!ShellExecuteExW(&sei) || !sei.hProcess) { SetLastError(ERROR_ELEVATION_REQUIRED); return FALSE; }
+    ZeroMemory(pi, sizeof(*pi)); pi->hProcess = sei.hProcess; pi->hThread = NULL; pi->dwProcessId = GetProcessId(sei.hProcess);
+    prob_send("elev_uac", 0);
+    return TRUE;
+}
+
 /* Skrinshotlar: yangi BMP larni JPEG qilib saytga yuklash (menyudagi galereya uchun). GDI+ (Windows bilan keladi) */
 typedef struct { UINT32 GdiplusVersion; void *DebugEventCallback; BOOL SuppressBackgroundThread; BOOL SuppressExternalCodecs; } XGdipStartupInput;
 int WINAPI GdiplusStartup(ULONG_PTR *token, const XGdipStartupInput *input, void *output);
@@ -2019,6 +2058,11 @@ static void start_failed(const wchar_t *exe, DWORD err)
             moved ? L"X CLIENT uni o‘zi tiklaydi: OK ni bosing va X CLIENT ni qayta oching - o‘yin qayta o‘rnatiladi (sozlamalar saqlanadi)." : L"X CLIENT ni saytdan qayta o‘rnating.",
             g_dir, nm, (unsigned long)err, moved ? L"Откройте X CLIENT снова - игра будет переустановлена." : L"Переустановите X CLIENT с сайта.");
     }
+    else if (err == ERROR_ELEVATION_REQUIRED)
+        _snwprintf(m, 900, L"%s administrator huquqini talab qilyapti (xato 740) va Windows ruxsat oynasida «Да» bosilmadi.\n\n"
+            L"Tuzatish: X CLIENT ni qayta oching va Windows so‘raganda «Да» ni bosing. Yoki: %s → o‘ng tugma → Свойства → Совместимость → «Запускать от имени администратора» belgisini olib tashlang.\n\n"
+            L"%s требует прав администратора (ошибка 740). Снова откройте X CLIENT и нажмите «Да» в окне Windows, или снимите галочку «Запускать от имени администратора» в свойствах файла.",
+            nm, nm, nm);
     else if (err == 225 || err == 226 || err == ERROR_ACCESS_DENIED || err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND || err == 1260)
         _snwprintf(m, 900, L"%s ni ochib bo‘lmadi (xato %lu). Ko‘pincha sabab - antivirus faylni to‘xtatgan yoki karantinga olgan.\n\n"
             L"Tuzatish: antivirusni oching → «Karantin» → %s ni toping → «Tiklash» va «Istisnolarga qo‘shish». Keyin X CLIENT ni qayta oching.\n\n"
@@ -2361,10 +2405,10 @@ static BOOL run_game(void)
     BOOL again = FALSE;
     FILETIME ft0; GetSystemTimeAsFileTime(&ft0);
     InterlockedExchange(&g_game_seen, 0);
-    if (CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, g_dir, &si, &pi)) {
+    if (game_spawn(exe, cmd, &si, &pi)) {
         if (g_one) { CloseHandle(g_one); g_one = NULL; }   /* o'yin ochildi - endi yana bosilsa, yangi launcher uni topib oldinga chiqaradi */
         if (o_prio && !safe) SetPriorityClass(pi.hProcess, ABOVE_NORMAL_PRIORITY_CLASS);   /* "O'yinni tezlashtirish": HIGH Windows ovoz xizmatini (audiodg) siqib, ovoz qotishi va chirsillashiga sabab bo'lardi */
-        CloseHandle(pi.hThread);
+        if (pi.hThread) CloseHandle(pi.hThread);
         /* guard_theme olib tashlandi: nDirect fayllarini qayta yozish har ochilishda yangilanishga sabab bo'lardi */
         /* O'yin yopilgach skrinshotlarni (F5) darhol galereyaga yuklaymiz - keyingi ishga tushishni kutmasdan.
          * fetch_opts qayta: menyuda o'yin paytida yoqilgan "galereyaga yuklash" ham hisobga olinadi va

@@ -1280,7 +1280,7 @@ case 'tg_unlink':
  * Kunlik fayl: probs/<sana> = [tur => [kompyuter => 1]] - har tur bo'yicha nechta kompyuterda bo'lgani ---------- */
 case 'prob':
     $k = p('k');
-    if (!in_array($k, array('net_slow', 'dl_net', 'dl_disk', 'dl_perm', 'av_del', 'setup_no', 'setup_fail', 'menu_wd', 'menu_lite', 'offline', 'dl_mirror', 'gpu_nodrv', 'safe_mode', 'autover', 'start_fail', 'game_crash', 'proc_fail', 'launch_err', 'smart_fix'), true)) out(array('ok' => true));
+    if (!in_array($k, array('net_slow', 'dl_net', 'dl_disk', 'dl_perm', 'av_del', 'setup_no', 'setup_fail', 'menu_wd', 'menu_lite', 'offline', 'dl_mirror', 'gpu_nodrv', 'safe_mode', 'autover', 'start_fail', 'game_crash', 'proc_fail', 'launch_err', 'smart_fix', 'elev_fixed', 'elev_uac'), true)) out(array('ok' => true));
     if (rl_count('pb' . client_ip(), 3600) >= 30) out(array('ok' => true));
     rl_add('pb' . client_ip(), 3600);
     $who = strtolower(p('d')); if (!preg_match('/^[a-z0-9]{8,40}$/', $who)) $who = 'ip' . substr(md5(client_ip()), 0, 10);
