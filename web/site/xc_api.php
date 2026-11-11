@@ -1393,7 +1393,7 @@ case 'tg_unlink':
  * Kunlik fayl: probs/<sana> = [tur => [kompyuter => 1]] - har tur bo'yicha nechta kompyuterda bo'lgani ---------- */
 case 'prob':
     $k = p('k');
-    if (!in_array($k, array('net_slow', 'dl_net', 'dl_disk', 'dl_perm', 'av_del', 'setup_no', 'setup_fail', 'menu_wd', 'menu_lite', 'offline', 'dl_mirror', 'gpu_nodrv', 'safe_mode', 'autover', 'start_fail', 'game_crash', 'proc_fail', 'launch_err', 'smart_fix', 'elev_fixed', 'elev_uac', 'gpu_virt'), true)) out(array('ok' => true));
+    if (!in_array($k, array('net_slow', 'dl_net', 'dl_disk', 'dl_perm', 'av_del', 'setup_no', 'setup_fail', 'menu_wd', 'menu_lite', 'offline', 'dl_mirror', 'gpu_nodrv', 'safe_mode', 'autover', 'start_fail', 'game_crash', 'proc_fail', 'launch_err', 'smart_fix', 'elev_fixed', 'elev_uac', 'gpu_virt', 'fw_ok', 'fw_fail'), true)) out(array('ok' => true));
     if (rl_count('pb' . client_ip(), 3600) >= 30) out(array('ok' => true));
     rl_add('pb' . client_ip(), 3600);
     $who = strtolower(p('d')); if (!preg_match('/^[a-z0-9]{8,40}$/', $who)) $who = 'ip' . substr(md5(client_ip()), 0, 10);
@@ -1405,7 +1405,7 @@ case 'prob':
     if ($det !== '') probx_add($k, $who, $det);
     /* 8. Telegram: bugun shu muammo 5, 20, 50, 100 ta kompyuterga yetsa - adminga darhol xabar */
     $n = count($x[$k]); $nm = array('dl_net' => "CS 1.6 yuklanmadi (internet)", 'dl_disk' => "diskda joy yo'q", 'dl_perm' => "papkaga yozib bo'lmadi", 'av_del' => "antivirus faylni o'chirdi",
-        'setup_no' => "o'rnatishga ruxsat berilmadi", 'setup_fail' => "o'rnatuvchi ishga tushmadi", 'menu_wd' => "menyu 20 s da ochilmadi", 'gpu_nodrv' => "videokarta drayveri yo'q", 'gpu_virt' => "asosiy ekran virtual drayverda (GameFusion va h.k.)", 'safe_mode' => "3 marta ketma-ket yiqilish (xavfsiz rejim)", 'start_fail' => "o'yin ishga tushmayapti (0xc0000005, ko'pincha Windows 7)", 'dl_mirror' => "cssborka.uz dan yuklanmadi - zaxira manzil ishlatildi");
+        'setup_no' => "o'rnatishga ruxsat berilmadi", 'setup_fail' => "o'rnatuvchi ishga tushmadi", 'menu_wd' => "menyu 20 s da ochilmadi", 'gpu_nodrv' => "videokarta drayveri yo'q", 'gpu_virt' => "asosiy ekran virtual drayverda (GameFusion va h.k.)", 'fw_ok' => "LAN server: firewall ruxsati qo'shildi", 'fw_fail' => "LAN server: firewall ruxsatiga «Да» bosilmadi (boshqalar ulana olmaydi)", 'safe_mode' => "3 marta ketma-ket yiqilish (xavfsiz rejim)", 'start_fail' => "o'yin ishga tushmayapti (0xc0000005, ko'pincha Windows 7)", 'dl_mirror' => "cssborka.uz dan yuklanmadi - zaxira manzil ishlatildi");
     if ($det === '' && $k !== 'menu_lite' && $k !== 'offline') probx_add($k, $who, '-');
     if (isset($nm[$k]) && in_array($n, array(5, 20, 50, 100), true)) tg_notify('report', "X CLIENT muammo: bugun " . $n . " ta kompyuterda - " . $nm[$k] . ". Admin panel > Muammolar");
     out(array('ok' => true));
@@ -2035,7 +2035,7 @@ case 'vcmd':
     $o = rd('dev/' . $d, array());
     if (!dev_ok($d, $o)) fail('nolaunch', 'XCLauncher.exe topilmadi');
     $c = p('c'); $n = in_array($c, array('sopen', 'sdel'), true) ? shot_name(p('n')) : vid_name(p('n'));   // sopen/sdel/sfold - F11 skrinshotlar
-    if (!in_array($c, array('open', 'del', 'folder', 'trim', 'clip', 'opt', 'edit', 'share', 'conn', 'lan', 'sopen', 'sdel', 'sfold'), true) || (in_array($c, array('open', 'del', 'trim', 'edit', 'share', 'sopen', 'sdel'), true) && $n === '')) fail('bad', 'bad');
+    if (!in_array($c, array('open', 'del', 'folder', 'trim', 'clip', 'opt', 'edit', 'share', 'conn', 'lan', 'fw', 'sopen', 'sdel', 'sfold'), true) || (in_array($c, array('open', 'del', 'trim', 'edit', 'share', 'sopen', 'sdel'), true) && $n === '')) fail('bad', 'bad');
     $tk = '';
     if ($c === 'share') {                                 // ulashish: faqat akkaunt bilan, kuniga 10 ta
         unlock(); $su = auth(); lock(); $o = rd('dev/' . $d, array());

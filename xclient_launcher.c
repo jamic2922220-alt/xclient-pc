@@ -2913,6 +2913,9 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, LPWSTR cmdline, int show)
     if (cmdline && !wcsncmp(cmdline, L"--shottest", 10)) {  /* avtomatik test: F11 skrinshot (ekran -> Rasmlar\X CLIENT\*.jpg) */
         shot_thread(NULL); CoUninitialize(); return g_shot_saved ? 0 : 3;
     }
+    if (cmdline && !wcsncmp(cmdline, L"--fwtest", 8)) {     /* avtomatik test: LAN server uchun firewall ruxsati (fw_thread) */
+        GetCurrentDirectoryW(MAX_PATH, g_dir); fw_thread(NULL); CoUninitialize(); return ini_int(L"fwok") == 1 ? 0 : 3;
+    }
     if (cmdline && !wcsncmp(cmdline, L"--perftest ", 11)) {  /* avtomatik test: --perftest <natija.txt> <exe> - o'yin o'rnida exe, yuklama o'lchovi */
         wchar_t *ex = wcschr(cmdline + 11, L' '); if (!ex) return 2; *ex++ = 0; g_perf_dump = cmdline + 11;
         STARTUPINFOW si = { sizeof(si) }; PROCESS_INFORMATION pi; wchar_t c[MAX_PATH]; lstrcpynW(c, ex, MAX_PATH);

@@ -8,8 +8,10 @@
  * ===================================================================== */
 #define COBJMACROS
 #include <winsock2.h>
+#include <iphlpapi.h>
 #ifdef _MSC_VER
 #pragma comment(lib, "ws2_32.lib")
+#pragma comment(lib, "iphlpapi.lib")
 #endif
 #include <d3d11.h>
 #include <d3d10.h>
@@ -1715,7 +1717,24 @@ static DWORD WINAPI lan_thread(LPVOID unused)
             static const char q[] = "\xFF\xFF\xFF\xFFTSource Engine Query";   /* oxiridagi \0 ham yuboriladi */
             struct sockaddr_in a; ZeroMemory(&a, sizeof(a)); a.sin_family = AF_INET; a.sin_addr.s_addr = INADDR_BROADCAST;
             for (int port = 27015; port <= 27020; port++) { a.sin_port = htons((u_short)port); sendto(s, q, sizeof(q), 0, (struct sockaddr *)&a, sizeof(a)); }
-            DWORD t0 = GetTickCount(); char seen[40][24]; int ns = 0;
+            /* 255.255.255.255 Windows'da faqat bitta tarmoq kartasidan chiqadi (VPN/VirtualBox bo'lsa - noto'g'risidan).
+             * Har bir faol tarmoqning o'z keng tarqatma manziliga ham yuboramiz (masalan 192.168.1.255) */
+            { ULONG sz = 16384; IP_ADAPTER_ADDRESSES *aa = (IP_ADAPTER_ADDRESSES *)malloc(sz);
+              if (aa && GetAdaptersAddresses(AF_INET, GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER, NULL, aa, &sz) == NO_ERROR) {
+                  for (IP_ADAPTER_ADDRESSES *x = aa; x; x = x->Next) {
+                      if (x->OperStatus != IfOperStatusUp || x->IfType == IF_TYPE_SOFTWARE_LOOPBACK) continue;
+                      for (IP_ADAPTER_UNICAST_ADDRESS *u = x->FirstUnicastAddress; u; u = u->Next) {
+                          if (!u->Address.lpSockaddr || u->Address.lpSockaddr->sa_family != AF_INET) continue;
+                          ULONG ip = ntohl(((struct sockaddr_in *)u->Address.lpSockaddr)->sin_addr.s_addr), pl = u->OnLinkPrefixLength;
+                          if (pl < 8 || pl > 30 || (ip >> 16) == 0xA9FE) continue;          /* 169.254 - tarmoq yo'q */
+                          ULONG bc = ip | (0xFFFFFFFFUL >> pl);
+                          struct sockaddr_in b2 = a; b2.sin_addr.s_addr = htonl(bc);
+                          for (int port = 27015; port <= 27020; port++) { b2.sin_port = htons((u_short)port); sendto(s, q, sizeof(q), 0, (struct sockaddr *)&b2, sizeof(b2)); }
+                      }
+                  }
+              }
+              free(aa); }
+            DWORD t0 = GetTickCount(); char seen[40][24], seenk[40][100]; int ns = 0;
             while (GetTickCount() - t0 < 1600 && found < 40) {
                 fd_set fs; FD_ZERO(&fs); FD_SET(s, &fs); struct timeval tv = { 0, 200000 };
                 if (select(0, &fs, NULL, NULL, &tv) <= 0) continue;
@@ -1732,9 +1751,11 @@ static DWORD WINAPI lan_thread(LPVOID unused)
                 else continue;
                 char ip[24]; unsigned long ad = ntohl(from.sin_addr.s_addr);
                 _snprintf(ip, sizeof(ip), "%lu.%lu.%lu.%lu:%u", (ad >> 24) & 255, (ad >> 16) & 255, (ad >> 8) & 255, ad & 255, (unsigned)ntohs(from.sin_port)); ip[23] = 0;
-                int dup = 0; for (int i = 0; i < ns; i++) if (!strcmp(seen[i], ip)) dup = 1;
+                /* bitta server bir nechta tarmoq kartasidan javob beradi (VirtualBox, Hyper-V) - nom+xarita+port bo'yicha bittasi qoladi */
+                char key[100]; _snprintf(key, sizeof(key), "%s|%s|%u", name, map, (unsigned)ntohs(from.sin_port)); key[99] = 0;
+                int dup = 0; for (int i = 0; i < ns; i++) if (!strcmp(seen[i], ip) || !strcmp(seenk[i], key)) dup = 1;
                 if (dup || ns >= 40) continue;
-                lstrcpynA(seen[ns++], ip, 24);
+                lstrcpynA(seenk[ns], key, 100); lstrcpynA(seen[ns++], ip, 24);
                 char one[160]; _snprintf(one, sizeof(one), "%s%s|%s|%s|%d|%d", found ? ";" : "", ip, name, map, pl, mx); one[159] = 0;
                 if (ll + strlen(one) + 1 < sizeof(list)) { strcat(list, one); ll += strlen(one); found++; }
             }
@@ -1748,6 +1769,46 @@ static DWORD WINAPI lan_thread(LPVOID unused)
     free(http_get(url, NULL));
     InterlockedExchange(&g_lan_busy, 0);
     return 0;
+}
+/* LAN server (botlar bilan mashq, do'stlar qo'shiladi): Windows firewall o'yinga kiruvchi ulanishga ruxsat bermasa, boshqalar
+ * serverni ko'rmaydi va ulana olmaydi. O'yinchi bir marta "Отмена" bosgan bo'lsa Windows o'yinni BLOKLAYDI (blok qoidasi ruxsatdan ustun).
+ * Shuning uchun: shu dasturlarning eski qoidalari o'chiriladi va ruxsat qo'shiladi (bir marta, Windows "Да" so'raydi) */
+static int run_hidden(const wchar_t *exe, wchar_t *args, DWORD wait)
+{
+    STARTUPINFOW si = { sizeof(si) }; PROCESS_INFORMATION pi; si.dwFlags = STARTF_USESHOWWINDOW; si.wShowWindow = SW_HIDE;
+    if (!CreateProcessW(exe, args, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) return -1;
+    DWORD code = (DWORD)-1; if (WaitForSingleObject(pi.hProcess, wait) == WAIT_OBJECT_0) GetExitCodeProcess(pi.hProcess, &code);
+    CloseHandle(pi.hThread); CloseHandle(pi.hProcess); return (int)code;
+}
+static DWORD WINAPI fw_thread(LPVOID unused)
+{
+    (void)unused;
+    wchar_t sys[MAX_PATH], ns[MAX_PATH], a[600], cs[MAX_PATH], hl[MAX_PATH];
+    GetSystemDirectoryW(sys, MAX_PATH); _snwprintf(ns, MAX_PATH, L"%s\\netsh.exe", sys); ns[MAX_PATH - 1] = 0;
+    _snwprintf(a, 600, L"netsh advfirewall firewall show rule name=\"CS 1.6 LAN (X CLIENT)\""); a[599] = 0;
+    if (run_hidden(ns, a, 8000) == 0 && ini_int(L"fwok") == 1) return 0;     /* qoida bor */
+    path_join(cs, g_dir, L"cstrike.exe"); path_join(hl, g_dir, L"hl.exe");
+    wchar_t cmd[2400];
+    _snwprintf(cmd, 2400, L"/c netsh advfirewall firewall delete rule name=all program=\"%s\" & netsh advfirewall firewall delete rule name=all program=\"%s\" & "
+        L"netsh advfirewall firewall add rule name=\"CS 1.6 LAN (X CLIENT)\" dir=in action=allow program=\"%s\" enable=yes profile=any & "
+        L"netsh advfirewall firewall add rule name=\"CS 1.6 LAN (X CLIENT)\" dir=in action=allow program=\"%s\" enable=yes profile=any & "
+        L"netsh advfirewall firewall add rule name=\"CS 1.6 LAN (X CLIENT)\" dir=out action=allow program=\"%s\" enable=yes profile=any & "
+        L"netsh advfirewall firewall add rule name=\"CS 1.6 LAN (X CLIENT)\" dir=out action=allow program=\"%s\" enable=yes profile=any", cs, hl, cs, hl, cs, hl);
+    cmd[2399] = 0;
+    SHELLEXECUTEINFOW se = { sizeof(se) }; se.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI; se.lpVerb = L"runas"; se.lpFile = L"cmd.exe"; se.lpParameters = cmd; se.nShow = SW_HIDE;
+    if (ShellExecuteExW(&se) && se.hProcess) {
+        WaitForSingleObject(se.hProcess, 30000); CloseHandle(se.hProcess);
+        if (run_hidden(ns, a, 8000) == 0) { ini_set_int(L"fwok", 1); prob_send("fw_ok", 0); return 0; }
+    }
+    prob_send("fw_fail", 0);                               /* "Да" bosilmadi - LAN serverga boshqalar ulana olmaydi */
+    return 0;
+}
+static volatile LONG g_fw_busy = 0;
+static void fw_fix(void)
+{
+    if (InterlockedExchange(&g_fw_busy, 1)) return;
+    HANDLE t = CreateThread(NULL, 0, fw_thread, NULL, 0, NULL); if (t) CloseHandle(t);
+    /* g_fw_busy qaytarilmaydi - bir sessiyada bir marta yetadi */
 }
 static void lan_scan(void)
 {
@@ -1785,7 +1846,8 @@ static void vid_exec(const char *line)
     if (!strcmp(c, "share")) sscanf(line, "%*s %*s %39s", tk);
     if (!strcmp(c, "clip")) { if (g_buf_run) InterlockedExchange(&g_clip_req, 1); return; }
     if (!strcmp(c, "conn")) { game_on_connect(fa); return; }
-    if (!strcmp(c, "lan")) { lan_scan(); return; }   /* menyu: LAN bo'limi ochildi */   /* menyu: serverga to'liq ulandi (1 - oynani tepaga, 2 - ikonka miltillasin) */   /* menyu: avtomatik klip (3+ kill) */
+    if (!strcmp(c, "lan")) { lan_scan(); return; }
+    if (!strcmp(c, "fw")) { fw_fix(); return; }      /* menyu: LAN server ochilyapti - firewall ruxsati */   /* menyu: LAN bo'limi ochildi */   /* menyu: serverga to'liq ulandi (1 - oynani tepaga, 2 - ikonka miltillasin) */   /* menyu: avtomatik klip (3+ kill) */
     if (!strcmp(c, "opt")) {                           /* menyuda bufer/mikrofon o'zgardi */
         rec_quality(); g_rb = 0; g_buf_want = 0;
         if (!g_rb) buf_stop(); else PostThreadMessageW(g_hk_tid, WM_REC_STATE, 100, 0);

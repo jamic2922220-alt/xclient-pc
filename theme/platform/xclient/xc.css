@@ -1010,3 +1010,8 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .dcd.big b .ico { width: 22px; height: 22px; }
 .dcd em { position: absolute; top: 2px; right: 4px; font-style: normal; color: #3ccf4e; font-size: 12px; }
 .dcn { font-size: 15px; color: #f5c518; }
+
+/* LAN: o'z serverini ochish */
+.lanhost { display: flex; align-items: center; gap: 12px; padding: 10px 6px 12px; border-bottom: 1px solid #221a1f; margin-bottom: 4px; }
+.lanhost .btn { flex: none; margin: 0; }
+.lanhost span { font-size: 12px; color: #8f8590; line-height: 1.4; }

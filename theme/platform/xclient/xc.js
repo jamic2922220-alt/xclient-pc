@@ -1828,7 +1828,9 @@ function renderServers() {
   } else each(rows, function (s) { html += rowHtml(s); });
   var emptyMsg = srvTab === 'lan' ? T('lan_' + (LAN_ST || 'none')) : isFav ? T('empty_favs') : isHist ? T('empty_hist') : isFr ? (ME ? T('empty_frsrv') : T('no_fr_login')) : (isNet && running ? T('loading') : T('empty_list'));
   var lst = $('srvList'), st = lst.scrollTop;
+  if (srvTab === 'lan') html = '<div class="lanhost"><a class="btn red" data-act="lanhost">+ ' + esc(T('lh_btn')) + '</a><span>' + esc(T('lh_s')) + '</span></div>' + html;   // o'z serverini ochish - do'stlar shu ro'yxatda ko'radi
   lst.innerHTML = html || '<div class="empty">' + esc(emptyMsg) + '</div>';
+  if (srvTab === 'lan' && !rows.length) lst.innerHTML += '<div class="empty">' + esc(emptyMsg) + '</div>';
   lst.scrollTop = st;
 
   if (isHist) renderHistStats();
@@ -3556,6 +3558,7 @@ function botsPane() {
     '<div class="ph2 m">' + esc(T('bt_map')) + '</div><div class="seg2">' + m + '</div>' +
     '<div class="ph2 m">' + esc(T('bt_n')) + '</div><div class="seg2">' + c + '</div>' +
     '<div class="ph2 m">' + esc(T('bt_dif')) + '</div><div class="seg2">' + l + '</div>' +
+    '<div class="fr w" style="margin-top:10px"><div class="lb">' + esc(T('bt_lan')) + '<small>' + esc(T('bt_lan2')) + '</small></div><div class="tg' + (b.lan !== 0 ? ' on' : '') + '" data-blan="1"><i></i></div></div>' +
     '<a class="btn red big" data-act="botgo" style="margin-top:14px">' + ico('play') + ' ' + esc(T('bt_go')) + '</a>' +
     '<div class="mut" style="font-size:12px;margin-top:10px">' + esc(T('bt_note')) + '</div></div>');
 }
@@ -3565,12 +3568,19 @@ function botsGo() {
   if (pcWeak() && n > 5 && !DB.botWarn) { DB.botWarn = 1; persist(); toast(T('bt_weak'), 9000); }
   if (CONNECTED) cmd('disconnect');
   /* o'yin DLL'i (mp.dll) o'yin ochilganda yuklanadi - bot_* sozlamalari xarita ochilishidan oldin ham bor */
-  each(['maxplayers ' + (n + 1), 'sv_lan 1', 'mp_autoteambalance 1', 'mp_limitteams 2', 'mp_timelimit 0'].concat(botCvars(b)).concat([
-        'bot_difficulty ' + d, 'bot_join_after_player 0', 'bot_auto_vacate 1', 'bot_quota_mode normal', 'bot_quota ' + n, 'bot_chatter minimal', 'map ' + mp]), function (c) { cmd(c); });
-  toast(T('bt_wait'), 6000);
+  /* LAN: do'stlar ham kira olsin - joy ko'proq, botlar "fill" rejimida (odam kirsa bot chiqadi, jami son saqlanadi).
+   * Server sozlamalari LAN uchun: tez yangilanish, tezlik cheklovi yo'q - lag bo'lmasin */
+  var lan = b.lan !== 0, total = n + 1, qmode = lan ? 'fill' : 'normal', quota = lan ? total : n;
+  var hn = String((S && S.name) || MYNAME || 'Player').replace(/["\\;]/g, '').slice(0, 20) + ' - LAN';
+  if (lan && PCID) vidCmd('fw', '', null, true);   // launcher: Windows firewall ruxsati (bir marta, "Да" so'raydi)
+  var hc = ['sv_lan 1', 'hostname "' + hn + '"', 'pausable 0', 'sv_maxrate 100000', 'sv_minrate 25000', 'sv_maxupdaterate 101', 'sv_minupdaterate 60'];   // server.cfg qayta yozsa - botsApply yana yuboradi
+  each(['maxplayers ' + (lan ? Math.max(total, 12) : total)].concat(hc).concat([
+        'mp_autoteambalance 1', 'mp_limitteams 2', 'mp_timelimit 0']).concat(botCvars(b)).concat([
+        'bot_difficulty ' + d, 'bot_join_after_player 0', 'bot_auto_vacate 1', 'bot_quota_mode ' + qmode, 'bot_quota ' + quota, 'bot_chatter minimal', 'map ' + mp]), function (c) { cmd(c); });
+  toast(T(lan ? 'bt_wait_lan' : 'bt_wait'), lan ? 9000 : 6000);
   /* xarita ochilganda o'yin server.cfg / listenserver.cfg ni bajaradi va bot_quota 0 ga tushadi - shuning uchun yuklangandan keyin
    * yana bir necha marta yuboramiz (sekin kompyuterda yuklanish 30-60 s). Ortiqcha yuborish zararsiz - son o'zgarmaydi */
-  BOT_PEND = { n: n, d: d, t: now(), b: b, rs: 0 }; BOT_SESS = { t: now(), m: b.m || 'std' }; fxClass(); sparks();
+  BOT_PEND = { hc: hc, n: quota, qm: qmode, d: d, t: now(), b: b, rs: 0 }; BOT_SESS = { t: now(), m: b.m || 'std' }; fxClass(); sparks();
   each([5, 10, 16, 24, 35, 50, 70, 95], function (sec) { setTimeout(botsApply, sec * 1000); });
 }
 var BOT_PEND = null, BOT_SESS = null, LOCAL_ON = false;
@@ -3596,7 +3606,7 @@ function botsScore() {
 }
 function botsApply() {
   if (!BOT_PEND || now() - BOT_PEND.t > 120000) { BOT_PEND = null; return; }
-  each(['bot_difficulty ' + BOT_PEND.d, 'bot_join_after_player 0', 'bot_quota_mode normal', 'bot_quota ' + BOT_PEND.n].concat(botCvars(BOT_PEND.b)), function (c) { cmd(c); });
+  each(['bot_difficulty ' + BOT_PEND.d, 'bot_join_after_player 0', 'bot_quota_mode ' + (BOT_PEND.qm || 'normal'), 'bot_quota ' + BOT_PEND.n].concat(botCvars(BOT_PEND.b)).concat(BOT_PEND.hc || []), function (c) { cmd(c); });
 }
 function closeModal() {
   if (DD) ddClose();
@@ -3660,6 +3670,7 @@ function act(a) {
   if (LITE && /^(friends|profile|missions|login|weekall|promo|stats|clan|ref)$/.test(a)) return openPromo();
   if (a === 'quick' || a === 'play') { closeModal(); return quick(); }
   if (a === 'bots') return botsPane();
+  if (a === 'lanhost') { DB.bots = DB.bots || {}; DB.bots.lan = 1; persist(); return botsPane(); }
   if (a === 'botgo') return botsGo();
   if (a === 'lagfix') return lagFix();
   if (a === 'servers') return openServers('internet');
@@ -4056,8 +4067,9 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-mcall'))) { var mc = el; api('miss_call', { to: el.getAttribute('data-mcall') }, function (r) { toast(r.ok ? T('mc_ok') : (r.msg || 'Xato'), 5000); if (r.ok && mc.parentNode) mc.parentNode.removeChild(mc); }); return; }
   if ((el = closest(t, 'data-fbk'))) { FBK = el.getAttribute('data-fbk'); var sib = el.parentNode.childNodes; for (var fi = 0; fi < sib.length; fi++) sib[fi].className = sib[fi] === el ? 'on' : ''; return; }
   if ((el = closest(t, 'data-frdel'))) { api('friend_del', { login: el.getAttribute('data-frdel') }, function () { loadFriends(); }); return; }
-  if ((el = closest(t, 'data-bmap')) || (el = closest(t, 'data-bn')) || (el = closest(t, 'data-bd')) || (el = closest(t, 'data-bm'))) {
+  if ((el = closest(t, 'data-bmap')) || (el = closest(t, 'data-bn')) || (el = closest(t, 'data-bd')) || (el = closest(t, 'data-bm')) || (el = closest(t, 'data-blan'))) {
     DB.bots = DB.bots || {};
+    if (el.getAttribute('data-blan')) { DB.bots.lan = DB.bots.lan === 0 ? 1 : 0; persist(); botsPane(); return; }
     if (el.getAttribute('data-bm')) { DB.bots.m = el.getAttribute('data-bm'); persist(); botsPane(); return; }
     if (el.getAttribute('data-bmap')) DB.bots.map = el.getAttribute('data-bmap');
     else if (el.getAttribute('data-bn')) DB.bots.n = +el.getAttribute('data-bn');
@@ -4332,6 +4344,7 @@ setInterval(function () {
 }, 30000);
 setInterval(function () {                          // "Serverlar" oynasi ochiq va ko'rinib turibdi - 15 soniyada bir yangilanadi
   if (curModal !== 'mdServers' || !uiShown()) return;
+  if (srvTab === 'lan') lanStart();               // LAN: yangi ochilgan serverlar ham chiqsin
   each(tabIps(), function (ip) { query(ip, true); });
   if (srvSel) loadPlayers(srvSel);
 }, 15000);

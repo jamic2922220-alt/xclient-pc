@@ -42,7 +42,7 @@ let window_lan_cmd = false;
     if (r.width < 20 || r.height < 16) return 'kichik';
     if (r.left < w.left || r.right > w.right || r.top < w.top || r.bottom > w.bottom) return 'oynadan tashqarida';
     const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-    return hit && (hit === e || e.contains(hit)) ? 'ok' : 'ustini yopgan: ' + (hit ? (hit.id || hit.className) : '-'); }, sel);
+    return hit && (hit === e || e.contains(hit)) ? 'ok' : 'ustini yopgan: ' + (hit ? (hit.id || hit.className) : '-') + (hit && hit.id === 'toast' ? ' [' + hit.textContent.slice(0, 60) + ']' : ''); }, sel);
   for (const lang of ['uz', 'ru', 'en']) {
     await p.evaluate((l) => { const e = document.createElement('a'); e.setAttribute('data-lang', l); document.body.appendChild(e); e.click(); e.remove(); }, lang);
     await p.waitForTimeout(300);

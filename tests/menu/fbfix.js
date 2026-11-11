@@ -8,12 +8,13 @@ const { page } = require('./lib');
   await p.click('[data-bmap="de_nuke"]'); await p.click('[data-bn="13"]'); await p.click('[data-bd="0"]'); await p.waitForTimeout(200);
   await p.evaluate(() => { window.LOG = []; }); await p.click('[data-act="botgo"]'); await p.waitForTimeout(400);
   const L = await p.evaluate(() => window.LOG);
-  const iq = L.indexOf('bot_quota 13'), im = L.indexOf('map de_nuke');
-  ok(L.includes('maxplayers 14') && L.includes('bot_difficulty 0') && iq >= 0 && im > iq, 'Boshlash: maxplayers 14, bot_quota 13, oson, keyin map de_nuke');
+  const iq = L.indexOf('bot_quota 14'), im = L.indexOf('map de_nuke');
+  ok(L.includes('maxplayers 14') && L.includes('bot_difficulty 0') && L.includes('bot_quota_mode fill') && iq >= 0 && im > iq, 'Boshlash (LAN yoqiq): maxplayers 14, jami 14 (fill - odam kirsa bot chiqadi), oson, keyin map de_nuke');
+  ok(L.some(x => /^hostname ".* - LAN"$/.test(x)) && L.includes('sv_maxupdaterate 101') && L.includes('pausable 0'), 'LAN server: nom, tez yangilanish (101), pauza yo\'q');
   ok(await p.evaluate(() => JSON.parse(localStorage.getItem('xclient')).bots.map === 'de_nuke'), 'tanlov eslab qolinadi');
   await p.evaluate(() => { window.LOG = []; }); await p.waitForTimeout(5600);
   const L3 = await p.evaluate(() => window.LOG);
-  ok(L3.includes('bot_quota 13') && L3.includes('bot_join_after_player 0'), 'xarita yuklangach bot soni qayta yuboriladi (server.cfg 0 qilsa ham)');
+  ok(L3.includes('bot_quota 14') && L3.includes('bot_join_after_player 0') && L3.some(x => /^hostname /.test(x)), 'xarita yuklangach bot soni qayta yuboriladi (server.cfg 0 qilsa ham)');
   // botlar bilan o'ynaganda menyu tinch turadi: serverlarga so'rov yubormaydi (so'rovlar o'yinni qotiradi), effektlar o'chiq
   const quiet = await p.evaluate(() => new Promise(res => {
     window.QN = 0; window.nextclient.gameUi.shown = false;
@@ -22,6 +23,17 @@ const { page } = require('./lib');
   }));
   ok(quiet.q === 0 && quiet.low && quiet.h < 0, 'botlar bilan o\'yin (local:27015) paytida menyu tinch: 47 s da serverlarga so\'rov ' + quiet.q + ' ta, effektlar o\'chiq=' + quiet.low + ', tarixga yozilmadi=' + (quiet.h < 0));
   await p.evaluate(() => { (window.L.disconnect || []).forEach(f => f({})); });
+  // LAN: Serverlar > LAN da "LAN server yaratish" -> botlar oynasi LAN yoqiq; LAN o'chirilsa - faqat o'zi uchun joy
+  await p.evaluate(() => { const e = document.createElement('a'); e.setAttribute('data-act', 'servers'); document.body.appendChild(e); e.click(); e.remove(); }); await p.waitForTimeout(400);
+  await p.click('#srvTabs [data-tab="lan"], [data-stab="lan"], .tabs a[data-t="t_lan"]').catch(() => {});
+  await p.evaluate(() => { const t = [...document.querySelectorAll('#mdServers a, #mdServers div')].find(x => x.getAttribute && (x.getAttribute('data-tab') === 'lan' || x.getAttribute('data-stab') === 'lan')); if (t) t.click(); }); await p.waitForTimeout(500);
+  ok(await p.$('#srvList [data-act="lanhost"]'), 'Serverlar > LAN: "LAN server yaratish" tugmasi');
+  await p.click('#srvList [data-act="lanhost"]'); await p.waitForTimeout(400);
+  ok(await p.$('#mdSide.on [data-blan].on'), 'botlar oynasi ochildi, LAN yoqiq');
+  await p.click('[data-blan]'); await p.waitForTimeout(200); await p.click('[data-bn="5"]'); await p.waitForTimeout(200);
+  await p.evaluate(() => { window.LOG = []; }); await p.click('[data-act="botgo"]'); await p.waitForTimeout(400);
+  const L5 = await p.evaluate(() => window.LOG);
+  ok(L5.includes('maxplayers 6') && L5.includes('bot_quota 5') && L5.includes('bot_quota_mode normal'), 'LAN o\'chiq: faqat o\'zi + 5 bot');
   // mashq turi: Aim
   await p.click('#menu [data-act="bots"]'); await p.waitForTimeout(400);
   await p.click('[data-bm="aim"]'); await p.waitForTimeout(200);
