@@ -8,4 +8,4 @@ ipconfig | grep -i "IPv4\|Subnet" >> $O/summary.txt
 echo "--- firewall" >> $O/summary.txt
 ./diag/vf/xcl_test.exe --fwtest; echo "fw rc=$?" >> $O/summary.txt
 netsh advfirewall firewall show rule name="CS 1.6 LAN (X CLIENT)" | grep -i "Rule Name\|Direction\|Action\|Program\|Profiles\|Enabled" >> $O/summary.txt 2>&1
-# 6
+# 7
