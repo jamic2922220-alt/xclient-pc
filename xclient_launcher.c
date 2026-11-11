@@ -27,6 +27,7 @@
 #include <objbase.h>
 #include <shobjidl.h>
 #include <tlhelp32.h>
+#include <psapi.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -2475,6 +2476,7 @@ static BOOL run_game(void)
     BOOL again = FALSE;
     FILETIME ft0; GetSystemTimeAsFileTime(&ft0);
     InterlockedExchange(&g_game_seen, 0);
+    if (o_tune) ram_offer();                            /* xotira kam bo'lsa - og'ir dasturlarni yopishni taklif qilish, bo'shatish */
     if (game_spawn(exe, cmd, &si, &pi)) {
         if (g_one) { CloseHandle(g_one); g_one = NULL; }   /* o'yin ochildi - endi yana bosilsa, yangi launcher uni topib oldinga chiqaradi */
         if (o_prio && !safe) SetPriorityClass(pi.hProcess, ABOVE_NORMAL_PRIORITY_CLASS);   /* "O'yinni tezlashtirish": HIGH Windows ovoz xizmatini (audiodg) siqib, ovoz qotishi va chirsillashiga sabab bo'lardi */
@@ -2912,6 +2914,12 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, LPWSTR cmdline, int show)
     }
     if (cmdline && !wcsncmp(cmdline, L"--shottest", 10)) {  /* avtomatik test: F11 skrinshot (ekran -> Rasmlar\X CLIENT\*.jpg) */
         shot_thread(NULL); CoUninitialize(); return g_shot_saved ? 0 : 3;
+    }
+    if (cmdline && !wcsncmp(cmdline, L"--ramtest ", 10)) {  /* avtomatik test: boshqa dasturlar xotirasini bo'shatish -> natija faylga */
+        DWORD tot = 0, a0 = ram_avail(&tot); ram_trim(0); Sleep(1500); DWORD a1 = ram_avail(NULL);
+        char t[120]; _snprintf(t, sizeof(t), "total=%lu before=%lu after=%lu freed=%ld", (unsigned long)tot, (unsigned long)a0, (unsigned long)a1, (long)a1 - (long)a0); t[119] = 0;
+        HANDLE f = CreateFileW(cmdline + 10, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL); if (f != INVALID_HANDLE_VALUE) { DWORD w; WriteFile(f, t, (DWORD)strlen(t), &w, NULL); CloseHandle(f); }
+        CoUninitialize(); return 0;
     }
     if (cmdline && !wcsncmp(cmdline, L"--fwtest", 8)) {     /* avtomatik test: LAN server uchun firewall ruxsati (fw_thread) */
         GetCurrentDirectoryW(MAX_PATH, g_dir); fw_thread(NULL); CoUninitialize(); return ini_int(L"fwok") == 1 ? 0 : 3;

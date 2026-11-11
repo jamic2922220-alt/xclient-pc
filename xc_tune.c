@@ -206,6 +206,90 @@ static void tune_end(void)
 /* launcher oldingi safar o'yin paytida yopilib qolgan (o'chirilgan, yiqilgan): qolgan o'zgarishlarni qaytarish */
 static void tune_recover(void) { macc_restore(); power_off(); }
 
+
+/* ---------------- xotira (RAM) ----------------
+ * 4 GB li kompyuterda o'yin + menyu + brauzer/Telegram xotirani to'ldiradi -> Windows diskka yozadi -> o'yin qotadi.
+ * 1) O'yin ochilishidan oldin: bo'sh xotira kam bo'lsa og'ir dasturlarni ko'rsatib yopishni taklif qilamiz (WM_CLOSE - dastur o'zi
+ *    saqlab yopiladi, majburan o'ldirilmaydi). Rad etilsa - 3 kun so'ralmaydi.
+ * 2) Boshqa dasturlarning ishlatmayotgan xotirasi (working set) bo'shatiladi - kerak bo'lsa Windows o'zi qaytaradi.
+ * 3) O'yin paytida bo'sh xotira 300 MB dan tushsa - yana bo'shatiladi (2 daqiqada ko'pi bilan bir marta), o'yinga tegilmaydi. */
+typedef BOOL (WINAPI *EWS_FN)(HANDLE);
+typedef BOOL (WINAPI *PMI_FN)(HANDLE, PROCESS_MEMORY_COUNTERS *, DWORD);
+static EWS_FN p_ews = NULL; static PMI_FN p_pmi = NULL;
+static void ram_api(void)
+{
+    if (p_ews && p_pmi) return;
+    HMODULE k = GetModuleHandleW(L"kernel32.dll");
+    p_ews = (EWS_FN)GetProcAddress(k, "K32EmptyWorkingSet"); p_pmi = (PMI_FN)GetProcAddress(k, "K32GetProcessMemoryInfo");
+    if (!p_ews || !p_pmi) { HMODULE ps = LoadLibraryW(L"psapi.dll"); if (ps) { if (!p_ews) p_ews = (EWS_FN)GetProcAddress(ps, "EmptyWorkingSet"); if (!p_pmi) p_pmi = (PMI_FN)GetProcAddress(ps, "GetProcessMemoryInfo"); } }
+}
+static DWORD ram_avail(DWORD *total)
+{
+    MEMORYSTATUSEX ms; ms.dwLength = sizeof(ms);
+    if (!GlobalMemoryStatusEx(&ms)) { if (total) *total = 0; return 0; }
+    if (total) *total = (DWORD)(ms.ullTotalPhys >> 20);
+    return (DWORD)(ms.ullAvailPhys >> 20);
+}
+static void ram_trim(DWORD skip_pid)
+{
+    ram_api(); if (!p_ews) return;
+    HANDLE sn = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0); if (sn == INVALID_HANDLE_VALUE) return;
+    PROCESSENTRY32W pe; pe.dwSize = sizeof(pe); DWORD me = GetCurrentProcessId();
+    for (BOOL ok = Process32FirstW(sn, &pe); ok; ok = Process32NextW(sn, &pe)) {
+        if (pe.th32ProcessID <= 4 || pe.th32ProcessID == me || pe.th32ProcessID == skip_pid) continue;
+        if (!_wcsicmp(pe.szExeFile, L"cstrike.exe") || !_wcsicmp(pe.szExeFile, L"hl.exe") || !_wcsicmp(pe.szExeFile, L"audiodg.exe") || !_wcsicmp(pe.szExeFile, L"dwm.exe")) continue;   /* o'yin, ovoz, ekran */
+        HANDLE h = OpenProcess(PROCESS_SET_QUOTA | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pe.th32ProcessID);
+        if (h) { p_ews(h); CloseHandle(h); }
+    }
+    CloseHandle(sn);
+}
+static const wchar_t *RAM_HEAVY[][2] = { { L"chrome.exe", L"Google Chrome" }, { L"msedge.exe", L"Microsoft Edge" }, { L"firefox.exe", L"Firefox" }, { L"opera.exe", L"Opera" },
+    { L"browser.exe", L"Yandex" }, { L"Telegram.exe", L"Telegram" }, { L"Discord.exe", L"Discord" }, { L"Spotify.exe", L"Spotify" }, { L"WhatsApp.exe", L"WhatsApp" },
+    { L"steamwebhelper.exe", L"Steam" }, { L"EpicGamesLauncher.exe", L"Epic Games" }, { L"utorrent.exe", L"uTorrent" }, { L"qbittorrent.exe", L"qBittorrent" } };
+#define RAM_NH (sizeof(RAM_HEAVY) / sizeof(RAM_HEAVY[0]))
+static BOOL CALLBACK ram_close_wnd(HWND w, LPARAM lp)
+{
+    DWORD pid = 0; GetWindowThreadProcessId(w, &pid);
+    const DWORD *pids = (const DWORD *)lp;
+    for (int i = 1; i <= (int)pids[0]; i++) if (pids[i] == pid && IsWindowVisible(w) && !GetWindow(w, GW_OWNER)) { PostMessageW(w, WM_CLOSE, 0, 0); break; }
+    return TRUE;
+}
+static void ram_offer(void)
+{
+    DWORD total = 0, av = ram_avail(&total);
+    if (!total || total > 8400 || av >= 1500) return;     /* 8 GB dan ko'p yoki 1.5 GB dan ko'p bo'sh - yetadi */
+    ram_api();
+    DWORD mb[RAM_NH] = { 0 }, pids[257] = { 0 };
+    HANDLE sn = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (sn != INVALID_HANDLE_VALUE) {
+        PROCESSENTRY32W pe; pe.dwSize = sizeof(pe);
+        for (BOOL ok = Process32FirstW(sn, &pe); ok; ok = Process32NextW(sn, &pe))
+            for (size_t i = 0; i < RAM_NH; i++) if (!_wcsicmp(pe.szExeFile, RAM_HEAVY[i][0])) {
+                HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, FALSE, pe.th32ProcessID);
+                PROCESS_MEMORY_COUNTERS pm; ZeroMemory(&pm, sizeof(pm)); pm.cb = sizeof(pm);
+                if (h && p_pmi && p_pmi(h, &pm, sizeof(pm))) mb[i] += (DWORD)(pm.WorkingSetSize >> 20);
+                if (h) CloseHandle(h);
+                if (pids[0] < 256) pids[++pids[0]] = pe.th32ProcessID;
+            }
+        CloseHandle(sn);
+    }
+    DWORD sum = 0; wchar_t list[600] = L""; size_t ll = 0;
+    for (size_t i = 0; i < RAM_NH; i++) if (mb[i] >= 60) { sum += mb[i]; wchar_t one[80]; _snwprintf(one, 80, L"  • %s — %lu MB\n", RAM_HEAVY[i][1], (unsigned long)mb[i]); one[79] = 0; if (ll + wcslen(one) < 599) { wcscat(list, one); ll += wcslen(one); } }
+    { char raw[80]; _snprintf(raw, sizeof(raw), "avail=%lu total=%lu heavy=%lu", (unsigned long)av, (unsigned long)total, (unsigned long)sum); raw[79] = 0; url_escape(g_probx, sizeof(g_probx), raw); prob_send("ram_low", 0); g_probx[0] = 0; }
+    FILETIME ft; GetSystemTimeAsFileTime(&ft);
+    int day = (int)(((((ULONGLONG)ft.dwHighDateTime << 32) | ft.dwLowDateTime) / 10000000ULL) / 86400ULL);
+    if (sum >= 300 && day - ini_int(L"ramno") >= 3) {
+        BOOL ru = !strncmp(g_lang, "ru", 2); wchar_t m[1100];
+        _snwprintf(m, 1100, ru ? L"Мало свободной памяти: %lu МБ из %lu МБ. Из-за этого игра может зависать.\n\nОткрытые программы:\n%s\nЗакрыть их на время игры? (они сохранятся и закроются сами)"
+                               : L"Bo‘sh xotira kam: %lu MB (jami %lu MB). Shu sababli o‘yin qotishi mumkin.\n\nOchiq dasturlar:\n%s\nO‘yin vaqtida ularni yopaymi? (o‘zlari saqlab yopiladi)", (unsigned long)av, (unsigned long)total, list);
+        m[1099] = 0;
+        if (MessageBoxW(g_wnd, m, L"X CLIENT", MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND) == IDYES) {
+            EnumWindows(ram_close_wnd, (LPARAM)pids);
+            Sleep(2500);
+        } else ini_set_int(L"ramno", day);
+    }
+    ram_trim(0);
+}
 /* ---------------- o'yin yiqilsa ----------------
  * CS 1.6 ko'pincha serverdan yuklangan buzilgan fayl (model, sprayt, ovoz, xarita) tufayli serverga kirganda yiqiladi.
  * Shu o'yin davomida, yiqilishdan oldingi 10 daqiqada cstrike_downloads ga tushgan fayllar xc_backup\crash ga ko'chiriladi -
@@ -280,7 +364,7 @@ static void crash_prune(void)
 /* ---- O'yin paytidagi yuklama (lag sababini aniqlash uchun): har 5 soniyada o'yin protsessorni qancha band qilyapti.
  * CS 1.6 bitta yadroda ishlaydi: o'yin bitta yadroning ~90%+ ini olsa - FPS kompyuter kuchiga tiralgan (FPS lag).
  * Kam olsa-yu lag bo'lsa - sabab internet (ping/yo'qotish, buni menyu o'lchaydi). Yakunda saytga: ?a=perfl ---- */
-typedef struct { HANDLE h; DWORD cores; int n, n90; double gsum, ssum; DWORD ramMin; } PerfSt;
+typedef struct { HANDLE h; DWORD cores; int n, n90, trims; double gsum, ssum; DWORD ramMin; } PerfSt;
 static PerfSt g_perf; static HANDLE g_perf_th = NULL; static const wchar_t *g_perf_dump = NULL;   /* test: natija faylga */
 static DWORD WINAPI perf_thread(LPVOID unused)
 {
@@ -296,7 +380,8 @@ static DWORD WINAPI perf_thread(LPVOID unused)
             if (gc > 4) gc = 4; if (sc < 0) sc = 0; if (sc > 1) sc = 1;
             g_perf.gsum += gc; g_perf.ssum += sc; g_perf.n++; if (gc >= 0.9) g_perf.n90++;
             MEMORYSTATUSEX ms; ms.dwLength = sizeof(ms);
-            if (GlobalMemoryStatusEx(&ms)) { DWORD av = (DWORD)(ms.ullAvailPhys >> 20); if (!g_perf.ramMin || av < g_perf.ramMin) g_perf.ramMin = av; }
+            if (GlobalMemoryStatusEx(&ms)) { DWORD av = (DWORD)(ms.ullAvailPhys >> 20); if (!g_perf.ramMin || av < g_perf.ramMin) g_perf.ramMin = av;
+                static DWORD trimT = 0; if (o_tune && av < 300 && GetTickCount() - trimT > 120000) { trimT = GetTickCount(); ram_trim(GetProcessId(g_perf.h)); g_perf.trims++; } }   /* xotira tugayapti - boshqalarnikini bo'shatamiz */
         }
         if (warm > 0) warm--;
         pg = g; pw = w; ps_i = sI; ps_t = sT;
@@ -319,9 +404,9 @@ static void perf_end(DWORD played)
     char url[300];
     if (g_perf_dump) { char t[200]; _snprintf(t, sizeof(t), "gc=%d g90=%d sc=%d ram=%lu cores=%lu n=%d", (int)(g_perf.gsum * 100 / g_perf.n), g_perf.n90 * 100 / g_perf.n, (int)(g_perf.ssum * 100 / g_perf.n), (unsigned long)g_perf.ramMin, (unsigned long)g_perf.cores, g_perf.n); t[199] = 0;
         HANDLE f = CreateFileW(g_perf_dump, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL); if (f != INVALID_HANDLE_VALUE) { DWORD w; WriteFile(f, t, (DWORD)strlen(t), &w, NULL); CloseHandle(f); } return; }
-    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=perfl&d=%s&gc=%d&g90=%d&sc=%d&ram=%lu&cores=%lu&n=%d&t=%lu", g_id,
+    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=perfl&d=%s&gc=%d&g90=%d&sc=%d&ram=%lu&cores=%lu&n=%d&t=%lu&tr=%d", g_id,
               (int)(g_perf.gsum * 100 / g_perf.n), g_perf.n90 * 100 / g_perf.n, (int)(g_perf.ssum * 100 / g_perf.n),
-              (unsigned long)g_perf.ramMin, (unsigned long)g_perf.cores, g_perf.n, (unsigned long)played);
+              (unsigned long)g_perf.ramMin, (unsigned long)g_perf.cores, g_perf.n, (unsigned long)played, g_perf.trims);
     url[sizeof(url) - 1] = 0;
     free(http_get(url, NULL));
 }
