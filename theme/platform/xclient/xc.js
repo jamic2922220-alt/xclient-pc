@@ -253,7 +253,7 @@ var UI_VIS = true;
 function uiShown() { try { if (NC && NC.gameUi && typeof NC.gameUi.shown === 'boolean') return NC.gameUi.shown; } catch (e) {} return UI_VIS; }
 /* serverda o'ynalayotganda (ESC menyusi o'yin ustida) - effektlarsiz: aks holda o'yin FPS'i tushadi */
 var SAFE = 0;   // launcher xavfsiz rejimda (o'yin 3 marta ketma-ket yiqilgan) - shu safar effektsiz, odamchalarsiz
-function lowFx() { return DB.fx === 0 || !!FX.off || !!CONNECTED || !!SAFE; }
+function lowFx() { return DB.fx === 0 || !!FX.off || !!CONNECTED || !!SAFE || localGame(); }
 function fxClass() { var h = document.documentElement; h.className = (h.className || '').replace(/(^|\s)lowfx(?=\s|$)/g, '') + (lowFx() ? ' lowfx' : ''); }
 function fxVisible() {
   if (curModal || document.webkitHidden) return false;
@@ -854,7 +854,7 @@ var PINNED = ['157.22.130.26:27015'];       // X CLIENT o'z serverlari
 var SRV = {}, MASTER = [], TOP = [];
 var queue = [], running = 0, MAXQ = 12;
 /* o'yin ustida (ESC) server so'rovlari o'yin oqimida bajariladi - bir vaqtda 12 ta so'rov kuchsiz kompyuterda qotishga sabab bo'lardi */
-function qmax() { return !CONNECTED ? MAXQ : (DB.fx === 0 || (HW && hwClass() === 'weak')) ? 2 : 4; }
+function qmax() { return !CONNECTED && !localGame() ? MAXQ : (DB.fx === 0 || (HW && hwClass() === 'weak')) ? 2 : 4; }
 function srv(ip) { if (!SRV[ip]) SRV[ip] = { ip: ip }; return SRV[ip]; }
 function query(ip, force) {
   if (!ip) return;
@@ -1383,6 +1383,7 @@ function demoCtl(c) {
 function stopRecord() { clearTimeout(REC_TM); if (REC) { cmd('stop'); REC = ''; } }
 function onConnectEvt(addr, inGame) {
   if (BOT_PEND) setTimeout(botsApply, 1500);       // botlar bilan mashq: xarita yuklandi - bot sonini qayta yuboramiz
+  if (isLocalAddr(addr) && (BOT_SESS || BOT_PEND)) { LOCAL_ON = true; fxClass(); sparks(); return; }   // o'z serveri (botlar) - haqiqiy o'yin funksiyalarisiz
   addr = normIp(addr);
   if (!addr) return;
   /* demo ham "ulanish" hodisasini beradi (yozilgan server manzili bilan) - bu o'yin emas: statistika, demo yozish, musiqa o'chirish kerak emas */
@@ -1397,6 +1398,7 @@ function onConnectEvt(addr, inGame) {
 }
 function onDisconnectEvt() {
   var was = CONNECTED;
+  if (LOCAL_ON || (BOT_SESS && !CONNECTED)) { LOCAL_ON = false; BOT_SESS = null; BOT_PEND = null; fxClass(); sparks(); if (!was) return; }   // botlar bilan mashq tugadi
   gpEnd();
   setTimeout(musicSync, 500);
   if (CUR) { CUR.d = Math.round((now() - CUR.t) / 1000); persist(); cloudSave(); sendStat(CUR); }
@@ -3543,7 +3545,7 @@ function botCvars(b) {
 }
 var BOT_MAPS = ['de_dust2', 'de_inferno', 'de_nuke', 'de_train', 'de_aztec', 'de_dust', 'cs_assault', 'cs_italy'];
 function botsPane() {
-  var b = DB.bots || {}, mp = b.map || 'de_dust2', n = b.n || 9, d = b.d != null ? b.d : 1, m = '', c = '', l = '';
+  var b = DB.bots || {}, mp = b.map || 'de_dust2', n = b.n || (pcWeak() ? 5 : 9), d = b.d != null ? b.d : 1, m = '', c = '', l = '';
   each(BOT_MAPS, function (x) { m += '<a class="' + (x === mp ? 'on' : '') + '" data-bmap="' + x + '">' + esc(x) + '</a>'; });
   each([3, 5, 9, 13], function (x) { c += '<a class="' + (x === n ? 'on' : '') + '" data-bn="' + x + '">' + (x + 1) + ' ' + esc(T('bt_pl')) + '</a>'; });
   each([0, 1, 2, 3], function (x) { l += '<a class="' + (x === d ? 'on' : '') + '" data-bd="' + x + '">' + esc(T('bt_d' + x)) + '</a>'; });
@@ -3558,8 +3560,9 @@ function botsPane() {
     '<div class="mut" style="font-size:12px;margin-top:10px">' + esc(T('bt_note')) + '</div></div>');
 }
 function botsGo() {
-  var b = DB.bots || {}, mp = b.map || 'de_dust2', n = b.n || 9, d = b.d != null ? b.d : 1;
+  var b = DB.bots || {}, mp = b.map || 'de_dust2', n = b.n || (pcWeak() ? 5 : 9), d = b.d != null ? b.d : 1;
   closeModal();
+  if (pcWeak() && n > 5 && !DB.botWarn) { DB.botWarn = 1; persist(); toast(T('bt_weak'), 9000); }
   if (CONNECTED) cmd('disconnect');
   /* o'yin DLL'i (mp.dll) o'yin ochilganda yuklanadi - bot_* sozlamalari xarita ochilishidan oldin ham bor */
   each(['maxplayers ' + (n + 1), 'sv_lan 1', 'mp_autoteambalance 1', 'mp_limitteams 2', 'mp_timelimit 0'].concat(botCvars(b)).concat([
@@ -3567,10 +3570,14 @@ function botsGo() {
   toast(T('bt_wait'), 6000);
   /* xarita ochilganda o'yin server.cfg / listenserver.cfg ni bajaradi va bot_quota 0 ga tushadi - shuning uchun yuklangandan keyin
    * yana bir necha marta yuboramiz (sekin kompyuterda yuklanish 30-60 s). Ortiqcha yuborish zararsiz - son o'zgarmaydi */
-  BOT_PEND = { n: n, d: d, t: now(), b: b, rs: 0 }; BOT_SESS = { t: now(), m: b.m || 'std' };
+  BOT_PEND = { n: n, d: d, t: now(), b: b, rs: 0 }; BOT_SESS = { t: now(), m: b.m || 'std' }; fxClass(); sparks();
   each([5, 10, 16, 24, 35, 50, 70, 95], function (sec) { setTimeout(botsApply, sec * 1000); });
 }
-var BOT_PEND = null, BOT_SESS = null;
+var BOT_PEND = null, BOT_SESS = null, LOCAL_ON = false;
+/* o'z kompyuteridagi server (botlar bilan mashq): ulanish manzili loopback/localhost/127.x bo'ladi. Bu haqiqiy server emas -
+ * tarix, statistika, tarmoq sozlash, ping o'lchovi kerak emas; lekin menyu o'yin davom etayotganini bilishi shart */
+function isLocalAddr(a) { return /^(loopback|localhost|127\.|0\.0\.0\.0)/i.test(String(a || '')) || a === ''; }
+function localGame() { return LOCAL_ON || !!(BOT_SESS && now() - BOT_SESS.t < 6 * 3600000); }
 /* mashq natijasi: ESC bosilganda o'z serveridan o'yinchilar ro'yxati (kill = ochko) */
 function botsScore() {
   if (!BOT_SESS || now() - BOT_SESS.t > 4 * 3600000 || !NC || !NC.matchmaking || !NC.matchmaking.getPlayersInfo) return;
@@ -4313,7 +4320,7 @@ if (NC) {
 /* O'yin paytida (serverda, menyu yopiq) fonda hech narsa qilmaymiz: serverlarni so'rash o'yin dvigateli orqali ketadi va
  * har 30 soniyada qisqa qotish berardi. Menyu ochilganda ('show') hammasi darhol yangilanadi */
 function playing() {
-  if (!CONNECTED) return false;
+  if (!CONNECTED && !localGame()) return false;    // botlar bilan mashq ham o'yin: menyu tinch turishi kerak (so'rovlar o'yinni qotiradi)
   return !uiShown();
 }
 setInterval(function () {
