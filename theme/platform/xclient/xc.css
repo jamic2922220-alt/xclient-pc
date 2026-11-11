@@ -995,3 +995,18 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .bts .seg2 a.on { border-color: #ff3b3b; color: #fff; background: #2a1216; }
 .bts .btn.big, .fqw .btn.big { display: block; text-align: center; height: 40px; line-height: 38px; font-size: 15px; }
 .lfl { margin: 0 0 14px 18px; padding: 0; color: #c9bfc9; font-size: 13px; line-height: 1.7; }
+
+/* kunlik sovg'a kalendari */
+.dcw p { margin: 0 0 10px; }
+.dcr { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin: 6px 0 12px; }
+.dcd { position: relative; text-align: center; padding: 8px 2px 6px; border: 1px solid #2a2026; background: #120f13; }
+.dcd small { display: block; font-size: 10px; color: #8f8590; }
+.dcd b { display: block; font-size: 17px; color: #fff; margin: 3px 0 1px; }
+.dcd span { font-size: 10px; color: #8f8590; }
+.dcd.done { opacity: .55; }
+.dcd.now { border-color: #ff3b3b; background: #2a1216; }
+.dcd.next { border-color: #f5c518; box-shadow: 0 0 0 1px #f5c518 inset; }
+.dcd.big b { font-size: 20px; }
+.dcd.big b .ico { width: 22px; height: 22px; }
+.dcd em { position: absolute; top: 2px; right: 4px; font-style: normal; color: #3ccf4e; font-size: 12px; }
+.dcn { font-size: 15px; color: #f5c518; }

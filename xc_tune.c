@@ -276,3 +276,52 @@ static void crash_prune(void)
     } while (FindNextFileW(h, &fd));
     FindClose(h);
 }
+
+/* ---- O'yin paytidagi yuklama (lag sababini aniqlash uchun): har 5 soniyada o'yin protsessorni qancha band qilyapti.
+ * CS 1.6 bitta yadroda ishlaydi: o'yin bitta yadroning ~90%+ ini olsa - FPS kompyuter kuchiga tiralgan (FPS lag).
+ * Kam olsa-yu lag bo'lsa - sabab internet (ping/yo'qotish, buni menyu o'lchaydi). Yakunda saytga: ?a=perfl ---- */
+typedef struct { HANDLE h; DWORD cores; int n, n90; double gsum, ssum; DWORD ramMin; } PerfSt;
+static PerfSt g_perf; static HANDLE g_perf_th = NULL; static const wchar_t *g_perf_dump = NULL;   /* test: natija faylga */
+static DWORD WINAPI perf_thread(LPVOID unused)
+{
+    (void)unused;
+    FILETIME c, e, k, u, si, sk, su; ULONGLONG pg = 0, pw = 0, ps_i = 0, ps_t = 0; int warm = 12;   /* birinchi 60 s - yuklanish, hisobga olinmaydi */
+    while (WaitForSingleObject(g_perf.h, 5000) == WAIT_TIMEOUT) {
+        FILETIME now; GetSystemTimeAsFileTime(&now);
+        if (!GetProcessTimes(g_perf.h, &c, &e, &k, &u) || !GetSystemTimes(&si, &sk, &su)) continue;
+        ULONGLONG g = ft64(k) + ft64(u), w = ft64(now), sI = ft64(si), sT = ft64(sk) + ft64(su);   /* sk ichida idle ham bor */
+        if (pw && w > pw && sT > ps_t && warm <= 0) {
+            double gc = (double)(g - pg) / (double)(w - pw);            /* 1.0 = bitta yadro to'liq band */
+            double sc = 1.0 - (double)(sI - ps_i) / (double)(sT - ps_t);  /* butun protsessor */
+            if (gc > 4) gc = 4; if (sc < 0) sc = 0; if (sc > 1) sc = 1;
+            g_perf.gsum += gc; g_perf.ssum += sc; g_perf.n++; if (gc >= 0.9) g_perf.n90++;
+            MEMORYSTATUSEX ms; ms.dwLength = sizeof(ms);
+            if (GlobalMemoryStatusEx(&ms)) { DWORD av = (DWORD)(ms.ullAvailPhys >> 20); if (!g_perf.ramMin || av < g_perf.ramMin) g_perf.ramMin = av; }
+        }
+        if (warm > 0) warm--;
+        pg = g; pw = w; ps_i = sI; ps_t = sT;
+    }
+    return 0;
+}
+static void perf_begin(HANDLE proc)
+{
+    ZeroMemory(&g_perf, sizeof(g_perf));
+    SYSTEM_INFO s; GetSystemInfo(&s); g_perf.cores = s.dwNumberOfProcessors;
+    if (!DuplicateHandle(GetCurrentProcess(), proc, GetCurrentProcess(), &g_perf.h, SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, 0)) { g_perf.h = NULL; return; }
+    g_perf_th = CreateThread(NULL, 0, perf_thread, NULL, 0, NULL);
+    if (g_perf_th) SetThreadPriority(g_perf_th, THREAD_PRIORITY_BELOW_NORMAL);
+}
+static void perf_end(DWORD played)
+{
+    if (g_perf_th) { WaitForSingleObject(g_perf_th, 8000); CloseHandle(g_perf_th); g_perf_th = NULL; }
+    if (g_perf.h) { CloseHandle(g_perf.h); g_perf.h = NULL; }
+    if (g_perf.n < 6 || played < 120) return;              /* 2 daqiqadan kam - ma'lumot yetarli emas */
+    char url[300];
+    if (g_perf_dump) { char t[200]; _snprintf(t, sizeof(t), "gc=%d g90=%d sc=%d ram=%lu cores=%lu n=%d", (int)(g_perf.gsum * 100 / g_perf.n), g_perf.n90 * 100 / g_perf.n, (int)(g_perf.ssum * 100 / g_perf.n), (unsigned long)g_perf.ramMin, (unsigned long)g_perf.cores, g_perf.n); t[199] = 0;
+        HANDLE f = CreateFileW(g_perf_dump, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL); if (f != INVALID_HANDLE_VALUE) { DWORD w; WriteFile(f, t, (DWORD)strlen(t), &w, NULL); CloseHandle(f); } return; }
+    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=perfl&d=%s&gc=%d&g90=%d&sc=%d&ram=%lu&cores=%lu&n=%d&t=%lu", g_id,
+              (int)(g_perf.gsum * 100 / g_perf.n), g_perf.n90 * 100 / g_perf.n, (int)(g_perf.ssum * 100 / g_perf.n),
+              (unsigned long)g_perf.ramMin, (unsigned long)g_perf.cores, g_perf.n, (unsigned long)played);
+    url[sizeof(url) - 1] = 0;
+    free(http_get(url, NULL));
+}

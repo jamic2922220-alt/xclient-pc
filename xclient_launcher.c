@@ -2488,6 +2488,7 @@ static BOOL run_game(void)
               HANDLE it = CreateThread(NULL, 0, game_icon_thread, dup, 0, NULL); if (it) CloseHandle(it); else CloseHandle(dup); } }
         rec_session_begin(pi.dwProcessId);
         tune_begin();                                /* quvvat rejimi, sichqoncha, fon dasturlari - o'yin yopilguncha */
+        perf_begin(pi.hProcess);                     /* lag sababi: o'yin protsessorni qancha band qilyapti */
         /* o'yin davomida launcher orqada turadi (F10, Windows sozlamalari). Uning ishlatmayotgan xotirasini Windows'ga qaytaramiz -
          * 2-4 GB li kompyuterlarda o'yinga ko'proq RAM qoladi. 20 soniyadan keyin (o'yin yuklanib bo'lgach), keyin 5 daqiqada bir;
          * video yozilayotganda tegmaymiz. Kerakli sahifalar so'ralganda Windows ularni o'zi qaytaradi */
@@ -2504,6 +2505,7 @@ static BOOL run_game(void)
         FILETIME ft1; GetSystemTimeAsFileTime(&ft1);
         ULONGLONG played = ((((ULONGLONG)ft1.dwHighDateTime << 32) | ft1.dwLowDateTime) - t0) / 10000000ULL;   /* soniya */
         g_played_s = (DWORD)played;
+        perf_end((DWORD)played);
         if (played >= 600) fn_send("p10");
         BOOL crashed = game_crashed(code, t0);
         /* ochilishdayoq yiqildi (o'yin oynasi umuman paydo bo'lmadi, xotira xatosi): bu o'yin ichidagi xato emas - exe bu Windows'da ishga tushmayapti */
@@ -2910,6 +2912,13 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, LPWSTR cmdline, int show)
     }
     if (cmdline && !wcsncmp(cmdline, L"--shottest", 10)) {  /* avtomatik test: F11 skrinshot (ekran -> Rasmlar\X CLIENT\*.jpg) */
         shot_thread(NULL); CoUninitialize(); return g_shot_saved ? 0 : 3;
+    }
+    if (cmdline && !wcsncmp(cmdline, L"--perftest ", 11)) {  /* avtomatik test: --perftest <natija.txt> <exe> - o'yin o'rnida exe, yuklama o'lchovi */
+        wchar_t *ex = wcschr(cmdline + 11, L' '); if (!ex) return 2; *ex++ = 0; g_perf_dump = cmdline + 11;
+        STARTUPINFOW si = { sizeof(si) }; PROCESS_INFORMATION pi; wchar_t c[MAX_PATH]; lstrcpynW(c, ex, MAX_PATH);
+        if (!CreateProcessW(ex, c, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) return 4;
+        DWORD t0 = GetTickCount(); perf_begin(pi.hProcess); WaitForSingleObject(pi.hProcess, INFINITE); perf_end((GetTickCount() - t0) / 1000);
+        CoUninitialize(); return 0;
     }
     if (cmdline && !wcsncmp(cmdline, L"--dmptest ", 10)) {  /* avtomatik test: yiqiladigan exe ni kuzatuvda ochib damp yozish -> %TEMP%\xc_crash.dmp */
         GetCurrentDirectoryW(MAX_PATH, g_dir);

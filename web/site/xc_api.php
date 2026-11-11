@@ -637,6 +637,24 @@ function tg_clip($c) {
     }
     tg_send($cf['tg_clips'], $cap);                       // katta fayl yoki curl yo'q - havola bilan
 }
+/* Lag sababi: launcher (perfl) - o'yin protsessorni qancha band qildi; menyu (perf) - o'yin paytidagi ping va yo'qotish.
+ * Ikkalasi 'perflog' ga (oxirgi 400 ta). gc - bitta yadroning necha % i (90+ - FPS kompyuter kuchiga tiralgan) */
+function perf_add($e) {
+    lock(); $l = rd('perflog', array()); array_unshift($l, $e); wr('perflog', array_slice($l, 0, 400)); unlock();
+}
+if ($a === 'perfl') {
+    header('Content-Type: text/plain'); header('Cache-Control: no-store');
+    $d = strtolower(p('d'));
+    if (!preg_match('/^[a-z0-9]{8,40}$/', $d) || !is_file(XC_DIR . '/dev/' . $d . '.php') || rl_count('perf' . $d, 3600) >= 20) exit;
+    rl_add('perf' . $d, 3600);
+    $e = array('t' => time(), 's' => 'l', 'd' => $d, 'gc' => max(0, min(400, (int)p('gc'))), 'g90' => max(0, min(100, (int)p('g90'))), 'sc' => max(0, min(100, (int)p('sc'))),
+        'ram' => max(0, min(1000000, (int)p('ram'))), 'cores' => max(0, min(256, (int)p('cores'))), 'dur' => max(0, min(86400 * 2, (int)p('t'))));
+    perf_add($e);
+    lock(); $o = rd('dev/' . $d, array());
+    $o['perf'] = $e; if ($e['g90'] >= 50 || $e['gc'] >= 90) $o['cpuhi'] = time();   // menyu keyingi safar "yengillashtirish" ni taklif qiladi
+    wr('dev/' . $d, $o); unlock();
+    echo 'ok'; exit;
+}
 /* Yiqilish dampi (launcher 1.0.139+): o'yin ishga tushmasa launcher minidump yozadi va 1 MB bo'laklab yuboradi.
  * Faqat admin kaliti bilan olinadi (dmplist / dmpget) - o'yin ishlab chiqaruvchisiga (NextClient) berish uchun */
 if ($a === 'dmpup') {
@@ -748,6 +766,20 @@ tg_bot_poll();
 switch ($a) {
 
 /* ro'yxatdan o'tish oynasi: login yozilayotganda bo'sh/bandligini ko'rsatadi (bo'sh variant taklifi bilan) */
+case 'perf':                                            // menyu: o'yin paytidagi ping (lag sababi). lag=1 - o'yinchi "lag" dedi, oxirgi yozuvga belgi
+    $dv = preg_replace('/[^a-z0-9]/', '', strtolower(p('device'))); $pc = strtolower(p('d'));
+    if ($dv === '' || rl_count('perfm' . $dv, 3600) >= 30) out(array('ok' => true));
+    rl_add('perfm' . $dv, 3600);
+    if (p('lag') === '1') {
+        lock(); $l = rd('perflog', array());
+        foreach ($l as $i => $x) if (isset($x['dv']) && $x['dv'] === $dv) { $l[$i]['lag'] = 1; break; }
+        wr('perflog', $l); unlock(); out(array('ok' => true));
+    }
+    perf_add(array('t' => time(), 's' => 'm', 'dv' => $dv, 'd' => preg_match('/^[a-z0-9]{8,40}$/', $pc) ? $pc : '', 'ip' => clean_str(p('ip'), 64),
+        'pm' => max(0, min(5000, (int)p('pm'))), 'px' => max(0, min(5000, (int)p('px'))), 'l' => max(0, min(100, (int)p('l'))), 'n' => max(0, min(9999, (int)p('n'))),
+        'dur' => max(0, min(86400, (int)p('dur'))), 'fps' => max(0, min(1000, (int)p('fps'))), 'lg' => p('lg') === '1' ? 1 : 0, 'w' => p('w') === '1' ? 1 : 0));
+    out(array('ok' => true));
+
 case 'dmplist':                                         // yiqilish damplari ro'yxati / bittasini yuklab olish - probrep kaliti bilan
 case 'dmpget':
     if (rl_count('pr' . client_ip(), 600) >= 10) { http_response_code(429); out(array('ok' => false, 'err' => 'rl')); }
@@ -807,7 +839,7 @@ case 'probrep':                                         // faqat o'qish: Muammol
             'wkk' => (isset($x['wkkid']) && $x['wkkid'] === $wkn) ? (int)$x['wkk'] : 0, 'last' => $ls, 'seen' => (int)@$x['seen'], 'cr' => (int)@$x['created'], 'cd' => isset($x['cdiag']) ? $x['cdiag'] : null); }
     $act['users_st'] = $us; $act['week'] = $wkn;
     $act['daily'] = $dl; $act['users'] = count((array)glob(XC_DIR . '/users/*.php'));
-    out(array('ok' => true, 'now' => date('Y-m-d H:i'), 'days' => $days, 'act' => $act, 'x' => rd('probs_x', array()), 'jserr' => $js, 'crash' => array_slice($cr, 0, 60), 'fb' => $fb, 'rep' => $rp, 'jshour' => rd('jserr_hour', array())));
+    out(array('ok' => true, 'now' => date('Y-m-d H:i'), 'days' => $days, 'act' => $act, 'x' => rd('probs_x', array()), 'jserr' => $js, 'crash' => array_slice($cr, 0, 60), 'fb' => $fb, 'rep' => $rp, 'jshour' => rd('jserr_hour', array()), 'perf' => array_slice(rd('perflog', array()), 0, 120)));
 case 'login_check':
     if (rl_count('lc' . client_ip(), 60) >= 60) out(array('ok' => false));
     rl_add('lc' . client_ip(), 60);
