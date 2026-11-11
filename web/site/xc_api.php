@@ -637,6 +637,32 @@ function tg_clip($c) {
     }
     tg_send($cf['tg_clips'], $cap);                       // katta fayl yoki curl yo'q - havola bilan
 }
+/* Yiqilish dampi (launcher 1.0.139+): o'yin ishga tushmasa launcher minidump yozadi va 1 MB bo'laklab yuboradi.
+ * Faqat admin kaliti bilan olinadi (dmplist / dmpget) - o'yin ishlab chiqaruvchisiga (NextClient) berish uchun */
+if ($a === 'dmpup') {
+    header('Content-Type: text/plain'); header('Cache-Control: no-store');
+    $d = strtolower(p('d')); $n = p('n'); $off = (int)p('off'); $tot = (int)p('tot');
+    if (!preg_match('/^[a-z0-9]{8,40}$/', $d) || !preg_match('/^\d{9,11}$/', $n) || !is_file(XC_DIR . '/dev/' . $d . '.php') || $tot < 1024 || $tot > 48 * 1048576) { echo 'bad'; exit; }
+    if ($off === 0 && rl_count('dmp' . $d, 86400) >= 3) { echo 'limit'; exit; }
+    if ($off === 0) rl_add('dmp' . $d, 86400);
+    @mkdir(XC_DIR . '/dumps', 0755, true);
+    if (!is_file(XC_DIR . '/dumps/.htaccess')) @file_put_contents(XC_DIR . '/dumps/.htaccess', "Require all denied\n");
+    $f = XC_DIR . '/dumps/' . $d . '_' . $n . '.dmp';
+    $data = file_get_contents('php://input', false, null, 0, 1048577);
+    if ($data === false || $data === '' || strlen($data) > 1048576) { echo 'bad'; exit; }
+    if ($off === 0 && substr($data, 0, 4) !== 'MDMP') { echo 'bad'; exit; }
+    $have = is_file($f) ? filesize($f) : 0;
+    if ($off !== $have) { echo 'off ', $have; exit; }
+    if ($have + strlen($data) > $tot) { echo 'bad'; exit; }
+    file_put_contents($f, $data, FILE_APPEND | LOCK_EX);
+    clearstatcache();
+    if (filesize($f) >= $tot) {                       // tugadi: ma'lumot yozuvi, eng eskilari o'chadi (30 ta qoladi)
+        @file_put_contents($f . '.txt', json_encode(array('d' => $d, 't' => (int)$n, 'size' => $tot, 'k' => preg_replace('/[^a-z]/', '', substr(p('k'), 0, 10)), 'v' => preg_replace('/[^\w.\-]/', '', substr(p('v'), 0, 20)))));
+        $all = (array)glob(XC_DIR . '/dumps/*.dmp'); usort($all, function ($x, $y) { return filemtime($y) - filemtime($x); });
+        foreach (array_slice($all, 30) as $old) { @unlink($old); @unlink($old . '.txt'); }
+    }
+    echo 'ok ', filesize($f); exit;
+}
 /* "Mening videolarim" dagi jonli ko'rinish: launcher 8 kadrli JPEG yuboradi (vthumb), menyu o'z kaliti bilan oladi (vth) */
 if ($a === 'vthumb' || $a === 'vth') {
     $isS = p('t') === 's';                                 // F11 skrinshotning kichik rasmi
@@ -722,6 +748,28 @@ tg_bot_poll();
 switch ($a) {
 
 /* ro'yxatdan o'tish oynasi: login yozilayotganda bo'sh/bandligini ko'rsatadi (bo'sh variant taklifi bilan) */
+case 'dmplist':                                         // yiqilish damplari ro'yxati / bittasini yuklab olish - probrep kaliti bilan
+case 'dmpget':
+    if (rl_count('pr' . client_ip(), 600) >= 10) { http_response_code(429); out(array('ok' => false, 'err' => 'rl')); }
+    $hd = isset($_SERVER['HTTP_AUTHORIZATION']) ? $_SERVER['HTTP_AUTHORIZATION'] : (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION']) ? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] : '');
+    if ($hd === '' && function_exists('getallheaders')) foreach ((array)getallheaders() as $hk => $hv) if (strtolower($hk) === 'authorization') $hd = $hv;
+    $rk = rd('repkey', null); $tok = preg_match('/^Bearer\s+([a-f0-9]{32,64})$/i', trim($hd), $mm) ? strtolower($mm[1]) : '';
+    if (!$rk || empty($rk['h']) || $tok === '' || !hash_equals($rk['h'], hash('sha256', $tok))) { rl_add('pr' . client_ip(), 600); http_response_code(403); out(array('ok' => false, 'err' => 'key')); }
+    if ($a === 'dmpget') {
+        $id = p('id');
+        $f = XC_DIR . '/dumps/' . $id . '.dmp';
+        if (!preg_match('/^[a-z0-9]{8,40}_\d{9,11}$/', $id) || !is_file($f)) { http_response_code(404); out(array('ok' => false, 'err' => 'nf')); }
+        header('Content-Type: application/octet-stream'); header('Content-Disposition: attachment; filename="' . $id . '.dmp"'); header('Content-Length: ' . filesize($f));
+        readfile($f); exit;
+    }
+    $l = array();
+    foreach ((array)glob(XC_DIR . '/dumps/*.dmp') as $f) {
+        $m = is_file($f . '.txt') ? json_decode((string)@file_get_contents($f . '.txt'), true) : null;
+        $l[] = array('id' => basename($f, '.dmp'), 'size' => filesize($f), 'done' => (bool)$m, 'info' => $m);
+    }
+    usort($l, function ($x, $y) { return strcmp($y['id'], $x['id']); });
+    out(array('ok' => true, 'dumps' => $l));
+
 case 'probrep':                                         // faqat o'qish: Muammolar hisoboti (admin panelda yaratilgan kalit bilan, Authorization: Bearer)
     if (rl_count('pr' . client_ip(), 600) >= 10) { http_response_code(429); out(array('ok' => false, 'err' => 'rl')); }
     $hd = isset($_SERVER['HTTP_AUTHORIZATION']) ? $_SERVER['HTTP_AUTHORIZATION'] : (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION']) ? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] : '');

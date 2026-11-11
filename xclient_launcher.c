@@ -2224,6 +2224,68 @@ static void dbg_stack(HANDLE proc, DWORD tid, DbgMod *mods, int nm, char *out, s
         strcat(out, one); len += strlen(one); hits++;
     }
 }
+/* Yiqilish dampi (minidump): o'yin ishlab chiqaruvchisiga (NextClient) sababni topish uchun. %TEMP%\xc_crash.dmp
+ * Faqat kuzatuv rejimida, birinchi xotira xatosida - o'yin oqimlari to'xtagan holatda yoziladi */
+typedef BOOL (WINAPI *MDWD)(HANDLE, DWORD, HANDLE, int, void *, void *, void *);
+static wchar_t g_dmp[MAX_PATH] = L"";
+static void dbg_dump(HANDLE proc, DWORD pid, DWORD tid, EXCEPTION_RECORD *er)
+{
+    if (g_dmp[0]) return;
+    HMODULE dh = LoadLibraryW(L"dbghelp.dll"); if (!dh) return;
+    MDWD wd = (MDWD)GetProcAddress(dh, "MiniDumpWriteDump");
+    wchar_t tp[MAX_PATH], f[MAX_PATH];
+    if (wd && GetTempPathW(MAX_PATH, tp)) {
+        _snwprintf(f, MAX_PATH, L"%sxc_crash.dmp", tp); f[MAX_PATH - 1] = 0;
+        HANDLE h = CreateFileW(f, GENERIC_READ | GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (h != INVALID_HANDLE_VALUE) {
+            /* istisno ma'lumoti: o'yin jarayoniga EXCEPTION_POINTERS yozamiz (ClientPointers=TRUE) - WinDbg !analyze yiqilgan joyni darhol ko'rsatadi */
+            struct { DWORD ThreadId; void *ExceptionPointers; BOOL ClientPointers; } mei = { tid, NULL, TRUE };
+            HANDLE th = OpenThread(THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, tid);
+            CONTEXT c; ZeroMemory(&c, sizeof(c)); c.ContextFlags = CONTEXT_FULL;
+            if (th && GetThreadContext(th, &c)) {
+                SIZE_T need = sizeof(EXCEPTION_RECORD) + sizeof(CONTEXT) + sizeof(EXCEPTION_POINTERS), w = 0;
+                BYTE *rm = (BYTE *)VirtualAllocEx(proc, NULL, need, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+                if (rm) {
+                    EXCEPTION_POINTERS ep; ep.ExceptionRecord = (EXCEPTION_RECORD *)rm; ep.ContextRecord = (CONTEXT *)(rm + sizeof(EXCEPTION_RECORD));
+                    if (WriteProcessMemory(proc, rm, er, sizeof(EXCEPTION_RECORD), &w) && WriteProcessMemory(proc, rm + sizeof(EXCEPTION_RECORD), &c, sizeof(CONTEXT), &w) &&
+                        WriteProcessMemory(proc, rm + sizeof(EXCEPTION_RECORD) + sizeof(CONTEXT), &ep, sizeof(ep), &w))
+                        mei.ExceptionPointers = rm + sizeof(EXCEPTION_RECORD) + sizeof(CONTEXT);
+                }
+            }
+            if (th) CloseHandle(th);
+            /* DataSegs | HandleData | IndirectlyReferencedMemory | UnloadedModules | ProcessThreadData | FullMemoryInfo | ThreadInfo - bir necha MB */
+            DWORD fl = 0x1 | 0x4 | 0x40 | 0x20 | 0x100 | 0x800 | 0x1000;
+            BOOL ok = wd(proc, pid, h, (int)fl, mei.ExceptionPointers ? &mei : NULL, NULL, NULL);
+            if (!ok) { SetFilePointer(h, 0, NULL, FILE_BEGIN); SetEndOfFile(h); ok = wd(proc, pid, h, 0x1 | 0x20, NULL, NULL, NULL); }   /* kichikroq */
+            CloseHandle(h);
+            if (ok) lstrcpynW(g_dmp, f, MAX_PATH); else DeleteFileW(f);
+        }
+    }
+    FreeLibrary(dh);
+}
+/* dampni saytga bo'laklab (1 MB) yuborish - admin "Muammolar" dan yuklab olinadi. Kuniga 1 marta */
+static char *share_post(const char *path, const void *data, DWORD len);   /* xc_rec.c */
+static void dmp_upload(const char *kind)
+{
+    if (!g_dmp[0]) return;
+    FILETIME ft; GetSystemTimeAsFileTime(&ft);
+    int day = (int)(((((ULONGLONG)ft.dwHighDateTime << 32) | ft.dwLowDateTime) / 10000000ULL) / 86400ULL);
+    if (ini_int(L"dmpday") == day) return;
+    long len = 0; char *b = read_all(g_dmp, &len);
+    if (!b || len < 1024 || len > 48 * 1024 * 1024) { free(b); return; }
+    ini_set_int(L"dmpday", day);
+    char n[24]; _snprintf(n, sizeof(n), "%lu", (unsigned long)((((ULONGLONG)ft.dwHighDateTime << 32 | ft.dwLowDateTime) / 10000000ULL) - 11644473600ULL)); n[23] = 0;
+    for (long off = 0; off < len; ) {
+        DWORD part = (DWORD)(len - off > 1048576 ? 1048576 : len - off);
+        char path[260]; _snprintf(path, sizeof(path), "/xc_api.php?a=dmpup&d=%s&n=%s&k=%s&v=%s&off=%ld&tot=%ld", g_id, n, kind, g_version[0] ? g_version : XC_VERSTR, off, len); path[sizeof(path) - 1] = 0;
+        char *r = NULL;
+        for (int a = 0; a < 3 && !(r && !strncmp(r, "ok", 2)); a++) { free(r); r = share_post(path, b + off, part); }
+        BOOL ok = r && !strncmp(r, "ok", 2); free(r);
+        if (!ok) break;
+        off += part;
+    }
+    free(b);
+}
 static void dbg_probe(const wchar_t *exe, const wchar_t *cmd, char *out, size_t cap)
 {
     static DbgMod mods[400]; int nm = 0;
@@ -2255,7 +2317,7 @@ static void dbg_probe(const wchar_t *exe, const wchar_t *cmd, char *out, size_t 
             ULONG_PTR a = (ULONG_PTR)er->ExceptionAddress; int bi = -1;
             for (int i = 0; i < nm; i++) if (mods[i].base <= a && (bi < 0 || mods[i].base > mods[bi].base)) bi = i;
             char *dst = de.u.Exception.dwFirstChance ? fc : sc;
-            if (code == EXCEPTION_ACCESS_VIOLATION && !stk[0]) dbg_stack(pi.hProcess, de.dwThreadId, mods, nm, stk, sizeof(stk));   /* birinchi xotira xatosi - stek */
+            if (code == EXCEPTION_ACCESS_VIOLATION && !stk[0]) { dbg_stack(pi.hProcess, de.dwThreadId, mods, nm, stk, sizeof(stk)); dbg_dump(pi.hProcess, pi.dwProcessId, de.dwThreadId, er); }   /* birinchi xotira xatosi - stek va damp */
             if (!de.u.Exception.dwFirstChance && code == EXCEPTION_ACCESS_VIOLATION && er->NumberParameters >= 2 && !acc[0]) {   /* o'qish/yozish/ishga tushirish va manzil */
                 _snprintf(acc, sizeof(acc), " acc=%c@%lx", er->ExceptionInformation[0] == 0 ? 'r' : er->ExceptionInformation[0] == 1 ? 'w' : 'x', (unsigned long)er->ExceptionInformation[1]); acc[sizeof(acc) - 1] = 0; }
             if (!dst[0]) { _snprintf(dst, 160, "%08lx mod=%s+%lx", code, bi >= 0 ? mods[bi].name : "?", bi >= 0 ? (unsigned long)(a - mods[bi].base) : (unsigned long)a); dst[159] = 0;
@@ -2455,6 +2517,7 @@ static BOOL run_game(void)
                   status(L"Xato sababi aniqlanmoqda...", 100);
                   char raw[760], esc[1100]; dbg_probe(exe, cmd, raw, sizeof(raw)); url_escape(esc, sizeof(esc), raw);
                   lstrcpynA(g_probx, esc, sizeof(g_probx));   /* modul ma'lumoti muhimroq - popup matni o'rniga */
+                  dmp_upload("start");                       /* damp - o'yin ishlab chiqaruvchisi uchun */
               } }
             prob_send("start_fail", 3000);
             g_probx[0] = 0;
@@ -2847,6 +2910,14 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, LPWSTR cmdline, int show)
     }
     if (cmdline && !wcsncmp(cmdline, L"--shottest", 10)) {  /* avtomatik test: F11 skrinshot (ekran -> Rasmlar\X CLIENT\*.jpg) */
         shot_thread(NULL); CoUninitialize(); return g_shot_saved ? 0 : 3;
+    }
+    if (cmdline && !wcsncmp(cmdline, L"--dmptest ", 10)) {  /* avtomatik test: yiqiladigan exe ni kuzatuvda ochib damp yozish -> %TEMP%\xc_crash.dmp */
+        GetCurrentDirectoryW(MAX_PATH, g_dir);
+        char raw[760]; dbg_probe(cmdline + 10, cmdline + 10, raw, sizeof(raw));
+        wchar_t rf2[MAX_PATH]; GetTempPathW(MAX_PATH, rf2); wcscat(rf2, L"xc_dmptest.txt");
+        HANDLE f = CreateFileW(rf2, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (f != INVALID_HANDLE_VALUE) { DWORD w; WriteFile(f, raw, (DWORD)strlen(raw), &w, NULL); CloseHandle(f); }
+        CoUninitialize(); return g_dmp[0] ? 0 : 3;
     }
     if (cmdline && !wcsncmp(cmdline, L"--sltest ", 9)) {   /* avtomatik test: skrinshotlar ro'yxati (hello &sl=) -> faylga */
         char sl[1800]; shot_list(sl, sizeof(sl));
