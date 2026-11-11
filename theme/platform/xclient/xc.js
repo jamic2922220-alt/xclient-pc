@@ -1383,7 +1383,7 @@ function demoCtl(c) {
 function stopRecord() { clearTimeout(REC_TM); if (REC) { cmd('stop'); REC = ''; } }
 function onConnectEvt(addr, inGame) {
   if (BOT_PEND) setTimeout(botsApply, 1500);       // botlar bilan mashq: xarita yuklandi - bot sonini qayta yuboramiz
-  if (isLocalAddr(addr) && (BOT_SESS || BOT_PEND)) { LOCAL_ON = true; fxClass(); sparks(); return; }   // o'z serveri (botlar) - haqiqiy o'yin funksiyalarisiz
+  if (isLocalAddr(addr)) { LOCAL_ON = true; fxClass(); sparks(); return; }   // o'z serveri (botlar) - haqiqiy o'yin funksiyalarisiz
   addr = normIp(addr);
   if (!addr) return;
   /* demo ham "ulanish" hodisasini beradi (yozilgan server manzili bilan) - bu o'yin emas: statistika, demo yozish, musiqa o'chirish kerak emas */
@@ -3576,11 +3576,12 @@ function botsGo() {
 var BOT_PEND = null, BOT_SESS = null, LOCAL_ON = false;
 /* o'z kompyuteridagi server (botlar bilan mashq): ulanish manzili loopback/localhost/127.x bo'ladi. Bu haqiqiy server emas -
  * tarix, statistika, tarmoq sozlash, ping o'lchovi kerak emas; lekin menyu o'yin davom etayotganini bilishi shart */
-function isLocalAddr(a) { return /^(loopback|localhost|127\.|0\.0\.0\.0)/i.test(String(a || '')) || a === ''; }
+function isLocalAddr(a) { return /^(local|loopback|localhost|127\.\d+\.\d+\.\d+|0\.0\.0\.0)(:\d+)?$/i.test(String(a || '').replace(/\s+/g, '')); }   // NextClient o'z serverini 'local:27015' deb beradi
 function localGame() { return LOCAL_ON || !!(BOT_SESS && now() - BOT_SESS.t < 6 * 3600000); }
 /* mashq natijasi: ESC bosilganda o'z serveridan o'yinchilar ro'yxati (kill = ochko) */
 function botsScore() {
-  if (!BOT_SESS || now() - BOT_SESS.t > 4 * 3600000 || !NC || !NC.matchmaking || !NC.matchmaking.getPlayersInfo) return;
+  if (!BOT_SESS || BOT_SESS.sq > 2 || now() - BOT_SESS.t > 4 * 3600000 || !NC || !NC.matchmaking || !NC.matchmaking.getPlayersInfo) return;
+  BOT_SESS.sq = (BOT_SESS.sq || 0) + 1;   // ko'pi bilan 3 marta: o'z serveriga so'rov ba'zi versiyalarda xato beradi
   var me = (MYNAME || (S && S.name) || '').toLowerCase();
   try {
     NC.matchmaking.getPlayersInfo('127.0.0.1:27015').then(function (list) {
@@ -4279,6 +4280,7 @@ step('beat', function () { if (DB.beat !== new Date().toDateString()) api('beat'
 step('loadAnn', function () { loadAnn(); });
 step('loadFeat', function () { loadFeat(); });
 step('perf', function () { perfStart(); });
+step('loc', function () { if (DB.hist && DB.hist.length) { var h = DB.hist.filter(function (x) { return !(x && isLocalAddr(x.ip)); }); if (h.length !== DB.hist.length) { DB.hist = h; persist(); } } });   // 10204600 gacha botlar bilan o'yin 'local:27015' bo'lib tarixga tushgan
 step('music', function () { setTimeout(musicSync, 3000); });
 step('whatsnew', function () { setTimeout(loadWhatsNew, 4000); });
 step('tour', function () { setTimeout(tourShow, 3000); });

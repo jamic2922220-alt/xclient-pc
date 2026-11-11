@@ -17,10 +17,10 @@ const { page } = require('./lib');
   // botlar bilan o'ynaganda menyu tinch turadi: serverlarga so'rov yubormaydi (so'rovlar o'yinni qotiradi), effektlar o'chiq
   const quiet = await p.evaluate(() => new Promise(res => {
     window.QN = 0; window.nextclient.gameUi.shown = false;
-    (window.L.connect || []).forEach(f => f({ address: 'loopback' }));
-    setTimeout(() => { const q = window.QN; window.nextclient.gameUi.shown = true; res({ q: q, low: document.documentElement.className.indexOf('lowfx') >= 0 }); }, 32000);
+    (window.L.connect || []).forEach(f => f({ detail: { address: 'local:27015' } }));   // NextClient o'z serverini shunday beradi (jonli ma'lumot)
+    setTimeout(() => { const q = window.QN; window.nextclient.gameUi.shown = true; res({ q: q, low: document.documentElement.className.indexOf('lowfx') >= 0, h: JSON.stringify(JSON.parse(localStorage.getItem('xclient')).hist || []).indexOf('local') }); }, 47000);
   }));
-  ok(quiet.q === 0 && quiet.low, 'botlar bilan o\'yin paytida menyu tinch: 30 s da serverlarga so\'rov ' + quiet.q + ' ta, effektlar o\'chiq=' + quiet.low);
+  ok(quiet.q === 0 && quiet.low && quiet.h < 0, 'botlar bilan o\'yin (local:27015) paytida menyu tinch: 47 s da serverlarga so\'rov ' + quiet.q + ' ta, effektlar o\'chiq=' + quiet.low + ', tarixga yozilmadi=' + (quiet.h < 0));
   await p.evaluate(() => { (window.L.disconnect || []).forEach(f => f({})); });
   // mashq turi: Aim
   await p.click('#menu [data-act="bots"]'); await p.waitForTimeout(400);
