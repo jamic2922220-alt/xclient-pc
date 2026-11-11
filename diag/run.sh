@@ -1,15 +1,11 @@
 #!/bin/bash
-# F11 skrinshot -> menyu ro'yxati va kichik rasm (launcher 1.0.138)
+# yiqilish dampi (launcher 1.0.139): kuzatuvda yiqiladigan exe -> %TEMP%\xc_crash.dmp
 O=$PWD/diag/out; mkdir -p $O; : > $O/summary.txt
-P="$USERPROFILE/Pictures/X CLIENT"
-./diag/vf/xcl_test.exe --shottest; echo "shot1 rc=$?" >> $O/summary.txt
-sleep 2
-./diag/vf/xcl_test.exe --shottest; echo "shot2 rc=$?" >> $O/summary.txt
-ls -la "$P" >> $O/summary.txt 2>&1
-echo "--- thumbs" >> $O/summary.txt
-ls -la "$P/.thumbs" >> $O/summary.txt 2>&1
-for f in "$P"/.thumbs/*.jpg; do python -c "import sys;d=open(sys.argv[1],'rb').read();print(sys.argv[1][-30:],len(d),d[:2].hex())" "$f" >> $O/summary.txt; done
-./diag/vf/xcl_test.exe --sltest "$(cygpath -w $O/sl.txt)"; echo "sl rc=$?" >> $O/summary.txt
-cat $O/sl.txt >> $O/summary.txt; echo >> $O/summary.txt
-cp "$P"/.thumbs/*.jpg $O/ 2>/dev/null
-# 3
+./diag/vf/xcl_test.exe --dmptest "$(cygpath -w $PWD/diag/vf/crash.exe)"; echo "dmp rc=$?" >> $O/summary.txt
+T=$(cygpath -u "$TEMP")
+cat "$T/xc_dmptest.txt" >> $O/summary.txt; echo >> $O/summary.txt
+ls -la "$T/xc_crash.dmp" >> $O/summary.txt 2>&1
+head -c 4 "$T/xc_crash.dmp" >> $O/summary.txt; echo >> $O/summary.txt
+python -c "import sys;d=open(sys.argv[1],'rb').read();import struct;n,off=struct.unpack('<II',d[8:16]);ty=[struct.unpack('<I',d[off+i*12:off+i*12+4])[0] for i in range(n)];print('streams',ty)" "$T/xc_crash.dmp" >> $O/summary.txt 2>&1
+cp "$T/xc_crash.dmp" $O/ 2>/dev/null
+# 4
