@@ -12,6 +12,7 @@ for i in $(seq 1 30); do curl -s -o /dev/null "$XC_BASE/ver.txt" && break; sleep
 A=$XC_BASE/xc_api.php
 export NODE_PATH="${NODE_PATH:-}:$(npm root -g 2>/dev/null):/opt/node-tools/node_modules"
 rc=0
+node "$HERE/dupes.js" || rc=1
 node "$HERE/lite.js" || rc=1                                          # launcher hali ko'rinmagan holat - hello'dan oldin
 curl -s -d 'a=hello&d=testpc0000001&v=1.0.64&lang=uz' $A >/dev/null   # launcher bor deb (to'liq menyu, "sodda" emas)
 REG=$(curl -s -d "a=register&login=testa&pass=secret12&device=testdev0001" $A); echo "register: ${REG:0:80}"; export XC_TOKEN=$(echo "$REG" | grep -o "\"token\":\"[a-f0-9]*\"" | cut -d\" -f4)
@@ -26,6 +27,7 @@ node "$HERE/scorekills.js" || rc=1
 node "$HERE/newfeat.js" || rc=1
 node "$HERE/shots.js" || rc=1
 node "$HERE/fbfix.js" || rc=1
+node "$HERE/perfold.js" || rc=1
 python3 "$HERE/visual.py" "$XC_SHOTS" ${1:-} || rc=1
 echo "Skrinshotlar: $XC_SHOTS"
 kill $SRV 2>/dev/null

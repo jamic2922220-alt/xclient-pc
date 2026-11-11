@@ -537,6 +537,8 @@ if ($a === 'menuver') {
  * vadd  - launcher: yangi video saqlandi (n, mb, sec)
  * vpoll - launcher: o'yin paytida har 4 soniyada - menyu yuborgan buyruqlarni oladi ("open|del|folder nom" qatorlari) */
 function vid_name($n) { return is_string($n) && preg_match('/^xc_\d{8}_\d{6}$/', $n) ? $n : ''; }
+/* 1.0.138 - 10204500: F11 ro'yxati xato bilan 'shots' ga (bu "galereyaga yuklash" belgisi) yozilgan edi - ajratamiz, belgi qaytadi (0) */
+function f11_fix(&$o) { if (isset($o['shots']) && is_array($o['shots'])) { if (!isset($o['f11'])) $o['f11'] = $o['shots']; $o['shots'] = 0; } }
 function shot_name($n) { return is_string($n) && preg_match('/^xc_\d{8}_\d{6}(_\d{1,2})?$/', $n) ? $n : ''; }   // F11 skrinshot (shu soniyada bir nechta - _2)
 /* LAN: launcher lokal tarmoqdagi serverlarni topib yuboradi (menyu "LAN" bo'limi so'raganda) - ip:port|nom|xarita|o'yinchi|max ; ... */
 if ($a === 'lanset') {
@@ -570,10 +572,10 @@ if ($a === 'vadd' || $a === 'vpoll') {
         rl_add('sadd' . $d, 3600);
         lock();
         $o = rd('dev/' . $d, array());
-        $v = isset($o['shots']) && is_array($o['shots']) ? $o['shots'] : array();
+        $v = isset($o['f11']) && is_array($o['f11']) ? $o['f11'] : array();
         $v = array_values(array_filter($v, function ($x) use ($n) { return isset($x['n']) && $x['n'] !== $n; }));
         array_unshift($v, array('n' => $n, 'kb' => max(0, min(200000, (int)p('kb')))));
-        $o['shots'] = array_slice($v, 0, 48);
+        $o['f11'] = array_slice($v, 0, 48); f11_fix($o);
         wr('dev/' . $d, $o);
         echo 'ok';
         exit;
@@ -645,8 +647,8 @@ function perf_add($e) {
 if ($a === 'perfl') {
     header('Content-Type: text/plain'); header('Cache-Control: no-store');
     $d = strtolower(p('d'));
-    if (!preg_match('/^[a-z0-9]{8,40}$/', $d) || !is_file(XC_DIR . '/dev/' . $d . '.php') || rl_count('perf' . $d, 3600) >= 20) exit;
-    rl_add('perf' . $d, 3600);
+    if (!preg_match('/^[a-z0-9]{8,40}$/', $d) || !is_file(XC_DIR . '/dev/' . $d . '.php') || rl_count('perfl' . $d, 3600) >= 20) exit;
+    rl_add('perfl' . $d, 3600);
     $e = array('t' => time(), 's' => 'l', 'd' => $d, 'gc' => max(0, min(400, (int)p('gc'))), 'g90' => max(0, min(100, (int)p('g90'))), 'sc' => max(0, min(100, (int)p('sc'))),
         'ram' => max(0, min(1000000, (int)p('ram'))), 'cores' => max(0, min(256, (int)p('cores'))), 'dur' => max(0, min(86400 * 2, (int)p('t'))));
     perf_add($e);
@@ -766,7 +768,7 @@ tg_bot_poll();
 switch ($a) {
 
 /* ro'yxatdan o'tish oynasi: login yozilayotganda bo'sh/bandligini ko'rsatadi (bo'sh variant taklifi bilan) */
-case 'perf':                                            // menyu: o'yin paytidagi ping (lag sababi). lag=1 - o'yinchi "lag" dedi, oxirgi yozuvga belgi
+case 'gperf':                                           // menyu: o'yin paytidagi ping (lag sababi). lag=1 - o'yinchi "lag" dedi, oxirgi yozuvga belgi
     $dv = preg_replace('/[^a-z0-9]/', '', strtolower(p('device'))); $pc = strtolower(p('d'));
     if ($dv === '' || rl_count('perfm' . $dv, 3600) >= 30) out(array('ok' => true));
     rl_add('perfm' . $dv, 3600);
@@ -1949,8 +1951,9 @@ case 'opts_done':
                 if ($n === '' || count($v) >= 48) continue;
                 $v[] = array('n' => $n, 'kb' => isset($pp[1]) ? max(0, min(200000, (int)$pp[1])) : 0);
             }
-            $o['shots'] = $v;
+            $o['f11'] = $v;
         }
+        f11_fix($o);
         if (preg_match('/^(ru|uz|en)$/', p('lang'))) $o['ilang'] = p('lang');      // o'rnatuvchida tanlangan til
         if (p('ch') !== '') $o['ch'] = preg_replace('/[^a-z]/', '', p('ch'));
         if (p('pt') !== '') $o['pt'] = clean_str(p('pt'), 60);
@@ -2000,6 +2003,7 @@ case 'opts_done':
         if (p('cache') !== '') $o['cachemb'] = (int)p('cache');
         wr('dev/' . $d, $o);
     }
+    f11_fix($o);
     $key = isset($o['k']) ? $o['k'] : '';
     unset($o['k'], $o['kc'], $o['ip'], $o['st'], $o['fav'], $o['vc']);   // saqlangan holat (token) faqat dstate orqali, kalit bilan
     $o['rsk'] = rsk_of($o);
@@ -2053,9 +2057,10 @@ case 'vcmd':
     $q[] = $c . ' ' . ($n !== '' ? $n : '-') . ($c === 'trim' ? ' ' . $ta . ' ' . $tb : '') . ($c === 'conn' ? ' ' . min(3, $ta) : '') . ($c === 'share' ? ' ' . $tk : '');
     $o['vc'] = array_slice($q, -5);
     if ($c === 'del' && isset($o['vids'])) $o['vids'] = array_values(array_filter($o['vids'], function ($x) use ($n) { return isset($x['n']) && $x['n'] !== $n; }));
-    if ($c === 'sdel' && isset($o['shots'])) { $o['shots'] = array_values(array_filter($o['shots'], function ($x) use ($n) { return isset($x['n']) && $x['n'] !== $n; })); @unlink(XC_DIR . '/vth/' . $d . '_s_' . $n . '.jpg'); }
+    f11_fix($o);
+    if ($c === 'sdel' && isset($o['f11'])) { $o['f11'] = array_values(array_filter($o['f11'], function ($x) use ($n) { return isset($x['n']) && $x['n'] !== $n; })); @unlink(XC_DIR . '/vth/' . $d . '_s_' . $n . '.jpg'); }
     wr('dev/' . $d, $o);
-    out(array('ok' => true, 'vids' => isset($o['vids']) ? $o['vids'] : array(), 'shots' => isset($o['shots']) ? $o['shots'] : array()));
+    out(array('ok' => true, 'vids' => isset($o['vids']) ? $o['vids'] : array(), 'f11' => isset($o['f11']) ? $o['f11'] : array()));
 
 /* menyu holati (kirish tokeni, sevimlilar, tarix, tugmalar, til) - kompyuter bo'yicha; o'yin brauzeri localStorage ni yo'qotsa tiklanadi */
 case 'langet':                                           // menyu: launcher topgan LAN serverlar

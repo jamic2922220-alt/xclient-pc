@@ -23,7 +23,7 @@ const { page } = require('./lib');
   await p.evaluate(() => { document.querySelectorAll('[data-act="close"]').forEach(c => { if (c.offsetParent) c.click(); }); });
   // lag sababi: o'yin paytida ping o'lchanadi va yakunda saytga yuboriladi
   const perf = await p.evaluate(() => new Promise(res => {
-    const sent = []; const o = XMLHttpRequest.prototype.send; XMLHttpRequest.prototype.send = function (b) { if (/^a=perf&/.test(b || '')) sent.push(b); return o.apply(this, arguments); };
+    const sent = []; const o = XMLHttpRequest.prototype.send; XMLHttpRequest.prototype.send = function (b) { if (/^a=gperf&/.test(b || '')) sent.push(b); return o.apply(this, arguments); };
     window.L.connect && window.L.connect.forEach(f => f({ address: '1.2.3.4:27015' }));
     setTimeout(() => { window.L.disconnect && window.L.disconnect.forEach(f => f({})); setTimeout(() => res(sent.join('|')), 400); }, 300);
   }));

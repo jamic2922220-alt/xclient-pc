@@ -432,6 +432,8 @@ function loadOpts() {
     if (r.d) PCID = r.d;
     if (r.k) { DB.pcid = r.d; DB.pck = r.k; persist(); }
     for (var k in r.o) if (r.o.hasOwnProperty(k) && OPTS.hasOwnProperty(k)) OPTS[k] = r.o[k];
+    if (typeof OPTS.shots === 'object') OPTS.shots = 0;   // eski server: F11 ro'yxati 'shots' (galereya belgisi) ga tushgan edi
+    if (r.o.f11) OPTS.f11 = r.o.f11;
     if (r.o.ver && !qparam('v')) { VERSION = r.o.ver; renderBar(); }
     if (r.o.age != null) setTimeout(function () { launchCheck(r.o.age); }, 3500);
     if (r.o.cachemb != null && !qparam('c')) CACHE_MB = r.o.cachemb;
@@ -1306,13 +1308,13 @@ function vidsRefresh() {
   api('opts', { d: PCID }, function (r) {
     if (!r.ok || !r.o) return;
     OPTS.vids = r.o.vids || [];
-    OPTS.shots = r.o.shots || null;
+    OPTS.f11 = r.o.f11 || null;
     if (curModal === 'mdSettings' && setTab === 'demo') $('setBody').innerHTML = PANES.demo();
   });
 }
 /* F11 skrinshotlar: launcher ro'yxat va 320px kichik rasmni yuboradi; bosilsa - launcher rasmni ochadi */
 function shotsBox() {
-  var sh = OPTS && OPTS.shots, g = '';
+  var sh = OPTS && OPTS.f11, g = '';
   each(sh || [], function (s) {
     var m = /^xc_(\d{4})(\d\d)(\d\d)_(\d\d)(\d\d)(\d\d)/.exec(s.n || ''); if (!m) return;
     var thu = PCID && DB.pck ? 'xc_api.php?a=vth&t=s&d=' + encodeURIComponent(PCID) + '&k=' + encodeURIComponent(DB.pck) + '&n=' + encodeURIComponent(s.n) : '';
@@ -1331,7 +1333,7 @@ function vidCmd(c, n, extra, quiet) {
   api('vcmd', prm, function (r) {
     if (!r.ok) { if (!quiet) toast(r.msg || 'Xato', 3500); return; }
     if (r.vids) OPTS.vids = r.vids;
-    if (r.shots) OPTS.shots = r.shots;
+    if (r.f11) OPTS.f11 = r.f11;
     if (c === 'trim') { setTimeout(function () { VIDS_T = 0; vidsRefresh(); }, 8000); setTimeout(function () { VIDS_T = 0; vidsRefresh(); }, 20000); }
     if (!quiet) toast(T({ del: 'vd_deleted', open: 'vd_opening', folder: 'vd_opening2', sopen: 'vd_opening', sfold: 'vd_opening2', sdel: 'vd_deleted', trim: 'vd_trimming', opt: 'vb_saved', edit: 'vd_editing', share: 'vs_wait' }[c] || 'saved'), c === 'share' ? 7000 : 5000);
     if (curModal === 'mdSettings' && setTab === 'demo') $('setBody').innerHTML = PANES.demo();
@@ -1387,7 +1389,7 @@ function onConnectEvt(addr, inGame) {
   if (DEMO_PLAY) return;
   cmd('host_framerate 0');          // demo o'zi ham ulanish hodisasini berishi mumkin - demo paytida tegmaymiz (serverga ulanish 'Connecting to' bilan ushlanadi)
   if (QUEUE_IP && addr !== QUEUE_IP && addr !== CONNECTED) stopQueue();   // hozirgi serverning o'z hodisalari (xarita almashishi) bekor qilmaydi   // boshqa serverga (konsol, o'yin ro'yxati) kirildi - navbat bekor
-  if (addr !== CONNECTED) { CONNECTED = addr; ESC_OPEN = false; perfStart(addr); setTimeout(restCheck, 3000); setTimeout(function () { if (CONNECTED === addr) aimNetApply(addr); }, inGame ? 1500 : 6000);
+  if (addr !== CONNECTED) { CONNECTED = addr; ESC_OPEN = false; gpStart(addr); setTimeout(restCheck, 3000); setTimeout(function () { if (CONNECTED === addr) aimNetApply(addr); }, inGame ? 1500 : 6000);
     if (inGame && OPTS && (OPTS.ontop || OPTS.flash)) vidCmd('conn', '', { ta: (OPTS.ontop ? 1 : 0) | (OPTS.flash ? 2 : 0) }, true);   /* serverga ulandi: oyna tepaga / ikonka miltillaydi (launcher) */
     if (!inGame) applyPw(addr); startGame(addr); musicSync();   // serverda mp3 chalinmasin: o'yin ovozlarini bo'g'adi
     pingPresence(); renderAll(); sparks(); voiceWarm(); }
@@ -1395,7 +1397,7 @@ function onConnectEvt(addr, inGame) {
 }
 function onDisconnectEvt() {
   var was = CONNECTED;
-  perfEnd();
+  gpEnd();
   setTimeout(musicSync, 500);
   if (CUR) { CUR.d = Math.round((now() - CUR.t) / 1000); persist(); cloudSave(); sendStat(CUR); }
   stopRecord();
@@ -3145,7 +3147,7 @@ var PANES = {
       '<div class="ph2 m">' + esc(T('vf_title')) + '</div><div class="vfb">' + vfs + '</div><div class="mut" style="font-size:12px;margin:-2px 0 8px">' + esc(T('vf_note')) + '</div>' +
       vtg('mic', OPTS && OPTS.mic, 'vb_mic', 'vb_mic2') + vtg('gsum', DB.gsum !== 0, 'gs_tg', 'gs_tg2') + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('vd_title')) + ' <a class="btn vfold" data-vfold="1">' + ico('folder') + ' ' + esc(T('vd_folder')) + '</a></div>' +
-      '<div class="dml dml2' + (OPTS && OPTS.shots && OPTS.shots.length ? ' sm' : '') + '">' + (rows || '<div class="empty">' + esc(T(PCID ? 'vd_none' : 'sy_nolaunch')) + '</div>') + '</div>' +
+      '<div class="dml dml2' + (OPTS && OPTS.f11 && OPTS.f11.length ? ' sm' : '') + '">' + (rows || '<div class="empty">' + esc(T(PCID ? 'vd_none' : 'sy_nolaunch')) + '</div>') + '</div>' +
       '<div class="mut" style="font-size:12px;margin-top:8px">' + esc(T('vd_note')) + '</div>' + shotsBox() + '</div>';
   },
   cont: function () {                             // Kontent: spray, skrinshotlar, mavzu, paketlar
@@ -3488,25 +3490,25 @@ function firstAskLater(n) {
     openSide('fq', T('fq_t'), '<div class="fqw"><div class="mut" style="margin-bottom:12px">' + esc(T('fq_s')) + '</div>' + b + '</div>'); }, n ? 300 : 3000);
 }
 /* ---- O'yin paytidagi ping (lag sababi): har 45 s serverga so'rov - javob vaqti ~ ping. Yakunda saytga (perf) ---- */
-var PERF = null, PERF_TM = 0, LASTPERF = null;
-function perfStart(ip) {
-  clearInterval(PERF_TM); PERF = { ip: ip, t: now(), p: [], lost: 0 };
+var GP = null, GP_TM = 0, LASTPERF = null;
+function gpStart(ip) {
+  clearInterval(GP_TM); GP = { ip: ip, t: now(), p: [], lost: 0 };
   if (!hasMM()) return;
-  PERF_TM = setInterval(function () {
-    if (!PERF || CONNECTED !== PERF.ip) return;
-    var t0 = now(), done = false, pf = PERF;
+  GP_TM = setInterval(function () {
+    if (!GP || CONNECTED !== GP.ip) return;
+    var t0 = now(), done = false, pf = GP;
     var tm = setTimeout(function () { if (!done) { done = true; pf.lost++; } }, 3000);
     try { NC.matchmaking.getServerInfo(pf.ip).then(function () { if (done) return; done = true; clearTimeout(tm); pf.p.push(now() - t0); }, function () { if (!done) { done = true; clearTimeout(tm); pf.lost++; } }); } catch (e) {}
   }, 45000);
 }
-function perfEnd() {
-  clearInterval(PERF_TM); var pf = PERF; PERF = null;
+function gpEnd() {
+  clearInterval(GP_TM); var pf = GP; GP = null;
   if (!pf) return;
   var dur = Math.round((now() - pf.t) / 1000), n = pf.p.length + pf.lost;
   if (dur < 90 || n < 2) return;
   var a = pf.p.slice().sort(function (x, y) { return x - y; }), pm = a.length ? a[Math.floor(a.length / 2)] : 0, px = a.length ? a[a.length - 1] : 0;
   LASTPERF = { pm: pm, l: Math.round(pf.lost * 100 / n) };
-  api('perf', { d: PCID || '', ip: pf.ip, pm: pm, px: px, l: LASTPERF.l, n: n, dur: dur, fps: S && S.fps || 0, lg: S && S.lowgfx ? 1 : 0, w: pcWeak() ? 1 : 0 }, function () {});
+  api('gperf', { d: PCID || '', ip: pf.ip, pm: pm, px: px, l: LASTPERF.l, n: n, dur: dur, fps: S && S.fps || 0, lg: S && S.lowgfx ? 1 : 0, w: pcWeak() ? 1 : 0 }, function () {});
   if ((pm >= 120 || LASTPERF.l >= 10) && !DB.dnd) setTimeout(function () { if (!CONNECTED) toast(T(LASTPERF.l >= 10 ? 'pf_loss' : 'pf_ping').replace('{p}', pm).replace('{l}', LASTPERF.l), 9000); }, 12000);
 }
 /* launcher: oxirgi o'yinda CS kompyuter kuchiga tiralgan (bitta yadro 90%+) - yengillashtirishni bir marta taklif qilamiz */
@@ -4054,7 +4056,7 @@ document.onclick = function (e) {
     else DB.bots.d = +el.getAttribute('data-bd');
     persist(); botsPane(); return;
   }
-  if ((el = closest(t, 'data-fq'))) { var fk = el.getAttribute('data-fq'); api('feedback', { text: 'Birinchi o\'yin: ' + fk + ' - ' + T('fq_' + fk), kind: 'first', nick: MYNAME || (S && S.name) || '', ver: VERSION }, function () {}); closeModal(); if (fk === 'lag') { api('perf', { lag: 1 }, function () {}); lagFixPane(LASTPERF && (LASTPERF.pm >= 120 || LASTPERF.l >= 10) ? T('pf_was').replace('{p}', LASTPERF.pm).replace('{l}', LASTPERF.l) : ''); return; } toast(T(fk === 'good' ? 'fq_thx_g' : 'fq_thx'), 6000); return; }
+  if ((el = closest(t, 'data-fq'))) { var fk = el.getAttribute('data-fq'); api('feedback', { text: 'Birinchi o\'yin: ' + fk + ' - ' + T('fq_' + fk), kind: 'first', nick: MYNAME || (S && S.name) || '', ver: VERSION }, function () {}); closeModal(); if (fk === 'lag') { api('gperf', { lag: 1 }, function () {}); lagFixPane(LASTPERF && (LASTPERF.pm >= 120 || LASTPERF.l >= 10) ? T('pf_was').replace('{p}', LASTPERF.pm).replace('{l}', LASTPERF.l) : ''); return; } toast(T(fk === 'good' ? 'fq_thx_g' : 'fq_thx'), 6000); return; }
   if ((el = closest(t, 'data-dbtg'))) { var dk = el.getAttribute('data-dbtg'); var cur = dk === 'fx' ? (DB.fx !== 0 && !FX.off) : (dk === 'autosave' || dk === 'dnd' ? !!DB[dk] : DB[dk] !== 0); DB[dk] = cur ? 0 : 1; persist(); if (dk === 'fx') { FX.off = 0; FX.slow = 0; sparks(); heroLoad(); } if (dk === 'hol') applyBg(); if (dk === 'autosave') $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local')); el.className = 'tg' + (DB[dk] ? ' on' : ''); return; }
   if ((el = closest(t, 'data-misclaim'))) {
     var mid = el.getAttribute('data-misclaim');

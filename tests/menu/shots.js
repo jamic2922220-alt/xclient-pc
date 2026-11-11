@@ -38,6 +38,12 @@ const body = Buffer.concat([JPG.slice(0, 2), Buffer.from([0xFF, 0xFE, 0x01, 0x02
   await p.click('#setBody [data-sfold]'); await p.waitForTimeout(700);
   ok(/sfold/.test(await get('a=vpoll&d=' + PC)), '"Открыть папку" -> launcherga "sfold"');
   ok((await get('a=vadd&t=s&d=' + PC + '&n=..%2F..%2Fx')) === '', 'yaroqsiz nom qabul qilinmaydi');
+  // F11 ro'yxati "galereyaga yuklash" (shots) belgisini buzmaydi: launcherga shots - son, menyuda tugma o'chiq
+  const hl = await fetch(A + '?a=hello&d=' + PC + '&v=1.0.140&sl=xc_20261109_213020~900').then(r => r.json());
+  ok(typeof hl.o.shots !== 'object', 'launcherga "shots" belgisi son bo\'lib qoladi (' + JSON.stringify(hl.o.shots) + ')');
+  await p.click('#setTabs a[data-tab="cont"]'); await p.waitForTimeout(500);
+  const gal = await p.evaluate(() => { const e = document.querySelector('#setBody [data-opt="shots"], #setBody [data-otg="shots"], #setBody [data-sh="up"]'); return e ? e.className : 'yo\'q'; });
+  ok(!/\bon\b/.test(gal), '"Galereyaga yuklash" tugmasi o\'z-o\'zidan yoqilmaydi (' + gal + ')');
   const fails = res.filter(r => r.startsWith('XATO'));
   console.log(res.join('\n'));
   console.log((fails.length || errs.length ? 'FAIL' : 'PASS') + ' shots (' + (res.length - fails.length) + '/' + res.length + (errs.length ? ', JS xato: ' + errs.join('|') : '') + ')');
