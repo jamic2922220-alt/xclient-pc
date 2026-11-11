@@ -25,6 +25,7 @@ node "$HERE/firstask.js" || rc=1
 node "$HERE/scorekills.js" || rc=1
 node "$HERE/newfeat.js" || rc=1
 node "$HERE/shots.js" || rc=1
+node "$HERE/fbfix.js" || rc=1
 python3 "$HERE/visual.py" "$XC_SHOTS" ${1:-} || rc=1
 echo "Skrinshotlar: $XC_SHOTS"
 kill $SRV 2>/dev/null

@@ -988,3 +988,10 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .sst span { display: block; font-size: 11px; color: #a89ea8; padding: 3px 6px; white-space: nowrap; }
 .sst .ssd { position: absolute; right: 4px; bottom: 2px; color: #8f8590; cursor: pointer; padding: 1px 3px; }
 .sst .ssd:hover { color: #ff3b3b; }
+
+/* botlar bilan mashq, lagni tuzatish */
+.bts .seg2 { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.bts .seg2 a { padding: 7px 11px; border: 1px solid #2a2026; background: #120f13; color: #c9bfc9; cursor: pointer; font-size: 13px; }
+.bts .seg2 a.on { border-color: #ff3b3b; color: #fff; background: #2a1216; }
+.bts .btn.big, .fqw .btn.big { display: block; text-align: center; height: 40px; line-height: 38px; font-size: 15px; }
+.lfl { margin: 0 0 14px 18px; padding: 0; color: #c9bfc9; font-size: 13px; line-height: 1.7; }

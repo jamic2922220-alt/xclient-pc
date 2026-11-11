@@ -3467,6 +3467,44 @@ function firstAskLater(n) {
     var b = ''; each(['good', 'lag', 'crash', 'nosrv', 'hard'], function (k) { b += '<a class="btn fqb" data-fq="' + k + '">' + esc(T('fq_' + k)) + '</a>'; });
     openSide('fq', T('fq_t'), '<div class="fqw"><div class="mut" style="margin-bottom:12px">' + esc(T('fq_s')) + '</div>' + b + '</div>'); }, n ? 300 : 3000);
 }
+/* "Lag / qotdi" javobi: bir bosishda tuzatish - tarmoq serverga moslanadi, FPS chegarasi va vsync, kuchsiz kompyuterda yengil grafika va menyu */
+function lagFixPane() {
+  openSide('lagfix', T('lf_t'), '<div class="fqw"><div class="mut" style="margin-bottom:10px">' + esc(T('lf_s')) + '</div><ul class="lfl"><li>' + esc(T('lf_1')) + '</li><li>' + esc(T('lf_2')) + '</li><li>' + esc(T(pcWeak() ? 'lf_3w' : 'lf_3')) + '</li><li>' + esc(T('lf_4')) + '</li></ul>' +
+    '<a class="btn red big" data-act="lagfix">' + esc(T('lf_go')) + '</a></div>');
+}
+function lagFix() {
+  var w = pcWeak() || (HW && hwClass() === 'weak');
+  S.aimnet = 1; S.vsync = 0; S.dyn = 0;
+  S.fps = Math.max(100, Math.min(Number(S.fps) || 100, 200));
+  if (w) { S.lowgfx = 1; S.decals = 300; DB.fx = 0; sparks(); }
+  DB.set = S; persist(); applySettings(S); cloudSave();
+  if (PCID) { OPTS.tune = 1; OPTS.bgp = 1; OPTS.macc = 1; api('opts_set', { d: PCID, o: JSON.stringify(OPTS) }, function () {}); }
+  api('feedback', { text: 'Lag: bir bosishda tuzatildi' + (w ? ' (kuchsiz PC)' : ''), kind: 'first', nick: MYNAME || '', ver: VERSION }, function () {});
+  closeModal(); toast(T(w ? 'lf_ok_w' : 'lf_ok'), 8000);
+}
+/* Botlar bilan mashq (oflayn): o'z kompyuterida server - CS 1.6 ning ichki botlari (ZBot). Internet kerak emas */
+var BOT_MAPS = ['de_dust2', 'de_inferno', 'de_nuke', 'de_train', 'de_aztec', 'de_dust', 'cs_assault', 'cs_italy'];
+function botsPane() {
+  var b = DB.bots || {}, mp = b.map || 'de_dust2', n = b.n || 9, d = b.d != null ? b.d : 1, m = '', c = '', l = '';
+  each(BOT_MAPS, function (x) { m += '<a class="' + (x === mp ? 'on' : '') + '" data-bmap="' + x + '">' + esc(x) + '</a>'; });
+  each([3, 5, 9, 13], function (x) { c += '<a class="' + (x === n ? 'on' : '') + '" data-bn="' + x + '">' + (x + 1) + ' ' + esc(T('bt_pl')) + '</a>'; });
+  each([0, 1, 2, 3], function (x) { l += '<a class="' + (x === d ? 'on' : '') + '" data-bd="' + x + '">' + esc(T('bt_d' + x)) + '</a>'; });
+  openSide('bots', T('m_bots'), '<div class="bts"><div class="mut" style="margin-bottom:10px">' + esc(T('bt_s')) + '</div>' +
+    '<div class="ph2 m">' + esc(T('bt_map')) + '</div><div class="seg2">' + m + '</div>' +
+    '<div class="ph2 m">' + esc(T('bt_n')) + '</div><div class="seg2">' + c + '</div>' +
+    '<div class="ph2 m">' + esc(T('bt_dif')) + '</div><div class="seg2">' + l + '</div>' +
+    '<a class="btn red big" data-act="botgo" style="margin-top:14px">' + ico('play') + ' ' + esc(T('bt_go')) + '</a>' +
+    '<div class="mut" style="font-size:12px;margin-top:10px">' + esc(T('bt_note')) + '</div></div>');
+}
+function botsGo() {
+  var b = DB.bots || {}, mp = b.map || 'de_dust2', n = b.n || 9, d = b.d != null ? b.d : 1;
+  closeModal();
+  if (CONNECTED) cmd('disconnect');
+  /* o'yin DLL'i (mp.dll) o'yin ochilganda yuklanadi - bot_* sozlamalari xarita ochilishidan oldin ham bor */
+  each(['maxplayers ' + (n + 1), 'sv_lan 1', 'mp_autoteambalance 1', 'mp_limitteams 2', 'mp_freezetime 2', 'mp_roundtime 2.5', 'mp_timelimit 0', 'mp_buytime 0.5',
+        'bot_difficulty ' + d, 'bot_join_after_player 1', 'bot_auto_vacate 1', 'bot_quota_mode normal', 'bot_quota ' + n, 'bot_chatter minimal', 'map ' + mp], function (c) { cmd(c); });
+  toast(T('bt_wait'), 6000);
+}
 function closeModal() {
   if (DD) ddClose();
   if (!curModal) return;
@@ -3528,6 +3566,9 @@ function avUpload(file) {
 function act(a) {
   if (LITE && /^(friends|profile|missions|login|weekall|promo|stats|clan|ref)$/.test(a)) return openPromo();
   if (a === 'quick' || a === 'play') { closeModal(); return quick(); }
+  if (a === 'bots') return botsPane();
+  if (a === 'botgo') return botsGo();
+  if (a === 'lagfix') return lagFix();
   if (a === 'servers') return openServers('internet');
   if (a === 'friends') return openFriends();
   if (a === 'missions') return openMissions();
@@ -3922,7 +3963,14 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-mcall'))) { var mc = el; api('miss_call', { to: el.getAttribute('data-mcall') }, function (r) { toast(r.ok ? T('mc_ok') : (r.msg || 'Xato'), 5000); if (r.ok && mc.parentNode) mc.parentNode.removeChild(mc); }); return; }
   if ((el = closest(t, 'data-fbk'))) { FBK = el.getAttribute('data-fbk'); var sib = el.parentNode.childNodes; for (var fi = 0; fi < sib.length; fi++) sib[fi].className = sib[fi] === el ? 'on' : ''; return; }
   if ((el = closest(t, 'data-frdel'))) { api('friend_del', { login: el.getAttribute('data-frdel') }, function () { loadFriends(); }); return; }
-  if ((el = closest(t, 'data-fq'))) { var fk = el.getAttribute('data-fq'); api('feedback', { text: 'Birinchi o\'yin: ' + fk + ' - ' + T('fq_' + fk), kind: 'first', nick: MYNAME || (S && S.name) || '', ver: VERSION }, function () {}); closeModal(); toast(T(fk === 'good' ? 'fq_thx_g' : 'fq_thx'), 6000); return; }
+  if ((el = closest(t, 'data-bmap')) || (el = closest(t, 'data-bn')) || (el = closest(t, 'data-bd'))) {
+    DB.bots = DB.bots || {};
+    if (el.getAttribute('data-bmap')) DB.bots.map = el.getAttribute('data-bmap');
+    else if (el.getAttribute('data-bn')) DB.bots.n = +el.getAttribute('data-bn');
+    else DB.bots.d = +el.getAttribute('data-bd');
+    persist(); botsPane(); return;
+  }
+  if ((el = closest(t, 'data-fq'))) { var fk = el.getAttribute('data-fq'); api('feedback', { text: 'Birinchi o\'yin: ' + fk + ' - ' + T('fq_' + fk), kind: 'first', nick: MYNAME || (S && S.name) || '', ver: VERSION }, function () {}); closeModal(); if (fk === 'lag') { lagFixPane(); return; } toast(T(fk === 'good' ? 'fq_thx_g' : 'fq_thx'), 6000); return; }
   if ((el = closest(t, 'data-dbtg'))) { var dk = el.getAttribute('data-dbtg'); var cur = dk === 'fx' ? (DB.fx !== 0 && !FX.off) : (dk === 'autosave' || dk === 'dnd' ? !!DB[dk] : DB[dk] !== 0); DB[dk] = cur ? 0 : 1; persist(); if (dk === 'fx') { FX.off = 0; FX.slow = 0; sparks(); heroLoad(); } if (dk === 'hol') applyBg(); if (dk === 'autosave') $('setNote').innerHTML = esc(ME && DB.autosave ? T('note_cloud') : T('note_local')); el.className = 'tg' + (DB[dk] ? ' on' : ''); return; }
   if ((el = closest(t, 'data-misclaim'))) {
     var mid = el.getAttribute('data-misclaim');
