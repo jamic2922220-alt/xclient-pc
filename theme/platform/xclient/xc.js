@@ -1113,6 +1113,7 @@ var CONNECTED = '', CUR = null;                 // CUR: joriy o'yin (tarix yozuv
 function connect(ip) {
   ip = normIp(ip);
   if (!ip) return;
+  BOT_PEND = null;                                 // botlar bilan mashqdan haqiqiy serverga o'tildi
   if (S.queue && isFull(srv(ip))) { startQueue(ip); return; }
   stopQueue();
   var alt = srv(ip).blk ? altAddr(ip) : null;
@@ -1362,6 +1363,7 @@ function demoCtl(c) {
 }
 function stopRecord() { clearTimeout(REC_TM); if (REC) { cmd('stop'); REC = ''; } }
 function onConnectEvt(addr, inGame) {
+  if (BOT_PEND) setTimeout(botsApply, 1500);       // botlar bilan mashq: xarita yuklandi - bot sonini qayta yuboramiz
   addr = normIp(addr);
   if (!addr) return;
   /* demo ham "ulanish" hodisasini beradi (yozilgan server manzili bilan) - bu o'yin emas: statistika, demo yozish, musiqa o'chirish kerak emas */
@@ -3502,8 +3504,17 @@ function botsGo() {
   if (CONNECTED) cmd('disconnect');
   /* o'yin DLL'i (mp.dll) o'yin ochilganda yuklanadi - bot_* sozlamalari xarita ochilishidan oldin ham bor */
   each(['maxplayers ' + (n + 1), 'sv_lan 1', 'mp_autoteambalance 1', 'mp_limitteams 2', 'mp_freezetime 2', 'mp_roundtime 2.5', 'mp_timelimit 0', 'mp_buytime 0.5',
-        'bot_difficulty ' + d, 'bot_join_after_player 1', 'bot_auto_vacate 1', 'bot_quota_mode normal', 'bot_quota ' + n, 'bot_chatter minimal', 'map ' + mp], function (c) { cmd(c); });
+        'bot_difficulty ' + d, 'bot_join_after_player 0', 'bot_auto_vacate 1', 'bot_quota_mode normal', 'bot_quota ' + n, 'bot_chatter minimal', 'map ' + mp], function (c) { cmd(c); });
   toast(T('bt_wait'), 6000);
+  /* xarita ochilganda o'yin server.cfg / listenserver.cfg ni bajaradi va bot_quota 0 ga tushadi - shuning uchun yuklangandan keyin
+   * yana bir necha marta yuboramiz (sekin kompyuterda yuklanish 30-60 s). Ortiqcha yuborish zararsiz - son o'zgarmaydi */
+  BOT_PEND = { n: n, d: d, t: now() };
+  each([5, 10, 16, 24, 35, 50, 70, 95], function (sec) { setTimeout(botsApply, sec * 1000); });
+}
+var BOT_PEND = null;
+function botsApply() {
+  if (!BOT_PEND || now() - BOT_PEND.t > 120000) { BOT_PEND = null; return; }
+  each(['bot_difficulty ' + BOT_PEND.d, 'bot_join_after_player 0', 'bot_quota_mode normal', 'bot_quota ' + BOT_PEND.n], function (c) { cmd(c); });
 }
 function closeModal() {
   if (DD) ddClose();

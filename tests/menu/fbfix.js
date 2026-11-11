@@ -11,6 +11,9 @@ const { page } = require('./lib');
   const iq = L.indexOf('bot_quota 13'), im = L.indexOf('map de_nuke');
   ok(L.includes('maxplayers 14') && L.includes('bot_difficulty 0') && iq >= 0 && im > iq, 'Boshlash: maxplayers 14, bot_quota 13, oson, keyin map de_nuke');
   ok(await p.evaluate(() => JSON.parse(localStorage.getItem('xclient')).bots.map === 'de_nuke'), 'tanlov eslab qolinadi');
+  await p.evaluate(() => { window.LOG = []; }); await p.waitForTimeout(5600);
+  const L3 = await p.evaluate(() => window.LOG);
+  ok(L3.includes('bot_quota 13') && L3.includes('bot_join_after_player 0'), 'xarita yuklangach bot soni qayta yuboriladi (server.cfg 0 qilsa ham)');
   // "Lag / qotdi" javobi
   await p.evaluate(() => { const e = document.createElement('a'); e.setAttribute('data-fq', 'lag'); document.body.appendChild(e); e.click(); e.remove(); }); await p.waitForTimeout(500);
   ok(await p.$('#mdSide.on [data-act="lagfix"]'), '"Lag" javobidan keyin "Bir bosishda tuzatish" oynasi');
