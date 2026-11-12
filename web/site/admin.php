@@ -179,6 +179,10 @@ if (empty($_SESSION['adm'])) {
 
 /* ---------- amallar (POST) ---------- */
 $P = g('p', 'dash');
+if ($P === 'crash' && isset($_GET['dmp'])) {             // yiqilish dampini yuklab olish (o'yin ishlab chiqaruvchisiga yuborish uchun)
+    $id = (string)$_GET['dmp']; $f = XC_DIR . '/dumps/' . $id . '.dmp';
+    if (preg_match('/^[a-z0-9]{8,40}_\d{9,11}$/', $id) && is_file($f)) { while (ob_get_level()) ob_end_clean(); header('Content-Type: application/octet-stream'); header('Content-Disposition: attachment; filename="' . $id . '.dmp"'); header('Content-Length: ' . filesize($f)); readfile($f); exit; }
+}
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_ok()) go('?p=' . urlencode($P));
     $act = pp('act');
@@ -419,7 +423,7 @@ if ($P === 'installs' && g('csv')) {
 
 /* ---------- sahifa ---------- */
 $NAV = array('dash' => array('Infopanel', '⌂'), 'online' => array('Onlayn', '●'), 'players' => array("O'yinchilar", '☺'), 'installs' => array("O'rnatishlar", '↓'), 'accounts' => array('Akkauntlar', '✉'),
-    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'stats' => array('Statistika', '★'), 'churn' => array('Ketganlar', '↘'), 'fb' => array('Fikrlar', '✎'), 'clips' => array('Kliplar', '▶'), 'crash' => array('Yiqilishlar', '✖'), 'clicks' => array('Tugmalar', '⊙'), 'ret' => array('Natijalar', '↗'), 'funnel' => array('Voronka', '▽'), 'prob' => array('Muammolar', '⚑'), 'menuver' => array('Menyu versiyalari', '⇅'), 'feat' => array('Funksiyalar', '◧'), 'speed' => array('Tezlik', '⚡'), 'promo' => array('Reklama', '$'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
+    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'stats' => array('Statistika', '★'), 'churn' => array('Ketganlar', '↘'), 'fb' => array('Fikrlar', '✎'), 'clips' => array('Kliplar', '▶'), 'crash' => array('Yiqilishlar', '✖'), 'lag' => array('Lag', '≈'), 'clicks' => array('Tugmalar', '⊙'), 'ret' => array('Natijalar', '↗'), 'funnel' => array('Voronka', '▽'), 'prob' => array('Muammolar', '⚑'), 'menuver' => array('Menyu versiyalari', '⇅'), 'feat' => array('Funksiyalar', '◧'), 'speed' => array('Tezlik', '⚡'), 'promo' => array('Reklama', '$'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
 $devCount = count((array)glob(XC_DIR . '/dev/*.php')); $ncCount = count((array)glob(XC_DIR . '/nc/*.php')); $accCount = count((array)glob(XC_DIR . '/users/*.php')); $repCount = count((array)glob(XC_DIR . '/reports/*.php'));
 $fbCount = count((array)glob(XC_DIR . '/feedback/*.php'));
 $badge = array('players' => $devCount + $ncCount, 'installs' => $devCount, 'accounts' => $accCount, 'reports' => $repCount, 'fb' => $fbCount);
@@ -978,8 +982,69 @@ if ($P === 'crash') {
     echo '<div class="panel"><div class="ph">Xato turlari</div><table class="list"><tr><th>Kod</th><th>Ma\'nosi</th><th>Kompyuterlar</th></tr>';
     foreach ($codes as $c => $n) echo '<tr><td><code>0x' . h(strtoupper($c)) . '</code></td><td>' . h(isset($CN[$c]) ? $CN[$c] : '—') . '</td><td>' . $n . '</td></tr>';
     if (!$codes) echo '<tr><td colspan="3" class="mut">30 kunda yiqilish yo\'q</td></tr>';
+    $dl = array(); foreach ((array)glob(XC_DIR . '/dumps/*.dmp') as $f) { $m = is_file($f . '.txt') ? json_decode((string)@file_get_contents($f . '.txt'), true) : null; if ($m) $dl[] = array('id' => basename($f, '.dmp'), 'm' => $m); }
+    usort($dl, function ($a, $b) { return $b['m']['t'] - $a['m']['t']; });
+    echo '</table></div><div class="panel"><div class="ph">Yiqilish damplari (o\'yin ochilishda yiqilsa launcher yozadi - nDirect\'ga yuborish uchun)</div><table class="list"><tr><th>Vaqt</th><th>Kompyuter</th><th>Launcher</th><th>Hajm</th><th></th></tr>';
+    foreach (array_slice($dl, 0, 30) as $x) echo '<tr><td>' . dt($x['m']['t']) . '</td><td><a href="?p=player&id=' . h($x['m']['d']) . '">' . h(substr($x['m']['d'], 0, 10)) . '</a></td><td>' . h($x['m']['v']) . '</td><td>' . round($x['m']['size'] / 1024) . ' KB</td><td class="r"><a class="lnk" href="?p=crash&dmp=' . urlencode($x['id']) . '">⇩ Yuklab olish</a></td></tr>';
+    if (!$dl) echo '<tr><td colspan="5" class="mut">Hozircha damp yo\'q</td></tr>';
     echo '</table></div><div class="panel"><div class="ph">Kompyuterlar</div><table class="list"><tr><th>Vaqt</th><th>Kompyuter</th><th>Windows</th><th>Versiya</th><th>Kod</th><th>Fayllar</th><th>Jami</th></tr>';
     foreach (array_slice($rows, 0, 200) as $o) echo '<tr><td>' . dt($o['cr']['t']) . '</td><td><a href="?p=player&id=' . h($o['_d']) . '">' . h(substr($o['_d'], 0, 10)) . '</a></td><td>' . h(isset($o['os']) ? $o['os'] : '') . '</td><td>' . h(isset($o['ver']) ? $o['ver'] : '') . '</td><td><code>0x' . h(strtoupper($o['cr']['c'])) . '</code></td><td>' . (int)$o['cr']['n'] . '</td><td>' . (int)(isset($o['crn']) ? $o['crn'] : 1) . '</td></tr>';
+    echo '</table></div>';
+}
+
+/* ---- Lag: o'yinchilar o'yin paytida o'lchagan ping (menyu, gperf) va kompyuter yuklamasi (launcher, perfl). Sabab: internetmi, kompyutermi ---- */
+if ($P === 'lag') {
+    $days = isset($_GET['d']) && in_array((int)$_GET['d'], array(1, 3, 7), true) ? (int)$_GET['d'] : 3;
+    $L = rd('perflog', array()); $from = time() - $days * 86400;
+    $srv = array(); $dev = array(); $nm = 0; $nl = 0; $lagN = 0; $hiPing = 0; $hiLoss = 0; $cpuHi = 0; $ramLow = 0; $pings = array();
+    foreach ($L as $x) {
+        if (!isset($x['t']) || $x['t'] < $from) continue;
+        if ($x['s'] === 'm') {
+            if (empty($x['ip']) || (isset($x['n']) && $x['n'] < 4) || preg_match('/^(local|loopback|localhost|127\.)/i', $x['ip'])) { if (!empty($x['lag'])) $lagN++; continue; }
+            $nm++; $pings[] = (int)$x['pm']; if (!empty($x['lag'])) $lagN++;
+            $bad = $x['px'] >= 700 || $x['pm'] >= 150 || $x['l'] >= 5; if ($x['pm'] >= 120) $hiPing++; if ($x['l'] >= 5) $hiLoss++;
+            $ip = $x['ip']; if (!isset($srv[$ip])) $srv[$ip] = array('n' => 0, 'b' => 0, 'p' => array(), 'px' => 0, 'l' => 0);
+            $srv[$ip]['n']++; if ($bad) $srv[$ip]['b']++; $srv[$ip]['p'][] = (int)$x['pm']; $srv[$ip]['px'] = max($srv[$ip]['px'], (int)$x['px']); $srv[$ip]['l'] += (int)$x['l'];
+        } elseif ($x['s'] === 'l') {
+            $nl++; $d = $x['d']; $hi = $x['g90'] >= 50 || $x['gc'] >= 90; if ($hi) $cpuHi++; if ($x['ram'] < 400) $ramLow++;
+            if (!isset($dev[$d])) $dev[$d] = array('n' => 0, 'hi' => 0, 'gc' => 0, 'ram' => 999999, 'cores' => $x['cores'], 't' => $x['t'], 'dur' => 0);
+            $dev[$d]['n']++; if ($hi) $dev[$d]['hi']++; $dev[$d]['gc'] = max($dev[$d]['gc'], (int)$x['gc']); $dev[$d]['ram'] = min($dev[$d]['ram'], (int)$x['ram']); $dev[$d]['dur'] += (int)$x['dur'];
+        }
+    }
+    $med = function ($a) { if (!$a) return 0; sort($a); return $a[(int)floor(count($a) / 2)]; };
+    $pct = function ($a, $b) { return $b ? round($a * 100 / $b) : 0; };
+    $bar = function ($v, $max, $col) { $w = $max ? min(100, round($v * 100 / $max)) : 0; return '<span style="display:inline-block;width:120px;height:8px;background:#2a2026;border-radius:4px;vertical-align:middle"><i style="display:block;width:' . $w . '%;height:8px;background:' . $col . ';border-radius:4px"></i></span>'; };
+    $u = rd('unstable_c', array('u' => array())); $U = isset($u['u']) ? $u['u'] : array();
+    $seg = ''; foreach (array(1 => 'Bugun', 3 => '3 kun', 7 => '7 kun') as $k => $t) $seg .= '<a href="?p=lag&d=' . $k . '"' . ($days === $k ? ' class="on"' : '') . '>' . $t . '</a>';
+    // xulosa: lag ko'proq nimadan
+    $net = $pct($hiPing + $hiLoss, max(1, $nm)); $cpu = $pct($cpuHi, max(1, $nl));
+    $why = !$nm && !$nl ? 'Hali ma\'lumot yo\'q (launcher 1.0.140+ va menyu 10204500+ kerak)' : ($cpu >= $net + 15 ? 'Lagning asosiy sababi - <b>kompyuter kuchi</b> (protsessor to\'la band, FPS tushadi)' : ($net >= $cpu + 15 ? 'Lagning asosiy sababi - <b>internet</b> (ping baland yoki paket yo\'qoladi)' : 'Lag sabablari aralash: internet ham, kompyuter kuchi ham'));
+    echo '<h1>Lag</h1><div class="panel"><div class="ph">Xulosa <span class="seg r">' . $seg . '</span></div><div style="font-size:16px">' . $why . '</div>'
+        . '<div class="mut small" style="margin-top:6px">Menyu o\'yin paytida har 45 s serverga so\'rov yuboradi (ping), launcher o\'yin protsessorni qancha band qilganini o\'lchaydi. "Lag" deganlar - birinchi o\'yindan keyingi savolga javob.</div></div>';
+    echo '<div class="grid2"><div class="panel"><div class="ph">Internet (' . $nm . ' ta o\'yin)</div><table class="list">'
+        . '<tr><td>O\'rtacha ping</td><td><b>' . $med($pings) . ' ms</b></td></tr>'
+        . '<tr><td>Ping 120 ms dan baland</td><td>' . $bar($hiPing, max(1, $nm), '#ff9a39') . ' ' . $hiPing . ' (' . $pct($hiPing, $nm) . '%)</td></tr>'
+        . '<tr><td>Paket yo\'qolishi 5%+</td><td>' . $bar($hiLoss, max(1, $nm), '#ff3b3b') . ' ' . $hiLoss . ' (' . $pct($hiLoss, $nm) . '%)</td></tr>'
+        . '<tr><td>"Lag" deganlar</td><td><b>' . $lagN . '</b></td></tr></table></div>'
+        . '<div class="panel"><div class="ph">Kompyuter (' . $nl . ' ta o\'yin, ' . count($dev) . ' kompyuter)</div><table class="list">'
+        . '<tr><td>Protsessor to\'la band (FPS tushgan)</td><td>' . $bar($cpuHi, max(1, $nl), '#ff3b3b') . ' ' . $cpuHi . ' (' . $pct($cpuHi, $nl) . '%)</td></tr>'
+        . '<tr><td>Bo\'sh xotira 400 MB dan kam</td><td>' . $bar($ramLow, max(1, $nl), '#ff9a39') . ' ' . $ramLow . ' (' . $pct($ramLow, $nl) . '%)</td></tr></table>'
+        . '<div class="mut small" style="margin-top:6px">Shunday kompyuterlarga menyu keyingi ochilishda "chuqur yengillashtirish"ni o\'zi taklif qiladi.</div></div></div>';
+    uasort($srv, function ($a, $b) { return $b['n'] - $a['n']; });
+    echo '<div class="panel"><div class="ph">Serverlar (o\'yinchilar o\'lchagani bo\'yicha)</div><table class="list"><tr><th>Server</th><th>O\'yinlar</th><th>O\'rtacha ping</th><th>Eng katta sakrash</th><th>Yomon o\'yinlar</th><th>Holat</th></tr>';
+    foreach (array_slice($srv, 0, 40, true) as $ip => $v) {
+        $st = isset($U[$ip]) ? '<b class="red">beqaror</b> - Tezkor o\'yin pastroqqa qo\'yadi' : ($v['b'] ? 'ba\'zan sakraydi' : '<span style="color:#3ccf4e">yaxshi</span>');
+        echo '<tr><td class="mono">' . h($ip) . '</td><td>' . $v['n'] . '</td><td>' . $med($v['p']) . ' ms</td><td>' . $v['px'] . ' ms</td><td>' . $bar($v['b'], $v['n'], '#ff3b3b') . ' ' . $pct($v['b'], $v['n']) . '%</td><td>' . $st . '</td></tr>';
+    }
+    if (!$srv) echo '<tr><td colspan="6" class="mut">Ma\'lumot yo\'q</td></tr>';
+    echo '</table></div>';
+    uasort($dev, function ($a, $b) { $x = $b['hi'] / max(1, $b['n']); $y = $a['hi'] / max(1, $a['n']); return $x == $y ? 0 : ($x > $y ? 1 : -1); });
+    echo '<div class="panel"><div class="ph">Kompyuterlar (launcher o\'lchagan)</div><table class="list"><tr><th>Kompyuter</th><th>O\'yinlar</th><th>Protsessor to\'la band</th><th>Eng ko\'p yuklama</th><th>Eng kam bo\'sh xotira</th><th>Yadro</th><th>Jami vaqt</th></tr>';
+    foreach (array_slice($dev, 0, 60, true) as $d => $v) {
+        $o = rd('dev/' . $d, array()); $gpu = isset($o['hw']['gpu']) ? $o['hw']['gpu'] : ''; $ram = isset($o['hw']['ram']) ? $o['hw']['ram'] : '';
+        echo '<tr><td><a href="?p=player&id=' . h($d) . '">' . h(substr($d, 0, 10)) . '</a><br><small class="mut">' . h($gpu) . ($ram ? ' · ' . round($ram / 1024, 1) . ' GB' : '') . '</small></td><td>' . $v['n'] . '</td><td>' . $bar($v['hi'], $v['n'], '#ff3b3b') . ' ' . $pct($v['hi'], $v['n']) . '%</td><td>' . $v['gc'] . '% (1 yadro)</td><td>' . ($v['ram'] < 400 ? '<b class="red">' . $v['ram'] . ' MB</b>' : $v['ram'] . ' MB') . '</td><td>' . (int)$v['cores'] . '</td><td>' . round($v['dur'] / 3600, 1) . ' soat</td></tr>';
+    }
+    if (!$dev) echo '<tr><td colspan="7" class="mut">Ma\'lumot yo\'q</td></tr>';
     echo '</table></div>';
 }
 

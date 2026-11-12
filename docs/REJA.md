@@ -4,8 +4,9 @@ Egasi tanlagan (2026-11-12), navbat bilan qilinadi:
 
 1. **Do'stni taklif qilish ko'rinadigan bo'lsin** — taklif kodi bor, lekin ko'rinmaydi. O'yin xulosasiga, LAN bo'limiga
    va bosh ekranga «Do'stingni chaqir — ikkalangizga sandiq» tugmasi; do'st kirib o'ynasa ikkalasiga mukofot.
-2. **O'yin ichida FPS va ping ko'rsatkichi** — burchakda kichik, yoqib-o'chiriladi (Sozlamalar → HUD).
-3. **Admin panel: «Lag» sahifasi** — o'yinchilar o'lchagan ping (gperf) va kompyuter yuklamasi (perfl) grafik bilan:
+2. ~~O'yin ichida FPS va ping ko'rsatkichi~~ — qilindi (10205300): HUD > FPS va ping + joyi (chap/o'rta/o'ng); lagni tuzatishda o'zi yoqiladi.
+3. ~~Admin panel: «Lag» sahifasi~~ — qilindi (10205300), Yiqilishlar sahifasida damplarni yuklab olish ham.
+   Asl reja: — o'yinchilar o'lchagan ping (gperf) va kompyuter yuklamasi (perfl) grafik bilan:
    beqaror serverlar, protsessori to'la band kompyuterlar, xotira kam (ram_low), lag dedi (lag=1).
 
 Qilindi (2026-11-12, menyu 10205200):

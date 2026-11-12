@@ -3255,7 +3255,7 @@ var PANES = {
         '<div class="fr"><div class="lb">' + esc(T('h_size2')) + '</div><div class="ct2 seg">' + hz + '</div></div>' +
         '<div class="mut" style="margin:-6px 0 10px;font-size:12px">' + esc(PCID ? T('h_size3') : T('sy_nolaunch')) + '</div>' +
         '<div class="ph2 m">' + esc(T('hx_kill')) + '</div>' + sl('dmax', 'h_kills', 3, 10, 1) + sl('dtime', 'h_dtime', 2, 15, 1, null, 's') + tg('hs', 'h_hs') + '</div>' +
-        '<div class="pane r hp"><div class="ph2">' + esc(T('h_title')) + '</div>' + tg('netg', 'h_net') + tg('cid', 'h_cid') + tg('nover', 'h_draw') + '</div>';
+        '<div class="pane r hp"><div class="ph2">' + esc(T('h_title')) + '</div>' + tg('netg', 'h_net', 'h_net2') + seg('ngpos', 'h_ngpos', [[3, 'h_ng3'], [2, 'h_ng2'], [1, 'h_ng1']]) + tg('cid', 'h_cid') + tg('nover', 'h_draw') + '</div>';
     }
     var pal = ['255 59 59', '50 250 50', '0 230 255', '255 210 60', '255 80 220', '255 255 255'];
     if (pal.indexOf(E.xc) < 0 && /^\d+ \d+ \d+$/.test(E.xc)) pal.push(E.xc);
@@ -3534,7 +3534,7 @@ function lagFixPane(why, strong) {
 }
 function lagFix(strong) {
   var w = pcWeak() || (HW && hwClass() === 'weak'), resTo = '';
-  S.aimnet = 1; S.vsync = 0; S.dyn = 0;
+  S.aimnet = 1; S.vsync = 0; S.dyn = 0; S.netg = 1;   // FPS va ping burchakda - o'yinchi lag nimadan ekanini ko'radi
   S.fps = Math.max(100, Math.min(Number(S.fps) || 100, 200));
   if (w) { S.lowgfx = 1; S.decals = 300; DB.fx = 0; sparks(); }
   /* launcher o'lchadi: o'yin protsessorni to'la band qilgan (FPS kompyuterga tiralgan) - chuqur yengillashtirish: effektlarsiz rejim,
