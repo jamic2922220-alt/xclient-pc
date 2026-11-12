@@ -437,6 +437,7 @@ function loadOpts() {
     if (r.o.ver && !qparam('v')) { VERSION = r.o.ver; renderBar(); }
     if (r.o.age != null) setTimeout(function () { launchCheck(r.o.age); }, 3500);
     if (r.o.cachemb != null && !qparam('c')) CACHE_MB = r.o.cachemb;
+    if (r.o.scr) OPTS.scr = r.o.scr;                   // monitor o'lchami (launcher)
     if (r.o.safe && !SAFE) { SAFE = 1; fxClass(); sparks(); }
     if (r.o.cpuhi && now() / 1000 - r.o.cpuhi < 3 * 86400 && DB.cpuhi !== r.o.cpuhi && !(S && S.lowgfx)) { var ch = r.o.cpuhi; setTimeout(function () { cpuHiOffer(ch, 0); }, 9000); }   // oxirgi o'yinda kompyuter kuchi yetmadi
     if (r.o.hw) { HW = r.o.hw; if (r.o.os) HW.os = r.o.os; if (DB.fx == null && hwClass() === 'weak') { DB.fx = 0; persist(); sparks(); api('prob', { k: 'menu_lite', d: PCID || '' }, function () {}); } }   // kuchsiz kompyuter - yengil menyu
@@ -1014,8 +1015,10 @@ function loadPromo() {
     renderSoon();
   });
 }
+var UNSTABLE = {};
+function loadUnstable() { api('unstable', {}, function (r) { if (r && r.ok && r.u) UNSTABLE = r.u; }); }
 function loadTop() {
-  loadPromo();
+  loadPromo(); loadUnstable();
   loadList(['top.php', 'http://boost-top.com/mmb/top.php', 'https://boost-top.com/mmb/top.php'], 'BOOST_TOP', function (l) { setTop(l || []); });
   setPromoFav([], true);
   loadList(['fav.php'], 'BOOST_FAV', function (l) { if (window.BOOST_SVC) setSvc(window.BOOST_SVC); if (l) setPromoFav(l); });
@@ -1460,7 +1463,7 @@ function annKill(wpn, hs, streak) {
 function bestServer() {
   var best = null;
   // do'stlar o'ynayotgan server, past ping va o'yinchi ko'pligi ustun
-  function score(s) { var q = netQual(s); return (isX(s) ? 1000 : 0) + friendsAt(s.ip).length * 300 + Math.min(s.pl || 0, 28) * 10 - (s.ping || 300) / 4 - q.loss * 6 - q.jit / 2; }   // yo'qotish va tebranish - lag
+  function score(s) { var q = netQual(s); return (isX(s) ? 1000 : 0) + friendsAt(s.ip).length * 300 + Math.min(s.pl || 0, 28) * 10 - (s.ping || 300) / 4 - q.loss * 6 - q.jit / 2 - (UNSTABLE[s.ip] || 0) * 400; }   // yo'qotish va tebranish - lag; boshqa o'yinchilarda o'yin paytida ping sakragan server - pastroqda
   for (var ip in SRV) {
     var s = SRV[ip];
     if (!s.ok || s.pass || isFull(s)) continue;
@@ -3519,22 +3522,30 @@ function gpEnd() {
 function cpuHiOffer(ch, n) {
   if (n > 20 || DB.cpuhi === ch) return;
   if (CONNECTED || curModal) return setTimeout(function () { cpuHiOffer(ch, n + 1); }, 5000);
-  DB.cpuhi = ch; persist(); lagFixPane(T('pf_cpu'));
+  DB.cpuhi = ch; persist(); lagFixPane(T('pf_cpu'), true);
 }
 /* "Lag / qotdi" javobi: bir bosishda tuzatish - tarmoq serverga moslanadi, FPS chegarasi va vsync, kuchsiz kompyuterda yengil grafika va menyu */
-function lagFixPane(why) {
+function lagFixPane(why, strong) {
   openSide('lagfix', T('lf_t'), '<div class="fqw">' + (why ? '<div class="chk bad" style="margin-bottom:10px">' + esc(why) + '</div>' : '') + '<div class="mut" style="margin-bottom:10px">' + esc(T('lf_s')) + '</div><ul class="lfl"><li>' + esc(T('lf_1')) + '</li><li>' + esc(T('lf_2')) + '</li><li>' + esc(T(pcWeak() ? 'lf_3w' : 'lf_3')) + '</li><li>' + esc(T('lf_4')) + '</li></ul>' +
-    '<a class="btn red big" data-act="lagfix">' + esc(T('lf_go')) + '</a></div>');
+    (strong ? '<div class="mut" style="margin:-6px 0 12px;color:#f5c518">' + esc(T('lf_5')) + '</div>' : '') +
+    '<a class="btn red big" data-act="' + (strong ? 'lagfix2' : 'lagfix') + '">' + esc(T('lf_go')) + '</a></div>');
 }
-function lagFix() {
-  var w = pcWeak() || (HW && hwClass() === 'weak');
+function lagFix(strong) {
+  var w = pcWeak() || (HW && hwClass() === 'weak'), resTo = '';
   S.aimnet = 1; S.vsync = 0; S.dyn = 0;
   S.fps = Math.max(100, Math.min(Number(S.fps) || 100, 200));
   if (w) { S.lowgfx = 1; S.decals = 300; DB.fx = 0; sparks(); }
+  /* launcher o'lchadi: o'yin protsessorni to'la band qilgan (FPS kompyuterga tiralgan) - chuqur yengillashtirish: effektlarsiz rejim,
+   * detal teksturalar, soyalar, HD modellar o'chadi; katta ekranda o'lcham 1280x720 (16:9) yoki 1024x768 - ichki videokartada FPS ancha oshadi */
+  if (strong) {
+    S.ultra = 1; S.detail = 0; S.shadows = 0; S.hdm = 0; S.hdmx = 1; S.lowgfx = 1; S.fps = 100;
+    var m = /^(\d+)x(\d+)$/.exec(OPTS.res || OPTS.scr || '');
+    if (m && +m[1] > 1280) { resTo = +m[1] / +m[2] > 1.5 ? '1280x720' : '1024x768'; OPTS.res = resTo; }
+  }
   DB.set = S; persist(); applySettings(S); cloudSave();
   if (PCID) { OPTS.tune = 1; OPTS.bgp = 1; OPTS.macc = 1; api('opts_set', { d: PCID, o: JSON.stringify(OPTS) }, function () {}); }
   api('feedback', { text: 'Lag: bir bosishda tuzatildi' + (w ? ' (kuchsiz PC)' : ''), kind: 'first', nick: MYNAME || '', ver: VERSION }, function () {});
-  closeModal(); toast(T(w ? 'lf_ok_w' : 'lf_ok'), 8000);
+  closeModal(); toast(resTo ? T('lf_ok_s').replace('{r}', resTo) : T(w ? 'lf_ok_w' : 'lf_ok'), 9000);
 }
 /* Botlar bilan mashq (oflayn): o'z kompyuterida server - CS 1.6 ning ichki botlari (ZBot). Internet kerak emas */
 var BOT_MODES = ['std', 'aim', 'noshoot', 'pistol', 'awp', 'knife'];
@@ -3673,6 +3684,7 @@ function act(a) {
   if (a === 'lanhost') { DB.bots = DB.bots || {}; DB.bots.lan = 1; persist(); return botsPane(); }
   if (a === 'botgo') return botsGo();
   if (a === 'lagfix') return lagFix();
+  if (a === 'lagfix2') return lagFix(true);
   if (a === 'servers') return openServers('internet');
   if (a === 'friends') return openFriends();
   if (a === 'missions') return openMissions();

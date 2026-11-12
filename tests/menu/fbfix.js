@@ -1,5 +1,5 @@
 /* O'yinchilar fikri: "Lag" javobi -> bir bosishda tuzatish; "Botlar bilan mashq" -> oflayn server buyruqlari */
-const { page } = require('./lib');
+const { page, BASE } = require('./lib');
 (async () => {
   const { b, p, errs } = await page({ db: { token: process.env.XC_TOKEN, device: 'testdev0001', fx: 1, set: { fps: 60, vsync: 1, dyn: 1, aimnet: 0 } } });
   const res = []; const ok = (c, m) => res.push((c ? 'ok  ' : 'XATO') + ' ' + m);
@@ -57,7 +57,6 @@ const { page } = require('./lib');
   ok(st.aimnet === 1 && st.vsync === 0 && st.dyn === 0 && st.fps >= 100, 'sozlamalar: aniq tegish yoqildi, vsync/dinamik yorug\'lik o\'chdi, fps 100+ (' + JSON.stringify({ a: st.aimnet, v: st.vsync, d: st.dyn, f: st.fps }) + ')');
   ok(/gl_vsync 0/.test(L2) && /fps_max 1\d\d/.test(L2), 'o\'yinga darhol yuborildi (gl_vsync 0, fps_max)');
   // kunlik sovg'a kalendari: yangi akkaunt - birinchi kirish (claimDaily)
-  const { BASE } = require('./lib');
   const reg = await fetch(BASE + '/xc_api.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'a=register&login=testcal' + Date.now() % 100000 + '&pass=secret12&device=testdev0009' }).then(r => r.json());
   const pg2 = await page({ db: { token: reg.token, device: 'testdev0009', fx: 1, lang: 'uz', dnd: 0, tour: 1, wnSeen: 'x' }, wait: 1500 });   // dnd: 0 - kalendar faqat bezovta qilmaslik o'chiq bo'lsa
   await pg2.p.waitForTimeout(9000);
@@ -66,6 +65,13 @@ const { page } = require('./lib');
   if (process.env.DAILY_SHOT) await pg2.p.screenshot({ path: process.env.DAILY_SHOT });
   if (pg2.errs.length) errs.push.apply(errs, pg2.errs);
   await pg2.b.close();
+  // chuqur yengillashtirish (launcher protsessor to'la band deb o'lchagan): effektlar, soyalar, HD modellar o'chadi
+  await p.evaluate(() => { const e = document.createElement('a'); e.setAttribute('data-act', 'lagfix2'); document.body.appendChild(e); e.click(); e.remove(); }); await p.waitForTimeout(400);
+  const st2 = await p.evaluate(() => JSON.parse(localStorage.getItem('xclient')).set);
+  ok(st2.ultra === 1 && st2.detail === 0 && st2.hdm === 0 && st2.lowgfx === 1 && st2.fps === 100, 'chuqur rejim: effektlarsiz, detal/HD o\'chiq, fps 100 (' + JSON.stringify({ u: st2.ultra, d: st2.detail, h: st2.hdm, f: st2.fps }) + ')');
+  // beqaror serverlar ro'yxati so'raladi (Tezkor o'yin ularni pastroqqa qo'yadi)
+  const un = await fetch(BASE + '/xc_api.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'a=unstable' }).then(r => r.json());
+  ok(un.ok && typeof un.u === 'object', 'beqaror serverlar API ishlaydi');
   const fails = res.filter(r => r.startsWith('XATO'));
   console.log(res.join('\n'));
   console.log((fails.length || errs.length ? 'FAIL' : 'PASS') + ' fbfix (' + (res.length - fails.length) + '/' + res.length + (errs.length ? ', JS xato: ' + errs.join('|') : '') + ')');

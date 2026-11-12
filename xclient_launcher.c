@@ -41,6 +41,7 @@
 #endif
 /* 1. zaxira manzil: cssborka.uz ishlamasa yoki juda sekin bo'lsa (GitHub Releases, Range qo'llaydi) */
 #define XC_GAME_MIRROR "https://github.com/jamic2922220-alt/xclient-pc/releases/download/cs16/CS_1_6_boost-top_PRO_2_5_3.exe"
+#define XC_GAME_SIZE 238932805ULL   /* CS_1_6_boost-top_PRO_2_5_3.exe aniq hajmi (ikkala manzilda bir xil). Chala yuklansa - o'rnatuvchi "buzilgan" (inno=1) */
 #define XC_VERSION_FILE L"xclient_version.txt"
 /* Launcher fayli nomi. Eski nomi "XClient.exe" ba'zi server himoyalarida (Vanga/ReChecker) 5 yil oldingi
  * shu nomli cheat sifatida ro'yxatda turibdi - o'yin papkasida bu nomdagi fayl qolmasligi kerak. */
@@ -692,6 +693,7 @@ static BOOL setup_in_dir(const wchar_t *dir, wchar_t *out)
     if (h == INVALID_HANDLE_VALUE) return FALSE;
     do {
         ULONGLONG sz = ((ULONGLONG)fd.nFileSizeHigh << 32) | fd.nFileSizeLow;
+        if (!_wcsicmp(fd.cFileName, L"CS_1_6_boost-top_PRO_2_5_3.exe") && sz != XC_GAME_SIZE) continue;   /* brauzerda chala yuklangan nusxa - ishlatmaymiz */
         if (sz > (100ULL << 20)) { _snwprintf(out, MAX_PATH, L"%s\\%s", dir, fd.cFileName); out[MAX_PATH - 1] = 0; FindClose(h); return TRUE; }
     } while (FindNextFileW(h, &fd));
     FindClose(h);
@@ -758,6 +760,16 @@ static BOOL ensure_game(const char *url)
         for (int s2 = 0; s2 < 2 && !ok; s2++) {
             for (int i = 0; i < (s2 ? 6 : 4) && !ok; i++) {   /* uzilsa - qolgan joyidan davom etadi */
                 ok = http_download_pct(src[s2], tmp, s2 ? L"CS 1.6 yuklanmoqda (zaxira):" : L"CS 1.6 yuklanmoqda:");
+                if (ok && (!strcmp(src[s2], XC_GAME_URL) || !strcmp(src[s2], XC_GAME_MIRROR))) {   /* hajm tekshiruvi: sayt hajmni aytmasa ham chala fayl o'tib ketmasin */
+                    WIN32_FILE_ATTRIBUTE_DATA da; ULONGLONG got = 0;
+                    if (GetFileAttributesExW(tmp, GetFileExInfoStandard, &da)) got = ((ULONGLONG)da.nFileSizeHigh << 32) | da.nFileSizeLow;
+                    if (got != XC_GAME_SIZE) {
+                        char raw[80]; _snprintf(raw, sizeof(raw), "got=%lluMB src=%d", got >> 20, s2); raw[79] = 0; url_escape(g_probx, sizeof(g_probx), raw); prob_send("dl_short", 0); g_probx[0] = 0;
+                        ok = FALSE; g_dl_err = 1;
+                        if (got > XC_GAME_SIZE || i >= 1) { DeleteFileW(tmp); break; }   /* ortiqcha yoki ikkinchi marta ham chala - boshqa manzilga */
+                        continue;                                                         /* birinchi marta chala - qolgan joyidan davom ettirib ko'ramiz */
+                    }
+                }
                 if (!ok && g_dl_err != 1) break;          /* disk/papka xatosi - qayta urinish foyda bermaydi */
                 if (!ok) { status(L"Internet uzildi, davom ettirilmoqda...", 0); Sleep(3000 + i * 2000); }
             }
