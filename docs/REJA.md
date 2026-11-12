@@ -15,6 +15,10 @@ Qilindi (2026-11-12, menyu 10205200):
 - Vazifalar: bajarilgan, olinmagan vazifalar soni chap menyuda belgi bilan.
 - Allaqachon bor edi: kunlik vazifalar, mikrofon sinovi (voice_loopback) va mikrofonni tuzatish, pritsel galereyasi, FPS/net_graph tugmalari.
 
+Keyingi (egasi tanladi, 2026-11-13):
+- **Granata mashqi** (botlar bilan mashq bo'limida): cheksiz pul va sotib olish vaqti, botlarsiz yoki otmaydigan botlar,
+  granatalarni qayta-qayta otish; ixtiyoriy - xaritani o'rganish (noclip, sv_cheats 1 faqat o'z serverida).
+
 Kutilmoqda:
 - nDirect javobi: Windows 7 da tier0.dll TLS (dump: 85c2a708f2..._1794500973, admin kaliti bilan dmpget).
 - Launcher 1.0.143: chala yuklangan o'rnatuvchi (dl_short) va chuqur yengillashtirish (lagfix2) natijalari.
