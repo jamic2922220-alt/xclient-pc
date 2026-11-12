@@ -29,6 +29,7 @@ def main():
     html = open(os.path.join(MENU, 'index.html'), encoding='utf-8').read()
     if "var V = '%s'" % ver not in html:
         sys.exit('index.html dagi V (%s) ver.txt bilan bir xil emas' % ver)
+    root_html = html                                  # asosiy sahifa - fayllar asosiy papkadan (rel/ chiqmay qolsa ham menyu ishlaydi)
     for f in ASSETS:
         n = html.count('"%s?v=%s"' % (f, ver))
         if n != 1:
@@ -40,8 +41,12 @@ def main():
             z.write(os.path.join(MENU, f), 'rel/%s/%s' % (ver, f))
         z.writestr('rel/%s/index.html' % ver, html)
         if a.root:
-            z.writestr('xc.html', html)
-            z.writestr('index.html', html)
+            # 10205200-10205300: FastPanel'da rel/<versiya> chiqmay qoldi, asosiy sahifa yo'q fayllarni so'radi - menyu ochilmadi.
+            # Endi asosiy sahifa o'z fayllarini yonidan (xc.js?v=..) oladi; rel/ - faqat beta / orqaga qaytarish uchun
+            for f in ASSETS:
+                z.write(os.path.join(MENU, f), f)
+            z.writestr('xc.html', root_html)
+            z.writestr('index.html', root_html)
             z.writestr('ver.txt', ver + '\n')
         for f in a.php:
             z.write(os.path.join(SITE, f), f)
