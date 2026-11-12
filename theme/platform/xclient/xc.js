@@ -1714,8 +1714,9 @@ function ddItems(kind) {
   } else if (kind === 'xsz') {
     each(SZ, function (z, i) { out.push([z, 'x' + (i + 1)]); });
   } else if (kind === 'res') {
-    out.push(['', T('sy_res_auto')]);
-    var sw = screen.width || 1920, sh = screen.height || 1080, seen = {}, ar = scrAr();
+    var mon = monRes();   // monitor o'lchami (launcher aytadi); o'yin ichida screen.* - o'yinning joriy o'lchami, monitor emas
+    out.push(['', T('sy_res_auto') + (mon ? ' (' + mon[0] + ' \u00d7 ' + mon[1] + ')' : '')]);
+    var sw = mon ? mon[0] : screen.width || 1920, sh = mon ? mon[1] : screen.height || 1080, seen = {}, ar = scrAr();
     var RES = { '43': ['1600x1200', '1280x960', '1152x864', '1024x768', '800x600', '640x480'], '169': ['2560x1440', '1920x1080', '1600x900', '1366x768', '1280x720'],
       '1610': ['1920x1200', '1680x1050', '1440x900', '1280x800'] };
     each([sw + 'x' + sh].concat(RES[ar] || []), function (r) {
@@ -1725,8 +1726,11 @@ function ddItems(kind) {
   return out;
 }
 /* ekran formati (NextClient "Формат экрана"): 4:3 / 16:9 / 16:10 - o'lchamlar ro'yxatini saralaydi */
+function monRes() { var m = /^(\d{3,5})x(\d{3,5})$/.exec(OPTS && OPTS.scr || ''); return m ? [+m[1], +m[2]] : null; }
+/* tanlangan o'lcham monitordan ancha kichik (eski tanlov qolib ketgan) - rasm xira. Lagni tuzatish ataylab kichraytirgan bo'lsa - aytmaymiz */
+function resSmall() { var mon = monRes(), m = /^(\d+)x(\d+)$/.exec(OPTS && OPTS.res || ''); return !!(mon && m && +m[1] < mon[0] * 0.75 && OPTS.res !== DB.lagres); }
 function resAr(r) { var m = /^(\d+)x(\d+)$/.exec(r || ''); if (!m) return ''; var k = m[1] / m[2]; return k < 1.45 ? '43' : k < 1.7 ? '1610' : '169'; }
-function scrAr() { return DB.ar || resAr(OPTS.res) || resAr((screen.width || 1920) + 'x' + (screen.height || 1080)) || '169'; }
+function scrAr() { return DB.ar || resAr(OPTS.res) || resAr(OPTS.scr) || resAr((screen.width || 1920) + 'x' + (screen.height || 1080)) || '169'; }
 function ddValue(kind) { return kind === 'map' ? FMAP : kind === 'mode' ? FMODE : kind === 'xpre' ? E.xp : kind === 'xsz' ? E.xs : OPTS.res || ''; }
 function ddLabel(kind) {
   var v = ddValue(kind), items = ddItems(kind);
@@ -3096,6 +3100,7 @@ var PANES = {
       '<div class="pane r"><div class="ph2">' + esc(T('v_scr')) + '</div>' +
       '<div class="fr"><div class="lb">' + esc(T('v_ar')) + '</div><div class="ct2 seg">' + vseg('ar', scrAr(), [['43', 'v_ar43'], ['169', 'v_ar169'], ['1610', 'v_ar1610']]) + '</div></div>' +
       '<div class="fr"><div class="lb">' + esc(T('sy_screen')) + '</div><div class="ct2"><a class="dd wide" data-dd="res"><span>' + esc(ddLabel('res')) + '</span><i>\u25be</i></a></div></div>' +
+      (resSmall() ? '<div class="chk bad" style="margin:4px 0 8px">' + esc(T('v_small').replace('{m}', monRes().join('\u00d7')).replace('{r}', OPTS.res.replace('x', '\u00d7'))) + ' <a class="btn red" data-act="resauto" style="margin-left:6px">' + esc(T('v_small_go')) + '</a></div>' : '') +
       '<div class="fr"><div class="lb">' + esc(T('v_mode')) + '</div><div class="ct2 seg">' + vseg('win', String(OPTS.win | 0), [['0', 'v_m_full'], ['1', 'v_m_win'], ['2', 'v_m_bl']]) + '</div></div>' +
       tg('vsync', 'v_vsync') + tg('hdm', 'v_hdm', 'v_rs') + tg('addons', 'v_addons', 'v_rs') + votg('stretch', 'v_stretch', 'v_rs') + tg('hor', 'v_hor') +
       tg('detail', 'v_detail') + votg('ontop', 'v_ontop') + votg('flash', 'v_flash') + '</div>';
@@ -3542,7 +3547,7 @@ function lagFix(strong) {
   if (strong) {
     S.ultra = 1; S.detail = 0; S.shadows = 0; S.hdm = 0; S.hdmx = 1; S.lowgfx = 1; S.fps = 100;
     var m = /^(\d+)x(\d+)$/.exec(OPTS.res || OPTS.scr || '');
-    if (m && +m[1] > 1280) { resTo = +m[1] / +m[2] > 1.5 ? '1280x720' : '1024x768'; OPTS.res = resTo; }
+    if (m && +m[1] > 1280) { resTo = +m[1] / +m[2] > 1.5 ? '1280x720' : '1024x768'; OPTS.res = resTo; DB.lagres = resTo; }
   }
   DB.set = S; persist(); applySettings(S); cloudSave();
   if (PCID) { OPTS.tune = 1; OPTS.bgp = 1; OPTS.macc = 1; api('opts_set', { d: PCID, o: JSON.stringify(OPTS) }, function () {}); }
@@ -3687,6 +3692,7 @@ function act(a) {
   if (a === 'botgo') return botsGo();
   if (a === 'lagfix') return lagFix();
   if (a === 'lagfix2') return lagFix(true);
+  if (a === 'resauto') { OPTS.res = ''; saveOpts(T('v_rs2')); return showSetTab('video'); }   // o'yin monitor o'lchamida (tiniq)
   if (a === 'servers') return openServers('internet');
   if (a === 'friends') return openFriends();
   if (a === 'missions') return openMissions();

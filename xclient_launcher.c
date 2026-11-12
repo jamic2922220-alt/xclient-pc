@@ -2449,7 +2449,20 @@ static BOOL run_game(void)
         _snwprintf(vid, 96, L" -width %u -height %u -window -noborder", w, h);
     }
     else if (o_res[0] && sscanf(o_res, "%ux%u", &w, &h) == 2) _snwprintf(vid, 96, L" -width %u -height %u%s", w, h, o_win ? L" -window" : L" -full");
-    else if (o_win) lstrcpyW(vid, L" -window");
+    else if (o_win) {   /* oyna + "Avto": ish maydoniga (vazifalar paneli chiqarilgan) sig'adigan eng katta standart o'lcham, monitor formati bilan.
+                         * Oldin faqat -window edi - o'yin eski saqlangan o'lchamda (ko'pincha 800x600) ochilardi */
+        RECT wa; DEVMODEW dm; ZeroMemory(&dm, sizeof(dm)); dm.dmSize = sizeof(dm);
+        static const unsigned R169[][2] = { { 2560, 1440 }, { 1920, 1080 }, { 1600, 900 }, { 1366, 768 }, { 1280, 720 }, { 1024, 576 } };
+        static const unsigned R43[][2] = { { 1600, 1200 }, { 1280, 960 }, { 1024, 768 }, { 800, 600 } };
+        static const unsigned R1610[][2] = { { 1920, 1200 }, { 1680, 1050 }, { 1440, 900 }, { 1280, 800 } };
+        if (SystemParametersInfoW(SPI_GETWORKAREA, 0, &wa, 0) && EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &dm) && dm.dmPelsHeight) {
+            unsigned aw = (unsigned)(wa.right - wa.left), ah = (unsigned)(wa.bottom - wa.top) - 32;   /* oyna sarlavhasi */
+            double k = (double)dm.dmPelsWidth / dm.dmPelsHeight;
+            const unsigned (*L)[2] = k < 1.45 ? R43 : k < 1.7 ? R1610 : R169; int n = k < 1.45 ? 4 : k < 1.7 ? 4 : 6;
+            for (int i = 0; i < n; i++) if (L[i][0] <= aw && L[i][1] <= ah) { w = L[i][0]; h = L[i][1]; break; }
+        }
+        if (w) _snwprintf(vid, 96, L" -width %u -height %u -window", w, h); else lstrcpyW(vid, L" -window");
+    }
     else {
         /* "Avto": o'yin monitorning haqiqiy o'lchamida ochiladi (Windows masshtabi 125%/150% bo'lsa ham - EnumDisplaySettings) */
         DEVMODEW dm; ZeroMemory(&dm, sizeof(dm)); dm.dmSize = sizeof(dm);
