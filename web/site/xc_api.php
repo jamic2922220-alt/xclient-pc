@@ -1863,13 +1863,13 @@ case 'gsshare':
     $cf = xc_cfg();
     if (!empty($cf['tg_token']) && !empty($cf['tg_clips'])) {
         $kd = $rec['d'] ? round($k / $rec['d'], 2) : $k;
-        $cap = "\xF0\x9F\x8E\xAE " . $rec['name'] . ": " . $k . " kill \xC2\xB7 K/D " . $kd . ($rec['srv'] !== '' ? " \xC2\xB7 " . $rec['srv'] : '') . "\n#xclient";
+        $cap = "\xF0\x9F\x8E\xAE " . $rec['name'] . ": " . $k . " kill \xC2\xB7 K/D " . $kd . ($rec['srv'] !== '' ? " \xC2\xB7 " . $rec['srv'] : '') . "\n\xF0\x9F\x93\xA5 cssborka.uz/xclient\n#xclient";   // kanaldan boshqalarga yuborilganda ham sayt ko'rinsin
         $ctx = stream_context_create(array('http' => array('method' => 'POST', 'timeout' => 20, 'ignore_errors' => true, 'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
             'content' => http_build_query(array('chat_id' => $cf['tg_clips'], 'photo' => $img . '&v=' . time(), 'caption' => $cap)))));
         $r = json_decode((string)@file_get_contents('https://api.telegram.org/bot' . $cf['tg_token'] . '/sendPhoto', false, $ctx), true);
         if (empty($r['ok'])) tg_send($cf['tg_clips'], $cap . "\n" . $img);
     }
-    out(array('ok' => true, 'url' => $img));
+    out(array('ok' => true, 'url' => 'https://mmb.boost-top.com/g.php?g=' . $id, 'img' => $img));   // havola - sahifa (karta + cssborka.uz yuklab olish tugmasi)
 
 case 'clips':                                            // ulashilgan kliplar (clips.php va yuklab olish sahifasidagi lenta)
     header('Access-Control-Allow-Origin: *');            // ochiq ma'lumot: cssborka.uz dagi yuklab olish sahifasi ham o'qiydi

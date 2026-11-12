@@ -535,7 +535,7 @@ function api(a, params, cb) {
   };
   try { x.send(body); } catch (e) { done = true; clearTimeout(tm); if (cb) cb({ ok: false, err: 'net', msg: T('lg_neterr') }); }
 }
-function setMe(me) { var was = !!ME; ME = me; renderAll(); if (me && !was) { setTimeout(pollNotif, 3000); setTimeout(statBackfill, 5000); setTimeout(claimDaily, 6000); } }
+function setMe(me) { var was = !!ME; ME = me; renderAll(); if (me && !was) { setTimeout(pollNotif, 3000); setTimeout(statBackfill, 5000); setTimeout(claimDaily, 6000); setTimeout(misCheck, 9000); if (S && S.rtag) setTimeout(function () { if (!PW_NAME) cmd('name ' + q(fullName(S))); }, 1500); } }
 /* kunlik kirish mukofoti: har kuni birinchi kirishda o'zi olinadi (ketma-ket kunlar - ko'proq XP, 7-kuni +200) */
 function claimDaily() {
   if (!ME || LITE || !feat('daily')) return;
@@ -1407,7 +1407,7 @@ function onDisconnectEvt() {
   if (CUR) { CUR.d = Math.round((now() - CUR.t) / 1000); persist(); cloudSave(); sendStat(CUR); }
   stopRecord();
   var fin = CUR;
-  if (fin && !DEMO_PLAY) { VIDS_T = 0; setTimeout(vidsRefresh, 2000); }
+  if (fin && !DEMO_PLAY) { VIDS_T = 0; setTimeout(vidsRefresh, 2000); setTimeout(misCheck, 8000); }   // o'yindan keyin vazifalar bajarilgan bo'lishi mumkin
   if (fin && !DEMO_PLAY) setTimeout(function () { if (!CONNECTED && !DEMO_PLAY) gameSummary(fin); }, 5000);   // qayta ulanish bo'lmasa - xulosa
   if (fin && !DEMO_PLAY && !ME) setTimeout(function () { if (!CONNECTED && !DEMO_PLAY && !ME && !curModal && regOfferDue()) { regOfferMark(); openSide('rgo', T('ro_btn'), '<div class="ydc">' + regOfferHtml(1) + '</div>'); } }, 6500);
   if (fin && !DEMO_PLAY && !DB.fq && fin.d >= 60) { DB.fq = 1; persist(); setTimeout(function () { firstAskLater(0); }, 1000); }   // birinchi o'yin: "qanday bo'ldi?" (bir marta)
@@ -2219,7 +2219,9 @@ function seedFromGame() {
 }
 var NETS = { slow: [25000, 60, 60], mid: [50000, 101, 101], fast: [100000, 101, 105] };
 var BUY = [['F1', 'buy m4a1; buy ak47; buyammo1; buyammo1'], ['F2', 'buy awp; buyammo1; buyammo1'], ['F3', 'buy vesthelm; buy defuser'], ['F4', 'buy hegren; buy flash; buy flash; buy sgren']];
-function fullName(s) { return ((s.tag || '') + s.name).slice(0, 31); }
+var RTAG = { silver: 'Silver', gold: 'Gold', plat: 'Plat', diamond: 'Diamond', legend: 'Legend' };
+/* o'yindagi nik: [unvon] (ixtiyoriy, Sozlamalar > O'yin) + klan tegi + nik. Bronza unvoni ko'rsatilmaydi */
+function fullName(s) { var r = s && s.rtag && ME && RTAG[ME.rank] ? '[' + RTAG[ME.rank] + ']' : ''; return (r + (s.tag || '') + s.name).slice(0, 31); }
 var ULTRA_WAS = false;  // asl qiymatlar faqat o'yinchi "Ultra yengil" ni o'chirganda yuboriladi (qon va h.k. ni o'zi o'chirganlarga tegmaymiz)
 function sndSet(c, cv, v) { var cur = parseFloat(readCvar(cv)); if (!isNaN(cur) && Math.abs(cur - Number(v)) > 1e-6) c.push(cv + ' ' + v); }
 /* Aniq tegish: o'q tekkan-tekmagani serverda hal bo'ladi - CFG uni "kuchaytira" olmaydi. Lekin noto'g'ri tarmoq sozlamasi
@@ -3054,7 +3056,7 @@ var PANES = {
       '<div class="fr"><div class="lb">' + esc(T('g_name')) + '</div><div class="ct2"><input class="tx" id="fName" maxlength="28" value="' + esc(E.name) + '"></div></div>' +
       seg('tag', 'g_tag', [['X | ', 'X |'], ['[UZ] ', '[UZ]']].concat(ME && ME.clan ? [['[' + ME.clan.tag + '] ', '[' + ME.clan.tag + ']']] : []).concat([['', 'g_none']])) +
       '<div class="ph2 m">' + esc(T('g_net')) + '</div><div class="big">' + nets + '</div>' +
-      '<div class="mut" style="margin:10px 0 14px;font-size:12px">' + esc(T('g_net_note')) + '</div>' + tg('aimnet', 'g_aimnet', 'g_aimnet2') + tg('reconn', 'g_reconn') + tg('rest', 'g_rest', 'g_rest2') + '</div>' +
+      '<div class="mut" style="margin:10px 0 14px;font-size:12px">' + esc(T('g_net_note')) + '</div>' + tg('aimnet', 'g_aimnet', 'g_aimnet2') + tg('reconn', 'g_reconn') + tg('rtag', 'g_rtag', 'g_rtag2') + tg('rest', 'g_rest', 'g_rest2') + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('g_server')) + '</div>' +
       tg('queue', 'g_queue', 'g_queue2') + tg('mp3off', 'g_mp3', 'g_mp32') + tg('hand', 'g_hand') + tg('fastsw', 'g_fast') +
       (ncHas('cl_discordrpc') ? '<div class="ph2 m">Discord</div>' + tg('drpc', 'g_drpc', 'g_drpc2') + tg('drpcs', 'g_drpcs') + tg('drpcj', 'g_drpcj') : '') + '</div>';
@@ -3972,11 +3974,18 @@ function misProgress(m) {
   if (m.id === 'kd') v = (x === 0 || k / x >= 1) ? k : 0;           // K/D 1 dan yuqori bo'lgandagina hisoblanadi
   return Math.min(m.goal, Math.floor(v));
 }
+/* bajarilgan, lekin hali olinmagan vazifalar soni - chap menyuda belgi (o'yinchi "Vazifalar" ni ochishni unutmasin) */
+function misBadge(r) {
+  var n = 0;
+  if (r && r.list) each(r.list, function (m) { MIS = r; if (r.done.indexOf(m.id) < 0 && misProgress(m) >= m.goal) n++; });
+  var e = $('mMis'); if (e) { e.style.display = n ? '' : 'none'; e.innerHTML = n ? String(n) : ''; }
+}
+function misCheck() { if (!ME || LITE) return; api('missions', {}, function (r) { if (r && r.ok) misBadge(r); }); }
 function openMissions() {
   if (!ME) return openSide('missions', T('ms_title'), '<div class="empty">' + esc(T('ms_login')) + '</div><a class="btn red" data-act="login" style="margin-top:12px">' + esc(T('a_login')) + '</a>');
   api('missions', {}, function (r) {
     if (!r.ok) return toast(r.msg || 'Xato');
-    MIS = r; renderMissions();
+    MIS = r; renderMissions(); misBadge(r);
   });
 }
 function renderMissions() {
