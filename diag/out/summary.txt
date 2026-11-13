@@ -1,0 +1,12 @@
+offtest rc=0
+--- mmb_home_page.html:
+file:///C:/Users/RUNNER~1/AppData/Local/Temp/X%20Test/%D0%98%D0%B3%D1%80%D0%B0%20CS/platform/xclient/offline.html
+--- lan.js:
+window.XC_LAN = "10.1.0.32:27015|Ali \"LAN\" сервер|de_dust2|3|12";
+--- srv:
+javob ('10.1.0.32', 60723)
+javob ('10.1.0.32', 60723)
+javob ('172.17.80.1', 60723)
+--- dom:
+<body>off
+46
