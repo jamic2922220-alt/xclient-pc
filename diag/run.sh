@@ -1,9 +1,13 @@
 #!/bin/bash
-# xotira bo'shatish (launcher 1.0.142): 600 MB band qilgan dastur -> ram_trim
+# internetsiz rejim (launcher): oflayn menyu manzili (bo'sh joy + kirill harfli papka) va LAN ro'yxati lan.js ga
 O=$PWD/diag/out; mkdir -p $O; : > $O/summary.txt
-./diag/vf/hog.exe & sleep 8
-tasklist //FI "IMAGENAME eq hog.exe" //FO CSV >> $O/summary.txt
-./diag/vf/xcl_test.exe --ramtest "$(cygpath -w $O/ram.txt)"; echo "ram rc=$?" >> $O/summary.txt
-cat $O/ram.txt >> $O/summary.txt; echo >> $O/summary.txt
-tasklist //FI "IMAGENAME eq hog.exe" //FO CSV >> $O/summary.txt
-# 8
+G="$TEMP/X Test/Игра CS"; mkdir -p "$G/platform/xclient"; echo '<html>off</html>' > "$G/platform/xclient/offline.html"
+python diag/fakesrv.py > $O/srv.txt 2>&1 & sleep 3
+./diag/vf/xcl_test.exe --offtest "$(cygpath -w "$G")"; echo "offtest rc=$?" >> $O/summary.txt
+echo "--- mmb_home_page.html:" >> $O/summary.txt; cat "$G/platform/mmb_home_page.html" >> $O/summary.txt; echo >> $O/summary.txt
+echo "--- lan.js:" >> $O/summary.txt; cat "$G/platform/xclient/lan.js" >> $O/summary.txt 2>&1
+echo "--- srv:" >> $O/summary.txt; cat $O/srv.txt >> $O/summary.txt
+# fayl manzili haqiqatan ochiladimi (Chrome/Edge headless): file:/// URL dan sahifa matni
+U=$(cat "$G/platform/mmb_home_page.html")
+E="/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"; [ -f "$E" ] || E="/c/Program Files/Google/Chrome/Application/chrome.exe"
+"$E" --headless --disable-gpu --dump-dom "$U" > $O/dom.txt 2>/dev/null; echo "--- dom:" >> $O/summary.txt; head -c 200 $O/dom.txt >> $O/summary.txt
