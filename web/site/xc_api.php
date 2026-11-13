@@ -319,14 +319,20 @@ function tg_bot_poll() {
 function tg_bot_answer($chat, $txt) {
     $me = null;
     foreach ((array)glob(XC_DIR . '/users/*.php') as $f) { $x = user(basename($f, '.php')); if ($x && !empty($x['tgid']) && (string)$x['tgid'] === (string)$chat) { $me = $x; break; } }
-    if (preg_match('/^(?:\/link\s*)?(\d{6})$/', $txt, $m)) {
+    if (preg_match('/^\/(stop|eslatma)$/i', $txt, $sm) && $me) {   // eslatmalarni o'chirish / yoqish
+        lock(); $u = user($me['login']); if ($u) { if (strtolower($sm[1]) === 'stop') $u['tgoff'] = 1; else unset($u['tgoff']); save_user($u); } unlock();
+        return strtolower($sm[1]) === 'stop' ? "Eslatmalar o'chirildi. Qayta yoqish: /eslatma" : "Eslatmalar yoqildi: kunlik sovg'a va seriya haqida kechqurun xabar beraman. O'chirish: /stop";
+    }
+    if (preg_match('/^(?:\/link\s*|\/start\s+)?(\d{6})$/', $txt, $m)) {   // /start KOD - menyudagi QR yoki tugma (t.me/bot?start=KOD)
         $codes = rd('tglink', array());
         if (empty($codes[$m[1]]) || time() - $codes[$m[1]]['t'] > 900) return "Kod topilmadi yoki eskirgan. X CLIENT menyusida: Sozlamalar > Akkaunt > Telegram'ni ulash.";
         lock(); $codes = rd('tglink', array());          // ping/stat bilan bir vaqtda yozib, ma'lumot yo'qolmasin
         if (empty($codes[$m[1]])) return "Kod topilmadi yoki eskirgan.";
         $u = user($codes[$m[1]]['l']); if (!$u) return 'Akkaunt topilmadi.';
-        $u['tgid'] = $chat; save_user($u); unset($codes[$m[1]]); wr('tglink', $codes); unlock();
-        return "Ulandi! Salom, " . $u['name'] . ".\n/me - statistikam\n/friends - onlayn do'stlar\n/top - hafta qotillari\n/online - hozir o'ynayotganlar";
+        $u['tgid'] = $chat; $gift = empty($u['tgbonus']);
+        if ($gift) { $u['tgbonus'] = 1; $u['chb'] = (int)@$u['chb'] + 1; }   // ulash sovg'asi - bir marta sandiq
+        save_user($u); unset($codes[$m[1]]); wr('tglink', $codes); unlock();
+        return "Ulandi! Salom, " . $u['name'] . "." . ($gift ? "\n\xF0\x9F\x8E\x81 Sovg'a: 1 ta sandiq - X CLIENT menyusida oching!" : '') . "\nKechqurun kunlik sovg'a va seriya haqida eslatib turaman (o'chirish: /stop).\n/me - statistikam\n/friends - onlayn do'stlar\n/top - hafta qotillari\n/online - hozir o'ynayotganlar";
     }
     if (!$me) return "Salom! Bu X CLIENT boti.\nAkkauntingizni ulash: X CLIENT menyusida Sozlamalar > Akkaunt > \"Telegram'ni ulash\" ni bosing va chiqqan 6 xonali kodni shu yerga yozing.";
     $cmd = strtolower(preg_replace('/@.*$/', '', $txt));
@@ -350,6 +356,62 @@ function tg_bot_answer($chat, $txt) {
         return "Hozir X CLIENT da: $n kishi ($srv tasi serverda o'ynayapti).";
     }
     return "/me - statistikam\n/friends - onlayn do'stlar\n/top - hafta qotillari\n/online - hozir o'ynayotganlar";
+}
+/* Telegram eslatmalari (botga ulanganlar, /stop - o'chirish). 20 daqiqada bir tekshiriladi (har qanday API so'rovida, qulf bilan):
+ *  - kechqurun 18-22 (Toshkent): kunlik seriya bor, bugun hali kirmagan - "seriya uzilmasin, bugun +N XP"
+ *  - 3-14 kun kirmagan - haftada ko'pi bilan bir marta "sizni sog'indik" */
+/* Do'st taklifi: yangi o'yinchi +100 XP va 1 sandiq, taklif qilgan +300 XP va 1 sandiq.
+ * Xato bo'lsa matn qaytaradi ('' = muvaffaqiyat). $u ni o'zgartiradi, lekin saqlamaydi (chaqiruvchi saqlaydi). */
+function ref_apply(&$u, $raw) {
+    if (!empty($u['refby'])) return 'Taklif kodi allaqachon kiritilgan';
+    $code = strtolower(preg_replace('/[^A-Za-z0-9_]/', '', (string)$raw));
+    if ($code === '') return 'Taklif kodi bo\'sh';
+    if ($code === strtolower($u['login'])) return 'O\'zingizni taklif qila olmaysiz';
+    $inv = user($code);
+    if (!$inv) return 'Bunday taklif kodi yo\'q';
+    if (rl_count('ref' . client_ip(), 86400) >= 3) return 'Bugun bu tarmoqdan juda ko\'p taklif kiritildi';
+    if (!empty($inv['devices']) && !empty($u['devices']) && array_intersect(array_keys($inv['devices']), array_keys($u['devices']))) return 'Bitta kompyuterdan o\'zingizni taklif qilib bo\'lmaydi';
+    rl_add('ref' . client_ip(), 86400);
+    $u['refby'] = strtolower($inv['login']); $u['xp'] = (int)$u['xp'] + 100; $u['chb'] = (int)@$u['chb'] + 1;
+    if (!isset($inv['refs'])) $inv['refs'] = array();
+    $inv['refs'][strtolower($u['login'])] = time(); $inv['xp'] = (int)$inv['xp'] + 300; $inv['chb'] = (int)@$inv['chb'] + 1;
+    if (!isset($inv['msgs'])) $inv['msgs'] = array();
+    $inv['msgs'][] = array('t' => time(), 'text' => "\xF0\x9F\x8E\x81 " . $u['name'] . " sizning taklifingiz bilan qo'shildi: +300 XP va 1 ta sandiq!");
+    if (!isset($u['msgs'])) $u['msgs'] = array();
+    $u['msgs'][] = array('t' => time(), 'text' => "\xF0\x9F\x8E\x81 Do'stingiz " . $inv['name'] . " taklifi uchun: +100 XP va 1 ta sandiq!");
+    ach_check($inv); save_user($inv);
+    if (!empty($inv['tgid']) && empty($inv['tgoff'])) tg_send($inv['tgid'], "\xF0\x9F\x8E\x81 " . $u['name'] . " sizning taklifingiz bilan X CLIENT'ga qo'shildi! +300 XP va 1 ta sandiq.");
+    return '';
+}
+
+function tg_remind_tick() {
+    $c = xc_cfg();
+    if (empty($c['tg_bot']) || empty($c['tg_token'])) return;
+    $f = XC_DIR . '/tgremind.lock';
+    if (is_file($f) && time() - filemtime($f) < 1200) return;
+    $h = @fopen($f, 'c'); if (!$h || !flock($h, LOCK_EX | LOCK_NB)) return;
+    touch($f);
+    @date_default_timezone_set('Asia/Tashkent');
+    $hr = (int)date('G'); $day = date('Y-m-d'); $yd = date('Y-m-d', time() - 86400); $sent = 0;
+    foreach ((array)glob(XC_DIR . '/users/*.php') as $uf) {
+        if ($sent >= 15) break;                                // bitta so'rovda ko'pi bilan 15 xabar (javob kechikmasin)
+        $u = user(basename($uf, '.php'));
+        if (!$u || empty($u['tgid']) || !empty($u['tgoff'])) continue;
+        $seen = (int)@$u['seen']; $dl = isset($u['dly']) && is_array($u['dly']) ? $u['dly'] : array('d' => '', 's' => 0); $msg = '';
+        if ($hr >= 18 && $hr < 22 && $dl['d'] === $yd && (int)$dl['s'] >= 1 && @$u['remd'] !== $day) {
+            $st = (int)$dl['s'] + 1; $xp = $st % 7 === 0 ? 200 : 20 + 10 * min(5, ($st - 1) % 7);
+            $msg = "\xF0\x9F\x94\xA5 " . $u['name'] . ", seriyangiz " . (int)$dl['s'] . " kun! Bugun X CLIENT ga kirsangiz: +" . $xp . " XP" . ($st % 7 === 0 ? " va SANDIQ" : '') . ".\nKirmasangiz seriya 1-kundan boshlanadi.";
+            $u['remd'] = $day;
+        } elseif ($hr >= 17 && $hr < 22 && $seen && time() - $seen > 3 * 86400 && time() - $seen < 14 * 86400 && time() - (int)@$u['remw'] > 7 * 86400) {
+            $on = 0; foreach ((isset($u['friends']) ? $u['friends'] : array()) as $fl) { $fx = user($fl); if ($fx && !empty($fx['seen']) && time() - $fx['seen'] < 86400) $on++; }
+            $msg = "Sizni sog'indik, " . $u['name'] . "! \xF0\x9F\x8E\xAE\n" . ($on ? $on . " ta do'stingiz bugun o'ynadi. " : '') . "Kunlik sovg'a va yangi imkoniyatlar kutyapti: botlar bilan mashq, do'stlar bilan LAN.\n(eslatmalarni o'chirish: /stop)";
+            $u['remw'] = time();
+        }
+        if ($msg === '') continue;
+        lock(); $u2 = user($u['login']); if ($u2) { foreach (array('remd', 'remw') as $k) if (isset($u[$k])) $u2[$k] = $u[$k]; save_user($u2); } unlock();
+        tg_send($u['tgid'], $msg); $sent++;
+    }
+    flock($h, LOCK_UN); fclose($h);
 }
 /* Kunlik vazifalar: sana bo'yicha hammaga bir xil 3 ta vazifa. Bajarilishini menyu o'yin tarixidan hisoblaydi,
  * mukofot (XP) bu yerda kuniga bir marta beriladi. */
@@ -764,6 +826,7 @@ if ($a === 'clipup' || $a === 'clipdone') {
 }
 daily_report();
 tg_bot_poll();
+tg_remind_tick();
 
 switch ($a) {
 
@@ -890,9 +953,10 @@ case 'register':
     $meta['next']++;
     wr('meta', $meta);
     touch_device($u);
+    $refErr = trim(p('ref')) !== '' ? ref_apply($u, p('ref')) : '';
     save_user($u);
     tg_notify('account', "Yangi X CLIENT akkaunt: " . $login . ($email !== '' ? ' (' . $email . ')' : ''));
-    out(array('ok' => true, 'token' => new_token($login), 'me' => pub($u, true)));
+    out(array('ok' => true, 'token' => new_token($login), 'me' => pub($u, true), 'referr' => $refErr));
 
 case 'login':
     $login = trim(p('login')); $pass = p('pass');
@@ -1303,21 +1367,9 @@ case 'clan_top':
 case 'ref_set':
     lock();
     $u = auth();
-    if (!empty($u['refby'])) fail('bad', 'Taklif kodi allaqachon kiritilgan');
     if (time() - (int)$u['created'] > 7 * 86400) fail('bad', 'Taklif kodi faqat ro\'yxatdan o\'tgandan keyin 7 kun ichida kiritiladi');
-    $code = strtolower(preg_replace('/[^A-Za-z0-9_]/', '', p('code')));
-    if ($code === strtolower($u['login'])) fail('bad', 'O\'zingizni taklif qila olmaysiz');
-    $inv = user($code);
-    if (!$inv) fail('bad', 'Bunday taklif kodi yo\'q');
-    if (rl_count('ref' . client_ip(), 86400) >= 3) fail('limit', 'Bugun bu tarmoqdan juda ko\'p taklif kiritildi');
-    if (!empty($inv['devices']) && !empty($u['devices']) && array_intersect(array_keys($inv['devices']), array_keys($u['devices']))) fail('bad', 'Bitta kompyuterdan o\'zingizni taklif qilib bo\'lmaydi');
-    rl_add('ref' . client_ip(), 86400);
-    $u['refby'] = strtolower($inv['login']); $u['xp'] = (int)$u['xp'] + 100;
-    if (!isset($inv['refs'])) $inv['refs'] = array();
-    $inv['refs'][strtolower($u['login'])] = time(); $inv['xp'] = (int)$inv['xp'] + 300;
-    if (!isset($inv['msgs'])) $inv['msgs'] = array();
-    $inv['msgs'][] = array('t' => time(), 'text' => $u['name'] . " sizning taklif kodingiz bilan qo'shildi: +300 XP");
-    ach_check($inv); save_user($inv); save_user($u);
+    $re = ref_apply($u, p('code'));
+    if ($re !== '') fail('bad', $re);
     out(array('ok' => true, 'me' => pub($u, true)));
 
 /* ---------- CFG kodi: sozlama + tugmalar 6 belgili kod bilan ulashiladi (xc_data/cfgs) ---------- */
@@ -1400,7 +1452,11 @@ case 'tg_code':
     $codes = rd('tglink', array()); foreach ($codes as $k => $v) if (time() - $v['t'] > 900) unset($codes[$k]);
     do { $code = (string)mt_rand(100000, 999999); } while (isset($codes[$code]));
     $codes[$code] = array('l' => strtolower($u['login']), 't' => time()); wr('tglink', $codes);
-    out(array('ok' => true, 'code' => $code, 'bot' => isset($c['tg_botname']) ? $c['tg_botname'] : '', 'linked' => !empty($u['tgid'])));
+    $bn = isset($c['tg_botname']) ? preg_replace('/[^A-Za-z0-9_]/', '', $c['tg_botname']) : '';
+    out(array('ok' => true, 'code' => $code, 'bot' => $bn, 'link' => $bn !== '' ? 'https://t.me/' . $bn . '?start=' . $code : '', 'linked' => !empty($u['tgid']), 'gift' => empty($u['tgbonus'])));
+case 'tg_st':                                            // menyu: QR skanerlandimi (ulandi) - har 4 s so'raydi
+    $u = auth();
+    out(array('ok' => true, 'linked' => !empty($u['tgid']), 'chests' => chests_avail($u)));
 case 'tg_unlink':
     lock(); $u = auth(); unset($u['tgid']); save_user($u); out(array('ok' => true));
 

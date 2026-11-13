@@ -1018,3 +1018,25 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 
 /* ping o'lchanmagan (server bu kompyuter so'roviga javob bermadi, sayt orqali ishlayotgani ma'lum) */
 .pblk { display: inline-block; width: 16px; height: 16px; line-height: 16px; text-align: center; border-radius: 8px; font-size: 11px; color: #c9bfc6; background: #2a2026; cursor: help; }
+
+/* Telegram ulash (QR) */
+.tgint { font-size: 15px; color: #fff; margin: 0 0 10px; }
+.tggift { display: inline-block; margin: 0 0 12px; padding: 6px 12px; border: 1px solid #f5c518; color: #f5c518; font-size: 14px; }
+.tgw { overflow: hidden; margin: 6px 0 10px; }
+.tgq { float: left; width: 210px; margin-right: 18px; text-align: center; }
+.tgq img.tgqr { display: block; width: 200px; height: 200px; margin: 0 auto 6px; background: #fff; padding: 4px; image-rendering: pixelated; }
+.tgq small { color: #8f8590; font-size: 11px; }
+.tgi { overflow: hidden; }
+.tgi ol { margin: 0 0 10px 18px; padding: 0; color: #e8e0e6; font-size: 14px; line-height: 1.7; }
+.tgl2 .tgi .tgcode { margin: 4px 0 10px; font-size: 30px; letter-spacing: 6px; text-align: left; }
+.tgst { padding: 8px 10px; background: #1d181f; border: 1px solid #2a2026; color: #c9bfc6; font-size: 13px; }
+.tgst.ok { border-color: #3ccf4e; color: #3ccf4e; }
+/* do'st taklifi: bosh ekrandagi "Do'stingni chaqir" qatori */
+.frinv { cursor: pointer; }
+.frinv .rk { color: #f0c24b; }
+.frinv .nm { color: #f0c24b; font-weight: bold; }
+.lanhost .btn + .btn, .lanhost span + .btn { margin-left: auto; }
+/* NextClient (LITE) o'yinchisi: o'yin xulosasida X CLIENT taklifi */
+.gslite { display: block; margin: 10px 0; padding: 10px 12px; border: 1px solid rgba(255, 59, 59, .55); background: rgba(255, 59, 59, .08); cursor: pointer; }
+.gslite b { color: #fff; }
+.gslite span { display: block; font-size: 12px; color: #cfc4ca; margin-top: 3px; }
