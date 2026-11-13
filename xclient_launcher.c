@@ -2479,32 +2479,35 @@ static BOOL run_game(void)
             if (m.dmPelsWidth == w && m.dmPelsHeight == h && m.dmBitsPerPel >= 32 && m.dmDisplayFrequency > best && m.dmDisplayFrequency <= 500) best = m.dmDisplayFrequency;
         if (best > 60) { size_t l = wcslen(vid); _snwprintf(vid + l, 96 - l, L" -freq %lu", best); }
     }
-    /* 6. xavfsiz rejim: o'yin ketma-ket 3 marta yiqilgan bo'lsa - oyna rejimi, 1024x768, yengil grafika, ustuvorliksiz.
-     * Bir marta 2 daqiqadan ko'proq yiqilmay o'ynalsa - keyingi safar odatiy holga qaytadi */
+    /* 6. yengil rejim: o'yin ketma-ket 3 marta yiqilgan bo'lsa - FAQAT bitta keyingi ochilishda grafika yengillashadi.
+     * O'lcham va oyna rejimi o'yinchi tanlaganicha qoladi, oyna (MessageBox) chiqmaydi - o'yinchilar "ekran kichrayib qoldi" deb norozi edi.
+     * Hisoblagich darhol nolga tushadi: keyingi safar - odatiy holat (o'yin necha daqiqa o'ynalganidan qat'i nazar). */
     BOOL safe = ini_int(L"crs") >= 3;
     if (safe) {
-        lstrcpyW(vid, L" -width 1024 -height 768 -window");
         wchar_t sc[MAX_PATH]; path_join(sc, g_dir, L"cstrike\\xclient_safe.cfg");
         FILE *sf = _wfopen(sc, L"wb");
-        if (sf) { fprintf(sf, "// X CLIENT xavfsiz rejim (ketma-ket yiqilishlardan keyin)\nfps_max 100\nr_dynamic 0\nmp_decals 100\ngl_max_size 512\ncl_minmodels 1\n"); fclose(sf); }
+        if (sf) { fprintf(sf, "// X CLIENT yengil rejim (ketma-ket yiqilishlardan keyin, bir martalik)\nr_dynamic 0\nmp_decals 100\n"); fclose(sf); }
         prob_send("safe_mode", 0);
-        BOOL ru = !strncmp(g_lang, "ru", 2);
-        MessageBoxW(NULL, ru ? L"Игра вылетела 3 раза подряд.\n\nX CLIENT откроет её в безопасном режиме: окно 1024x768 и лёгкая графика. Если всё будет нормально - в следующий раз вернётся обычный режим."
-                             : L"O‘yin ketma-ket 3 marta yiqildi.\n\nX CLIENT uni xavfsiz rejimda ochadi: 1024x768 oyna va yengil grafika. Hammasi joyida bo‘lsa - keyingi safar odatiy holga qaytadi.",
-                    L"X CLIENT", MB_ICONINFORMATION | MB_SETFOREGROUND);
+        ini_set_int(L"crs", 0); ini_set_int(L"safeu", 1);
+    } else if (ini_int(L"safeu") || !ini_int(L"safefx")) {
+        /* eski xavfsiz rejim (1.0.144 gacha) config.cfg ga yozib qoldirgan sozlamalarni qaytaramiz */
+        wchar_t sc[MAX_PATH]; path_join(sc, g_dir, L"cstrike\\xclient_safe.cfg");
+        FILE *sf = _wfopen(sc, L"wb");
+        if (sf) { fprintf(sf, "// X CLIENT: odatiy holat\ncl_minmodels 0\nr_dynamic 1\n"); fclose(sf); }
+        ini_set_int(L"safeu", 0); ini_set_int(L"safefx", 1); safe = 2;
     }
-    _snwprintf(cmd, 1024, L"\"%s\" -game cstrike%s%s -noforcemparms -noforcemaccel +exec xclient_launcher.cfg%s", exe, vid, o_stretch && !safe ? L" -stretchaspect" : L"", safe ? L" +exec xclient_safe.cfg" : L"");
+    _snwprintf(cmd, 1024, L"\"%s\" -game cstrike%s%s -noforcemparms -noforcemaccel +exec xclient_launcher.cfg%s", exe, vid, o_stretch ? L" -stretchaspect" : L"", safe ? L" +exec xclient_safe.cfg" : L"");
     STARTUPINFOW si = { sizeof(si) };
     PROCESS_INFORMATION pi;
     meta_save();
-    if (o_ok && !safe) compat_flags(exe, o_prio);
+    if (o_ok && safe != 1) compat_flags(exe, o_prio);
     BOOL again = FALSE;
     FILETIME ft0; GetSystemTimeAsFileTime(&ft0);
     InterlockedExchange(&g_game_seen, 0);
     if (o_tune) ram_offer();                            /* xotira kam bo'lsa - og'ir dasturlarni yopishni taklif qilish, bo'shatish */
     if (game_spawn(exe, cmd, &si, &pi)) {
         if (g_one) { CloseHandle(g_one); g_one = NULL; }   /* o'yin ochildi - endi yana bosilsa, yangi launcher uni topib oldinga chiqaradi */
-        if (o_prio && !safe) SetPriorityClass(pi.hProcess, ABOVE_NORMAL_PRIORITY_CLASS);   /* "O'yinni tezlashtirish": HIGH Windows ovoz xizmatini (audiodg) siqib, ovoz qotishi va chirsillashiga sabab bo'lardi */
+        if (o_prio && safe != 1) SetPriorityClass(pi.hProcess, ABOVE_NORMAL_PRIORITY_CLASS);   /* "O'yinni tezlashtirish": HIGH Windows ovoz xizmatini (audiodg) siqib, ovoz qotishi va chirsillashiga sabab bo'lardi */
         if (pi.hThread) CloseHandle(pi.hThread);
         /* guard_theme olib tashlandi: nDirect fayllarini qayta yozish har ochilishda yangilanishga sabab bo'lardi */
         /* O'yin yopilgach skrinshotlarni (F5) darhol galereyaga yuklaymiz - keyingi ishga tushishni kutmasdan.
@@ -2571,7 +2574,7 @@ static BOOL run_game(void)
         if (crashed) {
             int c = ini_int(L"crs") + 1; ini_set_int(L"crs", c);
             if (c >= 2) ini_set_int(L"autover", 1);   /* 7. ikkinchi yiqilishdan keyin - keyingi ochilishda X CLIENT fayllari tekshiriladi */
-        } else if (played > 120) ini_set_int(L"crs", 0);
+        } else ini_set_int(L"crs", 0);            /* yiqilmay yopildi - zanjir uziladi */
         if (crashed) {                               /* o'yin ichidagi yiqilish: Windows jurnalidan qaysi modulda yiqilganini olib, admin > Muammolar > Tafsilotlar ga */
             DWORD since = (DWORD)((t0 / 10000000ULL) - 11644473600ULL);
             g_cmod[0] = 0; Sleep(1500); crash_detail(g_probx, sizeof(g_probx), since);
