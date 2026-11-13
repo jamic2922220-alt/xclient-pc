@@ -1015,3 +1015,6 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .lanhost { display: flex; align-items: center; gap: 12px; padding: 10px 6px 12px; border-bottom: 1px solid #221a1f; margin-bottom: 4px; }
 .lanhost .btn { flex: none; margin: 0; }
 .lanhost span { font-size: 12px; color: #8f8590; line-height: 1.4; }
+
+/* ping o'lchanmagan (server bu kompyuter so'roviga javob bermadi, sayt orqali ishlayotgani ma'lum) */
+.pblk { display: inline-block; width: 16px; height: 16px; line-height: 16px; text-align: center; border-radius: 8px; font-size: 11px; color: #c9bfc6; background: #2a2026; cursor: help; }

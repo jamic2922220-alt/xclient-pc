@@ -1174,6 +1174,9 @@ function netCheck(ip, go) {
     var avg = 0; each(pings, function (p) { avg += p; }); avg = pings.length ? Math.round(avg / pings.length) : 0;
     var loss = Math.round(lost * 100 / 3);
     if (loss < 34 && avg < 180) return go();
+    /* sayt serverni ishlayapti deb ko'radi, faqat shu kompyuterning ping so'roviga javob yo'q (server so'rovlarni cheklaydi).
+     * O'yin ulanishi odatda ishlaydi ("Connection accepted") - qo'rqitadigan savol bermaymiz, kiraveramiz */
+    if (!pings.length && srv(ip).blk) { toast(T('nc_blk2'), 6000); return go(); }
     ask(T(pings.length ? 'nc_bad' : srv(ip).blk ? 'nc_blk' : 'nc_dead').replace('{p}', avg).replace('{l}', loss), go, false, false, true);
   }
   probe();
@@ -1817,7 +1820,7 @@ function renderServers() {
       c1row(s, (s.name || (h && h.name) || s.ip), s.pass ? '<span class="vb">PW</span>' : '') +
       '<span class="c2">' + (s.ok ? pbar(s) + s.pl + '/' + s.max : (s.fail ? '<span class="rd">' + T('offline') + '</span>' : '...')) + '</span>' +
       '<span class="c3">' + esc(s.map || (h && h.map) || '') + '</span>' +
-      '<span class="c4">' + (s.ok ? (s.blk ? '<i class="dot r"></i>\u2715' : '<i class="dot ' + pc + '"></i>' + s.ping) : '') + '</span>' +
+      '<span class="c4">' + (s.ok ? (s.blk ? '<span class="pblk" title="' + esc(T('blk_t')) + '">?</span>' : '<i class="dot ' + pc + '"></i>' + s.ping) : '') + '</span>' +
       '<span class="c5">' + c5 + '</span><span class="c6">' + c6 + '</span></div>';
     return html;
   }
@@ -1952,7 +1955,8 @@ function renderInfo2(box) {
     '<span>' + esc(mapn || '?') + '</span></div>' +
     '<h3>' + flagOf(srvSel) + esc(s.name || (h && h.name) || srvSel) + '</h3><div class="ip"><input class="ipin" readonly value="' + esc(srvSel) + '"><a class="cpy" data-copyip="' + esc(srvSel) + '">' + esc(T('ip_copy')) + '</a></div>' +
       pwInline(srvSel) +
-    '<div class="ln">' + esc(T('ph_players')) + ' <b>' + (s.ok ? s.pl + '/' + s.max : '-') + '</b><span class="r ' + pc + '">' + (s.ok ? '\u25cf ' + s.ping + ' ms' : esc(T('offline'))) + '</span></div>' +
+    '<div class="ln">' + esc(T('ph_players')) + ' <b>' + (s.ok ? s.pl + '/' + s.max : '-') + '</b><span class="r ' + (s.blk ? 'mut' : pc) + '">' + (s.ok ? (s.blk ? esc(T('blk_s')) : '\u25cf ' + s.ping + ' ms') : esc(T('offline'))) + '</span></div>' +
+    (s.ok && s.blk ? '<div class="mut" style="font-size:12px;margin:-4px 0 8px">' + esc(T('blk_t')) + '</div>' : '') +
     histBars(srvSel) +
     '<div class="ph">' + esc(T('ph_players')) + '</div><div class="pls">' + ph + '</div>' +
     (fr.length ? '<div class="fr3">' + esc(T('fr_here')) + '<span class="gr">' + esc(fr.join(', ')) + '</span></div>' : '') +
