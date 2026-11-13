@@ -35,4 +35,12 @@ function layoutProblems(p) {
     return out;
   });
 }
-module.exports = { page, layoutProblems, BASE };
+/* QR kodni ekrandan o'qish (telefon kamerasi kabi): element rasmi -> OpenCV QRCodeDetector */
+async function qrDecode(p, sel) {
+  const f = require('os').tmpdir() + '/xcqr_' + Date.now() + '.png';
+  const el = await p.$(sel); if (!el) return '';
+  await el.screenshot({ path: f });
+  try { return require('child_process').execFileSync('python3', ['-c', 'import cv2,sys\nim=cv2.imread(sys.argv[1]);im=cv2.copyMakeBorder(im,40,40,40,40,cv2.BORDER_CONSTANT,value=(255,255,255))\nprint(cv2.QRCodeDetector().detectAndDecode(im)[0])', f]).toString().trim(); }
+  catch (e) { return ''; }
+}
+module.exports = { page, layoutProblems, BASE, qrDecode };

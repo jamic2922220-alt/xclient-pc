@@ -1876,7 +1876,19 @@ static void vid_exec(const char *line)
 {
     char c[8] = "", n[24] = "", tk[40] = ""; int fa = 0, fb = 0;
     if (sscanf(line, "%7s %23s %d %d", c, n, &fa, &fb) < 1) return;
-    if (!strcmp(c, "share")) sscanf(line, "%*s %*s %39s", tk);
+    if (!strcmp(c, "share") || !strcmp(c, "utg")) sscanf(line, "%*s %*s %39s", tk);
+    /* menyudagi havolalar: o'yinchining brauzerida ochiladi. Faqat shu yerda yozilgan manzillar (menyu ixtiyoriy manzil ocha olmaydi) */
+    if (!strcmp(c, "usite") || !strcmp(c, "uapk") || !strcmp(c, "utg")) {
+        char u[160];
+        if (!strcmp(c, "usite")) lstrcpynA(u, "https://cssborka.uz/xclient/", sizeof(u));
+        else if (!strcmp(c, "uapk")) lstrcpynA(u, "https://github.com/jamic2922220-alt/cssborka.uz-mobile/releases/latest/download/CS16-boosttop.apk", sizeof(u));
+        else {
+            if (strlen(n) != 6 || strspn(n, "0123456789") != 6 || strlen(tk) < 5 || strspn(tk, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_") != strlen(tk)) return;
+            _snprintf(u, sizeof(u), "https://t.me/%s?start=%s", tk, n); u[sizeof(u) - 1] = 0;
+        }
+        game_minimize_for_shell(); ShellExecuteA(NULL, "open", u, NULL, NULL, SW_SHOWNORMAL);
+        return;
+    }
     if (!strcmp(c, "clip")) { if (g_buf_run) InterlockedExchange(&g_clip_req, 1); return; }
     if (!strcmp(c, "conn")) { game_on_connect(fa); return; }
     if (!strcmp(c, "lan")) { lan_scan(); return; }

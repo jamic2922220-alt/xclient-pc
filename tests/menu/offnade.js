@@ -1,5 +1,5 @@
 /* Granata mashqi (botsiz, F3 granatalar, F4 uchish, xarita joylari) va internetsiz oflayn menyu (offline.html) */
-const { page } = require('./lib');
+const { page, qrDecode } = require('./lib');
 const path = require('path'), fs = require('fs'), os = require('os');
 (async () => {
   const { b, p, errs } = await page({ db: { token: process.env.XC_TOKEN, device: 'testdev0001', fx: 1, lang: 'uz', dnd: 0, tour: 1, wnSeen: 'x', tgAsk: Date.now(), tgAskN: 3, bots: { m: 'nade', map: 'de_dust2', lan: 0 }, set: { name: 'testa', tag: '' } }, wait: 1500 });
@@ -38,8 +38,13 @@ const path = require('path'), fs = require('fs'), os = require('os');
   await p.evaluate(() => { document.querySelectorAll('[data-act="close"]').forEach(c => { if (c.offsetParent) c.click(); }); });
   ok(await p.evaluate(() => getComputedStyle(document.getElementById('mobCard')).display !== 'none'), 'bosh ekranda "Telefonda ham o\'yna" kartasi');
   await clk('#mobCard'); await p.waitForTimeout(800);
-  const mb = await p.evaluate(() => ({ t: document.getElementById('sideBody').textContent, qr: !!document.querySelector('#sideBody img.tgqr'), u: (document.querySelector('#sideBody .ipin') || {}).value || '' }));
-  ok(mb.qr && /CS16-boosttop\.apk/.test(mb.u) && /Android/.test(mb.t), 'telefon: QR va APK havolasi (' + mb.u + ')');
+  const mb = await p.evaluate(() => ({ t: document.getElementById('sideBody').textContent, qr: document.querySelectorAll('#sideBody .tgqr').length === 2, u: (document.querySelector('#sideBody .ipin') || {}).value || '' }));
+  const mq = await qrDecode(p, '#sideBody .qrc-apk .tgqr'), sq = await qrDecode(p, '#sideBody .qrc-site .tgqr');
+  ok(/CS16-boosttop\.apk$/.test(mq) && /Android/.test(mb.t), 'telefon: 1-QR (APK) skanerlanadi (' + mq + ')');
+  ok(sq === 'https://cssborka.uz/xclient/', '2-QR (cssborka.uz) skanerlanadi (' + sq + ')');
+  const vc = []; p.on('request', r => { const d = r.postData() || ''; if (/a=vcmd/.test(d)) vc.push(decodeURIComponent(d)); });
+  await clk('#sideBody .qrc-site .qrl'); await p.waitForTimeout(500); await clk('#sideBody .qrc-apk .qrb'); await p.waitForTimeout(500);
+  ok(vc.some(x => /c=usite/.test(x)) && vc.some(x => /c=uapk/.test(x)), 'pastdagi havola va tugma saytni brauzerda ochadi (usite, uapk)');
   await p.screenshot({ path: '/tmp/claude-0/-home-user/c174bc30-11c3-5deb-b9e4-d277fe0ca5fd/scratchpad/mobapp.png' });
   /* oflayn menyu: kompyuterdagi fayl, LAN ro'yxati lan.js dan */
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xcoff'));

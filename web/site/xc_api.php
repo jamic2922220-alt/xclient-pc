@@ -2135,8 +2135,13 @@ case 'vcmd':
     lock();
     $o = rd('dev/' . $d, array());
     if (!dev_ok($d, $o)) fail('nolaunch', 'XCLauncher.exe topilmadi');
-    $c = p('c'); $n = in_array($c, array('sopen', 'sdel'), true) ? shot_name(p('n')) : vid_name(p('n'));   // sopen/sdel/sfold - F11 skrinshotlar
-    if (!in_array($c, array('open', 'del', 'folder', 'trim', 'clip', 'opt', 'edit', 'share', 'conn', 'lan', 'fw', 'sopen', 'sdel', 'sfold'), true) || (in_array($c, array('open', 'del', 'trim', 'edit', 'share', 'sopen', 'sdel'), true) && $n === '')) fail('bad', 'bad');
+    $c = p('c'); $n = in_array($c, array('sopen', 'sdel'), true) ? shot_name(p('n')) : vid_name(p('n'));
+    /* saytni o'yinchining brauzerida ochish (launcher faqat o'zida yozilgan manzillarni ochadi): usite - cssborka.uz, uapk - telefon ilovasi,
+     * utg - Telegram bot (kod + bot nomi) */
+    $ux = '';
+    if ($c === 'utg') { $cf = xc_cfg(); $bn = isset($cf['tg_bot']) ? preg_replace('/[^A-Za-z0-9_]/', '', $cf['tg_bot']) : '';
+        if (!preg_match('/^\d{6}$/', p('n')) || strlen($bn) < 5) fail('bad', 'bad'); $n = p('n'); $ux = ' ' . substr($bn, 0, 32); }   // sopen/sdel/sfold - F11 skrinshotlar
+    if (!in_array($c, array('open', 'del', 'folder', 'trim', 'clip', 'opt', 'edit', 'share', 'conn', 'lan', 'fw', 'sopen', 'sdel', 'sfold', 'usite', 'uapk', 'utg'), true) || (in_array($c, array('open', 'del', 'trim', 'edit', 'share', 'sopen', 'sdel'), true) && $n === '')) fail('bad', 'bad');
     $tk = '';
     if ($c === 'share') {                                 // ulashish: faqat akkaunt bilan, kuniga 10 ta
         unlock(); $su = auth(); lock(); $o = rd('dev/' . $d, array());
@@ -2155,7 +2160,7 @@ case 'vcmd':
     if ($c === 'clip' && rl_count('vclip' . $d, 60) >= 3) out(array('ok' => true));   // avtomatik klip - daqiqasiga 3 tadan ko'p emas
     if ($c === 'clip') rl_add('vclip' . $d, 60);
     $q = isset($o['vc']) && is_array($o['vc']) ? $o['vc'] : array();
-    $q[] = $c . ' ' . ($n !== '' ? $n : '-') . ($c === 'trim' ? ' ' . $ta . ' ' . $tb : '') . ($c === 'conn' ? ' ' . min(3, $ta) : '') . ($c === 'share' ? ' ' . $tk : '');
+    $q[] = $c . ' ' . ($n !== '' ? $n : '-') . ($c === 'trim' ? ' ' . $ta . ' ' . $tb : '') . ($c === 'conn' ? ' ' . min(3, $ta) : '') . ($c === 'share' ? ' ' . $tk : '') . $ux;
     $o['vc'] = array_slice($q, -5);
     if ($c === 'del' && isset($o['vids'])) $o['vids'] = array_values(array_filter($o['vids'], function ($x) use ($n) { return isset($x['n']) && $x['n'] !== $n; }));
     f11_fix($o);

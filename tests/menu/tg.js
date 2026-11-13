@@ -1,5 +1,5 @@
 /* Telegram ulash: kirgandan keyin taklif (QR + kod), QR - t.me/bot?start=KOD, ulanish o'zi aniqlanadi (tg_st) */
-const { page } = require('./lib');
+const { page, qrDecode } = require('./lib');
 (async () => {
   const { b, p, errs } = await page({ db: { token: process.env.XC_TOKEN, device: 'testdev0001', fx: 1, lang: 'uz', dnd: 0, tour: 1, wnSeen: 'x' }, wait: 1500 });
   const res = []; const ok = (c, m) => res.push((c ? 'ok  ' : 'XATO') + ' ' + m);
@@ -10,10 +10,15 @@ const { page } = require('./lib');
     if (/^a=daily&/.test(d)) return r.fulfill({ contentType: 'application/json', body: '{"ok":true,"got":0}' });
     return r.continue(); });
   await p.reload(); await p.waitForTimeout(19000);   // kirgandan ~16 s keyin taklif
-  const side = await p.evaluate(() => ({ on: document.getElementById('mdSide').className, t: (document.getElementById('sideBody') || {}).textContent || '', qr: (document.querySelector('#sideBody img.tgqr') || {}).src || '' }));
+  const side = await p.evaluate(() => ({ on: document.getElementById('mdSide').className, t: (document.getElementById('sideBody') || {}).textContent || '', qr: document.querySelectorAll('#sideBody .tgqr .qrr').length }));
   ok(/on/.test(side.on) && /Telegram'ni ulang/.test(side.t), 'kirgandan keyin Telegram ulash taklifi o\'zi chiqdi');
-  ok(/^data:image\/gif;base64,/.test(side.qr), 'QR kod rasmi bor');
+  const qtxt = await qrDecode(p, '#sideBody .tgqr');
+  ok(side.qr > 20 && qtxt === 'https://t.me/xclient_bot?start=123456', 'QR kod skanerlanadi (' + qtxt + ')');
   ok(/123456/.test(side.t) && /sandiq/.test(side.t), 'kod va sovg\'a (sandiq) yozilgan');
+  await p.screenshot({ path: '/tmp/claude-0/-home-user/c174bc30-11c3-5deb-b9e4-d277fe0ca5fd/scratchpad/tgwin.png' });
+  const vc = []; p.on('request', r => { const d = r.postData() || ''; if (/a=vcmd/.test(d)) vc.push(decodeURIComponent(d)); });
+  await p.evaluate(() => { const e = document.querySelector('#sideBody .qrl'); if (e) e.click(); }); await p.waitForTimeout(600);
+  ok(vc.some(x => /c=utg/.test(x) && /n=123456/.test(x)), 'pastdagi havola Telegram botni brauzerda ochadi (utg)');
   await p.waitForTimeout(9500);
   const done = await p.evaluate(() => (document.getElementById('tgSt') || {}).className + ' | ' + (document.getElementById('tgSt') || {}).textContent);
   ok(/ok/.test(done) && /ulandi/i.test(done), 'QR skanerlangach "Ulandi" o\'zi chiqadi (' + done + ')');

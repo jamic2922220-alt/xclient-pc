@@ -3616,21 +3616,49 @@ function aimtEnd() {
   cmd('say "' + T('at_res').replace('{k}', k).replace('{h}', hp) + (rec ? ' ' + T('at_rec') : '') + '"');
   if (ME) api('aim_set', { k: k, h: h }, function (r) { if (r.ok) AIM_TOP = r.top || AIM_TOP; });
 }
+/* QR kodni HTML bilan chizish: o'yin brauzeri data: rasmlarni ko'rsatmaydi (QR "x" bo'lib chiqardi).
+ * Har qator - bir xil rangdagi bo'laklar ketma-ketligi (kam element, eski CEF da ham tez) */
+function qrHtml(q, px) {
+  var n = q.getModuleCount(), c = Math.max(2, Math.floor(px / (n + 4))), h = '<div class="tgqr" style="padding:' + (c * 2) + 'px;width:' + (n * c) + 'px">';
+  for (var r = 0; r < n; r++) {
+    h += '<div class="qrr" style="height:' + c + 'px">';
+    for (var x = 0; x < n; ) { var d = q.isDark(r, x), k = x; while (k < n && q.isDark(r, k) === d) k++; h += '<span style="width:' + ((k - x) * c) + 'px' + (d ? ';background:#000' : '') + '"></span>'; x = k; }
+    h += '</div>';
+  }
+  return h + '</div>';
+}
 /* telefon ilovasi (Android, Xash3D asosida): havola mobile.json dan (yangi build chiqsa o'zi yangilanadi), telefon kamerasi bilan QR */
 function mobApp() {
   CLK.mobapp = (CLK.mobapp || 0) + 1; CLK_N++;
-  var show = function (url) {
-    var qr = ''; try { var q = QRGEN(0, 'M'); q.addData(url); q.make(); qr = '<img class="tgqr" src="' + q.createDataURL(4, 2) + '" alt="QR">'; } catch (e) {}
-    openSide('mobapp', T('mb_t'), '<div class="tgl2"><p class="tgint">' + esc(T('mb_intro')) + '</p><div class="tgw">' + (qr ? '<div class="tgq">' + qr + '<small>' + esc(T('tg_scan')) + '</small></div>' : '') +
-      '<div class="tgi"><ol><li>' + esc(T('mb_s1')) + '</li><li>' + esc(T('mb_s2')) + '</li><li>' + esc(T('mb_s3')) + '</li></ol></div></div>' +
-      '<div class="avurl"><input class="ipin" readonly value="' + esc(url) + '"><a class="cpy" data-copyip="' + esc(url) + '">' + esc(T('ip_copy')) + '</a></div>' +
-      '<div class="mut" style="font-size:12px;margin-top:8px">' + esc(T('mb_note')) + '</div></div>');
+  var site = 'https://cssborka.uz/xclient/';
+  var show = function (apk) {
+    openSide('mobapp', T('mb_t'), '<div class="qrw"><p class="qri">' + esc(T('mb_intro')) + '</p><div class="qrcards">' +
+      qrCard('apk', T('mb_c1'), apk, T('mb_c1s'), T('mb_b1'), 'data-act="uapk"') +
+      qrCard('site', T('mb_c2'), site, 'cssborka.uz/xclient', T('mb_b2'), 'data-act="usite"') + '</div>' +
+      '<ol class="qrsteps"><li>' + esc(T('mb_s1')) + '</li><li>' + esc(T('mb_s2')) + '</li><li>' + esc(T('mb_s3')) + '</li></ol>' +
+      '<p class="qrnote">' + esc(T('mb_note')) + '</p></div>');
+    chime();
   };
   var x = new XMLHttpRequest(), done = false, fb = 'https://github.com/jamic2922220-alt/cssborka.uz-mobile/releases/latest/download/CS16-boosttop.apk';
   var tm = setTimeout(function () { if (!done) { done = true; show(fb); } }, 4000);
   x.onreadystatechange = function () { if (x.readyState !== 4 || done) return; done = true; clearTimeout(tm); var u = fb; try { var j = JSON.parse(x.responseText); if (/^https:\/\//.test(j.apk_url || '')) u = j.apk_url; } catch (e) {} show(u); };
   try { x.open('GET', 'mobile.json?t=' + now(), true); x.send(null); } catch (e) { done = true; clearTimeout(tm); show(fb); }
 }
+/* QR karta: sarlavha, QR (telefon kamerasi bilan), katta tugma va pastda bosiladigan havola - ikkalasi ham saytni o'yinchining brauzerida ochadi */
+function qrCard(id, title, url, label, btn, attr) {
+  var qr = ''; try { var q = QRGEN(0, 'M'); q.addData(url); q.make(); qr = qrHtml(q, id === 'tg' ? 160 : 190); } catch (e) {}
+  return '<div class="qrc qrc-' + id + '"><div class="qrt">' + esc(title) + '</div><div class="qrbox">' + qr + '</div><small class="qrs">' + esc(T('tg_scan')) + '</small>' +
+    '<a class="btn red qrb" ' + attr + '>' + esc(btn) + ' &#8599;</a><a class="qrl" ' + attr + '>' + esc(label) + '</a></div>';
+}
+/* havolani o'yinchining brauzerida ochish: launcher (faqat o'zida yozilgan manzillar). Launchersiz - manzilni ko'rsatamiz */
+function openLink(kind, code) {
+  CLK['ln_' + kind] = (CLK['ln_' + kind] || 0) + 1; CLK_N++;
+  var shown = { usite: 'cssborka.uz/xclient', uapk: 'cssborka.uz/xclient', utg: 'Telegram' }[kind] || '';
+  if (!PCID) return toast(T('ln_nol').replace('{u}', shown), 7000);
+  vidCmd(kind, code || '', null, true); toast(T('ln_open'), 5000);
+}
+/* yoqimli "ding" (o'yin ovozi orqali): QR oynalari ochilganda */
+function chime() { if (S && S.uisnd !== 0 && hasApi()) cmd('play xclient/chime.wav'); }
 function nadeTips(mp) {
   var t = T('nd_' + mp), h = '<div class="ph2 m">' + esc(T('nd_keys')) + '</div><div class="ndk"><b>F3</b> ' + esc(T('nd_f3')) + ' &nbsp; <b>F4</b> ' + esc(T('nd_f4')) + '</div>';
   if (t && t !== 'nd_' + mp) { h += '<div class="ph2 m">' + esc(T('nd_spots')) + '</div><ol class="ndl">'; each(t.split('|'), function (x) { h += '<li>' + esc(x) + '</li>'; }); h += '</ol>'; }
@@ -3706,17 +3734,15 @@ function botsApply() {
 function tgOpen(intro) {
   api('tg_code', {}, function (r) {
     if (!r.ok) return toast(r.msg || 'Xato', 5000);
-    var qr = '';
-    if (r.link && typeof QRGEN === 'function') { try { var q = QRGEN(0, 'M'); q.addData(r.link); q.make(); qr = '<img class="tgqr" src="' + q.createDataURL(5, 2) + '" alt="QR">'; } catch (e) {} }
-    var h = '<div class="tgl2">' + (intro ? '<p class="tgint">' + esc(T('tg_intro')) + '</p>' : '') +
-      (r.gift ? '<div class="tggift">' + ico('gift') + ' ' + esc(T('tg_gift')) + '</div>' : '') +
-      '<div class="tgw">' + (qr ? '<div class="tgq">' + qr + '<small>' + esc(T('tg_scan')) + '</small></div>' : '') +
-      '<div class="tgi"><ol><li>' + esc(T('tg_s1')) + '</li><li>' + esc(T('tg_s2')) + '</li><li>' + esc(T('tg_s3')) + '</li></ol>' +
-      '<p class="mut" style="font-size:12px">' + esc(T('tg_or').replace('{b}', r.bot ? '@' + r.bot : 'bot')) + '</p><div class="tgcode">' + esc(r.code) + '</div>' +
-      '<div class="tgst' + (r.linked ? ' ok' : '') + '" id="tgSt">' + esc(T(r.linked ? 'tg_on' : 'tg_wait')) + '</div></div></div>' +
-      '<p class="mut" style="font-size:12px">' + esc(T('tg_ben')) + '</p>' +
+    var h = '<div class="qrw">' + (intro ? '<p class="qri">' + esc(T('tg_intro')) + '</p>' : '') +
+      (r.gift ? '<div class="qrgift">' + ico('gift') + ' ' + esc(T('tg_gift')) + '</div>' : '') +
+      '<div class="qrcards one">' + (r.link ? qrCard('tg', T('tg_card'), r.link, 't.me/' + (r.bot || ''), T('tg_btn'), 'data-utg="' + esc(r.code) + '"') : '') + '</div>' +
+      '<ol class="qrsteps"><li>' + esc(T('tg_s1')) + '</li><li>' + esc(T('tg_s2')) + '</li><li>' + esc(T('tg_s3')) + '</li></ol>' +
+      '<div class="qrcode2"><span>' + esc(T('tg_or').replace('{b}', r.bot ? '@' + r.bot : 'bot')) + '</span><b>' + esc(r.code) + '</b></div>' +
+      '<div class="tgst' + (r.linked ? ' ok' : '') + '" id="tgSt">' + esc(T(r.linked ? 'tg_on' : 'tg_wait')) + '</div>' +
+      '<p class="qrnote">' + esc(T('tg_ben')) + '</p>' +
       (r.linked ? '<a class="btn" data-act="tgunlink">' + esc(T('tg_unlink')) + '</a>' : '') + '</div>';
-    openSide('tg', 'Telegram', h);
+    openSide('tg', 'Telegram', h); chime();
     if (!r.linked) tgPoll(0);
   });
 }
@@ -3822,6 +3848,7 @@ function act(a) {
   if (a === 'trskip') return tourEnd();
   if (a === 'trreg') { tourEnd(); lgReg = true; return openLogin(); }
   if (a === 'acctx') { DB.acx = 1; persist(); statePush(); renderAll(); return toast(T('ac_x'), 5000); }   // akkaunt kartasi bir marta yopiladi
+  if (a === 'usite' || a === 'uapk') return openLink(a);
   if (a === 'mobx') { DB.mobx = now(); persist(); renderAll(); return; }
   if (a === 'mobapp') return mobApp();
   if (a === 'promox') { DB.pxx = now(); persist(); statePush(); renderAll(); return; }
@@ -4271,6 +4298,7 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-copyip'))) { copyIp(el.getAttribute('data-copyip'), el.parentNode.querySelector('input')); return; }
   if ((el = closest(t, 'data-ovf'))) { OPTS = OPTS || {}; OPTS.vf = el.getAttribute('data-ovf'); saveOpts(T('vf_ok')); showSetTab('demo'); return; }
   if ((el = closest(t, 'data-ovq'))) { OPTS = OPTS || {}; OPTS.vq = el.getAttribute('data-ovq'); OPTS.vqx = 1; saveOpts(T('vq_ok')); showSetTab('demo'); return; }
+  if ((el = closest(t, 'data-utg'))) { openLink('utg', el.getAttribute('data-utg')); return; }
   if ((el = closest(t, 'data-vopen'))) { vidCmd('open', el.getAttribute('data-vopen')); return; }
   if ((el = closest(t, 'data-vdel'))) { var vn = el.getAttribute('data-vdel'); ask(T('vd_delq'), function () { vidCmd('del', vn); }, false, false, true); return; }
   if ((el = closest(t, 'data-vfold'))) { vidCmd('folder', ''); return; }

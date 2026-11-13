@@ -1024,7 +1024,10 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .tggift { display: inline-block; margin: 0 0 12px; padding: 6px 12px; border: 1px solid #f5c518; color: #f5c518; font-size: 14px; }
 .tgw { overflow: hidden; margin: 6px 0 10px; }
 .tgq { float: left; width: 210px; margin-right: 18px; text-align: center; }
-.tgq img.tgqr { display: block; width: 200px; height: 200px; margin: 0 auto 6px; background: #fff; padding: 4px; image-rendering: pixelated; }
+.tgq .tgqr { margin: 0 auto 6px; background: #fff; }
+.tgqr .qrr { font-size: 0; line-height: 0; white-space: nowrap; overflow: hidden; }
+.tgqr .qrr span { display: inline-block; height: 100%; margin: 0; padding: 0; border: 0; vertical-align: top; }
+.tgqr, .tgqr .qrr { -webkit-box-sizing: content-box; box-sizing: content-box; }
 .tgq small { color: #8f8590; font-size: 11px; }
 .tgi { overflow: hidden; }
 .tgi ol { margin: 0 0 10px 18px; padding: 0; color: #e8e0e6; font-size: 14px; line-height: 1.7; }
@@ -1053,3 +1056,31 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .mobcard .mobt { margin-left: 42px; }
 .mobcard .mobt b { display: block; color: #fff; font-size: 14px; }
 .mobcard .mobt small { display: block; color: #a99fa6; font-size: 12px; margin-top: 2px; }
+/* ---- QR oynalari (Telegram, telefon ilovasi): QR o'rtada, oq ramka, katta tugma va pastda bosiladigan havola ---- */
+.qrw { text-align: center; }
+.qri { margin: 0 30px 10px; font-size: 15px; line-height: 1.5; color: #fff; }
+.qrgift { display: inline-block; margin: 0 0 10px; padding: 5px 14px; border: 1px solid #f5c518; color: #f5c518; font-size: 14px; -webkit-border-radius: 3px; }
+.qrcards { margin: 0 auto 10px; white-space: nowrap; font-size: 0; }
+.qrc { display: inline-block; vertical-align: top; width: 300px; margin: 0 10px; padding: 10px 0 10px; background: #1b161d; border: 1px solid #2f2530; -webkit-border-radius: 6px; white-space: normal; font-size: 14px;
+  -webkit-animation: qrpop .45s ease-out both; }
+.qrc + .qrc { -webkit-animation-delay: .08s; }
+.qrcards.one .qrc { width: 340px; }
+.qrt { font-size: 15px; font-weight: bold; color: #fff; margin-bottom: 8px; }
+.qrbox { display: inline-block; padding: 8px; background: #fff; -webkit-border-radius: 6px; -webkit-box-shadow: 0 6px 24px rgba(0,0,0,.45); }
+.qrbox .tgqr { margin: 0; }
+.qrs { display: block; margin: 5px 0 8px; color: #8f8590; font-size: 11px; }
+.qrb { display: block; margin: 0 22px; height: 38px; line-height: 38px; font-size: 14px; }
+.qrl { display: block; margin-top: 8px; font-size: 12px; color: #6fb6ff; text-decoration: underline; cursor: pointer; }
+.qrl:hover { color: #a7d3ff; }
+.qrsteps { display: inline-block; text-align: left; margin: 2px 0 4px; padding-left: 20px; color: #e8e0e6; font-size: 13px; line-height: 1.55; }
+.qrcode2 { margin: 2px 0 6px; font-size: 12px; color: #a99fa6; }
+.qrcode2 b { margin-left: 8px; font-size: 22px; letter-spacing: 5px; color: #fff; vertical-align: middle; }
+.qrnote { margin: 6px 30px 0; font-size: 12px; color: #8f8590; }
+.qrw .tgst { margin: 2px auto 0; display: inline-block; padding: 6px 12px; }
+.qrcards.one { margin-bottom: 6px; }
+.qrcards.one .qrb { display: inline-block; padding: 0 26px; margin: 0; }
+@-webkit-keyframes qrpop { from { opacity: 0; -webkit-transform: translateY(14px) scale(.96); } to { opacity: 1; -webkit-transform: none; } }
+/* hamma oynalar yumshoq ochiladi (kuchsiz kompyuterda / o'yin ichida - animatsiyasiz) */
+.modal.on .win { -webkit-animation: winpop .22s ease-out; }
+@-webkit-keyframes winpop { from { opacity: 0; -webkit-transform: translateY(10px) scale(.97); } to { opacity: 1; -webkit-transform: none; } }
+.lowfx .modal.on .win, .lowfx .qrc { -webkit-animation: none; }
