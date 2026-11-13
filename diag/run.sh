@@ -10,4 +10,5 @@ echo "--- srv:" >> $O/summary.txt; cat $O/srv.txt >> $O/summary.txt
 # fayl manzili haqiqatan ochiladimi (Chrome/Edge headless): file:/// URL dan sahifa matni
 U=$(cat "$G/platform/mmb_home_page.html")
 E="/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"; [ -f "$E" ] || E="/c/Program Files/Google/Chrome/Application/chrome.exe"
-"$E" --headless --disable-gpu --dump-dom "$U" > $O/dom.txt 2>/dev/null; echo "--- dom:" >> $O/summary.txt; head -c 200 $O/dom.txt >> $O/summary.txt
+"$E" --headless --disable-gpu --dump-dom "$U" > $O/dom.txt 2>/dev/null; echo "--- dom:" >> $O/summary.txt; grep -oE "off</html>|<body>off|ERR_[A-Z_]+" $O/dom.txt | head -3 >> $O/summary.txt; wc -c < $O/dom.txt >> $O/summary.txt
+# r2
