@@ -1040,3 +1040,8 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .gslite { display: block; margin: 10px 0; padding: 10px 12px; border: 1px solid rgba(255, 59, 59, .55); background: rgba(255, 59, 59, .08); cursor: pointer; }
 .gslite b { color: #fff; }
 .gslite span { display: block; font-size: 12px; color: #cfc4ca; margin-top: 3px; }
+/* granata mashqi */
+.ndk { font-size: 13px; color: #cfc4ca; margin-bottom: 4px; }
+.ndk b { display: inline-block; min-width: 26px; padding: 1px 5px; margin-right: 4px; border: 1px solid #4a3a43; text-align: center; color: #fff; }
+.ndl { margin: 0 0 4px 18px; padding: 0; font-size: 12px; line-height: 1.5; color: #cfc4ca; }
+.ndl li { margin-bottom: 4px; }

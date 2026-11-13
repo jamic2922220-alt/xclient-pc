@@ -364,7 +364,8 @@ static void crash_prune(void)
 /* ---- O'yin paytidagi yuklama (lag sababini aniqlash uchun): har 5 soniyada o'yin protsessorni qancha band qilyapti.
  * CS 1.6 bitta yadroda ishlaydi: o'yin bitta yadroning ~90%+ ini olsa - FPS kompyuter kuchiga tiralgan (FPS lag).
  * Kam olsa-yu lag bo'lsa - sabab internet (ping/yo'qotish, buni menyu o'lchaydi). Yakunda saytga: ?a=perfl ---- */
-typedef struct { HANDLE h; DWORD cores; int n, n90, trims; double gsum, ssum; DWORD ramMin; } PerfSt;
+typedef struct { HANDLE h; DWORD cores; int n, n90, trims; double gsum, ssum; DWORD ramMin, gmem; } PerfSt;   /* gmem - o'yin jarayoni xotirasi (eng yuqori, MB) */
+static DWORD g_gmem = 0;   /* oxirgi o'yinning eng yuqori xotirasi - yiqilish hisobotiga */
 static PerfSt g_perf; static HANDLE g_perf_th = NULL; static const wchar_t *g_perf_dump = NULL;   /* test: natija faylga */
 static DWORD WINAPI perf_thread(LPVOID unused)
 {
@@ -383,6 +384,8 @@ static DWORD WINAPI perf_thread(LPVOID unused)
             if (GlobalMemoryStatusEx(&ms)) { DWORD av = (DWORD)(ms.ullAvailPhys >> 20); if (!g_perf.ramMin || av < g_perf.ramMin) g_perf.ramMin = av;
                 static DWORD trimT = 0; if (o_tune && av < 300 && GetTickCount() - trimT > 120000) { trimT = GetTickCount(); ram_trim(GetProcessId(g_perf.h)); g_perf.trims++; } }   /* xotira tugayapti - boshqalarnikini bo'shatamiz */
         }
+        { PROCESS_MEMORY_COUNTERS pm; ZeroMemory(&pm, sizeof(pm)); pm.cb = sizeof(pm);   /* cstrike.exe 32-bitli: ~2 GB dan oshsa yiqiladi - uzoq o'yindagi yiqilishlar shundanmi */
+          if (p_pmi && p_pmi(g_perf.h, &pm, sizeof(pm))) { DWORD mb = (DWORD)(pm.PagefileUsage >> 20); if (mb > g_perf.gmem) g_perf.gmem = mb; } }
         if (warm > 0) warm--;
         pg = g; pw = w; ps_i = sI; ps_t = sT;
     }
@@ -392,7 +395,9 @@ static void perf_begin(HANDLE proc)
 {
     ZeroMemory(&g_perf, sizeof(g_perf));
     SYSTEM_INFO s; GetSystemInfo(&s); g_perf.cores = s.dwNumberOfProcessors;
-    if (!DuplicateHandle(GetCurrentProcess(), proc, GetCurrentProcess(), &g_perf.h, SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, 0)) { g_perf.h = NULL; return; }
+    ram_api(); g_gmem = 0;
+    if (!DuplicateHandle(GetCurrentProcess(), proc, GetCurrentProcess(), &g_perf.h, SYNCHRONIZE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, 0)
+        && !DuplicateHandle(GetCurrentProcess(), proc, GetCurrentProcess(), &g_perf.h, SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, 0)) { g_perf.h = NULL; return; }
     g_perf_th = CreateThread(NULL, 0, perf_thread, NULL, 0, NULL);
     if (g_perf_th) SetThreadPriority(g_perf_th, THREAD_PRIORITY_BELOW_NORMAL);
 }
@@ -400,13 +405,14 @@ static void perf_end(DWORD played)
 {
     if (g_perf_th) { WaitForSingleObject(g_perf_th, 8000); CloseHandle(g_perf_th); g_perf_th = NULL; }
     if (g_perf.h) { CloseHandle(g_perf.h); g_perf.h = NULL; }
+    g_gmem = g_perf.gmem;
     if (g_perf.n < 6 || played < 120) return;              /* 2 daqiqadan kam - ma'lumot yetarli emas */
     char url[300];
     if (g_perf_dump) { char t[200]; _snprintf(t, sizeof(t), "gc=%d g90=%d sc=%d ram=%lu cores=%lu n=%d", (int)(g_perf.gsum * 100 / g_perf.n), g_perf.n90 * 100 / g_perf.n, (int)(g_perf.ssum * 100 / g_perf.n), (unsigned long)g_perf.ramMin, (unsigned long)g_perf.cores, g_perf.n); t[199] = 0;
         HANDLE f = CreateFileW(g_perf_dump, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL); if (f != INVALID_HANDLE_VALUE) { DWORD w; WriteFile(f, t, (DWORD)strlen(t), &w, NULL); CloseHandle(f); } return; }
-    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=perfl&d=%s&gc=%d&g90=%d&sc=%d&ram=%lu&cores=%lu&n=%d&t=%lu&tr=%d", g_id,
+    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=perfl&d=%s&gc=%d&g90=%d&sc=%d&ram=%lu&cores=%lu&n=%d&t=%lu&tr=%d&gm=%lu", g_id,
               (int)(g_perf.gsum * 100 / g_perf.n), g_perf.n90 * 100 / g_perf.n, (int)(g_perf.ssum * 100 / g_perf.n),
-              (unsigned long)g_perf.ramMin, (unsigned long)g_perf.cores, g_perf.n, (unsigned long)played, g_perf.trims);
+              (unsigned long)g_perf.ramMin, (unsigned long)g_perf.cores, g_perf.n, (unsigned long)played, g_perf.trims, (unsigned long)g_perf.gmem);
     url[sizeof(url) - 1] = 0;
     free(http_get(url, NULL));
 }

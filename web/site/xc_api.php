@@ -711,7 +711,7 @@ if ($a === 'perfl') {
     $d = strtolower(p('d'));
     if (!preg_match('/^[a-z0-9]{8,40}$/', $d) || !is_file(XC_DIR . '/dev/' . $d . '.php') || rl_count('perfl' . $d, 3600) >= 20) exit;
     rl_add('perfl' . $d, 3600);
-    $e = array('t' => time(), 's' => 'l', 'd' => $d, 'gc' => max(0, min(400, (int)p('gc'))), 'g90' => max(0, min(100, (int)p('g90'))), 'sc' => max(0, min(100, (int)p('sc'))),
+    $e = array('t' => time(), 's' => 'l', 'd' => $d, 'gc' => max(0, min(400, (int)p('gc'))), 'g90' => max(0, min(100, (int)p('g90'))), 'sc' => max(0, min(100, (int)p('sc'))), 'gm' => max(0, min(9999, (int)p('gm'))),
         'ram' => max(0, min(1000000, (int)p('ram'))), 'cores' => max(0, min(256, (int)p('cores'))), 'dur' => max(0, min(86400 * 2, (int)p('t'))), 'tr' => max(0, min(9999, (int)p('tr'))));   // tr - o'yin paytida xotira necha marta bo'shatildi
     perf_add($e);
     lock(); $o = rd('dev/' . $d, array());
@@ -911,6 +911,14 @@ case 'probrep':                                         // faqat o'qish: Muammol
     $dl = array(); for ($i = 0; $i < 30; $i++) { $k = date('Y-m-d', strtotime("-$i day")); $x = rd('daily/' . $k, array()); $dl[$k] = array();
         foreach (array('d', 'n', 'm', 'mn') as $t) $dl[$k][$t] = isset($x[$t]) ? count($x[$t]) : 0; }
     $act['funnel'] = funnel_cohorts(14);
+    /* yangi kompyuterlar (14 kun): qaysi bosqichda to'xtagan - "bir marta ochib ketganlar" sababini topish uchun */
+    $nd = array(); foreach ((array)glob(XC_DIR . '/dev/*.php') as $f) { $o = json_decode(substr((string)@file_get_contents($f), strlen(XC_GUARD)), true);
+        if (!$o || empty($o['first']) || $now - (int)$o['first'] > 14 * 86400) continue;
+        $nd[] = array('d' => substr(basename($f, '.php'), 0, 10), 'first' => (int)$o['first'], 'seen' => isset($o['seen']) ? (int)$o['seen'] : 0, 'runs' => isset($o['runs']) ? (int)$o['runs'] : 0,
+            'v' => isset($o['ver']) ? $o['ver'] : '', 'fn' => isset($o['fn']) ? array_keys((array)$o['fn']) : array(), 'os' => isset($o['os']) ? $o['os'] : '', 'hw' => isset($o['hw']) ? $o['hw'] : null,
+            'cc' => isset($o['cc']) ? $o['cc'] : '', 'ch' => isset($o['ch']) ? $o['ch'] : '', 'pt' => isset($o['pt']) ? $o['pt'] : '', 'il' => isset($o['ilang']) ? $o['ilang'] : ''); }
+    usort($nd, function ($a, $b) { return $b['first'] - $a['first']; });
+    $act['newdev'] = array_slice($nd, 0, 120);
     $us = array(); $wkn = week_id();   // akkauntlar: o'yin statistikasi yig'ilyaptimi (kill, o'yin soni, oxirgi o'yin)
     foreach ((array)glob(XC_DIR . '/users/*.php') as $f) { $x = rd('users/' . basename($f, '.php'), null); if (!$x) continue;
         $st0 = isset($x['st']) && is_array($x['st']) ? $x['st'] : array(); $ls = 0;
@@ -1958,7 +1966,7 @@ case 'report':                                           // "Xatolik haqida xaba
 /* ---------- Voronka (admin > Voronka): launcher birinchi ochilish bosqichlarini bir martadan yuboradi ---------- */
 case 'fn':
     $d = (string)p('d'); $st = (string)p('s');
-    if (!preg_match('/^[a-z0-9]{8,40}$/', $d) || !in_array($st, array('inst', 'game', 'p10'), true)) out(array('ok' => true));
+    if (!preg_match('/^[a-z0-9]{8,40}$/', $d) || !in_array($st, array('inst', 'game', 'p10', 'upd', 'dl', 'dlh'), true)) out(array('ok' => true));
     if (rl_count('fn' . client_ip(), 3600) >= 30) out(array('ok' => true));
     rl_add('fn' . client_ip(), 3600);
     lock(); $o = rd('dev/' . $d, null);

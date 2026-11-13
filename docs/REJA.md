@@ -16,8 +16,11 @@ Qilindi (2026-11-12, menyu 10205200):
 - Allaqachon bor edi: kunlik vazifalar, mikrofon sinovi (voice_loopback) va mikrofonni tuzatish, pritsel galereyasi, FPS/net_graph tugmalari.
 
 Keyingi (egasi tanladi, 2026-11-13):
-- **Granata mashqi** (botlar bilan mashq bo'limida): cheksiz pul va sotib olish vaqti, botlarsiz yoki otmaydigan botlar,
+- ✅ **Granata mashqi** (10205700: botsiz, F3 granatalar, F4 noclip, 4 xarita uchun joylar) (botlar bilan mashq bo'limida): cheksiz pul va sotib olish vaqti, botlarsiz yoki otmaydigan botlar,
   granatalarni qayta-qayta otish; ixtiyoriy - xaritani o'rganish (noclip, sv_cheats 1 faqat o'z serverida).
+- ✅ **Internetsiz rejim** (launcher 1.0.147+): internet yo'q bo'lsa o'yinda oflayn menyu (botlar, LAN, IP), LAN ro'yxati launcherdan.
+- ⏳ **Yangi o'yinchilar voronkasi**: upd/dl/dlh bosqichlari va probrep newdev - bir necha kun ma'lumot yig'ib, keyin tuzatish.
+- ⏳ **Uzoq o'yindagi yiqilishlar**: o'yin xotirasi (gmem) o'lchanyapti - xotira to'lishimi, aniqlash.
 
 Kutilmoqda:
 - nDirect javobi: Windows 7 da tier0.dll TLS (dump: 85c2a708f2..._1794500973, admin kaliti bilan dmpget).

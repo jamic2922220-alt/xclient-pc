@@ -31,6 +31,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #ifndef XC_API
 #define XC_API "http://mmb.boost-top.com/xclient/api.php"   /* admin.php > Yangilanishlar */
@@ -113,6 +114,7 @@ static DWORD g_played_s = 0;
 static char g_cmod[64];   /* oxirgi yiqilishda aybdor modul (aqlli tuzatish uchun), bo'lmasa bo'sh */   /* oxirgi o'yin necha soniya davom etdi (muammo hisobotiga) */   /* prob_send uchun qo'shimcha tafsilot (url-escape qilingan), bo'lmasa bo'sh */
 static volatile DWORD g_net_dl = 0;
 static volatile LONG g_probe_ok = 0;
+static BOOL g_offline = FALSE;   /* internet yo'q (faqat LAN yoki umuman tarmoqsiz): tarmoq ishlari o'tkazib yuboriladi, o'yinda oflayn menyu */
 static HINTERNET open_url_raw(const char *url)
 {
     if (g_net_dl && (LONG)(GetTickCount() - g_net_dl) > 0) return NULL;
@@ -225,18 +227,29 @@ static BOOL http_download_pct(const char *url, const wchar_t *dst, const wchar_t
     DWORD got, wr;
     ULONGLONG n = have;
     int lastPct = -1;
-    BOOL ok = TRUE;
+    BOOL ok = TRUE, game = label && wcsstr(label, L"CS 1.6") != NULL;
+    DWORD t0 = GetTickCount(), tUi = 0; ULONGLONG n0 = have;
+    if (game) fn_send("dl");
     while ((ok = InternetReadFile(h, buf, sizeof(buf), &got)) != FALSE) {
         if (!got) break;
         if (!WriteFile(f, buf, got, &wr, NULL) || wr != got) { ok = FALSE; g_dl_err = GetLastError() == ERROR_DISK_FULL ? 2 : 3; break; }
         n += got;
         int pct = total ? (int)(n * 100 / total) : 0;
-        if (pct != lastPct) {
+        DWORD el = GetTickCount() - t0;
+        if (pct != lastPct || (game && GetTickCount() - tUi > 1000)) {
             wchar_t msg[256];
-            if (total) _snwprintf(msg, 256, L"%s %d%%  (%u / %u MB)", label, pct, (unsigned)(n >> 20), (unsigned)(total >> 20));
+            if (game && pct >= 50) fn_send("dlh");
+            /* tezlik va qolgan vaqt: sekin internetda "qotib qoldi" deb launcherni yopib qo'yishmasin */
+            if (total && game && el > 3000 && n > n0) {
+                double bps = (double)(n - n0) * 1000.0 / el; unsigned left = bps > 1 ? (unsigned)((total - n) / bps) : 0;
+                wchar_t eta[48];
+                if (left >= 120) _snwprintf(eta, 48, L"~%u daqiqa", (left + 59) / 60); else _snwprintf(eta, 48, L"~%u soniya", left);
+                _snwprintf(msg, 256, L"%s %d%%  (%u / %u MB) \x00b7 %.1f MB/s \x00b7 %s", label, pct, (unsigned)(n >> 20), (unsigned)(total >> 20), bps / 1048576.0, eta);
+            }
+            else if (total) _snwprintf(msg, 256, L"%s %d%%  (%u / %u MB)", label, pct, (unsigned)(n >> 20), (unsigned)(total >> 20));
             else _snwprintf(msg, 256, L"%s %u MB", label, (unsigned)(n >> 20));
             status(msg, pct);
-            lastPct = pct;
+            lastPct = pct; tUi = GetTickCount();
         }
     }
     CloseHandle(f);
@@ -1770,6 +1783,26 @@ static void setup_main_menu(void)
             if (o) { fwrite(cur, 1, n, o); fclose(o); }
         }
     }
+    if (g_offline) {
+        /* internet yo'q: sayt menyusi ochilmaydi (qora/xato sahifa) - o'yin brauzeri kompyuterdagi oflayn menyuni ochadi.
+         * Keyingi ochilishda internet bo'lsa - pastdagi qism yana sayt manzilini yozadi */
+        wchar_t off[MAX_PATH]; path_join(off, g_dir, L"platform\\xclient\\offline.html");
+        if (GetFileAttributesW(off) != INVALID_FILE_ATTRIBUTES) {
+            char u8[MAX_PATH * 3], url[MAX_PATH * 9 + 16] = "file:///"; size_t o = strlen(url);
+            WideCharToMultiByte(CP_UTF8, 0, off, -1, u8, sizeof(u8), NULL, NULL);
+            for (const unsigned char *c = (const unsigned char *)u8; *c && o < sizeof(url) - 4; c++) {
+                if (*c == '\\') url[o++] = '/';
+                else if (isalnum(*c) || strchr("/:.-_~", *c)) url[o++] = (char)*c;
+                else { _snprintf(url + o, 4, "%%%02X", *c); o += 3; }
+            }
+            url[o] = 0;
+            if (!cur || strcmp(cur, url)) {
+                mkdirs_for(home); SetFileAttributesW(home, FILE_ATTRIBUTE_NORMAL);
+                FILE *f = _wfopen(home, L"wb"); if (f) { fputs(url, f); fclose(f); }
+            }
+            free(cur); return;
+        }
+    }
     if (!cur || !strstr(cur, XC_HOME)) {
         mkdirs_for(home);
         SetFileAttributesW(home, FILE_ATTRIBUTE_NORMAL);
@@ -2523,6 +2556,7 @@ static BOOL run_game(void)
         { HANDLE dup = NULL;   /* taskbar va Alt+Tab da X CLIENT belgisi */
           if (DuplicateHandle(GetCurrentProcess(), pi.hProcess, GetCurrentProcess(), &dup, SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, 0)) {
               HANDLE it = CreateThread(NULL, 0, game_icon_thread, dup, 0, NULL); if (it) CloseHandle(it); else CloseHandle(dup); } }
+        if (g_offline) lan_offline_start(pi.hProcess);   /* oflayn menyu uchun: LAN serverlar ro'yxati platform/xclient/lan.js ga */
         rec_session_begin(pi.dwProcessId);
         tune_begin();                                /* quvvat rejimi, sichqoncha, fon dasturlari - o'yin yopilguncha */
         perf_begin(pi.hProcess);                     /* lag sababi: o'yin protsessorni qancha band qilyapti */
@@ -2585,6 +2619,7 @@ static BOOL run_game(void)
         if (crashed) {                               /* o'yin ichidagi yiqilish: Windows jurnalidan qaysi modulda yiqilganini olib, admin > Muammolar > Tafsilotlar ga */
             DWORD since = (DWORD)((t0 / 10000000ULL) - 11644473600ULL);
             g_cmod[0] = 0; Sleep(1500); crash_detail(g_probx, sizeof(g_probx), since);
+            if (g_gmem) { size_t pl = strlen(g_probx); _snprintf(g_probx + pl, sizeof(g_probx) - pl, "%%20gmem=%luMB", (unsigned long)g_gmem); g_probx[sizeof(g_probx) - 1] = 0; }   /* yiqilish oldidan o'yin xotirasi */
             prob_send("game_crash", 3000); g_probx[0] = 0;
             smart_fix(FALSE);                        /* sabab ma'lum bo'lsa (drayver, overlay, antivirus...) - aniq yo'l-yo'riq */
         }
@@ -2687,8 +2722,8 @@ static DWORD WINAPI fn_th(LPVOID arg)
 }
 static void fn_send(const char *stage)
 {
-    static const char *ok[] = { "inst", "game", "p10" };
-    const char *st = NULL; for (int i = 0; i < 3; i++) if (!strcmp(stage, ok[i])) st = ok[i];
+    static const char *ok[] = { "inst", "game", "p10", "upd", "dl", "dlh" };   /* upd - birinchi yangilanish tugadi, dl - o'yin yuklash boshlandi, dlh - yarmi */
+    const char *st = NULL; for (int i = 0; i < 6; i++) if (!strcmp(stage, ok[i])) st = ok[i];
     if (!st || !g_net || !g_id[0]) return;
     wchar_t k[16]; _snwprintf(k, 16, L"fn_%S", st); k[15] = 0;
     if (ini_int(k)) return;
@@ -2800,7 +2835,8 @@ static DWORD WINAPI worker(LPVOID unused)
     if (!fresh) {
         status(L"Internet tekshirilmoqda...", 1);
         HANDLE pr = CreateThread(NULL, 0, net_probe, NULL, 0, NULL);
-        if (pr) { if (WaitForSingleObject(pr, 8000) != WAIT_OBJECT_0 || !g_probe_ok) slow = TRUE; CloseHandle(pr); }
+        if (pr) { if (WaitForSingleObject(pr, 5000) != WAIT_OBJECT_0 || !g_probe_ok) slow = TRUE; CloseHandle(pr); }
+        g_offline = slow;
         DWORD dl = GetTickCount() + (slow ? 1 : 25000); g_net_dl = dl ? dl : 1;
     }
     if (fresh) { g_fresh = TRUE; status(L"O‘rnatilmoqda...", 1); api_call("install", NULL); }
@@ -2837,6 +2873,7 @@ static DWORD WINAPI worker(LPVOID unused)
             int fails = sync_files(&u, &selfUp);
             if (keep) { DWORD dl = GetTickCount() + 10000; g_net_dl = dl ? dl : 1; }
             if (fails == 0) {
+                fn_send("upd");
                 if (autov) ini_set_int(L"autover", 0);
                 g_build = u.build;
                 lstrcpynA(g_version, u.version, sizeof(g_version));
@@ -2851,7 +2888,7 @@ static DWORD WINAPI worker(LPVOID unused)
     }
     if (!g_relaunch) write_master_js();
     if (!g_relaunch && (o_clean || o_verify || o_beta >= 0)) opts_done(cache_mb());
-    g_net_dl = 0;                                 /* o'yin fayllari yo'q bo'lsa - yuklash kerak; keyingi ishlar ham cheklovsiz */
+    if (!g_offline || !has_game()) g_net_dl = 0;  /* internetsiz: keyingi tarmoq ishlari ham kutmasdan o'tkaziladi. O'yin fayllari yo'q bo'lsa - yuklash kerak; keyingi ishlar ham cheklovsiz */
     if (!g_relaunch && ensure_game(u.game)) fn_send("inst");
     else if (!g_relaunch) {
         if (!g_err[0]) lstrcpyW(g_err, L"CS 1.6 o‘yin fayllarini o‘rnatib bo‘lmadi. Internetni tekshirib, X CLIENT ni qayta oching.");
@@ -2955,6 +2992,13 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, LPWSTR cmdline, int show)
         char t[120]; _snprintf(t, sizeof(t), "total=%lu before=%lu after=%lu freed=%ld", (unsigned long)tot, (unsigned long)a0, (unsigned long)a1, (long)a1 - (long)a0); t[119] = 0;
         HANDLE f = CreateFileW(cmdline + 10, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL); if (f != INVALID_HANDLE_VALUE) { DWORD w; WriteFile(f, t, (DWORD)strlen(t), &w, NULL); CloseHandle(f); }
         CoUninitialize(); return 0;
+    }
+    if (cmdline && !wcsncmp(cmdline, L"--offtest ", 10)) {   /* avtomatik test: internetsiz rejim - oflayn menyu manzili + LAN ro'yxati lan.js ga */
+        { const wchar_t *a = cmdline + 10; if (*a == L'"') a++; lstrcpynW(g_dir, a, MAX_PATH); size_t l = wcslen(g_dir); if (l && g_dir[l - 1] == L'"') g_dir[l - 1] = 0; }
+        g_offline = TRUE;
+        setup_main_menu();
+        path_join(g_lan_js, g_dir, L"platform\\xclient\\lan.js"); lan_thread(NULL);
+        g_offline = FALSE; CoUninitialize(); return 0;
     }
     if (cmdline && !wcsncmp(cmdline, L"--fwtest", 8)) {     /* avtomatik test: LAN server uchun firewall ruxsati (fw_thread) */
         GetCurrentDirectoryW(MAX_PATH, g_dir); fw_thread(NULL); CoUninitialize(); return ini_int(L"fwok") == 1 ? 0 : 3;

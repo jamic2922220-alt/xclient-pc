@@ -1701,6 +1701,7 @@ static DWORD WINAPI share_thread(LPVOID arg)
  * javoblar ('m' - GoldSrc, 'I' - yangi format, 'A' - challenge -> qayta so'rov) 1.6 soniya yig'iladi va saytga yuboriladi */
 static volatile LONG g_lan_busy = 0;
 static const wchar_t *g_lan_dump = NULL;   /* avtomatik test: ro'yxat faylga ham yoziladi */
+static wchar_t g_lan_js[MAX_PATH] = L"";   /* oflayn: ro'yxat platform/xclient/lan.js ga (saytga emas) */
 static const char *lan_str(const char *p, const char *end, char *out, int cap)
 {
     int n = 0; while (p < end && *p) { if (n < cap - 1) { char ch = *p; out[n++] = (ch == '|' || ch == ';' || (unsigned char)ch < 32) ? ' ' : ch; } p++; }
@@ -1764,6 +1765,22 @@ static DWORD WINAPI lan_thread(LPVOID unused)
         WSACleanup();
     }
     if (g_lan_dump) { FILE *df = _wfopen(g_lan_dump, L"wb"); if (df) { fputs(list, df); fclose(df); } }
+    if (g_lan_js[0]) {                                   /* oflayn menyu o'qiydi: window.XC_LAN = "..." (vaqtinchalik fayl -> almashtirish) */
+        wchar_t tmp[MAX_PATH]; _snwprintf(tmp, MAX_PATH, L"%s.tmp", g_lan_js); tmp[MAX_PATH - 1] = 0;
+        FILE *jf = _wfopen(tmp, L"wb");
+        if (jf) {
+            fputs("window.XC_LAN = \"", jf);
+            for (const unsigned char *c = (const unsigned char *)list; *c; c++) {
+                if (*c == '"' || *c == '\\') fprintf(jf, "\\%c", *c);
+                else if (*c < 32) fputc(' ', jf);
+                else fputc(*c, jf);
+            }
+            fputs("\";\n", jf); fclose(jf);
+            MoveFileExW(tmp, g_lan_js, MOVEFILE_REPLACE_EXISTING);
+        }
+        InterlockedExchange(&g_lan_busy, 0);
+        return 0;
+    }
     char esc[9000], url[9400]; url_escape(esc, sizeof(esc), list);
     _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=lanset&d=%s&l=%s", g_id, esc); url[sizeof(url) - 1] = 0;
     free(http_get(url, NULL));
@@ -1809,6 +1826,22 @@ static void fw_fix(void)
     if (InterlockedExchange(&g_fw_busy, 1)) return;
     HANDLE t = CreateThread(NULL, 0, fw_thread, NULL, 0, NULL); if (t) CloseHandle(t);
     /* g_fw_busy qaytarilmaydi - bir sessiyada bir marta yetadi */
+}
+/* Internetsiz o'yin: oflayn menyu (platform/xclient/offline.html) LAN serverlar ro'yxatini lan.js dan o'qiydi.
+ * O'yin ochiq turguncha har 6 soniyada qidiramiz (bitta qidiruv ~1.6 s, tarmoqqa yuk sezilmaydi) */
+static DWORD WINAPI lan_offline_thread(LPVOID proc)
+{
+    path_join(g_lan_js, g_dir, L"platform\\xclient\\lan.js");
+    do lan_thread(NULL); while (WaitForSingleObject((HANDLE)proc, 6000) == WAIT_TIMEOUT);
+    CloseHandle((HANDLE)proc);
+    return 0;
+}
+static void lan_offline_start(HANDLE game)
+{
+    HANDLE dup = NULL;
+    if (!DuplicateHandle(GetCurrentProcess(), game, GetCurrentProcess(), &dup, SYNCHRONIZE, FALSE, 0)) return;
+    HANDLE t = CreateThread(NULL, 0, lan_offline_thread, dup, 0, NULL);
+    if (t) CloseHandle(t); else CloseHandle(dup);
 }
 static void lan_scan(void)
 {
