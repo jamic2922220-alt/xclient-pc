@@ -1084,3 +1084,38 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .modal.on .win { -webkit-animation: winpop .22s ease-out; }
 @-webkit-keyframes winpop { from { opacity: 0; -webkit-transform: translateY(10px) scale(.97); } to { opacity: 1; -webkit-transform: none; } }
 .lowfx .modal.on .win, .lowfx .qrc { -webkit-animation: none; }
+/* yangi daraja tabrigi */
+.rkup { text-align: center; padding-top: 40px; }
+.rkupb { display: inline-block; -webkit-transform: scale(2.2); margin: 20px 0 34px; -webkit-animation: rkpop .6s ease-out both; }
+.rkup h2 { font-size: 24px; color: #fff; margin: 0 0 10px; }
+.rkup p { margin: 0 60px 22px; }
+@-webkit-keyframes rkpop { 0% { opacity: 0; -webkit-transform: scale(.6); } 70% { -webkit-transform: scale(2.5); } 100% { opacity: 1; -webkit-transform: scale(2.2); } }
+/* shaxsiy murabbiy */
+.coach { margin: 0 0 14px; padding: 12px 14px; background: #1b161d; border: 1px solid #3a2a30; border-left: 3px solid #ff3b3b; }
+.cct { font-size: 12px; letter-spacing: 2px; color: #ff3b3b; margin-bottom: 8px; }
+.cci { overflow: hidden; padding: 6px 0; border-top: 1px solid #261e23; }
+.cci:first-of-type { border-top: 0; }
+.cci p { margin: 0 0 6px; font-size: 13px; color: #e8e0e6; line-height: 1.45; }
+.cci .btn { float: right; height: 28px; line-height: 28px; padding: 0 14px; font-size: 12px; }
+/* chit shikoyati */
+.pl .plrep { margin-left: 8px; color: #8f8590; font-size: 12px; cursor: pointer; }
+.pl .plrep:hover { color: #ff3b3b; }
+.chp p { font-size: 14px; }
+.chws { margin: 10px 0 14px; }
+.chws .chw { display: block; margin: 0 0 8px; height: 40px; line-height: 40px; text-align: left; padding-left: 16px; }
+/* Yangi yil iventi: ramka (qizil-yashil-oq, yaltiraydi) va vazifalar oynasidagi karta */
+.fny { -webkit-box-shadow: 0 0 0 3px #e3242b, 0 0 0 6px #fff, 0 0 0 8px #1f9d55, 0 0 14px 4px rgba(227,36,43,.6); }
+@-webkit-keyframes k_fny { 0% { -webkit-box-shadow: 0 0 0 3px #e3242b, 0 0 0 6px #fff, 0 0 0 8px #1f9d55, 0 0 14px 4px rgba(227,36,43,.55); }
+  50% { -webkit-box-shadow: 0 0 0 3px #1f9d55, 0 0 0 6px #fff, 0 0 0 8px #e3242b, 0 0 18px 6px rgba(31,157,85,.6); }
+  100% { -webkit-box-shadow: 0 0 0 3px #e3242b, 0 0 0 6px #fff, 0 0 0 8px #1f9d55, 0 0 14px 4px rgba(227,36,43,.55); } }
+.fny, .bigav.fny, .fpav.fny, #bar .me .av.fny, .frl a i.av.fny, .av2.fny, .nyb i.av.fny { -webkit-animation: k_fny 2.4s ease-in-out infinite !important; }
+.nyev { margin: 0 0 14px; padding: 12px 14px; border: 1px solid #1f9d55; background: -webkit-linear-gradient(left, rgba(227,36,43,.14), rgba(31,157,85,.14)); }
+.nyh { font-size: 13px; letter-spacing: 2px; color: #fff; margin-bottom: 10px; }
+.nyh span { float: right; letter-spacing: 0; color: #f5c518; font-size: 12px; }
+.nyb { overflow: hidden; }
+.nyb i.av { float: left; width: 46px; height: 46px; line-height: 46px; margin: 4px 16px 0 6px; text-align: center; font-style: normal; font-size: 20px; color: #fff; background: #2a2128; -webkit-border-radius: 50%; overflow: hidden; }
+.nyb i.av img { width: 100%; height: 100%; }
+.nyb > div { overflow: hidden; }
+.nyb b { display: block; font-size: 13px; color: #fff; margin-bottom: 6px; }
+.nyb small { color: #a99fa6; font-size: 12px; }
+.nyb i.av.fny { -webkit-box-shadow: 0 0 0 3px #e3242b, 0 0 0 6px #fff, 0 0 0 8px #1f9d55; }

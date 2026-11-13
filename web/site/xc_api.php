@@ -239,7 +239,8 @@ function geo_cc($ip) {
 /* Telegram xabarnoma (admin.php > Telegram bo'limida yoqiladi) */
 function tg_notify($event, $text) {
     $c = xc_cfg();
-    if (empty($c['tg_token']) || empty($c['tg_chat']) || empty($c['tg_ev'][$event])) return;
+    if (empty($c['tg_token']) || empty($c['tg_chat'])) return;
+    if (empty($c['tg_ev'][$event]) && !($event === 'cheat' && !isset($c['tg_ev']['cheat']))) return;   // chit shikoyati - sozlanmagan bo'lsa ham yoqiq
     if (rl_count('tg', 3600) >= 30) return;              // soatiga 30 tadan ko'p xabar yubormaymiz
     rl_add('tg', 3600);
     $ctx = stream_context_create(array('http' => array('method' => 'POST', 'timeout' => 3,
@@ -319,6 +320,10 @@ function tg_bot_poll() {
 function tg_bot_answer($chat, $txt) {
     $me = null;
     foreach ((array)glob(XC_DIR . '/users/*.php') as $f) { $x = user(basename($f, '.php')); if ($x && !empty($x['tgid']) && (string)$x['tgid'] === (string)$chat) { $me = $x; break; } }
+    if (preg_match('/^\/(dostoff|doston)$/i', $txt, $sm) && $me) {   // do'stlar o'yinga kirganda xabar
+        lock(); $u = user($me['login']); if ($u) { if (strtolower($sm[1]) === 'dostoff') $u['tgfroff'] = 1; else unset($u['tgfroff']); save_user($u); } unlock();
+        return strtolower($sm[1]) === 'dostoff' ? "Do'stlar o'yinga kirganda xabar bermayman. Qayta yoqish: /doston" : "Do'stlaringiz o'yinga kirganda xabar beraman. O'chirish: /dostoff";
+    }
     if (preg_match('/^\/(stop|eslatma)$/i', $txt, $sm) && $me) {   // eslatmalarni o'chirish / yoqish
         lock(); $u = user($me['login']); if ($u) { if (strtolower($sm[1]) === 'stop') $u['tgoff'] = 1; else unset($u['tgoff']); save_user($u); } unlock();
         return strtolower($sm[1]) === 'stop' ? "Eslatmalar o'chirildi. Qayta yoqish: /eslatma" : "Eslatmalar yoqildi: kunlik sovg'a va seriya haqida kechqurun xabar beraman. O'chirish: /stop";
@@ -384,6 +389,23 @@ function ref_apply(&$u, $raw) {
     return '';
 }
 
+/* do'st o'yinga kirdi -> Telegram'i ulangan (ikki tomonlama) do'stlariga xabar. Bir juftga 3 soatda bir marta, ko'pi bilan 8 kishiga,
+ * o'zi o'ynab turganlarga yubormaymiz. O'chirish: botda /dostoff */
+function fr_play_notify($u, $srv, $map) {
+    if (empty($u['friends'])) return;
+    $me = strtolower($u['login']); $seen = rd('tgfn', array()); $now = time(); $sent = 0; $ch = false;
+    foreach ($seen as $k => $t) if ($now - $t > 86400) { unset($seen[$k]); $ch = true; }
+    foreach (array_slice(array_map('strtolower', (array)$u['friends']), 0, 40) as $fl) {
+        if ($sent >= 8) break;
+        $t = user($fl); if (!$t || empty($t['tgid']) || !empty($t['tgoff']) || !empty($t['tgfroff'])) continue;
+        if (empty($t['friends']) || !in_array($me, array_map('strtolower', (array)$t['friends']))) continue;
+        if (is_online($t) && !empty($t['server'])) continue;
+        $key = $me . '|' . $fl; if (isset($seen[$key]) && $now - $seen[$key] < 3 * 3600) continue;
+        $seen[$key] = $now; $ch = true; $sent++;
+        tg_send($t['tgid'], "\xF0\x9F\x8E\xAE " . $u['name'] . " hozir o'ynayapti" . ($map !== '' ? ': ' . $map : '') . " \xC2\xB7 " . $srv . "\nQo'shilish: X CLIENT \xE2\x86\x92 Do'stlar \xE2\x86\x92 Kirish\n(Bu xabarlarni o'chirish: /dostoff)");
+    }
+    if ($ch) { lock(); $cur = rd('tgfn', array()); foreach ($seen as $k => $t) $cur[$k] = $t; foreach ($cur as $k => $t) if ($now - $t > 86400) unset($cur[$k]); wr('tgfn', $cur); unlock(); }
+}
 function aim_top($b) {
     $l = array(); foreach ($b as $lk => $x) $l[] = array('n' => $x['n'], 'k' => (int)$x['k'], 'h' => (int)$x['h']);
     usort($l, function ($a, $c) { return $c['k'] - $a['k'] ?: $c['h'] - $a['h']; });
@@ -420,6 +442,14 @@ function tg_remind_tick() {
 }
 /* Kunlik vazifalar: sana bo'yicha hammaga bir xil 3 ta vazifa. Bajarilishini menyu o'yin tarixidan hisoblaydi,
  * mukofot (XP) bu yerda kuniga bir marta beriladi. */
+/* Yangi yil iventi: 15-dekabr - 10-yanvar. Vazifalar XP x1.5, 5 ta vazifa - cheklangan "Yangi yil" ramkasi (fny) */
+function ny_event() {
+    @date_default_timezone_set('Asia/Tashkent'); $md = (int)date('nd');
+    if ($md < 1215 && $md > 110) return null;
+    $y = (int)date('Y') + ($md >= 1215 ? 1 : 0);          // qaysi Yangi yil (2027)
+    $end = mktime(23, 59, 59, 1, 10, $y);
+    return array('y' => $y, 'end' => $end, 'goal' => 5);
+}
 function missions_today() {
     @date_default_timezone_set('Asia/Tashkent');
     $pool = array(
@@ -916,6 +946,7 @@ case 'probrep':                                         // faqat o'qish: Muammol
     $dl = array(); for ($i = 0; $i < 30; $i++) { $k = date('Y-m-d', strtotime("-$i day")); $x = rd('daily/' . $k, array()); $dl[$k] = array();
         foreach (array('d', 'n', 'm', 'mn') as $t) $dl[$k][$t] = isset($x[$t]) ? count($x[$t]) : 0; }
     $act['funnel'] = funnel_cohorts(14);
+    $act['cheats'] = array_slice(array_reverse(rd('cheats', array())), 0, 40);
     /* yangi kompyuterlar (14 kun): qaysi bosqichda to'xtagan - "bir marta ochib ketganlar" sababini topish uchun */
     $nd = array(); foreach ((array)glob(XC_DIR . '/dev/*.php') as $f) { $o = json_decode(substr((string)@file_get_contents($f), strlen(XC_GUARD)), true);
         if (!$o || empty($o['first']) || $now - (int)$o['first'] > 14 * 86400) continue;
@@ -1144,6 +1175,10 @@ case 'ping':                                             // har daqiqada: onlayn
     $u = auth();
     $srv = p('server'); $map = p('map');
     $now = time();
+    /* do'stlarga "o'yinga kirdi" xabari (Telegram): server bo'sh edi yoki 10 daqiqa ko'rinmagan edi -> endi haqiqiy serverda */
+    $frn = $srv !== '' && preg_match('/^[\w.\-]+:\d+$/', $srv) && !preg_match('/^(local|loopback|localhost|127\.|0\.0\.0\.0)/i', $srv)
+        && (empty($u['server']) || $now - (isset($u['seen']) ? (int)$u['seen'] : 0) > 600) && $now - (isset($u['tgstn']) ? (int)$u['tgstn'] : 0) > 1800;
+    if ($frn) $u['tgstn'] = $now;
     if ($srv !== '' && preg_match('/^[\w.\-]+:\d+$/', $srv)) {
         $last = isset($u['seen']) ? $u['seen'] : 0;
         if (!empty($u['server']) && $u['server'] === $srv && $now - $last >= 50 && $now - $last <= 180) {
@@ -1159,13 +1194,16 @@ case 'ping':                                             // har daqiqada: onlayn
     if (!empty($u['inv'])) { foreach ((array)$u['inv'] as $i) if (is_array($i) && isset($i['t']) && $now - $i['t'] < 600) $inv[] = $i; $u['inv'] = array(); }
     $msgs = !empty($u['msgs']) ? $u['msgs'] : array(); $u['msgs'] = array();   // admin yuborgan shaxsiy xabarlar (bir marta)
     save_user($u);
+    if ($frn) { unlock(); fr_play_notify($u, $srv, $u['map']); }
     out(array('ok' => true, 'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL, 'inv' => $inv, 'msgs' => $msgs));
 
 case 'missions':                                         // bugungi vazifalar va qaysilari olingan
     $u = auth();
     $list = missions_today(); $day = date('Y-m-d');
     $prog = array(); foreach ($list as $x) $prog[$x['id']] = mis_prog($u, $day, $x['id']);
-    out(array('ok' => true, 'day' => $day, 'list' => $list, 'prog' => $prog, 'done' => isset($u['mis'][$day]) ? array_keys($u['mis'][$day]) : array()));
+    $ny = ny_event(); if ($ny) { foreach ($list as &$lx) $lx['xp'] = (int)round($lx['xp'] * 1.5); unset($lx);
+        $ny['n'] = isset($u['ny' . $ny['y']]) ? (int)$u['ny' . $ny['y']] : 0; $ny['has'] = in_array('fny', (array)@$u['bag']['fr'], true); $ny['now'] = time(); }
+    out(array('ok' => true, 'day' => $day, 'list' => $list, 'prog' => $prog, 'done' => isset($u['mis'][$day]) ? array_keys($u['mis'][$day]) : array(), 'ny' => $ny));
 
 case 'mission_claim':                                    // vazifa mukofoti (kuniga bir marta)
     lock();
@@ -1180,11 +1218,20 @@ case 'mission_claim':                                    // vazifa mukofoti (kun
     $okm = mis_prog($u, $day, $id) + ($id === 'min' || $id === 'xsrv' ? 2 : 0) >= $m['goal'];   // daqiqalarda 2 daq. zaxira (oxirgi xabar kechikishi)
     if (!$okm) fail('notyet', 'Vazifa hali bajarilmagan');
     $u['mis'][$day][$id] = 1;
+    $ny = ny_event(); $nyr = null;
+    if ($ny) {                                           // Yangi yil: XP x1.5 va ramka sari hisob
+        $m['xp'] = (int)round($m['xp'] * 1.5);
+        $nk = 'ny' . $ny['y']; $u[$nk] = (isset($u[$nk]) ? (int)$u[$nk] : 0) + 1; $got = false;
+        if (!isset($u['bag']) || !is_array($u['bag'])) $u['bag'] = inv_of($u);
+        if (!isset($u['bag']['fr']) || !is_array($u['bag']['fr'])) $u['bag']['fr'] = array();
+        if ($u[$nk] >= $ny['goal'] && !in_array('fny', $u['bag']['fr'], true)) { $u['bag']['fr'][] = 'fny'; $got = true; }
+        $nyr = array('n' => $u[$nk], 'goal' => $ny['goal'], 'got' => $got);
+    }
     $u['xp'] = (int)$u['xp'] + $m['xp'];
     if (!isset($u['wk']) || $u['wk'] !== week_id()) { $u['wk'] = week_id(); $u['wkxp'] = 0; }
     $u['wkxp'] = (int)$u['wkxp'] + $m['xp'];
     save_user($u);
-    out(array('ok' => true, 'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL, 'got' => $m['xp']));
+    out(array('ok' => true, 'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL, 'got' => $m['xp'], 'ny' => $nyr));
 
 case 'whatsnew':                                         // "Nima yangi" oynasi (admin panelda yoziladi)
     out(array('ok' => true, 'w' => rd('whatsnew', null)));
@@ -1384,6 +1431,22 @@ case 'ref_set':
     $re = ref_apply($u, p('code'));
     if ($re !== '') fail('bad', $re);
     out(array('ok' => true, 'me' => pub($u, true)));
+
+/* ---------- Chit haqida shikoyat (o'yin paytida): 24 soatda bitta serverdagi bitta nikka 3+ turli o'yinchi - admin Telegram'ga ---------- */
+case 'cheat_rep':
+    $u = auth();
+    $ip = p('ip'); $nick = clean_str(p('nick'), 40); $why = p('why');
+    if (!preg_match('/^[\w.\-]+:\d+$/', $ip) || $nick === '' || !in_array($why, array('aim', 'wh', 'speed', 'other'), true)) fail('bad', 'Noto\'g\'ri ma\'lumot');
+    if (rl_count('cheat' . strtolower($u['login']), 86400) >= 10) fail('limit', 'Bugun juda ko\'p shikoyat yubordingiz');
+    rl_add('cheat' . strtolower($u['login']), 86400);
+    lock();
+    $l = rd('cheats', array()); $now = time(); $key = strtolower($ip . '|' . $nick); $who = array(strtolower($u['login']) => 1);
+    foreach ($l as $x) if ($now - $x['t'] < 86400 && strtolower($x['ip'] . '|' . $x['nick']) === $key) $who[$x['by']] = 1;
+    $l[] = array('t' => $now, 'ip' => $ip, 'nick' => $nick, 'why' => $why, 'by' => strtolower($u['login']), 'demo' => preg_replace('/[^\w\-]/', '', p('demo')));
+    if (count($l) > 400) $l = array_slice($l, -400);
+    wr('cheats', $l); unlock();
+    if (count($who) === 3) tg_notify('cheat', "\xE2\x9A\xA0 Ehtimoliy chiter: " . $nick . "\nServer: " . $ip . "\n24 soatda 3 ta turli o'yinchi shikoyat qildi (" . implode(', ', array_keys($who)) . ")");
+    out(array('ok' => true, 'n' => count($who)));
 
 /* ---------- Aim test (60 soniya, joyida turgan botlar): haftalik TOP-10. Natija o'yinchining eng yaxshisi bilan almashadi ---------- */
 case 'aim_set':
@@ -1836,7 +1899,14 @@ case 'stat':
     $ws[$wid]['k'] += $dk; $ws[$wid]['d'] += $dd; $ws[$wid]['t'] += $dt; if (!isset($ss[$sid])) $ws[$wid]['g']++;
     ksort($ws); if (count($ws) > 12) $ws = array_slice($ws, -12, 12, true);
     $u['wkst'] = $ws;
+    $rk0 = rank_of((int)@$u['rp']); $rkup = '';
     $u['rp'] = max(0, (float)@$u['rp'] + 2 * $dk - 1.5 * $dd);                 // reyting
+    $rk1 = rank_of((int)$u['rp']); $rord = array('bronze', 'silver', 'gold', 'plat', 'diamond', 'legend');
+    if (array_search($rk1, $rord) > array_search($rk0, $rord) && empty($u['rkmax'][$rk1])) {   // yangi daraja (birinchi marta) - Telegram'da tabrik
+        if (!isset($u['rkmax']) || !is_array($u['rkmax'])) $u['rkmax'] = array(); $u['rkmax'][$rk1] = time(); $rkup = $rk1;
+        $rnm = array('silver' => 'Silver', 'gold' => 'Gold', 'plat' => 'Platinum', 'diamond' => 'Diamond', 'legend' => 'Legend');
+        if (!empty($u['tgid'])) $rkmsg = array($u['tgid'], "\xF0\x9F\x8F\x86 Tabriklaymiz, " . $u['name'] . "! Siz " . $rnm[$rk1] . " darajasiga chiqdingiz (" . (int)$u['rp'] . " RP).\nNikingiz oldida [" . $rnm[$rk1] . "] tegi - X CLIENT \xE2\x86\x92 Profil.");
+    }
     @date_default_timezone_set('Asia/Tashkent');
     $dsa = isset($u['dst']) && is_array($u['dst']) ? $u['dst'] : array(); $td = date('Y-m-d');   // kunlik xulosa ("Kechagi o'yiningiz")
     if (!isset($dsa[$td])) $dsa[$td] = array('k' => 0, 'd' => 0, 't' => 0, 'g' => 0, 'srv' => array());
@@ -1863,7 +1933,8 @@ case 'stat':
     $u['ss'] = $ss;
     save_user($u);
     $pu = pub($u, true);
-    out(array('ok' => true, 'st' => $pu['st'], 'ach' => $pu['ach'], 'newach' => $newach, 'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL));
+    if (!empty($rkmsg)) { unlock(); tg_send($rkmsg[0], $rkmsg[1]); }
+    out(array('ok' => true, 'st' => $pu['st'], 'ach' => $pu['ach'], 'newach' => $newach, 'rankup' => $rkup, 'xp' => (int)$u['xp'], 'level' => level($u['xp']), 'lvlxp' => (int)$u['xp'] % XP_PER_LEVEL));
 
 case 'stat_bf':                                          // eski o'yinlar (menyu tarixidan) - akkauntga bir marta
     lock();

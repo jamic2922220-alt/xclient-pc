@@ -32,6 +32,7 @@ node "$HERE/gshare.js" || rc=1
 node "$HERE/res.js" || rc=1
 node "$HERE/tg.js" || rc=1
 node "$HERE/offnade.js" || rc=1
+node "$HERE/feat2.js" || rc=1
 python3 "$HERE/visual.py" "$XC_SHOTS" ${1:-} || rc=1
 echo "Skrinshotlar: $XC_SHOTS"
 kill $SRV 2>/dev/null
