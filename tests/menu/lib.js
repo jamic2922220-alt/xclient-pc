@@ -13,7 +13,8 @@ async function page(opts) {
     if (!o.noShown) ui.shown = true;
     window.nextclient = { exec(c) { window.LOG.push(String(c).trim()); }, getCvarValue() { return null; },
       matchmaking: { getServerInfo(ip) { window.QN++; return Promise.resolve({ hostname: 'S ' + ip, map: 'de_dust2', playersOnline: 12, playersMax: 32 }); }, getPlayersInfo() { return Promise.resolve([{ name: 'p1', score: 3 }]); } },
-      addEventListener(n, f) { (window.L[n] = window.L[n] || []).push(f); }, gameUi: ui };
+      addEventListener(n, f) { (window.L[n] = window.L[n] || []).push(f); }, gameUi: ui,
+      console: { addEventListener(n, f) { (window.L['con_' + n] = window.L['con_' + n] || []).push(f); } } };
   }, opts);
   await p.goto(BASE + '/xc.html'); await p.waitForTimeout(opts.wait || 5000);
   const close = () => p.evaluate(() => { document.querySelectorAll('[data-act="close"]').forEach(c => { if (c.offsetParent) c.click(); }); });

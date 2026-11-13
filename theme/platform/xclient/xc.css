@@ -1045,3 +1045,11 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .ndk b { display: inline-block; min-width: 26px; padding: 1px 5px; margin-right: 4px; border: 1px solid #4a3a43; text-align: center; color: #fff; }
 .ndl { margin: 0 0 4px 18px; padding: 0; font-size: 12px; line-height: 1.5; color: #cfc4ca; }
 .ndl li { margin-bottom: 4px; }
+/* aim test reytingi */
+.attop .kv span { color: #cfc4ca; }
+/* telefon ilovasi kartasi */
+.mobcard { position: relative; cursor: pointer; padding: 10px 40px 10px 12px; }
+.mobcard .mobi { position: absolute; left: 12px; top: 9px; font-size: 26px; line-height: 30px; }
+.mobcard .mobt { margin-left: 42px; }
+.mobcard .mobt b { display: block; color: #fff; font-size: 14px; }
+.mobcard .mobt small { display: block; color: #a99fa6; font-size: 12px; margin-top: 2px; }

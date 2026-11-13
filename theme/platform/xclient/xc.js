@@ -1395,6 +1395,7 @@ function demoCtl(c) {
 function stopRecord() { clearTimeout(REC_TM); if (REC) { cmd('stop'); REC = ''; } }
 function onConnectEvt(addr, inGame) {
   if (BOT_PEND) setTimeout(botsApply, 1500);       // botlar bilan mashq: xarita yuklandi - bot sonini qayta yuboramiz
+  if (!isLocalAddr(addr)) AIMT = null;            // haqiqiy serverda aim test hisobi va chatga yozish bo'lmaydi
   if (isLocalAddr(addr)) { LOCAL_ON = true; fxClass(); sparks(); return; }   // o'z serveri (botlar) - haqiqiy o'yin funksiyalarisiz
   addr = normIp(addr);
   if (!addr) return;
@@ -1410,7 +1411,7 @@ function onConnectEvt(addr, inGame) {
 }
 function onDisconnectEvt() {
   var was = CONNECTED;
-  if (LOCAL_ON || (BOT_SESS && !CONNECTED)) { LOCAL_ON = false; BOT_SESS = null; BOT_PEND = null; fxClass(); sparks(); if (!was) return; }   // botlar bilan mashq tugadi
+  if (LOCAL_ON || (BOT_SESS && !CONNECTED)) { LOCAL_ON = false; BOT_SESS = null; BOT_PEND = null; if (AIMT) { if (AIMT.t0) aimtEnd(); AIMT = null; } fxClass(); sparks(); if (!was) return; }   // botlar bilan mashq tugadi
   gpEnd();
   setTimeout(musicSync, 500);
   if (CUR) { CUR.d = Math.round((now() - CUR.t) / 1000); persist(); cloudSave(); sendStat(CUR); }
@@ -1441,6 +1442,10 @@ function onConsole(txt) {
   /* demo tugadi yoki serverga ulanyapti - oddiy tezlik. Faqat aniq qatorlar: "Couldn't open file overviews/..." (radar xaritasi) demo xatosi emas */
   if (DEMO_PLAY) { var dm = /^\s*Completed demo|^\s*ERROR: couldn'?t open\.?\s*$|^\s*Connecting to/i.exec(txt); if (dm) demoEnd(dm[0]); }
   if (/\b(wrote|writing|saved)\b.*\.(bmp|tga|jpg|png)\b/i.test(txt)) toast(T('sh_saved'), 2500);   // F5: skrinshot saqlandi
+  if (AIMT && AIMT.on) {                           // aim test (o'z serverida, CUR yo'q bo'lishi mumkin)
+    var am = /^(.+?) killed (.+?) with (a headshot from )?([\w\-]+)/.exec(txt.replace(/^\s*(\*\*\*\s*)?/, '')), mine = function (n) { return !!n && (n === MYNAME || (S && (n === S.name || n === fullName(S)))); };
+    if (am && mine(am[1]) && !mine(am[2])) aimtKill(!!am[3]);
+  }
   if (!CUR || !MYNAME) return;
   /* "A killed B with ak47", "*** A killed B with a headshot from ak47 ***", "A + C killed B with m4a1" (C - yordam bergan) */
   var m = /^(.+?) killed (.+?) with (a headshot from )?([\w\-]+)/.exec(txt.replace(/^\s*(\*\*\*\s*)?/, ''));
@@ -1520,6 +1525,7 @@ function renderHome() {
   if (ME && on < 3) fr += '<div class="tr frinv" data-act="ref"><div class="rk c">' + ico('gift') + '</div><div class="nm">' + esc(T('rf_cta')) + '</div><div class="mt">' + esc(T('rf_cta2')) + '</div></div>';
   $('frList').innerHTML = fr || '<div class="empty">' + (ME ? esc(T('no_fr')) : '<a data-act="login">' + esc(T('no_fr_login')) + '</a>') + '</div>';
   $('acct').style.display = ME || DB.acx ? 'none' : ''; var xp = $('xpromo'); if (xp) xp.style.display = DB.pxx && now() - DB.pxx < 3 * 864e5 ? 'none' : ''; $('frCard').style.display = ME ? '' : 'none';
+  var mc = $('mobCard'); if (mc) mc.style.display = ME && !LITE && !(DB.mobx && now() - DB.mobx < 14 * 864e5) ? '' : 'none';   // telefon ilovasi - akkaunti borlarga, yopsa 14 kun ko'rinmaydi
   $('frCnt').innerHTML = on ? on : '';
   $('mFriends').innerHTML = on ? esc(T('fr_on').replace('{n}', on)) : '';
   renderBar();
@@ -3568,19 +3574,63 @@ function lagFix(strong) {
   closeModal(); toast(resTo ? T('lf_ok_s').replace('{r}', resTo) : T(w ? 'lf_ok_w' : 'lf_ok'), 9000);
 }
 /* Botlar bilan mashq (oflayn): o'z kompyuterida server - CS 1.6 ning ichki botlari (ZBot). Internet kerak emas */
-var BOT_MODES = ['std', 'aim', 'noshoot', 'pistol', 'awp', 'knife', 'nade'];
+var BOT_MODES = ['std', 'aimt', 'aim', 'noshoot', 'pistol', 'awp', 'knife', 'nade'];
 /* mashq turi: CS 1.6 ning ichki bot sozlamalari (plaginsiz). Har safar hammasi yuboriladi - oldingi tur qolib ketmasin */
 function botCvars(b) {
-  var m = b.m || 'std', train = m === 'aim' || m === 'noshoot';
+  var m = b.m || 'std', train = m === 'aim' || m === 'aimt' || m === 'noshoot';
   /* granata mashqi: botsiz, o'z serverida sv_cheats 1 - F3 granatalar beradi, F4 uchib yurish (noclip) */
   if (m === 'nade') return ['sv_cheats 1', 'bot_stop 1', 'mp_startmoney 16000', 'mp_buytime 9', 'mp_roundtime 9', 'mp_freezetime 0', 'mp_c4timer 60',
     'alias xcnade "give weapon_hegrenade;give weapon_flashbang;give weapon_smokegrenade"', 'bind F3 xcnade', 'bind F4 noclip'];
-  return ['sv_cheats 0', 'bot_stop ' + (m === 'aim' ? 1 : 0), 'bot_dont_shoot ' + (m === 'noshoot' ? 1 : 0), 'bot_pistols_only ' + (m === 'pistol' ? 1 : 0),
+  return ['sv_cheats 0', 'bot_stop ' + (m === 'aim' || m === 'aimt' ? 1 : 0), 'bot_dont_shoot ' + (m === 'noshoot' || m === 'aimt' ? 1 : 0), 'bot_pistols_only ' + (m === 'pistol' ? 1 : 0),
     'bot_snipers_only ' + (m === 'awp' ? 1 : 0), 'bot_knives_only ' + (m === 'knife' ? 1 : 0),
     'mp_startmoney ' + (train || m === 'awp' ? 16000 : 800), 'mp_buytime ' + (train ? 9 : 0.5), 'mp_roundtime ' + (train ? 9 : 2.5), 'mp_freezetime ' + (train ? 0 : 2)];
 }
 var BOT_MAPS = ['de_dust2', 'de_inferno', 'de_nuke', 'de_train', 'de_aztec', 'de_dust', 'cs_assault', 'cs_italy'];
 /* granata mashqi: xaritadagi mashhur tutun/flesh joylari (qayerda turib, qayerga qarab otish) */
+/* ---- Aim test: 60 soniya, joyida turgan botlar. Birinchi kill bilan vaqt boshlanadi; kill/headshot o'yin konsolidan sanaladi.
+ * Natija o'yin chatida (say - faqat o'z serverida), eng yaxshisi saqlanadi va haftalik TOP-10 ga yuboriladi ---- */
+var AIMT = null, AIM_TOP = null;
+function aimtPane() {
+  var best = DB.aimBest, h = '<div class="mut" style="font-size:12px;margin:2px 0 8px">' + esc(T('at_how')) + '</div>';
+  if (best) h += '<div class="kv"><span>' + esc(T('at_best')) + '</span><b>' + best.k + ' kill · ' + (best.k ? Math.round(best.h * 100 / best.k) : 0) + '% HS</b></div>';
+  h += '<div class="ph2 m">' + esc(T('at_top')) + '</div><div class="attop" id="atTop">' + aimTopHtml() + '</div>';
+  if (!AIM_TOP) api('aim_top', {}, function (r) { if (!r.ok) return; AIM_TOP = r.top || []; var e = $('atTop'); if (e) e.innerHTML = aimTopHtml(); });
+  return h;
+}
+function aimTopHtml() {
+  if (!AIM_TOP) return '<div class="mut">' + esc(T('loading')) + '</div>';
+  if (!AIM_TOP.length) return '<div class="mut">' + esc(T('at_none')) + '</div>';
+  var h = ''; each(AIM_TOP, function (x, i) { h += '<div class="kv"><span>' + (i + 1) + '. ' + esc(x.n) + '</span><b>' + x.k + ' kill · ' + (x.k ? Math.round(x.h * 100 / x.k) : 0) + '% HS</b></div>'; });
+  return h;
+}
+function aimtKill(hs) {
+  if (!AIMT) return;
+  if (!AIMT.t0) { AIMT.t0 = now(); AIMT.k = 0; AIMT.h = 0; cmd('say "' + T('at_go') + '"'); clearTimeout(AIMT.tm); AIMT.tm = setTimeout(aimtEnd, 60000); }
+  AIMT.k++; if (hs) AIMT.h++;
+}
+function aimtEnd() {
+  if (!AIMT || !AIMT.t0) return;
+  var k = AIMT.k, h = AIMT.h, hp = k ? Math.round(h * 100 / k) : 0, best = DB.aimBest, rec = !best || k > best.k || (k === best.k && h > best.h);
+  AIMT.t0 = 0;                                     // keyingi kill - yangi urinish
+  if (rec) { DB.aimBest = { k: k, h: h, t: now() }; persist(); }
+  cmd('say "' + T('at_res').replace('{k}', k).replace('{h}', hp) + (rec ? ' ' + T('at_rec') : '') + '"');
+  if (ME) api('aim_set', { k: k, h: h }, function (r) { if (r.ok) AIM_TOP = r.top || AIM_TOP; });
+}
+/* telefon ilovasi (Android, Xash3D asosida): havola mobile.json dan (yangi build chiqsa o'zi yangilanadi), telefon kamerasi bilan QR */
+function mobApp() {
+  CLK.mobapp = (CLK.mobapp || 0) + 1; CLK_N++;
+  var show = function (url) {
+    var qr = ''; try { var q = QRGEN(0, 'M'); q.addData(url); q.make(); qr = '<img class="tgqr" src="' + q.createDataURL(4, 2) + '" alt="QR">'; } catch (e) {}
+    openSide('mobapp', T('mb_t'), '<div class="tgl2"><p class="tgint">' + esc(T('mb_intro')) + '</p><div class="tgw">' + (qr ? '<div class="tgq">' + qr + '<small>' + esc(T('tg_scan')) + '</small></div>' : '') +
+      '<div class="tgi"><ol><li>' + esc(T('mb_s1')) + '</li><li>' + esc(T('mb_s2')) + '</li><li>' + esc(T('mb_s3')) + '</li></ol></div></div>' +
+      '<div class="avurl"><input class="ipin" readonly value="' + esc(url) + '"><a class="cpy" data-copyip="' + esc(url) + '">' + esc(T('ip_copy')) + '</a></div>' +
+      '<div class="mut" style="font-size:12px;margin-top:8px">' + esc(T('mb_note')) + '</div></div>');
+  };
+  var x = new XMLHttpRequest(), done = false, fb = 'https://github.com/jamic2922220-alt/cssborka.uz-mobile/releases/latest/download/CS16-boosttop.apk';
+  var tm = setTimeout(function () { if (!done) { done = true; show(fb); } }, 4000);
+  x.onreadystatechange = function () { if (x.readyState !== 4 || done) return; done = true; clearTimeout(tm); var u = fb; try { var j = JSON.parse(x.responseText); if (/^https:\/\//.test(j.apk_url || '')) u = j.apk_url; } catch (e) {} show(u); };
+  try { x.open('GET', 'mobile.json?t=' + now(), true); x.send(null); } catch (e) { done = true; clearTimeout(tm); show(fb); }
+}
 function nadeTips(mp) {
   var t = T('nd_' + mp), h = '<div class="ph2 m">' + esc(T('nd_keys')) + '</div><div class="ndk"><b>F3</b> ' + esc(T('nd_f3')) + ' &nbsp; <b>F4</b> ' + esc(T('nd_f4')) + '</div>';
   if (t && t !== 'nd_' + mp) { h += '<div class="ph2 m">' + esc(T('nd_spots')) + '</div><ol class="ndl">'; each(t.split('|'), function (x) { h += '<li>' + esc(x) + '</li>'; }); h += '</ol>'; }
@@ -3596,7 +3646,7 @@ function botsPane() {
   openSide('bots', T('m_bots'), '<div class="bts"><div class="mut" style="margin-bottom:10px">' + esc(T('bt_s')) + '</div>' +
     '<div class="ph2 m">' + esc(T('bt_mode')) + '</div><div class="seg2">' + ms + '</div><div class="mut" style="font-size:12px;margin:-2px 0 6px">' + esc(T('bm_' + md + '2')) + '</div>' +
     '<div class="ph2 m">' + esc(T('bt_map')) + '</div><div class="seg2">' + m + '</div>' +
-    (md === 'nade' ? nadeTips(mp) :
+    (md === 'aimt' ? aimtPane() : md === 'nade' ? nadeTips(mp) :
     '<div class="ph2 m">' + esc(T('bt_n')) + '</div><div class="seg2">' + c + '</div>' +
     '<div class="ph2 m">' + esc(T('bt_dif')) + '</div><div class="seg2">' + l + '</div>') +
     '<div class="fr w" style="margin-top:10px"><div class="lb">' + esc(T('bt_lan')) + '<small>' + esc(T('bt_lan2')) + '</small></div><div class="tg' + (b.lan !== 0 ? ' on' : '') + '" data-blan="1"><i></i></div></div>' +
@@ -3606,6 +3656,7 @@ function botsPane() {
 function botsGo() {
   var b = DB.bots || {}, mp = b.map || 'de_dust2', n = b.n || (pcWeak() ? 5 : 9), d = b.d != null ? b.d : 1;
   if (b.m === 'nade') n = 0;                     // granata mashqi - botsiz (LAN yoqilgan bo'lsa do'stlar kira oladi)
+  if (b.m === 'aimt') { n = pcWeak() ? 9 : 13; d = 0; AIMT = { on: 1, t0: 0, k: 0, h: 0 }; } else AIMT = null;   // aim test: ko'proq nishon
   closeModal();
   if (pcWeak() && n > 5 && !DB.botWarn) { DB.botWarn = 1; persist(); toast(T('bt_weak'), 9000); }
   if (CONNECTED) cmd('disconnect');
@@ -3619,7 +3670,7 @@ function botsGo() {
   each(['maxplayers ' + (lan ? Math.max(total, 12) : total)].concat(hc).concat([
         'mp_autoteambalance 1', 'mp_limitteams 2', 'mp_timelimit 0']).concat(botCvars(b)).concat([
         'bot_difficulty ' + d, 'bot_join_after_player 0', 'bot_auto_vacate 1', 'bot_quota_mode ' + qmode, 'bot_quota ' + quota, 'bot_chatter minimal', 'map ' + mp]), function (c) { cmd(c); });
-  toast(T(b.m === 'nade' ? 'nd_wait' : lan ? 'bt_wait_lan' : 'bt_wait'), b.m === 'nade' ? 12000 : lan ? 9000 : 6000);
+  toast(T(b.m === 'aimt' ? 'at_wait' : b.m === 'nade' ? 'nd_wait' : lan ? 'bt_wait_lan' : 'bt_wait'), b.m === 'nade' ? 12000 : lan ? 9000 : 6000);
   /* xarita ochilganda o'yin server.cfg / listenserver.cfg ni bajaradi va bot_quota 0 ga tushadi - shuning uchun yuklangandan keyin
    * yana bir necha marta yuboramiz (sekin kompyuterda yuklanish 30-60 s). Ortiqcha yuborish zararsiz - son o'zgarmaydi */
   BOT_PEND = { hc: hc, n: quota, qm: qmode, d: d, t: now(), b: b, rs: 0 }; BOT_SESS = { t: now(), m: b.m || 'std' }; fxClass(); sparks();
@@ -3771,6 +3822,8 @@ function act(a) {
   if (a === 'trskip') return tourEnd();
   if (a === 'trreg') { tourEnd(); lgReg = true; return openLogin(); }
   if (a === 'acctx') { DB.acx = 1; persist(); statePush(); renderAll(); return toast(T('ac_x'), 5000); }   // akkaunt kartasi bir marta yopiladi
+  if (a === 'mobx') { DB.mobx = now(); persist(); renderAll(); return; }
+  if (a === 'mobapp') return mobApp();
   if (a === 'promox') { DB.pxx = now(); persist(); statePush(); renderAll(); return; }
   if (a === 'feedback') return openFeedback();
   if (a === 'fbsend') return sendFeedback();

@@ -2,7 +2,7 @@
 const { page } = require('./lib');
 const path = require('path'), fs = require('fs'), os = require('os');
 (async () => {
-  const { b, p, errs } = await page({ db: { token: process.env.XC_TOKEN, device: 'testdev0001', fx: 1, lang: 'uz', dnd: 0, tour: 1, wnSeen: 'x', tgAsk: Date.now(), tgAskN: 3, bots: { m: 'nade', map: 'de_dust2', lan: 0 } }, wait: 1500 });
+  const { b, p, errs } = await page({ db: { token: process.env.XC_TOKEN, device: 'testdev0001', fx: 1, lang: 'uz', dnd: 0, tour: 1, wnSeen: 'x', tgAsk: Date.now(), tgAskN: 3, bots: { m: 'nade', map: 'de_dust2', lan: 0 }, set: { name: 'testa', tag: '' } }, wait: 1500 });
   const res = []; const ok = (c, m) => res.push((c ? 'ok  ' : 'XATO') + ' ' + m);
   const clk = sel => p.evaluate(s => { const e = document.querySelector(s); if (e) e.click(); return !!e; }, sel);
   await clk('.mi[data-act=bots]'); await p.waitForTimeout(300);
@@ -16,6 +16,31 @@ const path = require('path'), fs = require('fs'), os = require('os');
   await clk('.mi[data-act=bots]'); await p.waitForTimeout(300); await clk('[data-bm=std]'); await p.waitForTimeout(200);
   await p.evaluate(() => { window.LOG.length = 0; }); await clk('[data-act=botgo]'); await p.waitForTimeout(300);
   ok((await p.evaluate(() => window.LOG)).includes('sv_cheats 0'), 'oddiy botlar o\'yinida sv_cheats 0 qaytadi');
+  /* aim test: birinchi kill bilan 60 s, natija chatga (say), rekord saqlanadi va haftalik TOP ga */
+  await clk('.mi[data-act=bots]'); await p.waitForTimeout(300); await clk('[data-bm=aimt]'); await p.waitForTimeout(500);
+  const at = await p.evaluate(() => document.getElementById('sideBody').textContent);
+  ok(/HAFTALIK TOP-10/.test(at) && /60 soniya/.test(at), 'aim test oynasi: tushuntirish va haftalik TOP');
+  const sent = []; p.on('request', r => { const d = r.postData() || ''; if (/a=aim_set/.test(d)) sent.push(d); });
+  await p.evaluate(() => { window.LOG.length = 0; }); await clk('[data-act=botgo]'); await p.waitForTimeout(300);
+  const lg = await p.evaluate(() => window.LOG);
+  ok(lg.includes('bot_stop 1') && lg.includes('bot_dont_shoot 1') && lg.includes('bot_quota 13'), 'aim test: 13 ta joyida turgan, otmaydigan bot');
+  await p.evaluate(() => (window.L.putinserver || []).forEach(f => f({ detail: { address: 'loopback' } })));
+  await p.evaluate(() => { const c = window.L.con_message || []; const send = t => c.forEach(f => f({ detail: { text: t } }));
+    send('testa killed Bot1 with ak47'); send('*** testa killed Bot2 with a headshot from ak47 ***'); send('testa killed Bot3 with deagle'); send('Bot4 killed testa with ak47'); });
+  await p.waitForTimeout(1000);
+  ok((await p.evaluate(() => window.LOG)).some(x => /60 soniya boshlandi/.test(x)), 'birinchi kill bilan 60 soniya boshlandi (chatda)');
+  await p.waitForTimeout(61000);
+  const say = (await p.evaluate(() => window.LOG)).filter(x => /^say /.test(x)).pop() || '';
+  ok(/3 kill, 33% headshot/.test(say) && /REKORD/.test(say), 'natija chatda: ' + say);
+  await p.waitForTimeout(800);
+  ok(sent.length === 1 && /k=3&h=1/.test(sent[0]), 'natija haftalik reytingga yuborildi');
+  /* telefon ilovasi kartasi: bosh ekranda, bosilsa QR + APK havolasi */
+  await p.evaluate(() => { document.querySelectorAll('[data-act="close"]').forEach(c => { if (c.offsetParent) c.click(); }); });
+  ok(await p.evaluate(() => getComputedStyle(document.getElementById('mobCard')).display !== 'none'), 'bosh ekranda "Telefonda ham o\'yna" kartasi');
+  await clk('#mobCard'); await p.waitForTimeout(800);
+  const mb = await p.evaluate(() => ({ t: document.getElementById('sideBody').textContent, qr: !!document.querySelector('#sideBody img.tgqr'), u: (document.querySelector('#sideBody .ipin') || {}).value || '' }));
+  ok(mb.qr && /CS16-boosttop\.apk/.test(mb.u) && /Android/.test(mb.t), 'telefon: QR va APK havolasi (' + mb.u + ')');
+  await p.screenshot({ path: '/tmp/claude-0/-home-user/c174bc30-11c3-5deb-b9e4-d277fe0ca5fd/scratchpad/mobapp.png' });
   /* oflayn menyu: kompyuterdagi fayl, LAN ro'yxati lan.js dan */
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xcoff'));
   fs.copyFileSync(path.join(__dirname, '../../theme/platform/xclient/offline.html'), path.join(dir, 'offline.html'));

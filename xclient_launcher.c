@@ -114,6 +114,7 @@ static DWORD g_played_s = 0;
 static char g_cmod[64];   /* oxirgi yiqilishda aybdor modul (aqlli tuzatish uchun), bo'lmasa bo'sh */   /* oxirgi o'yin necha soniya davom etdi (muammo hisobotiga) */   /* prob_send uchun qo'shimcha tafsilot (url-escape qilingan), bo'lmasa bo'sh */
 static volatile DWORD g_net_dl = 0;
 static volatile LONG g_probe_ok = 0;
+static DWORD g_t0 = 0, g_st = 0;   /* launcher ochilgan vaqt va o'yin ochilguncha ketgan ms (tezlik o'lchovi) */
 static BOOL g_offline = FALSE;   /* internet yo'q (faqat LAN yoki umuman tarmoqsiz): tarmoq ishlari o'tkazib yuboriladi, o'yinda oflayn menyu */
 static HINTERNET open_url_raw(const char *url)
 {
@@ -2546,6 +2547,7 @@ static BOOL run_game(void)
     InterlockedExchange(&g_game_seen, 0);
     if (o_tune) ram_offer();                            /* xotira kam bo'lsa - og'ir dasturlarni yopishni taklif qilish, bo'shatish */
     if (game_spawn(exe, cmd, &si, &pi)) {
+        if (!g_st && g_t0) g_st = GetTickCount() - g_t0;   /* birinchi ochilish: launcher bosilgandan o'yin ochilguncha */
         if (g_one) { CloseHandle(g_one); g_one = NULL; }   /* o'yin ochildi - endi yana bosilsa, yangi launcher uni topib oldinga chiqaradi */
         if (o_prio && safe != 1) SetPriorityClass(pi.hProcess, ABOVE_NORMAL_PRIORITY_CLASS);   /* "O'yinni tezlashtirish": HIGH Windows ovoz xizmatini (audiodg) siqib, ovoz qotishi va chirsillashiga sabab bo'lardi */
         if (pi.hThread) CloseHandle(pi.hThread);
@@ -2795,6 +2797,9 @@ static DWORD WINAPI launch_ping(LPVOID unused) { (void)unused; api_call("launch"
 static BOOL g_relaunch = FALSE, g_play = TRUE;
 static wchar_t g_err[256] = L"";
 
+/* yangilanish tekshiruvi sozlamalar so'rovi (fetch_opts) bilan parallel - launcher tezroq ochiladi */
+static UpdInfo g_upd; static BOOL g_upd_ok = FALSE;
+static DWORD WINAPI upd_th(LPVOID unused) { (void)unused; g_upd_ok = get_update(&g_upd); return 0; }
 static DWORD WINAPI side_jobs(LPVOID unused)
 {
     (void)unused;
@@ -2847,6 +2852,8 @@ static DWORD WINAPI worker(LPVOID unused)
      * ayniqsa sekin internet/disk bo'lgan kompyuterlarda). O'yin ochilishidan oldin kutib olinadi */
     HANDLE side = CreateThread(NULL, 0, side_jobs, NULL, 0, NULL);
     if (!side) side_jobs(NULL);
+    char ch0[16]; lstrcpynA(ch0, g_chan, sizeof(ch0));
+    HANDLE uth = CreateThread(NULL, 0, upd_th, NULL, 0, NULL);
     fetch_opts();
     if (o_beta >= 0) { lstrcpynA(g_chan, o_beta ? "beta" : "stable", sizeof(g_chan)); ini_save(); }
     if (o_start >= 0) set_autostart(o_start);
@@ -2858,7 +2865,11 @@ static DWORD WINAPI worker(LPVOID unused)
 
     status(L"Yangilanish tekshirilmoqda...", 1);
     UpdInfo u;
-    if (get_update(&u)) {
+    if (uth) { WaitForSingleObject(uth, INFINITE); CloseHandle(uth); }
+    BOOL uok;
+    if (!uth || strcmp(ch0, g_chan)) uok = get_update(&u);   /* kanal (beta/barqaror) shu ochilishda o'zgardi - qayta so'raymiz */
+    else { u = g_upd; uok = g_upd_ok; }
+    if (uok) {
         if (u.msg[0]) {
             wchar_t w[256];
             MultiByteToWideChar(CP_UTF8, 0, u.msg, -1, w, 256);
@@ -2980,6 +2991,7 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, LPWSTR cmdline, int show)
 {
     (void)hp; (void)cmdline; (void)show;
     CoInitialize(NULL);
+    g_t0 = GetTickCount();
     GetModuleFileNameW(NULL, g_self, MAX_PATH);
     if (cmdline && !wcsncmp(cmdline, L"--lantest ", 10)) {   /* avtomatik test: LAN skaner -> faylga */
         g_lan_dump = cmdline + 10; lan_thread(NULL); CoUninitialize(); return 0;

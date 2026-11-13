@@ -410,9 +410,9 @@ static void perf_end(DWORD played)
     char url[300];
     if (g_perf_dump) { char t[200]; _snprintf(t, sizeof(t), "gc=%d g90=%d sc=%d ram=%lu cores=%lu n=%d", (int)(g_perf.gsum * 100 / g_perf.n), g_perf.n90 * 100 / g_perf.n, (int)(g_perf.ssum * 100 / g_perf.n), (unsigned long)g_perf.ramMin, (unsigned long)g_perf.cores, g_perf.n); t[199] = 0;
         HANDLE f = CreateFileW(g_perf_dump, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL); if (f != INVALID_HANDLE_VALUE) { DWORD w; WriteFile(f, t, (DWORD)strlen(t), &w, NULL); CloseHandle(f); } return; }
-    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=perfl&d=%s&gc=%d&g90=%d&sc=%d&ram=%lu&cores=%lu&n=%d&t=%lu&tr=%d&gm=%lu", g_id,
+    _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=perfl&d=%s&gc=%d&g90=%d&sc=%d&ram=%lu&cores=%lu&n=%d&t=%lu&tr=%d&gm=%lu&st=%lu", g_id,
               (int)(g_perf.gsum * 100 / g_perf.n), g_perf.n90 * 100 / g_perf.n, (int)(g_perf.ssum * 100 / g_perf.n),
-              (unsigned long)g_perf.ramMin, (unsigned long)g_perf.cores, g_perf.n, (unsigned long)played, g_perf.trims, (unsigned long)g_perf.gmem);
+              (unsigned long)g_perf.ramMin, (unsigned long)g_perf.cores, g_perf.n, (unsigned long)played, g_perf.trims, (unsigned long)g_perf.gmem, (unsigned long)g_st);
     url[sizeof(url) - 1] = 0;
     free(http_get(url, NULL));
 }

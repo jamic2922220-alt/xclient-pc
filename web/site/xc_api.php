@@ -384,6 +384,11 @@ function ref_apply(&$u, $raw) {
     return '';
 }
 
+function aim_top($b) {
+    $l = array(); foreach ($b as $lk => $x) $l[] = array('n' => $x['n'], 'k' => (int)$x['k'], 'h' => (int)$x['h']);
+    usort($l, function ($a, $c) { return $c['k'] - $a['k'] ?: $c['h'] - $a['h']; });
+    return array_slice($l, 0, 10);
+}
 function tg_remind_tick() {
     $c = xc_cfg();
     if (empty($c['tg_bot']) || empty($c['tg_token'])) return;
@@ -711,7 +716,7 @@ if ($a === 'perfl') {
     $d = strtolower(p('d'));
     if (!preg_match('/^[a-z0-9]{8,40}$/', $d) || !is_file(XC_DIR . '/dev/' . $d . '.php') || rl_count('perfl' . $d, 3600) >= 20) exit;
     rl_add('perfl' . $d, 3600);
-    $e = array('t' => time(), 's' => 'l', 'd' => $d, 'gc' => max(0, min(400, (int)p('gc'))), 'g90' => max(0, min(100, (int)p('g90'))), 'sc' => max(0, min(100, (int)p('sc'))), 'gm' => max(0, min(9999, (int)p('gm'))),
+    $e = array('t' => time(), 's' => 'l', 'd' => $d, 'gc' => max(0, min(400, (int)p('gc'))), 'g90' => max(0, min(100, (int)p('g90'))), 'sc' => max(0, min(100, (int)p('sc'))), 'gm' => max(0, min(9999, (int)p('gm'))), 'st' => max(0, min(600000, (int)p('st'))),
         'ram' => max(0, min(1000000, (int)p('ram'))), 'cores' => max(0, min(256, (int)p('cores'))), 'dur' => max(0, min(86400 * 2, (int)p('t'))), 'tr' => max(0, min(9999, (int)p('tr'))));   // tr - o'yin paytida xotira necha marta bo'shatildi
     perf_add($e);
     lock(); $o = rd('dev/' . $d, array());
@@ -1379,6 +1384,23 @@ case 'ref_set':
     $re = ref_apply($u, p('code'));
     if ($re !== '') fail('bad', $re);
     out(array('ok' => true, 'me' => pub($u, true)));
+
+/* ---------- Aim test (60 soniya, joyida turgan botlar): haftalik TOP-10. Natija o'yinchining eng yaxshisi bilan almashadi ---------- */
+case 'aim_set':
+    $u = auth();
+    $k = max(0, (int)p('k')); $h = max(0, min($k, (int)p('h')));
+    if ($k > 90) fail('bad', 'Natija noto\'g\'ri');                   // 60 soniyada 90 dan ko'p kill - imkonsiz
+    if (rl_count('aim' . strtolower($u['login']), 3600) >= 40) fail('limit', 'Juda ko\'p');
+    rl_add('aim' . strtolower($u['login']), 3600);
+    lock();
+    $wk = 'aimtop_' . week_id(); $b = rd($wk, array()); $lk = strtolower($u['login']);
+    $old = isset($b[$lk]) ? $b[$lk] : null;
+    $better = !$old || $k > $old['k'] || ($k === $old['k'] && $h > $old['h']);
+    if ($better) { $b[$lk] = array('n' => $u['name'], 'k' => $k, 'h' => $h, 't' => time()); wr($wk, $b); }
+    unlock();
+    out(array('ok' => true, 'best' => $better, 'top' => aim_top($b), 'me' => $b[$lk]));
+case 'aim_top':
+    out(array('ok' => true, 'top' => aim_top(rd('aimtop_' . week_id(), array()))));
 
 /* ---------- CFG kodi: sozlama + tugmalar 6 belgili kod bilan ulashiladi (xc_data/cfgs) ---------- */
 case 'cfg_share':
