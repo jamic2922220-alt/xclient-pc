@@ -1998,8 +1998,6 @@ static BOOL handle_running_game(void)
     HANDLE ph[16]; wchar_t nm[16][64];
     int n = game_procs(ph, nm, 16);
     if (!n) return TRUE;
-    wchar_t list[256] = L"";
-    for (int i = 0; i < n && wcslen(list) < 180; i++) { if (i) wcscat(list, L", "); wcscat(list, nm[i]); }
     HWND live = NULL; BOOL hung = FALSE;
     for (int i = 0; i < n; i++) {
         if (_wcsicmp(nm[i], L"hl.exe") && _wcsicmp(nm[i], L"cstrike.exe")) continue;   /* oyna holati - faqat o'yinning o'zi */
@@ -2012,14 +2010,23 @@ static BOOL handle_running_game(void)
         if (IsIconic(live)) ShowWindow(live, SW_RESTORE);
         SetForegroundWindow(live);
         go = FALSE;
-    } else {
-        wchar_t q[512];
-        _snwprintf(q, 512, L"O‘yin oldingi safardan ochiq qolgan yoki qotib qolgan (%s).\nUni yopib, qayta ochaymi?\n\n"
-                           L"Игра осталась открытой или зависла. Закрыть и запустить заново?", list);
-        q[511] = 0;
-        /* g_wnd ustida: launcher oynasi (topmost) so'rovni yopib qo'ymasin; xarita yuklanayotgan sog' o'yin ham "qotgan" ko'rinishi mumkin - standart "Yo'q" */
-        if (MessageBoxW(g_wnd, q, L"X CLIENT", MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND | MB_TOPMOST | MB_DEFBUTTON2) != IDYES) go = FALSE;
+    } else if (hung && live == NULL) {
+        /* O'yin oynasi javob bermayapti. Xarita yuklanayotgan sog' o'yin ham bir necha soniya "qotgan" ko'rinadi - 8 soniya kutamiz.
+         * Savol oynasi chiqmaydi (o'yinchilar norozi edi): tuzalsa - oldinga chiqaramiz, tuzalmasa - jimgina yopib, qayta ochamiz */
+        for (int k = 0; k < 16 && hung; k++) {
+            Sleep(500); hung = FALSE;
+            for (int i = 0; i < n; i++) {
+                if (_wcsicmp(nm[i], L"hl.exe") && _wcsicmp(nm[i], L"cstrike.exe")) continue;
+                if (WaitForSingleObject(ph[i], 0) == WAIT_OBJECT_0) continue;
+                GameWnd g = { GetProcessId(ph[i]), NULL };
+                EnumWindows(game_wnd_cb, (LPARAM)&g);
+                if (g.wnd) { if (IsHungAppWindow(g.wnd)) hung = TRUE; else live = g.wnd; }
+            }
+        }
+        if (live && !hung) { if (IsIconic(live)) ShowWindow(live, SW_RESTORE); SetForegroundWindow(live); go = FALSE; }
     }
+    /* oynasiz qolgan jarayonlar (cstrike.exe, crashpad_handler.exe va h.k.) - savolsiz yopiladi */
+    if (go) prob_send("stale_kill", 0);
     if (go && !(live && !hung)) {
         BOOL denied = FALSE;
         for (int i = 0; i < n; i++) {
