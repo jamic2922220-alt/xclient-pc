@@ -35,6 +35,10 @@ Keyingi (egasi tanladi, 2026-11-13):
   - M9 kuchsiz telefon rejimi (RAM/yadro bo'yicha gfx=low avtomatik);
   - M10 yiqilish hisoboti (Android 11+ ApplicationExitInfo, Java xatolari) -> prob `mob_crash`/`mob_anr`/`mob_lowmem`;
   - M12 do'stni chaqirish (Android ulashish oynasi, matnda taklif kodi = login).
+  - M14 push-bildirishnoma: "do'sting o'ynayapti", "kunlik sovg'a kutyapti" (fonda tekshirish yoki FCM);
+  - M15 do'stlar bo'limi: qo'shish, so'rovni qabul qilish, do'stga xabar (friend_add/accept, msg_send/msg_list);
+  - M17 ovozli chat tugmasi: o'yinda bosib turib gapirish (+voicerecord touch tugmasi, mikrofon ruxsati);
+  - M22 ilova nomi va ikonkasi: "X CLIENT Mobile".
 
 Kutilmoqda:
 - nDirect javobi: Windows 7 da tier0.dll TLS (dump: 85c2a708f2..._1794500973, admin kaliti bilan dmpget).
