@@ -682,6 +682,31 @@ static BOOL has_game(void)
 static DWORD g_setup_err = 0;
 /* Inno Setup chiqish kodi: 0 ok, 1-3 ishga tushmadi, 2/5 bekor qilindi, 4 o'rnatish paytida xato, 6 to'xtatildi, 7 tayyorlashda xato */
 static DWORD g_setup_exit = 0;
+/* Inno Setup jurnalidan xato qatorlarini olish (setup_fail sababini bilish uchun) */
+static void setup_log_tail(const wchar_t *path, char *out, int n)
+{
+    out[0] = 0;
+    HANDLE f = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+    if (f == INVALID_HANDLE_VALUE) { lstrcpynA(out, "nolog", n); return; }
+    static char buf[65536]; DWORD sz = GetFileSize(f, NULL), rd = 0;
+    if (sz != INVALID_FILE_SIZE && sz > sizeof(buf) - 1) SetFilePointer(f, (LONG)(sz - (sizeof(buf) - 1)), NULL, FILE_BEGIN);
+    ReadFile(f, buf, sizeof(buf) - 1, &rd, NULL); CloseHandle(f); buf[rd] = 0;
+    char *hit[3] = { 0 }; int nh = 0;
+    for (char *l = buf; l && *l; ) {
+        char *e = strchr(l, '\n'); if (e) *e = 0;
+        if (strstr(l, "rror") || strstr(l, "failed") || strstr(l, "xception") || strstr(l, "orrupt") || strstr(l, "enied") || strstr(l, "annot ") || strstr(l, "Exit code")) { if (nh < 3) hit[nh++] = l; else { hit[0] = hit[1]; hit[1] = hit[2]; hit[2] = l; } }
+        l = e ? e + 1 : NULL;
+    }
+    for (int i = 0; i < nh; i++) {
+        char *l = hit[i]; size_t k = strlen(l); while (k && (l[k - 1] == '\r' || l[k - 1] == ' ')) l[--k] = 0;
+        if (k > 20 && l[4] == '-' && l[10] == ' ') { l += 19; while (*l == '.' || (*l >= '0' && *l <= '9')) l++; while (*l == ' ') l++; }   /* "2026-11-14 22:56:01.123" vaqtini tashlaymiz */
+        if (strlen(out) + strlen(l) + 3 >= (size_t)n) break;
+        if (out[0]) strcat(out, " ~ ");
+        strcat(out, l);
+    }
+    if (!out[0]) lstrcpynA(out, "noerr", n);
+}
+
 static BOOL run_setup(const wchar_t *exe, const wchar_t *params)
 {
     g_setup_err = 0;
@@ -806,7 +831,8 @@ static BOOL ensure_game(const char *url)
     }
     status(L"CS 1.6 o‘rnatilmoqda... (ruxsat so‘ralsa \"Ha\" ni bosing)", 100);
     SetWindowPos(g_wnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    _snwprintf(params, 1024, L"/VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /NOICONS /TASKS=\"\" /LANG=uzbek /DIR=\"%s\"", g_dir);
+    wchar_t ilog[MAX_PATH]; GetTempPathW(MAX_PATH, ilog); wcscat(ilog, L"xc_setup.log"); DeleteFileW(ilog);
+    _snwprintf(params, 1024, L"/VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /NOICONS /TASKS=\"\" /LANG=uzbek /LOG=\"%s\" /DIR=\"%s\"", ilog, g_dir);
     run_setup(tmp, params);
     DWORD ex1 = g_setup_exit, ex2 = 0;
     if (!has_game()) {
@@ -819,7 +845,8 @@ static BOOL ensure_game(const char *url)
         ULARGE_INTEGER fr; fr.QuadPart = 0; GetDiskFreeSpaceExW(g_dir, &fr, NULL, NULL);
         WIN32_FILE_ATTRIBUTE_DATA fa; ULONGLONG sz = 0;
         if (GetFileAttributesExW(tmp, GetFileExInfoStandard, &fa)) sz = ((ULONGLONG)fa.nFileSizeHigh << 32) | fa.nFileSizeLow;
-        char raw[200]; _snprintf(raw, sizeof(raw), "inno=%lu/%lu local=%d size=%lluMB free=%lluMB", (unsigned long)ex1, (unsigned long)ex2, local ? 1 : 0, sz >> 20, (unsigned long long)(fr.QuadPart >> 20)); raw[199] = 0;
+        char lg[400]; setup_log_tail(ilog, lg, sizeof(lg));
+        char raw[600]; _snprintf(raw, sizeof(raw), "inno=%lu/%lu local=%d size=%lluMB free=%lluMB full=%d log=%s", (unsigned long)ex1, (unsigned long)ex2, local ? 1 : 0, sz >> 20, (unsigned long long)(fr.QuadPart >> 20), sz == XC_GAME_SIZE, lg); raw[599] = 0;
         url_escape(g_probx, sizeof(g_probx), raw); prob_send("setup_fail", 4000); g_probx[0] = 0;
         if (ex2 == 2 || ex2 == 5) lstrcpyW(g_err, L"O‘rnatish oynasi yopib yuborildi. X CLIENT ni qayta oching va o‘rnatish oxirigacha kuting.");
         else if (ex1 == 4 || ex2 == 4 || ex1 == 7 || ex2 == 7) lstrcpyW(g_err, L"CS 1.6 o‘rnatishda xato bo‘ldi (diskda joy yoki antivirus). Kamida 2 GB joy bo‘shating, antivirusni vaqtincha o‘chirib X CLIENT ni qayta oching.");
