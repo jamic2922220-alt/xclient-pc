@@ -341,6 +341,13 @@ function tg_bot_answer($chat, $txt) {
         lock(); $u = user($me['login']); if ($u) { if (strtolower($sm[1]) === 'stop') $u['tgoff'] = 1; else unset($u['tgoff']); save_user($u); } unlock();
         return strtolower($sm[1]) === 'stop' ? "Eslatmalar o'chirildi. Qayta yoqish: /eslatma" : "Eslatmalar yoqildi: kunlik sovg'a va seriya haqida kechqurun xabar beraman. O'chirish: /stop";
     }
+    if (preg_match('/^\/start\s+lg(\d{8})$/', $txt, $m)) {   // telefon ilovasi: "Telegram orqali kirish" (t.me/bot?start=lgKOD)
+        if (!$me) return "Bu Telegram hali X CLIENT akkauntiga ulanmagan.\nAvval kompyuterdagi X CLIENT menyusida: Sozlamalar > Akkaunt > \"Telegram'ni ulash\". Yoki ilovada kompyuterdagi kod / login va parol bilan kiring.";
+        lock(); $lg = rd('tglogin', array());
+        if (empty($lg[$m[1]]) || time() - $lg[$m[1]]['t'] > 600) { unlock(); return "Kod eskirgan. Ilovada \"Telegram orqali kirish\" ni qayta bosing."; }
+        $lg[$m[1]]['l'] = strtolower($me['login']); wr('tglogin', $lg); unlock();
+        return "Tayyor, " . $me['name'] . "! Ilovaga qayting - akkauntingizga kirildi.";
+    }
     if (preg_match('/^(?:\/link\s*|\/start\s+)?(\d{6})$/', $txt, $m)) {   // /start KOD - menyudagi QR yoki tugma (t.me/bot?start=KOD)
         $codes = rd('tglink', array());
         if (empty($codes[$m[1]]) || time() - $codes[$m[1]]['t'] > 900) return "Kod topilmadi yoki eskirgan. X CLIENT menyusida: Sozlamalar > Akkaunt > Telegram'ni ulash.";
@@ -1137,6 +1144,29 @@ case 'mclaim':
     lock(); $mc = rd('mcodes', array());
     if (strlen($code) !== 6 || empty($mc[$code]) || time() - $mc[$code]['t'] > 600) { rl_add('mcl' . client_ip(), 900); unlock(); usleep(400000); fail('bad', 'Kod noto\'g\'ri yoki eskirgan - kompyuterda yangi kod oling'); }
     $u = user($mc[$code]['l']); unset($mc[$code]); wr('mcodes', $mc);
+    if (!$u) fail('bad', 'Akkaunt topilmadi');
+    $u['mob'] = time(); save_user($u);
+    out(array('ok' => true, 'token' => new_token($u['login']), 'me' => pub($u, true)));
+
+/* telefon ilovasi: Telegram orqali kirish (parolsiz). Ilova kod oladi va t.me/bot?start=lgKOD ni ochadi, bot akkauntni tasdiqlaydi, ilova tgl_st bilan kutadi */
+case 'tgl_code':
+    $c = xc_cfg(); $bn = isset($c['tg_botname']) ? preg_replace('/[^A-Za-z0-9_]/', '', $c['tg_botname']) : '';
+    if (empty($c['tg_bot']) || empty($c['tg_token']) || $bn === '') fail('off', 'Telegram bot hali yoqilmagan');
+    if (rl_count('tgl' . client_ip(), 3600) >= 20) fail('limit', 'Juda ko\'p urinish - keyinroq');
+    rl_add('tgl' . client_ip(), 3600);
+    lock(); $lg = rd('tglogin', array()); foreach ($lg as $k => $v) if (time() - $v['t'] > 600) unset($lg[$k]);
+    do { $code = (string)mt_rand(10000000, 99999999); } while (isset($lg[$code]));
+    $sec = bin2hex(function_exists('random_bytes') ? random_bytes(12) : openssl_random_pseudo_bytes(12));   // faqat shu ilova biladi: kodni ko'rgan boshqa odam token ololmaydi
+    $lg[$code] = array('t' => time(), 'l' => '', 's' => $sec); wr('tglogin', $lg);
+    out(array('ok' => true, 'code' => $code, 'sec' => $sec, 'link' => 'https://t.me/' . $bn . '?start=lg' . $code, 'ttl' => 600));
+case 'tgl_st':
+    $code = preg_replace('/\D/', '', p('code'));
+    if (rl_count('tgs' . client_ip(), 600) >= 200) fail('limit', 'limit');
+    rl_add('tgs' . client_ip(), 600);
+    lock(); $lg = rd('tglogin', array());
+    if (strlen($code) !== 8 || empty($lg[$code]) || time() - $lg[$code]['t'] > 600 || !hash_equals($lg[$code]['s'], (string)p('sec'))) { unlock(); fail('bad', 'Kod eskirgan - qayta urinib ko\'ring'); }
+    if ($lg[$code]['l'] === '') { unlock(); out(array('ok' => true, 'wait' => 1)); }
+    $u = user($lg[$code]['l']); unset($lg[$code]); wr('tglogin', $lg);
     if (!$u) fail('bad', 'Akkaunt topilmadi');
     $u['mob'] = time(); save_user($u);
     out(array('ok' => true, 'token' => new_token($u['login']), 'me' => pub($u, true)));
