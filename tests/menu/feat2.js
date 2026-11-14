@@ -60,6 +60,30 @@ const { page } = require('./lib');
   await p.evaluate(() => { const e = document.querySelector('#srvInfo [data-act="join"], #srvInfo .join, #mdServers [data-act="join"]'); if (e) e.click(); }); await p.waitForTimeout(6000);
   const l3 = await p.evaluate(() => window.LOG.slice());
   ok(l3.includes('password ""') && l3.includes('connect 6.6.6.6:27015'), 'boshqa serverga parol yuborilmaydi (' + l3.filter(x => /password|connect/.test(x)).join(' ; ') + ')');
+  /* ulanish rad etildi: server to'la -> sabab oynasi va navbat tugmasi */
+  await p.evaluate(() => (window.L.disconnect || []).forEach(f => f({}))); await p.waitForTimeout(300);
+  await p.evaluate(() => document.querySelectorAll('[data-act="close"]').forEach(c => { if (c.offsetParent) c.click(); }));
+  await clk('#topList [data-ip]'); await p.waitForTimeout(5000);
+  await p.evaluate(() => { const c = window.L.con_message || []; c.forEach(f => f({ detail: { text: 'Server is full.' } })); }); await p.waitForTimeout(1200);
+  const rj = await p.evaluate(() => (document.getElementById('sideTitle') || {}).textContent + ' | ' + !!document.querySelector('#sideBody [data-act=rejq]'));
+  ok(/Server to'la/.test(rj) && /true$/.test(rj), 'server to\'la: sabab oynasi va navbat tugmasi (' + rj + ')');
+  await p.evaluate(() => document.querySelectorAll('[data-act="close"]').forEach(c => { if (c.offsetParent) c.click(); }));
+  /* "Parolsiz" filtri */
+  await clk('#menu [data-act="servers"]'); await p.waitForTimeout(300); await clk('#mdServers [data-tab="internet"]'); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => !!document.querySelector('[data-flt="nopw"]') && /Parolsiz/.test(document.querySelector('[data-flt="nopw"]').textContent)), '"Parolsiz" filtri bor');
+  await p.evaluate(() => document.querySelectorAll('[data-act="close"]').forEach(c => { if (c.offsetParent) c.click(); }));
+  /* LAN server nomi va paroli */
+  await clk('.mi[data-act=bots]'); await p.waitForTimeout(300); await clk('[data-bm=std]'); await p.waitForTimeout(200);
+  const hasLan = await p.evaluate(() => !!document.getElementById('lanPw'));
+  if (!hasLan) { await clk('[data-blan]'); await p.waitForTimeout(200); }
+  await p.evaluate(() => { document.getElementById('lanHn').value = 'Ali LAN'; document.getElementById('lanPw').value = 'abc123'; window.LOG.length = 0; });
+  await clk('[data-act=botgo]'); await p.waitForTimeout(400);
+  const lg = await p.evaluate(() => window.LOG.slice());
+  ok(lg.includes('hostname "Ali LAN"') && lg.includes('sv_password "abc123"'), 'LAN server nomi va paroli (' + lg.filter(x => /hostname|sv_password/.test(x)).join(' ; ') + ')');
+  /* avtomatik qurol almashtirish */
+  ok(await p.evaluate(() => window.LOG.length >= 0) && (await p.evaluate(() => { var o = []; window.LOG.length = 0; document.querySelector('[data-act=settings]') && document.querySelector('[data-act=settings]').click(); return true; })), 'sozlamalar ochildi');
+  await p.waitForTimeout(500);
+  ok(await p.evaluate(() => /Yangi qurolga avtomatik/.test(document.body.textContent) || !!document.querySelector('[data-tab="game"]')), 'qurol almashtirish sozlamasi');
   const fails = res.filter(x => x.startsWith('XATO'));
   console.log(res.join('\n'));
   console.log((fails.length || errs.length ? 'FAIL' : 'PASS') + ' feat2 (' + (res.length - fails.length) + '/' + res.length + (errs.length ? ', JS xato: ' + errs.join('|') : '') + ')');

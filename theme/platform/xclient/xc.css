@@ -141,7 +141,7 @@ input, select { font-family: inherit; }
 
 /* serverlar ro'yxati */
 #srvTools { position: absolute; left: 20px; right: 20px; top: 18px; height: 36px; white-space: nowrap; }
-#srvSearch { width: 270px; height: 34px; margin-right: 6px; padding: 0 12px; font-size: 13px; color: #eee; background: #0f0d12; border: 1px solid #3a2e34; outline: none; vertical-align: top; }
+#srvSearch { width: 200px; height: 34px; margin-right: 6px; padding: 0 12px; font-size: 13px; color: #eee; background: #0f0d12; border: 1px solid #3a2e34; outline: none; vertical-align: top; }
 #srvSearch:focus { border-color: #e5484d; }
 #srvTools .btn { float: right; margin-left: 8px; height: 34px; line-height: 32px; }
 #favNote { float: right; line-height: 34px; font-size: 12px; margin-right: 10px; }
@@ -1124,3 +1124,10 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .spwin { margin: 8px 0; padding: 8px 10px; border: 1px solid rgba(245, 197, 24, .45); background: rgba(245, 197, 24, .06); font-size: 13px; color: #fff; overflow: hidden; }
 .spwin .mut { font-size: 12px; }
 .spwin .btn { float: right; height: 26px; line-height: 26px; padding: 0 12px; font-size: 12px; margin-left: 6px; }
+/* ulanish rad etildi (to'la/ban/kick) va LAN server nomi/paroli */
+.rejw b { display: block; font-size: 16px; color: #fff; margin-bottom: 8px; }
+.rejw p { font-size: 14px; color: #e8e0e6; margin: 0 0 10px; }
+.rejr { margin: 0 0 14px; padding: 8px 10px; background: #120f14; border: 1px solid #2f2530; font-size: 12px; font-family: Consolas, monospace; }
+.lansv { margin: 6px 0 0; }
+.lansv .tx { display: block; width: 100%; margin-bottom: 6px; -webkit-box-sizing: border-box; box-sizing: border-box; }
+#srvTools .chip { padding: 0 9px; margin-right: 5px; }

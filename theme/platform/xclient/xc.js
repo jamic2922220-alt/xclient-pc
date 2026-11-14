@@ -1311,6 +1311,22 @@ function spwAsk(ip, wrong) {
     doConnect(ip, true);
   }, false, true);
 }
+/* ulanish rad etildi: server to'la / ban / kick - oddiy CS kabi sababini ko'rsatamiz (oldin o'yinchi shunchaki menyuga qaytardi) */
+function rejConsole(txt) {
+  if (!SPW_TRY || now() - SPW_TRY.t > 40000) return;
+  var k = /server is full|server full|сервер (заполнен|полон)/i.test(txt) ? 'full' : /\bbann?ed\b|you are banned|забанен|бан\b/i.test(txt) ? 'ban'
+    : /\bkicked\b|кикнут|выкинут/i.test(txt) ? 'kick' : /connection rejected|rejected|отклон/i.test(txt) && !/password/i.test(txt) ? 'rej' : '';
+  if (!k) return;
+  var ip = SPW_TRY.ip; SPW_TRY = null;
+  CLK['rej_' + k] = (CLK['rej_' + k] || 0) + 1; CLK_N++;
+  setTimeout(function () {
+    var b = k === 'full' ? '<a class="btn red" data-act="rejq">' + esc(T('rj_queue')) + '</a> ' : '';
+    REJ_IP = ip;
+    openSide('rej', T('rj_t_' + k), '<div class="rejw"><b>' + esc(srv(ip).name || ip) + '</b><p>' + esc(T('rj_' + k)) + '</p><div class="rejr mut">' + esc(String(txt).replace(/\s+/g, ' ').slice(0, 160)) + '</div>' +
+      b + '<a class="btn" data-act="quick">' + esc(T('rj_other')) + '</a></div>');
+  }, 700);
+}
+var REJ_IP = '';
 function spwConsole(txt) {
   if (!SPW_TRY || now() - SPW_TRY.t > 40000 || !/password/i.test(txt) || !/(invalid|bad|wrong|incorrect|requir|need|enter|неверн|нужен)/i.test(txt)) return;
   var ip = SPW_TRY.ip, had = !!(DB.spw && DB.spw[ip]); SPW_TRY = null;
@@ -1522,7 +1538,7 @@ var MYNAME = '', CONLOG = [];
 var CON_N = 0, CON_K = 0;   // tashxis: konsoldan nechta qator keldi, nechtasi kill deb tanildi (stat bilan serverga)
 function onConsole(txt) {
   txt = String(txt || ''); CON_N++;
-  spwConsole(txt);
+  spwConsole(txt); rejConsole(txt);
   CONLOG.push(txt); if (CONLOG.length > 400) CONLOG.shift();
   var r = /Recording to (\S+?)(?:\.dem)?\.?\s*$/i.exec(txt);
   if (r && REC && r[1].indexOf(REC) === 0) demoAdd(REC);
@@ -1896,6 +1912,7 @@ function renderServers() {
       if (FLT.ping && !(s.ok && s.ping < 50)) return;
       if (FLT.notempty && !(s.pl > 0)) return;
       if (FLT.notfull && isFull(s)) return;
+      if (FLT.nopw && s.pass) return;
     }
     rows.push(s);
   });
@@ -2258,7 +2275,7 @@ function openAvatars() {
 
 /* ============================================================ SOZLAMALAR */
 var DEF = {
-  name: '', tag: 'X | ', net: 'fast', aimnet: 1, dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, buykeys: 0, queue: 1, reconn: 1, rest: 0, demo: 0, dmig: 0, dmig2: 0,
+  name: '', tag: 'X | ', net: 'fast', aimnet: 1, dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, aws: 1, buykeys: 0, queue: 1, reconn: 1, rest: 0, demo: 0, dmig: 0, dmig2: 0,
   sens: 2.5, zoom: 1.2, raw: 1, filter: 0, inv: 0,
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1, micwarm: 1, micfix: 0,
   fps: 100, showfps: 0, uisnd: 1, uics: 0, uimig: 0, ultra: 0, ann: 1, gamma: 2.5, bright: 1, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
@@ -2371,6 +2388,7 @@ function settingsCmds(s) {
   c.push('rate ' + n[0], 'cl_updaterate ' + n[1], 'cl_cmdrate ' + n[2]);
   c.push('cl_allowdownload 1', 'cl_allowupload 1', 'cl_righthand ' + s.hand, 'hud_fastswitch ' + s.fastsw);
   c.push('mp3volume ' + (s.mp3off ? 0 : s.mus));
+  c.push('setinfo _cl_autowepswitch ' + (s.aws === 0 ? 0 : 1));   // yangi qurol olganda unga o'tish (oddiy CS sozlamasi)
   c.push('sensitivity ' + s.sens, 'zoom_sensitivity_ratio ' + s.zoom, 'm_rawinput ' + s.raw, 'm_filter ' + s.filter, 'm_pitch ' + (s.inv ? -0.022 : 0.022));
   c.push('volume ' + s.vol, 'voice_enable ' + s.voice, 'voice_scale ' + s.vscale, 'snd_mute_losefocus ' + s.mute, 'voice_dsound ' + (s.micfix ? 0 : 1));
   // fps_override 1 bo'lmasa NextClient FPS ni 100 da ushlab qoladi
@@ -3178,7 +3196,7 @@ var PANES = {
       '<div class="ph2 m">' + esc(T('g_net')) + '</div><div class="big">' + nets + '</div>' +
       '<div class="mut" style="margin:10px 0 14px;font-size:12px">' + esc(T('g_net_note')) + '</div>' + tg('aimnet', 'g_aimnet', 'g_aimnet2') + tg('reconn', 'g_reconn') + tg('rtag', 'g_rtag', 'g_rtag2') + tg('rest', 'g_rest', 'g_rest2') + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('g_server')) + '</div>' +
-      tg('queue', 'g_queue', 'g_queue2') + tg('mp3off', 'g_mp3', 'g_mp32') + tg('hand', 'g_hand') + tg('fastsw', 'g_fast') +
+      tg('queue', 'g_queue', 'g_queue2') + tg('mp3off', 'g_mp3', 'g_mp32') + tg('hand', 'g_hand') + tg('fastsw', 'g_fast') + tg('aws', 'g_aws', 'g_aws2') +
       (ncHas('cl_discordrpc') ? '<div class="ph2 m">Discord</div>' + tg('drpc', 'g_drpc', 'g_drpc2') + tg('drpcs', 'g_drpcs') + tg('drpcj', 'g_drpcj') : '') + '</div>';
   },
   keys: function () {
@@ -3776,11 +3794,14 @@ function botsPane() {
     '<div class="ph2 m">' + esc(T('bt_n')) + '</div><div class="seg2">' + c + '</div>' +
     '<div class="ph2 m">' + esc(T('bt_dif')) + '</div><div class="seg2">' + l + '</div>') +
     '<div class="fr w" style="margin-top:10px"><div class="lb">' + esc(T('bt_lan')) + '<small>' + esc(T('bt_lan2')) + '</small></div><div class="tg' + (b.lan !== 0 ? ' on' : '') + '" data-blan="1"><i></i></div></div>' +
+    (b.lan !== 0 ? '<div class="lansv"><input class="tx" id="lanHn" maxlength="40" placeholder="' + esc(T('ls_name')) + '" value="' + esc(b.hn || '') + '"><input class="tx" id="lanPw" maxlength="30" placeholder="' + esc(T('ls_pw')) + '" value="' + esc(b.pw || '') + '"></div>' : '') +
     '<a class="btn red big" data-act="botgo" style="margin-top:14px">' + ico('play') + ' ' + esc(T('bt_go')) + '</a>' +
     '<div class="mut" style="font-size:12px;margin-top:10px">' + esc(T('bt_note')) + '</div></div>');
 }
 function botsGo() {
   var b = DB.bots || {}, mp = b.map || 'de_dust2', n = b.n || (pcWeak() ? 5 : 9), d = b.d != null ? b.d : 1;
+  var ihn = $('lanHn'), ipw = $('lanPw');           // LAN server nomi va paroli (ixtiyoriy) - eslab qolinadi
+  if (ihn || ipw) { DB.bots = b; b.hn = ihn ? String(ihn.value || '').replace(/^\s+|\s+$/g, '') : b.hn; b.pw = ipw ? String(ipw.value || '').replace(/\s+/g, '') : b.pw; persist(); }
   if (b.m === 'nade') n = 0;                     // granata mashqi - botsiz (LAN yoqilgan bo'lsa do'stlar kira oladi)
   if (b.m === 'aimt') { n = pcWeak() ? 9 : 13; d = 0; AIMT = { on: 1, t0: 0, k: 0, h: 0 }; } else AIMT = null;   // aim test: ko'proq nishon
   closeModal();
@@ -3790,9 +3811,9 @@ function botsGo() {
   /* LAN: do'stlar ham kira olsin - joy ko'proq, botlar "fill" rejimida (odam kirsa bot chiqadi, jami son saqlanadi).
    * Server sozlamalari LAN uchun: tez yangilanish, tezlik cheklovi yo'q - lag bo'lmasin */
   var lan = b.lan !== 0, total = n + 1, qmode = lan && n ? 'fill' : 'normal', quota = lan && n ? total : n;
-  var hn = String((S && S.name) || MYNAME || 'Player').replace(/["\\;]/g, '').slice(0, 20) + ' - LAN';
+  var hn = String(b.hn || ((S && S.name) || MYNAME || 'Player') + ' - LAN').replace(/["\\;]/g, '').slice(0, 40), spw = lan && b.pw ? String(b.pw).replace(/["\\;\s]/g, '').slice(0, 30) : '';
   if (lan && PCID) vidCmd('fw', '', null, true);   // launcher: Windows firewall ruxsati (bir marta, "Да" so'raydi)
-  var hc = ['sv_lan 1', 'hostname "' + hn + '"', 'pausable 0', 'sv_maxrate 100000', 'sv_minrate 25000', 'sv_maxupdaterate 101', 'sv_minupdaterate 60'];   // server.cfg qayta yozsa - botsApply yana yuboradi
+  var hc = ['sv_lan 1', 'hostname "' + hn + '"', 'sv_password "' + spw + '"', 'pausable 0', 'sv_maxrate 100000', 'sv_minrate 25000', 'sv_maxupdaterate 101', 'sv_minupdaterate 60'];   // server.cfg qayta yozsa - botsApply yana yuboradi
   each(['maxplayers ' + (lan ? Math.max(total, 12) : total)].concat(hc).concat([
         'mp_autoteambalance 1', 'mp_limitteams 2', 'mp_timelimit 0']).concat(botCvars(b)).concat([
         'bot_difficulty ' + d, 'bot_join_after_player 0', 'bot_auto_vacate 1', 'bot_quota_mode ' + qmode, 'bot_quota ' + quota, 'bot_chatter minimal', 'map ' + mp]), function (c) { cmd(c); });
@@ -3950,6 +3971,7 @@ function act(a) {
   if (a === 'trskip') return tourEnd();
   if (a === 'trreg') { tourEnd(); lgReg = true; return openLogin(); }
   if (a === 'acctx') { DB.acx = 1; persist(); statePush(); renderAll(); return toast(T('ac_x'), 5000); }   // akkaunt kartasi bir marta yopiladi
+  if (a === 'rejq') { closeModal(); if (REJ_IP) startQueue(REJ_IP); return; }
   if (a === 'spwgo') { if (!srvSel) return; return DB.spw && DB.spw[srvSel] ? doConnect(srvSel, true) : spwAsk(srvSel, false); }
   if (a === 'spwdel') { if (DB.spw && srvSel) { delete DB.spw[srvSel]; persist(); } toast(T('pw_del'), 4000); return renderInfo(); }
   if (a === 'usite' || a === 'uapk') return openLink(a);
