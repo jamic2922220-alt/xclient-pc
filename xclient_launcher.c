@@ -114,6 +114,7 @@ static DWORD g_played_s = 0;
 static char g_cmod[64];   /* oxirgi yiqilishda aybdor modul (aqlli tuzatish uchun), bo'lmasa bo'sh */   /* oxirgi o'yin necha soniya davom etdi (muammo hisobotiga) */   /* prob_send uchun qo'shimcha tafsilot (url-escape qilingan), bo'lmasa bo'sh */
 static volatile DWORD g_net_dl = 0;
 static volatile LONG g_probe_ok = 0;
+static int day_now(void) { FILETIME f; GetSystemTimeAsFileTime(&f); return (int)(((((ULONGLONG)f.dwHighDateTime << 32) | f.dwLowDateTime) / 10000000ULL) / 86400ULL); }   /* 1970 dan beri kun */
 static DWORD g_t0 = 0, g_st = 0;   /* launcher ochilgan vaqt va o'yin ochilguncha ketgan ms (tezlik o'lchovi) */
 static BOOL g_offline = FALSE;   /* internet yo'q (faqat LAN yoki umuman tarmoqsiz): tarmoq ishlari o'tkazib yuboriladi, o'yinda oflayn menyu */
 static HINTERNET open_url_raw(const char *url)
@@ -2475,6 +2476,9 @@ static BOOL run_game(void)
     path_join(exe, g_dir, L"cstrike.exe");
     /* cstrike.exe bu kompyuterda ochilishdayoq yiqilgan bo'lsa (Windows 7: "Ошибка при запуске приложения 0xc0000005") -
      * o'sha o'yinni klassik hl.exe orqali ochamiz */
+    /* hl.exe zaxirasi abadiy emas: 3 kundan keyin (yoki hl.exe da yiqilgandan keyin) yana cstrike.exe sinab ko'riladi -
+     * bir martalik ochilmaslik (antivirus, yangilanish) o'yinchini eski hl.exe da qoldirib ketardi. Eski format (1) - darhol qayta sinash */
+    { int uh = ini_int(L"usehl"); if (uh && (uh == 1 || day_now() - uh >= 3)) ini_set_int(L"usehl", 0); }
     if (ini_int(L"usehl")) { wchar_t hl[MAX_PATH]; path_join(hl, g_dir, L"hl.exe"); if (GetFileAttributesW(hl) != INVALID_FILE_ATTRIBUTES) lstrcpyW(exe, hl); }
     if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) path_join(exe, g_dir, L"hl.exe");
     if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) {
@@ -2599,7 +2603,7 @@ static BOOL run_game(void)
             wchar_t hl[MAX_PATH]; path_join(hl, g_dir, L"hl.exe");
             BOOL isHl = !_wcsicmp(wcsrchr(exe, L'\\') ? wcsrchr(exe, L'\\') + 1 : exe, L"hl.exe");
             if (!isHl && GetFileAttributesW(hl) != INVALID_FILE_ATTRIBUTES) {   /* 1-chora: hl.exe bilan avtomatik qayta */
-                ini_set_int(L"usehl", 1);
+                ini_set_int(L"usehl", day_now());
                 CloseHandle(pi.hProcess);
                 return TRUE;
             }
@@ -2614,6 +2618,7 @@ static BOOL run_game(void)
             CloseHandle(pi.hProcess);
             return FALSE;
         }
+        if (crashed && ini_int(L"usehl")) ini_set_int(L"usehl", 0);   /* hl.exe ham yiqildi - keyingi safar yana cstrike.exe */
         if (crashed) {
             int c = ini_int(L"crs") + 1; ini_set_int(L"crs", c);
             if (c >= 2) ini_set_int(L"autover", 1);   /* 7. ikkinchi yiqilishdan keyin - keyingi ochilishda X CLIENT fayllari tekshiriladi */
@@ -2771,7 +2776,7 @@ static void sys_ctx(char *out, size_t cap)
     _snprintf(out, cap, "os=%lu.%lu.%lu sp=%u x64=%d ram=%u/%uMB cpu=%lu gpu=%s av=%s hl=%d safe=%d t=%lus",
         vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber, (unsigned)vi.wServicePackMajor, w64 ? 1 : 0,
         (unsigned)(ms.ullTotalPhys >> 20), (unsigned)(ms.ullAvailPhys >> 20), si.dwNumberOfProcessors, gpu, av[0] ? av : "-",
-        ini_int(L"usehl"), ini_int(L"crs") >= 3 ? 1 : 0, (unsigned long)g_played_s);
+        ini_int(L"usehl") ? 1 : 0, ini_int(L"crs") >= 3 ? 1 : 0, (unsigned long)g_played_s);
     out[cap - 1] = 0;
 }
 static void prob_send(const char *kind, DWORD wait)
