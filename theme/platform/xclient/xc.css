@@ -1120,3 +1120,7 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .nyb i.av.fny { -webkit-box-shadow: 0 0 0 3px #e3242b, 0 0 0 6px #fff, 0 0 0 8px #1f9d55; }
 /* oyna ochiq turganda orqa fon "muzlaydi": cheksiz animatsiyalar pauzada (oynaning o'zidagi ramkalar - ham) */
 .mdon #col *, .mdon #bar *, .mdon #hero *, .mdon #stage *, .mdon #menu * { -webkit-animation-play-state: paused !important; }
+/* server kirish paroli (sv_password) - server oynasida */
+.spwin { margin: 8px 0; padding: 8px 10px; border: 1px solid rgba(245, 197, 24, .45); background: rgba(245, 197, 24, .06); font-size: 13px; color: #fff; overflow: hidden; }
+.spwin .mut { font-size: 12px; }
+.spwin .btn { float: right; height: 26px; line-height: 26px; padding: 0 12px; font-size: 12px; margin-left: 6px; }

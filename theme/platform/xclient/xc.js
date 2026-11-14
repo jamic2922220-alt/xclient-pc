@@ -1293,7 +1293,33 @@ function pwSave(ip, del) {
   if (CONNECTED === ip) { applyPw(ip); if (pw) toast(T('pw_reconn'), 7000); }
   if (curModal === 'mdServers') { if (del && $('pwL')) { $('pwL').value = ''; $('pwP').value = ''; } renderInfo(); } else { openServers(srvTab); srvSel = ip; renderServers(); }
 }
-function doConnect(ip) {
+/* ---- serverning kirish paroli (sv_password): oddiy CS da "parolni kiriting" oynasi chiqardi, NextClient menyusida chiqmaydi.
+ * Parolli server (ro'yxatda PW) - ulanishdan oldin so'raymiz; server "parol noto'g'ri/kerak" desa (konsol) - yana so'raymiz.
+ * Parol shu server uchun eslab qolinadi; boshqa serverga ulanishda 'password' bo'shatiladi (begona serverga ketmasin) ---- */
+var SPW_ON = false, SPW_TRY = null;
+function spwSet(ip) {
+  var pw = DB.spw && DB.spw[ip];
+  if (pw) { cmd('password ' + q(pw)); SPW_ON = true; }
+  else if (SPW_ON) { cmd('password ""'); SPW_ON = false; }
+}
+function spwAsk(ip, wrong) {
+  if (DB.spw && DB.spw[ip] && wrong) { delete DB.spw[ip]; persist(); }
+  ask(T(wrong ? 'spw_bad' : 'spw_ask').replace('{s}', srv(ip).name || ip), function (v) {
+    v = String(v || '').replace(/["\\;\n]/g, '').slice(0, 60);
+    if (!v) return;
+    DB.spw = DB.spw || {}; DB.spw[ip] = v; persist();
+    doConnect(ip, true);
+  }, false, true);
+}
+function spwConsole(txt) {
+  if (!SPW_TRY || now() - SPW_TRY.t > 40000 || !/password/i.test(txt) || !/(invalid|bad|wrong|incorrect|requir|need|enter|неверн|нужен)/i.test(txt)) return;
+  var ip = SPW_TRY.ip, had = !!(DB.spw && DB.spw[ip]); SPW_TRY = null;
+  srv(ip).pass = true;
+  setTimeout(function () { spwAsk(ip, had); }, 600);   // o'yin menyuga qaytib bo'lsin
+}
+function doConnect(ip, pwDone) {
+  if (!pwDone && srv(ip).pass && !(DB.spw && DB.spw[ip])) return spwAsk(ip, false);   // parolli server - avval parol
+  spwSet(ip); SPW_TRY = { ip: ip, t: now() };
   applyPw(ip);
   toast(T('connecting') + (srv(ip).name || ip));
   if (!cmd('connect ' + ip)) toast(T('no_api'));
@@ -1496,6 +1522,7 @@ var MYNAME = '', CONLOG = [];
 var CON_N = 0, CON_K = 0;   // tashxis: konsoldan nechta qator keldi, nechtasi kill deb tanildi (stat bilan serverga)
 function onConsole(txt) {
   txt = String(txt || ''); CON_N++;
+  spwConsole(txt);
   CONLOG.push(txt); if (CONLOG.length > 400) CONLOG.shift();
   var r = /Recording to (\S+?)(?:\.dem)?\.?\s*$/i.exec(txt);
   if (r && REC && r[1].indexOf(REC) === 0) demoAdd(REC);
@@ -2003,6 +2030,13 @@ function sendStats() {
   if (list.length) api('srvstat', { s: JSON.stringify(list) });
 }
 /* VIP/admin kirish: server oynasida doim ochiq login va parol joyi */
+/* parolli server (sv_password): server oynasida - kirish paroli holati va "Parol bilan kirish" */
+function spwInline(ip) {
+  var s = srv(ip), has = DB.spw && DB.spw[ip];
+  if (!s.pass && !has) return '';
+  return '<div class="spwin">' + ico('key') + ' <b>' + esc(T('spw_t')) + '</b> <span class="mut">' + esc(T(has ? 'spw_saved' : 'spw_need')) + '</span>' +
+    '<a class="btn red" data-act="spwgo">' + esc(T(has ? 'spw_go2' : 'spw_go')) + '</a>' + (has ? '<a class="btn" data-act="spwdel">' + esc(T('pw_delb')) + '</a>' : '') + '</div>';
+}
 function pwInline(ip) {
   var p = srvPw(ip) || {}; PW_IP = ip;
   return '<div class="pwin" title="' + esc(T('pw_short')) + '"><div class="pwh"><a data-act="srvpw">?</a>' + ico('key') + ' ' + esc(T('pw_title')) + (p.pw ? '<span class="gr"> \u2713 ' + esc(T('pw_ok')) + '</span>' : '') + '</div>' +
@@ -2031,7 +2065,7 @@ function renderInfo2(box) {
     (/^[\w\-.]{2,40}$/.test(mapn) ? '<img src="map.php?m=' + encodeURIComponent(mapn.toLowerCase()) + '" alt="" onerror="this.style.display=\'none\'">' : '') +
     '<span>' + esc(mapn || '?') + '</span></div>' +
     '<h3>' + flagOf(srvSel) + esc(s.name || (h && h.name) || srvSel) + '</h3><div class="ip"><input class="ipin" readonly value="' + esc(srvSel) + '"><a class="cpy" data-copyip="' + esc(srvSel) + '">' + esc(T('ip_copy')) + '</a></div>' +
-      pwInline(srvSel) +
+      spwInline(srvSel) + pwInline(srvSel) +
     '<div class="ln">' + esc(T('ph_players')) + ' <b>' + (s.ok ? s.pl + '/' + s.max : '-') + '</b><span class="r ' + (s.blk ? 'mut' : pc) + '">' + (s.ok ? (s.blk ? esc(T('blk_s')) : '\u25cf ' + s.ping + ' ms') : esc(T('offline'))) + '</span></div>' +
     (s.ok && s.blk ? '<div class="mut" style="font-size:12px;margin:-4px 0 8px">' + esc(T('blk_t')) + '</div>' : '') +
     histBars(srvSel) +
@@ -3916,6 +3950,8 @@ function act(a) {
   if (a === 'trskip') return tourEnd();
   if (a === 'trreg') { tourEnd(); lgReg = true; return openLogin(); }
   if (a === 'acctx') { DB.acx = 1; persist(); statePush(); renderAll(); return toast(T('ac_x'), 5000); }   // akkaunt kartasi bir marta yopiladi
+  if (a === 'spwgo') { if (!srvSel) return; return DB.spw && DB.spw[srvSel] ? doConnect(srvSel, true) : spwAsk(srvSel, false); }
+  if (a === 'spwdel') { if (DB.spw && srvSel) { delete DB.spw[srvSel]; persist(); } toast(T('pw_del'), 4000); return renderInfo(); }
   if (a === 'usite' || a === 'uapk') return openLink(a);
   if (a === 'coach_aim' || a === 'coach_nade') { DB.bots = DB.bots || {}; DB.bots.m = a === 'coach_aim' ? 'aimt' : 'nade'; var cm = ACT_EL && ACT_EL.getAttribute('data-cmap'); if (cm && BOT_MAPS.indexOf(cm) >= 0) DB.bots.map = cm; persist(); closeModal(); return botsPane(); }
   if (a === 'coach_lag') { closeModal(); return lagFixPane(T('cc_blag'), false); }
