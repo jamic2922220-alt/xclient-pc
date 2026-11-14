@@ -3575,6 +3575,7 @@ var curModal = '';
 function openModal(id) {
   SFX_QUIET = true; closeModal(); SFX_QUIET = false;
   curModal = id; $(id).className = 'modal on';
+  mdClass(true);
   sfx('open');
 }
 /* Birinchi o'yindan keyin bitta savol (o'rnatganlarning 70% i qaytmayapti - sababini bilish uchun). Javob admin > Fikrlar ga */
@@ -3831,9 +3832,12 @@ function tgAsk(n) {
   DB.tgAsk = now(); DB.tgAskN = (DB.tgAskN || 0) + 1; persist();
   tgOpen(true);
 }
+/* oyna ochiq: orqa fondagi cheksiz CSS animatsiyalar (avatar ramkalari, yangiliklar) to'xtaydi - eski o'yin brauzeri ularni ham qayta chizardi */
+function mdClass(on) { var h = document.documentElement, c = (h.className || '').replace(/(^|\s)mdon(?=\s|$)/g, ''); h.className = on ? c + ' mdon' : c; }
 function closeModal() {
   if (DD) ddClose();
   if (!curModal) return;
+  mdClass(false);
   if (curModal === 'mdSettings' && XLIVE && S) { XLIVE = false; each(xhairCmds(S), function (x) { cmd(x); }); }   // saqlanmagan pritselni qaytarish
   KEYWAIT = '';
   $(curModal).className = 'modal'; curModal = '';

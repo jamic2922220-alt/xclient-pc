@@ -1067,8 +1067,7 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .qrgift { display: inline-block; margin: 0 0 10px; padding: 5px 14px; border: 1px solid #f5c518; color: #f5c518; font-size: 14px; -webkit-border-radius: 3px; }
 .qrcards { margin: 0 auto 10px; white-space: nowrap; font-size: 0; }
 .qrc { display: inline-block; vertical-align: top; width: 300px; margin: 0 10px; padding: 10px 0 10px; background: #1b161d; border: 1px solid #2f2530; -webkit-border-radius: 6px; white-space: normal; font-size: 14px;
-  -webkit-animation: qrpop .45s ease-out both; }
-.qrc + .qrc { -webkit-animation-delay: .08s; }
+}
 .qrcards.one .qrc { width: 340px; }
 .qrt { font-size: 15px; font-weight: bold; color: #fff; margin-bottom: 8px; }
 .qrbox { display: inline-block; padding: 8px; background: #fff; -webkit-border-radius: 6px; -webkit-box-shadow: 0 6px 24px rgba(0,0,0,.45); }
@@ -1084,17 +1083,12 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .qrw .tgst { margin: 2px auto 0; display: inline-block; padding: 6px 12px; }
 .qrcards.one { margin-bottom: 6px; }
 .qrcards.one .qrb { display: inline-block; padding: 0 26px; margin: 0; }
-@-webkit-keyframes qrpop { from { opacity: 0; -webkit-transform: translateY(14px) scale(.96); } to { opacity: 1; -webkit-transform: none; } }
-/* hamma oynalar yumshoq ochiladi (kuchsiz kompyuterda / o'yin ichida - animatsiyasiz) */
-.modal.on .win { -webkit-animation: winpop .22s ease-out; }
-@-webkit-keyframes winpop { from { opacity: 0; -webkit-transform: translateY(10px) scale(.97); } to { opacity: 1; -webkit-transform: none; } }
-.lowfx .modal.on .win, .lowfx .qrc { -webkit-animation: none; }
+/* oyna ochilish animatsiyasi OLIB TASHLANDI: o'yin brauzeri (CEF1, videokartasiz chizadi) katta oynani har kadrda qayta chizib qotib qolardi */
 /* yangi daraja tabrigi */
 .rkup { text-align: center; padding-top: 40px; }
-.rkupb { display: inline-block; -webkit-transform: scale(2.2); margin: 20px 0 34px; -webkit-animation: rkpop .6s ease-out both; }
+.rkupb { display: inline-block; -webkit-transform: scale(2.2); margin: 20px 0 34px; }
 .rkup h2 { font-size: 24px; color: #fff; margin: 0 0 10px; }
 .rkup p { margin: 0 60px 22px; }
-@-webkit-keyframes rkpop { 0% { opacity: 0; -webkit-transform: scale(.6); } 70% { -webkit-transform: scale(2.5); } 100% { opacity: 1; -webkit-transform: scale(2.2); } }
 /* shaxsiy murabbiy */
 .coach { margin: 0 0 14px; padding: 12px 14px; background: #1b161d; border: 1px solid #3a2a30; border-left: 3px solid #ff3b3b; }
 .cct { font-size: 12px; letter-spacing: 2px; color: #ff3b3b; margin-bottom: 8px; }
@@ -1124,3 +1118,5 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .nyb b { display: block; font-size: 13px; color: #fff; margin-bottom: 6px; }
 .nyb small { color: #a99fa6; font-size: 12px; }
 .nyb i.av.fny { -webkit-box-shadow: 0 0 0 3px #e3242b, 0 0 0 6px #fff, 0 0 0 8px #1f9d55; }
+/* oyna ochiq turganda orqa fon "muzlaydi": cheksiz animatsiyalar pauzada (oynaning o'zidagi ramkalar - ham) */
+.mdon #col *, .mdon #bar *, .mdon #hero *, .mdon #stage *, .mdon #menu * { -webkit-animation-play-state: paused !important; }
