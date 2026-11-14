@@ -4205,7 +4205,7 @@ function renderMissions() {
   var h = '<div class="mis">', ny = MIS.ny;
   if (ny) {                                        // Yangi yil iventi: XP x1.5, 5 vazifa - cheklangan ramka
     var left = Math.max(0, Math.ceil((ny.end - ny.now) / 86400)), nn = Math.min(ny.n || 0, ny.goal);
-    h += '<div class="nyev"><div class="nyh">\ud83c\udf84 ' + esc(T('ny_t').replace('{y}', ny.y)) + '<span>' + esc(T('ny_left').replace('{d}', left)) + '</span></div>' +
+    h += '<div class="nyev"><div class="nyh">' + ico('gift') + ' ' + esc(T('ny_t').replace('{y}', ny.y)) + '<span>' + esc(T('ny_left').replace('{d}', left)) + '</span></div>' +
       '<div class="nyb"><i class="av fny">' + avInner(ME) + '</i><div><b>' + esc(T(ny.has ? 'ny_has' : 'ny_goal').replace('{g}', ny.goal)) + '</b>' +
       '<div class="xpw"><i style="width:' + Math.round(nn * 100 / ny.goal) + '%"></i></div><small>' + nn + ' / ' + ny.goal + ' \u00b7 ' + esc(T('ny_x15')) + '</small></div></div></div>';
   }

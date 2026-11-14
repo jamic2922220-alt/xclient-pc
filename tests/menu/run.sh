@@ -13,6 +13,15 @@ A=$XC_BASE/xc_api.php
 export NODE_PATH="${NODE_PATH:-}:$(npm root -g 2>/dev/null):/opt/node-tools/node_modules"
 rc=0
 node "$HERE/dupes.js" || rc=1
+# o'yin brauzeri (CEF1) emoji ko'rsatmaydi - bo'sh kvadrat chiqadi: menyu matnlarida emoji bo'lmasin
+python3 - "$ROOT/theme/platform/xclient" <<'PYE' || rc=1
+import sys, re, os
+d = sys.argv[1]; bad = []
+for f in ('xc.js', 'xc_lang.js', 'index.html', 'offline.html'):
+    t = open(os.path.join(d, f), encoding='utf-8').read()
+    for m in re.finditer(r'[\U00010000-\U0010FFFF]|\\ud83[c-f]|&#(1[2-9][0-9]{4});', t): bad.append(f + ':' + str(t.count('\n', 0, m.start()) + 1))
+print(('FAIL emoji (o\'yinda kvadrat bo\'lib chiqadi): ' + ', '.join(bad[:10])) if bad else 'PASS emoji (menyuda emoji yo\'q)'); sys.exit(1 if bad else 0)
+PYE
 node "$HERE/lite.js" || rc=1                                          # launcher hali ko'rinmagan holat - hello'dan oldin
 curl -s -d 'a=hello&d=testpc0000001&v=1.0.64&lang=uz' $A >/dev/null   # launcher bor deb (to'liq menyu, "sodda" emas)
 REG=$(curl -s -d "a=register&login=testa&pass=secret12&device=testdev0001" $A); echo "register: ${REG:0:80}"; export XC_TOKEN=$(echo "$REG" | grep -o "\"token\":\"[a-f0-9]*\"" | cut -d\" -f4)
