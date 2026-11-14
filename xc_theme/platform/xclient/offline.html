@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>X CLIENT</title>
+<!--
+  X CLIENT oflayn menyusi. Launcher internet yo'qligini aniqlasa, o'yin brauzeri shu faylni (kompyuterdan) ochadi:
+  botlar bilan o'yin, LAN serverlar (launcher lan.js ga yozib turadi), IP bilan ulanish, sozlamalar, chiqish.
+  Internet qaytsa - "To'liq menyu" tugmasi chiqadi. CEF1 (Chrome 17): faqat ES5, absolute + px.
+-->
+<style>
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0f0c11; color: #e8e2e6; font: 14px Tahoma, Arial, sans-serif; -webkit-user-select: none; }
+#bg { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: #0f0c11; background-image: -webkit-radial-gradient(20% 10%, circle, rgba(200, 30, 40, .22), rgba(15, 12, 17, 0) 520px); }
+#wrap { position: absolute; left: 60px; top: 50px; right: 60px; bottom: 40px; }
+#logo { position: absolute; left: 0; top: 0; font: bold 54px Tahoma, Arial; letter-spacing: 2px; color: #fff; }
+#logo b { color: #e3242b; }
+#off { position: absolute; left: 4px; top: 74px; font-size: 13px; color: #f0c24b; letter-spacing: 1px; text-transform: uppercase; }
+#online { position: absolute; right: 0; top: 14px; display: none; padding: 10px 16px; background: #1d7a3a; color: #fff; cursor: pointer; font-weight: bold; }
+#menu { position: absolute; left: 0; top: 130px; width: 300px; }
+.mi { display: block; height: 46px; line-height: 46px; padding: 0 16px; margin-bottom: 6px; font-size: 20px; color: #d7cfd4; cursor: pointer; border-left: 3px solid transparent; }
+.mi:hover, .mi.on { color: #fff; background: rgba(227, 36, 43, .14); border-left-color: #e3242b; }
+#pane { position: absolute; left: 340px; top: 130px; right: 0; bottom: 0; background: rgba(20, 16, 22, .92); border: 1px solid #2c2228; padding: 22px 26px; overflow: auto; }
+h2 { margin: 0 0 14px; font-size: 13px; letter-spacing: 3px; color: #e3242b; text-transform: uppercase; }
+p { margin: 0 0 12px; color: #a99fa6; line-height: 1.5; }
+.row { margin-bottom: 14px; }
+.lbl { display: inline-block; width: 140px; color: #a99fa6; }
+.ch { display: inline-block; padding: 6px 12px; margin: 0 6px 6px 0; border: 1px solid #3a2e35; color: #cfc4ca; cursor: pointer; }
+.ch.on { border-color: #e3242b; color: #fff; background: rgba(227, 36, 43, .18); }
+.btn { display: inline-block; height: 40px; line-height: 40px; padding: 0 26px; background: #e3242b; color: #fff; font-weight: bold; cursor: pointer; margin-right: 8px; }
+.btn.gr { background: #2a2128; }
+.srv { height: 44px; line-height: 44px; border-bottom: 1px solid #261e23; cursor: pointer; padding: 0 10px; }
+.srv:hover { background: rgba(255, 255, 255, .05); }
+.srv b { color: #fff; }
+.srv span { float: right; color: #a99fa6; }
+input { width: 260px; height: 34px; padding: 0 10px; background: #120f14; border: 1px solid #3a2e35; color: #fff; font-size: 15px; outline: none; -webkit-user-select: text; }
+#msg { position: absolute; left: 50%; bottom: 60px; width: 520px; margin-left: -260px; padding: 12px 16px; background: #1c161a; border: 1px solid #e3242b; text-align: center; display: none; }
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<div id="wrap">
+  <div id="logo"><b>X</b> CLIENT</div>
+  <div id="off"></div>
+  <div id="online" data-a="online"></div>
+  <div id="menu"></div>
+  <div id="pane"></div>
+</div>
+<div id="msg"></div>
+<script>
+(function () {
+  var NC = window.nextclient || null;
+  var RU = /^ru/i.test(navigator.language || '');
+  var L = RU ? {
+    off: 'Нет интернета - офлайн режим', bots: 'Игра с ботами', lan: 'LAN серверы', ip: 'Подключиться по IP', set: 'Настройки', quit: 'Выход', resume: 'Продолжить игру',
+    online: 'Интернет есть - полное меню', b_t: 'Игра с ботами', b_s: 'Интернет не нужен. Друзья в той же сети (Wi-Fi/кабель) тоже могут зайти - вкладка LAN.',
+    map: 'Карта', n: 'Ботов', d: 'Сложность', d0: 'Лёгкие', d1: 'Средние', d2: 'Сложные', d3: 'Эксперт', go: 'Играть',
+    l_t: 'Серверы в локальной сети', l_s: 'Серверы друзей в той же Wi-Fi или кабельной сети. Список обновляется сам.', l_none: 'Пока серверов нет. Друг может открыть свой: «Игра с ботами» - «Играть».', l_scan: 'Поиск...',
+    i_t: 'Подключиться по IP', i_s: 'Например: 192.168.1.5 или 192.168.1.5:27015', i_go: 'Подключиться', wait: 'Карта загружается...', conn: 'Подключение: '
+  } : {
+    off: "Internet yo'q - oflayn rejim", bots: "Botlar bilan o'yin", lan: 'LAN serverlar', ip: 'IP bilan ulanish', set: 'Sozlamalar', quit: 'Chiqish', resume: "O'yinga qaytish",
+    online: "Internet bor - to'liq menyu", b_t: "Botlar bilan o'yin", b_s: "Internet kerak emas. Bitta tarmoqdagi (Wi-Fi/kabel) do'stlaringiz ham kira oladi - LAN bo'limi.",
+    map: 'Xarita', n: 'Botlar soni', d: 'Qiyinlik', d0: 'Oson', d1: "O'rta", d2: 'Qiyin', d3: 'Ekspert', go: "O'ynash",
+    l_t: 'Lokal tarmoqdagi serverlar', l_s: "Bitta Wi-Fi yoki kabel tarmog'idagi do'stlaringiz serverlari. Ro'yxat o'zi yangilanadi.", l_none: "Hozircha server yo'q. Do'stingiz o'zinikini ochishi mumkin: «Botlar bilan o'yin» - «O'ynash».", l_scan: 'Qidirilmoqda...',
+    i_t: 'IP bilan ulanish', i_s: 'Masalan: 192.168.1.5 yoki 192.168.1.5:27015', i_go: 'Ulanish', wait: 'Xarita yuklanmoqda...', conn: 'Ulanish: '
+  };
+  var MAPS = ['de_dust2', 'de_inferno', 'de_nuke', 'de_train', 'de_aztec', 'de_dust', 'cs_assault', 'cs_italy'];
+  var st = { map: 'de_dust2', n: 9, d: 1, tab: 'bots', ingame: false };
+  try { var sv = JSON.parse(localStorage.getItem('xcoff') || '{}'); if (sv.map) st.map = sv.map; if (sv.n) st.n = sv.n; if (sv.d != null) st.d = sv.d; } catch (e) {}
+  function save() { try { localStorage.setItem('xcoff', JSON.stringify({ map: st.map, n: st.n, d: st.d })); } catch (e) {} }
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function cmd(c) { try { if (NC && NC.exec) NC.exec(c + '\n'); } catch (e) {} }
+  function msg(t, ms) { var m = $('msg'); m.innerHTML = esc(t); m.style.display = 'block'; clearTimeout(msg.tm); msg.tm = setTimeout(function () { m.style.display = 'none'; }, ms || 3000); }
+  function connect(ip) { cmd('mp3 stop'); cmd('connect ' + ip); msg(L.conn + ip, 6000); }
+
+  /* LAN: launcher har bir necha soniyada lan.js ni yozadi (window.XC_LAN = "ip|nom|xarita|o'yinchi|maks;...") */
+  var LAN = [], LAN_T = 0;
+  function lanLoad() {
+    var s = document.createElement('script');
+    s.src = 'lan.js?t=' + new Date().getTime();
+    s.onload = function () { LAN_T = 1; LAN = []; var raw = String(window.XC_LAN || ''); if (raw) { var a = raw.split(';'); for (var i = 0; i < a.length; i++) { var p = a[i].split('|'); if (p[0]) LAN.push({ ip: p[0], name: p[1] || p[0], map: p[2] || '', pl: +p[3] || 0, mx: +p[4] || 0 }); } } if (st.tab === 'lan') render(); if (s.parentNode) s.parentNode.removeChild(s); };
+    s.onerror = function () { if (s.parentNode) s.parentNode.removeChild(s); };
+    document.body.appendChild(s);
+  }
+
+  function menu() {
+    var items = st.ingame ? [['resume', L.resume]] : [];
+    items = items.concat([['bots', L.bots], ['lan', L.lan], ['ip', L.ip], ['set', L.set], ['quit', L.quit]]);
+    var h = '';
+    for (var i = 0; i < items.length; i++) h += '<div class="mi' + (items[i][0] === st.tab ? ' on' : '') + '" data-a="' + items[i][0] + '">' + esc(items[i][1]) + '</div>';
+    $('menu').innerHTML = h;
+  }
+  function chips(key, vals, labels) {
+    var h = '';
+    for (var i = 0; i < vals.length; i++) h += '<span class="ch' + (st[key] === vals[i] ? ' on' : '') + '" data-k="' + key + '" data-v="' + i + '">' + esc(labels ? labels[i] : vals[i]) + '</span>';
+    return h;
+  }
+  var NS = [3, 5, 9, 13], DS = [0, 1, 2, 3];
+  function render() {
+    menu();
+    var h = '';
+    if (st.tab === 'bots') {
+      h = '<h2>' + esc(L.b_t) + '</h2><p>' + esc(L.b_s) + '</p>' +
+        '<div class="row"><div class="lbl">' + esc(L.map) + '</div><br>' + chips('map', MAPS) + '</div>' +
+        '<div class="row"><div class="lbl">' + esc(L.n) + '</div><br>' + chips('n', NS) + '</div>' +
+        '<div class="row"><div class="lbl">' + esc(L.d) + '</div><br>' + chips('d', DS, [L.d0, L.d1, L.d2, L.d3]) + '</div>' +
+        '<span class="btn" data-a="botgo">' + esc(L.go) + '</span>';
+    } else if (st.tab === 'lan') {
+      h = '<h2>' + esc(L.l_t) + '</h2><p>' + esc(L.l_s) + '</p>';
+      if (!LAN.length) h += '<p>' + esc(LAN_T ? L.l_none : L.l_scan) + '</p>';
+      for (var i = 0; i < LAN.length; i++) h += '<div class="srv" data-ip="' + esc(LAN[i].ip) + '"><b>' + esc(LAN[i].name) + '</b> &nbsp; ' + esc(LAN[i].map) + '<span>' + LAN[i].pl + '/' + LAN[i].mx + ' &nbsp; ' + esc(LAN[i].ip) + '</span></div>';
+    } else if (st.tab === 'ip') {
+      h = '<h2>' + esc(L.i_t) + '</h2><p>' + esc(L.i_s) + '</p><input id="ipin" type="text" maxlength="40"> <span class="btn" data-a="ipgo">' + esc(L.i_go) + '</span>';
+    }
+    $('pane').innerHTML = h;
+    if (st.tab === 'ip') try { $('ipin').focus(); } catch (e) {}
+  }
+  /* botlar: asosiy menyudagi kabi - LAN server (do'stlar kira oladi), botlar "fill" rejimida.
+   * Xarita ochilganda server.cfg bot_quota ni 0 ga tushirishi mumkin - bir necha marta qayta yuboramiz */
+  function botGo() {
+    var n = st.n, total = n + 1, hc = ['sv_lan 1', 'hostname "X CLIENT - LAN"', 'pausable 0', 'sv_maxrate 100000', 'sv_minrate 25000', 'sv_maxupdaterate 101', 'sv_minupdaterate 60'];
+    var q = ['disconnect', 'mp3 stop', 'maxplayers ' + Math.max(total, 12)].concat(hc).concat(['mp_autoteambalance 1', 'mp_limitteams 2', 'mp_timelimit 0',
+      'mp_startmoney 800', 'mp_buytime 0.5', 'mp_roundtime 2.5', 'mp_freezetime 2', 'bot_stop 0', 'bot_dont_shoot 0', 'bot_pistols_only 0', 'bot_snipers_only 0', 'bot_knives_only 0',
+      'bot_difficulty ' + st.d, 'bot_join_after_player 0', 'bot_auto_vacate 1', 'bot_quota_mode fill', 'bot_quota ' + total, 'bot_chatter minimal', 'map ' + st.map]);
+    for (var i = 0; i < q.length; i++) cmd(q[i]);
+    msg(L.wait, 8000);
+    var again = function () { for (var j = 0; j < hc.length; j++) cmd(hc[j]); cmd('bot_quota_mode fill'); cmd('bot_quota ' + total); };
+    var secs = [5, 10, 16, 24, 35, 50, 70, 95];
+    for (var k = 0; k < secs.length; k++) setTimeout(again, secs[k] * 1000);
+    st.ingame = true;
+  }
+
+  document.addEventListener('click', function (e) {
+    var el = e.target;
+    while (el && el !== document && !(el.getAttribute && (el.getAttribute('data-a') || el.getAttribute('data-k') || el.getAttribute('data-ip')))) el = el.parentNode;
+    if (!el || el === document) return;
+    var a = el.getAttribute('data-a'), k = el.getAttribute('data-k'), ip = el.getAttribute('data-ip');
+    if (k) { var v = +el.getAttribute('data-v'); st[k] = k === 'map' ? MAPS[v] : k === 'n' ? NS[v] : DS[v]; save(); return render(); }
+    if (ip) { st.ingame = true; return connect(ip); }
+    if (a === 'bots' || a === 'lan' || a === 'ip') { st.tab = a; if (a === 'lan') lanLoad(); return render(); }
+    if (a === 'set') return cmd('gamemenucommand OpenOptionsDialog');
+    if (a === 'quit') return cmd('quit');
+    if (a === 'resume') return cmd('gamemenucommand ResumeGame');
+    if (a === 'botgo') return botGo();
+    if (a === 'ipgo') { var v2 = String(($('ipin') || {}).value || '').replace(/\s+/g, ''); if (/^[\w.\-]+(:\d{1,5})?$/.test(v2)) { if (v2.indexOf(':') < 0) v2 += ':27015'; st.ingame = true; connect(v2); } return; }
+    if (a === 'online') return location.replace(ONLINE);
+  }, false);
+  document.addEventListener('keydown', function (e) { if (e.keyCode === 13 && st.tab === 'ip') { var b = document.querySelector('[data-a="ipgo"]'); if (b) b.click(); } }, false);
+
+  /* internet qaytdimi: sayt rasmini yuklab ko'ramiz (XHR file:// dan ishlamasligi mumkin, rasm ishlaydi) */
+  var ONLINE = 'http://mmb.boost-top.com/xc.html';
+  function netCheck() {
+    var im = new Image();
+    im.onload = function () { $('online').style.display = 'block'; };
+    im.src = 'http://mmb.boost-top.com/logo.png?t=' + new Date().getTime();
+  }
+  $('off').innerHTML = esc(L.off);
+  $('online').innerHTML = esc(L.online) + ' &rarr;';
+  render(); lanLoad(); netCheck();
+  setInterval(function () { if (st.tab === 'lan') lanLoad(); }, 5000);
+  setInterval(netCheck, 20000);
+})();
+</script>
+</body>
+</html>
