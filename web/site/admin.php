@@ -27,12 +27,23 @@ function wr($name, $data) {                            // vaqtinchalik fayl + no
     $j = json_encode($data); if ($j === false) return;   // noto'g'ri UTF-8 - eski faylni bo'sh bilan almashtirmaymiz
     if (@file_put_contents($tmp, XC_GUARD . $j, LOCK_EX) !== false) @rename($tmp, $f);
 }
+/* Antivirus/sandbox tekshiruv mashinasi: haqiqiy videokartasiz (Basic Display) va kichik RAM yoki chet eldan, yoki Windows Server/LTSB obrazi.
+ * Ular launcherni 1-2 marta ochib ketadi - statistikada "bir marta ochib ketgan o'yinchi" bo'lib ko'rinmasin */
+function dev_sandbox($o) {
+    $g = isset($o['hw']['gpu']) ? strtolower($o['hw']['gpu']) : ''; $ram = isset($o['hw']['ram']) ? (int)$o['hw']['ram'] : 0;
+    $cc = isset($o['cc']) ? $o['cc'] : ''; $os = isset($o['os']) ? $o['os'] : '';
+    if (strpos($os, 'LTSB') !== false) return true;
+    if (strpos($g, 'basic display') === false && strpos($g, 'basic render') === false) return false;
+    return ($ram > 0 && $ram <= 2100) || ($cc !== '' && !in_array($cc, array('uz', 'kz', 'tj', 'kg', 'tm', 'af'), true));
+}
 /* Voronka: oxirgi $days kunda birinchi marta ochgan kompyuterlar (kun bo'yicha) - qaysi bosqichgacha yetdi */
 function funnel_cohorts($days) {
     @date_default_timezone_set('Asia/Tashkent'); $c = array();
-    for ($i = 0; $i < $days; $i++) $c[date('Y-m-d', strtotime("-$i day"))] = array('n' => 0, 'inst' => 0, 'game' => 0, 'p10' => 0, 'ret' => 0);
+    for ($i = 0; $i < $days; $i++) $c[date('Y-m-d', strtotime("-$i day"))] = array('n' => 0, 'inst' => 0, 'game' => 0, 'p10' => 0, 'ret' => 0, 'sb' => 0, 'old' => 0);
     foreach ((array)glob(XC_DIR . '/dev/*.php') as $f) { $o = json_decode(substr((string)@file_get_contents($f), strlen(XC_GUARD)), true);
         if (!$o || empty($o['first'])) continue; $k = date('Y-m-d', (int)$o['first']); if (!isset($c[$k])) continue;
+        if (dev_sandbox($o)) { $c[$k]['sb']++; continue; }            // sandbox - hisobga kirmaydi (alohida soni)
+        if (!empty($o['ver']) && preg_match('/^1\.0\.(\d+)$/', $o['ver'], $vm) && (int)$vm[1] < 135 && empty($o['fn'])) $c[$k]['old']++;   // bosqichlarni sanamaydigan eski launcher
         $c[$k]['n']++; foreach (array('inst', 'game', 'p10') as $st) if (!empty($o['fn'][$st])) $c[$k][$st]++;
         if (!empty($o['seen']) && date('Y-m-d', (int)$o['seen']) !== $k) $c[$k]['ret']++; }
     return $c;
@@ -908,15 +919,15 @@ if ($P === 'prob') {
 
 /* ===== VORONKA: o'rnatganlar qaysi bosqichgacha yetdi (launcher 1.0.133+) ===== */
 if ($P === 'funnel') {
-    $c = funnel_cohorts(14); $tot = array('n' => 0, 'inst' => 0, 'game' => 0, 'p10' => 0, 'ret' => 0);
+    $c = funnel_cohorts(14); $tot = array('n' => 0, 'inst' => 0, 'game' => 0, 'p10' => 0, 'ret' => 0, 'sb' => 0, 'old' => 0);
     foreach ($c as $r) foreach ($tot as $k => $v) $tot[$k] += $r[$k];
     $pc = function ($a, $b) { return $b ? round($a * 100 / $b) . '%' : '—'; };
     echo '<h1>Voronka</h1><div class="panel"><div class="ph">Birinchi marta X CLIENT ni ochganlar - qaysi bosqichgacha yetishdi (14 kun)</div>'
-        . '<div class="mut small" style="margin-bottom:10px">Bosqichlar launcher 1.0.133 dan boshlab yoziladi - undan oldingi kunlarda faqat "Ochdi" va "Qaytdi" to\'g\'ri. Eng ko\'p odam tushib qolgan bosqich - tuzatish kerak bo\'lgan joy.</div>'
-        . '<table class="list"><tr><th>Kun</th><th>Ochdi</th><th>CS 1.6 o\'rnatildi</th><th>O\'yin ochildi</th><th>10+ daqiqa o\'ynadi</th><th>Boshqa kuni qaytdi</th></tr>';
+        . '<div class="mut small" style="margin-bottom:10px">Bosqichlar launcher 1.0.133 dan boshlab yoziladi - undan oldingi kunlarda faqat "Ochdi" va "Qaytdi" to\'g\'ri. Eng ko\'p odam tushib qolgan bosqich - tuzatish kerak bo\'lgan joy. Antivirus tekshiruv mashinalari (videokartasiz, chet eldan) "Ochdi" ga qo\'shilmaydi.</div>'
+        . '<table class="list"><tr><th>Kun</th><th>Ochdi</th><th>CS 1.6 o\'rnatildi</th><th>O\'yin ochildi</th><th>10+ daqiqa o\'ynadi</th><th>Boshqa kuni qaytdi</th><th>Eski launcher<br><span class="mut small">bosqich yozilmaydi</span></th><th>Antivirus tekshiruvi<br><span class="mut small">hisobga kirmaydi</span></th></tr>';
     $row = function ($k, $r, $b) use ($pc) { return '<tr><td>' . ($b ? '<b>' . h($k) . '</b>' : h($k)) . '</td><td><b>' . $r['n'] . '</b></td>'
         . '<td>' . $r['inst'] . ' <span class="mut small">' . $pc($r['inst'], $r['n']) . '</span></td><td>' . $r['game'] . ' <span class="mut small">' . $pc($r['game'], $r['n']) . '</span></td>'
-        . '<td>' . $r['p10'] . ' <span class="mut small">' . $pc($r['p10'], $r['n']) . '</span></td><td>' . $r['ret'] . ' <span class="mut small">' . $pc($r['ret'], $r['n']) . '</span></td></tr>'; };
+        . '<td>' . $r['p10'] . ' <span class="mut small">' . $pc($r['p10'], $r['n']) . '</span></td><td>' . $r['ret'] . ' <span class="mut small">' . $pc($r['ret'], $r['n']) . '</span></td><td class="mut">' . $r['old'] . '</td><td class="mut">' . $r['sb'] . '</td></tr>'; };
     echo $row('Jami 14 kun', $tot, true);
     foreach ($c as $k => $r) echo $row($k, $r, false);
     echo '</table></div>';

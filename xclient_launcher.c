@@ -110,6 +110,7 @@ static wchar_t g_err[256];                         /* launcher yopilishida ko'rs
 static void prob_send(const char *kind, DWORD wait);   /* admin panel > Muammolar (pastda) */
 static void fn_send(const char *stage);   /* admin panel > Voronka: birinchi ochilish bosqichlari (har bosqich bir marta) */
 static char g_probx[1800];
+static char g_updx[160];             /* yangilanish xatosi tafsiloti (upd_fail) */
 static DWORD g_played_s = 0;
 static char g_cmod[64];   /* oxirgi yiqilishda aybdor modul (aqlli tuzatish uchun), bo'lmasa bo'sh */   /* oxirgi o'yin necha soniya davom etdi (muammo hisobotiga) */   /* prob_send uchun qo'shimcha tafsilot (url-escape qilingan), bo'lmasa bo'sh */
 static volatile DWORD g_net_dl = 0;
@@ -443,8 +444,14 @@ static BOOL get_update(UpdInfo *u)
 static int sync_files(const UpdInfo *u, BOOL *selfUpdated)
 {
     status(L"Fayllar ro‘yxati olinmoqda...", 2);
+    /* zaxira: GitHub (raw) ba'zi provayderlarda ochilmaydi - xuddi shu commit jsDelivr orqali (.exe dan boshqa fayllar) */
+    static const char RAWP[] = "https://raw.githubusercontent.com/jamic2922220-alt/xclient-pc/";
+    char mir[300] = "";
+    if (!_strnicmp(u->base, RAWP, sizeof(RAWP) - 1)) { _snprintf(mir, sizeof(mir), "https://cdn.jsdelivr.net/gh/jamic2922220-alt/xclient-pc@%s", u->base + sizeof(RAWP) - 1); mir[sizeof(mir) - 1] = 0; }
+    g_updx[0] = 0;
     char *man = http_get(u->manifest, NULL);
-    if (!man) return -1;
+    if (!man && mir[0]) { char mu[360]; _snprintf(mu, sizeof(mu), "%s/manifest.txt", mir); mu[sizeof(mu) - 1] = 0; man = http_get(mu, NULL); if (man) lstrcpynA(g_updx, "man=mirror", sizeof(g_updx)); }
+    if (!man) { lstrcpynA(g_updx, "man=fail", sizeof(g_updx)); return -1; }
 
     int total = 0, done = 0, fails = 0;
     for (char *p = man; *p; p++) if (*p == '\n') total++;
@@ -490,11 +497,15 @@ static int sync_files(const UpdInfo *u, BOOL *selfUpdated)
         _snwprintf(tmp, MAX_PATH, L"%s.xcdl", dst); tmp[MAX_PATH - 1] = 0;
 
         BOOL ok = FALSE;
+        size_t rl = strlen(rel); BOOL isExe = rl > 4 && !_stricmp(rel + rl - 4, ".exe");
         for (int attempt = 0; attempt < 3 && !ok; attempt++) {
+            if (attempt == 2 && mir[0] && !isExe) { _snprintf(url, sizeof(url), "%s/%s", mir, enc); url[sizeof(url) - 1] = 0; }   /* 3-urinish - zaxira manzildan */
             if (http_download(url, tmp) && sha256_file(tmp, have, &hs) && hs == size && !_stricmp(have, sha)) ok = TRUE;
             else Sleep(800);
         }
-        if (!ok) { DeleteFileW(tmp); fails++; continue; }
+        if (!ok) { DeleteFileW(tmp); fails++;
+                   if (!strstr(g_updx, "file=")) { size_t gl = strlen(g_updx); _snprintf(g_updx + gl, sizeof(g_updx) - gl, "%sfile=%.60s", gl ? " " : "", rel); g_updx[sizeof(g_updx) - 1] = 0; }
+                   continue; }
 
         if (isSelf) {
             wchar_t old[MAX_PATH];
@@ -2921,7 +2932,11 @@ static DWORD WINAPI worker(LPVOID unused)
                 g_build = u.build;
                 lstrcpynA(g_version, u.version, sizeof(g_version));
                 ini_save();
-            } else if (fails > 0 && u.min && g_build < u.min) {
+            } else if (fails != 0) {   /* sababini bilish uchun: ro'yxat olinmadimi yoki qaysi fayl yuklanmadi */
+                char raw[220]; _snprintf(raw, sizeof(raw), "fails=%d from=%d to=%d %s", fails, g_build, u.build, g_updx); raw[219] = 0;
+                url_escape(g_probx, sizeof(g_probx), raw); prob_send("upd_fail", 0); g_probx[0] = 0;
+            }
+            if (fails > 0 && u.min && g_build < u.min) {
                 lstrcpyW(g_err, L"Majburiy yangilanishni yuklab bo‘lmadi. Internetni tekshiring.");
                 g_play = FALSE;
             }

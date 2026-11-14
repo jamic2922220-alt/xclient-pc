@@ -45,12 +45,23 @@ function probx_add($k, $who, $det) {
         $l[$i]['n'] = (isset($l[$i]['n']) ? $l[$i]['n'] : 1) + 1; $l[$i]['t'] = time(); $l[$i]['x'] = $det; $l[$i]['v'] = clean_str(p('v'), 20); wr('probs_x', $l); return; }
     $l[] = array('t' => time(), 'k' => $k, 'd' => $who, 'v' => clean_str(p('v'), 20), 'x' => $det); if (count($l) > 60) $l = array_slice($l, -60); wr('probs_x', $l);
 }
+/* Antivirus/sandbox tekshiruv mashinasi: haqiqiy videokartasiz (Basic Display) va kichik RAM yoki chet eldan, yoki Windows Server/LTSB obrazi.
+ * Ular launcherni 1-2 marta ochib ketadi - statistikada "bir marta ochib ketgan o'yinchi" bo'lib ko'rinmasin */
+function dev_sandbox($o) {
+    $g = isset($o['hw']['gpu']) ? strtolower($o['hw']['gpu']) : ''; $ram = isset($o['hw']['ram']) ? (int)$o['hw']['ram'] : 0;
+    $cc = isset($o['cc']) ? $o['cc'] : ''; $os = isset($o['os']) ? $o['os'] : '';
+    if (strpos($os, 'LTSB') !== false) return true;
+    if (strpos($g, 'basic display') === false && strpos($g, 'basic render') === false) return false;
+    return ($ram > 0 && $ram <= 2100) || ($cc !== '' && !in_array($cc, array('uz', 'kz', 'tj', 'kg', 'tm', 'af'), true));
+}
 /* Voronka: oxirgi $days kunda birinchi marta ochgan kompyuterlar (kun bo'yicha) - qaysi bosqichgacha yetdi */
 function funnel_cohorts($days) {
     @date_default_timezone_set('Asia/Tashkent'); $c = array();
-    for ($i = 0; $i < $days; $i++) $c[date('Y-m-d', strtotime("-$i day"))] = array('n' => 0, 'inst' => 0, 'game' => 0, 'p10' => 0, 'ret' => 0);
+    for ($i = 0; $i < $days; $i++) $c[date('Y-m-d', strtotime("-$i day"))] = array('n' => 0, 'inst' => 0, 'game' => 0, 'p10' => 0, 'ret' => 0, 'sb' => 0, 'old' => 0);
     foreach ((array)glob(XC_DIR . '/dev/*.php') as $f) { $o = json_decode(substr((string)@file_get_contents($f), strlen(XC_GUARD)), true);
         if (!$o || empty($o['first'])) continue; $k = date('Y-m-d', (int)$o['first']); if (!isset($c[$k])) continue;
+        if (dev_sandbox($o)) { $c[$k]['sb']++; continue; }            // sandbox - hisobga kirmaydi (alohida soni)
+        if (!empty($o['ver']) && preg_match('/^1\.0\.(\d+)$/', $o['ver'], $vm) && (int)$vm[1] < 135 && empty($o['fn'])) $c[$k]['old']++;   // bosqichlarni sanamaydigan eski launcher
         $c[$k]['n']++; foreach (array('inst', 'game', 'p10') as $st) if (!empty($o['fn'][$st])) $c[$k][$st]++;
         if (!empty($o['seen']) && date('Y-m-d', (int)$o['seen']) !== $k) $c[$k]['ret']++; }
     return $c;
@@ -934,14 +945,16 @@ case 'probrep':                                         // faqat o'qish: Muammol
     $fb = array(); foreach (array_slice(array_reverse((array)glob(XC_DIR . '/feedback/*.php')), 0, 25) as $f) { $o = rd('feedback/' . basename($f, '.php'), null); if ($o) $fb[] = array('t' => $o['t'], 'kind' => $o['kind'], 'text' => $o['text'], 'ver' => isset($o['ver']) ? $o['ver'] : ''); }
     $rp = array(); foreach (array_slice(array_reverse((array)glob(XC_DIR . '/reports/*.php')), 0, 8) as $f) { $o = rd('reports/' . basename($f, '.php'), null); if ($o) $rp[] = array('t' => $o['t'], 'ver' => $o['ver'], 'log' => mb_substr((string)$o['log'], 0, 2500, 'UTF-8')); }
     $act = array(); $now = time();
-    foreach (array('dev', 'nc') as $src) { $a = array('total' => 0, 'd1' => 0, 'd7' => 0, 'd30' => 0, 'new7' => 0, 'new30' => 0, 'old7' => 0, 'old7back' => 0, 'once' => 0, 'ver' => array());
+    foreach (array('dev', 'nc') as $src) { $a = array('total' => 0, 'd1' => 0, 'd7' => 0, 'd30' => 0, 'new7' => 0, 'new30' => 0, 'old7' => 0, 'old7back' => 0, 'once' => 0, 'sb' => 0, 'ver' => array(), 'ver7' => array());
         foreach ((array)glob(XC_DIR . '/' . $src . '/*.php') as $f) { $o = json_decode(substr((string)@file_get_contents($f), strlen(XC_GUARD)), true); if (!$o) continue;
+            if ($src === 'dev' && dev_sandbox($o)) { $a['sb']++; continue; }   // antivirus tekshiruv mashinalari - alohida
             $se = isset($o['seen']) ? (int)$o['seen'] : 0; $fi = isset($o['first']) ? (int)$o['first'] : $se; $a['total']++;
             if ($now - $se < 86400) $a['d1']++; if ($now - $se < 7 * 86400) $a['d7']++; if ($now - $se < 30 * 86400) $a['d30']++;
             if ($now - $fi < 7 * 86400) $a['new7']++; if ($now - $fi < 30 * 86400) $a['new30']++;
             if ($now - $fi >= 7 * 86400) { $a['old7']++; if ($now - $se < 7 * 86400) $a['old7back']++; }
             if ($se - $fi < 3600) $a['once']++;
-            if ($src === 'dev' && $now - $se < 30 * 86400) { $v = isset($o['ver']) && $o['ver'] !== '' ? $o['ver'] : '?'; $a['ver'][$v] = (isset($a['ver'][$v]) ? $a['ver'][$v] : 0) + 1; } }
+            if ($src === 'dev' && $now - $se < 30 * 86400) { $v = isset($o['ver']) && $o['ver'] !== '' ? $o['ver'] : '?'; $a['ver'][$v] = (isset($a['ver'][$v]) ? $a['ver'][$v] : 0) + 1;
+                if ($now - $se < 7 * 86400) $a['ver7'][$v] = (isset($a['ver7'][$v]) ? $a['ver7'][$v] : 0) + 1; } }   // hozir ishlatilayotgan versiyalar
         $act[$src] = $a; }
     $dl = array(); for ($i = 0; $i < 30; $i++) { $k = date('Y-m-d', strtotime("-$i day")); $x = rd('daily/' . $k, array()); $dl[$k] = array();
         foreach (array('d', 'n', 'm', 'mn') as $t) $dl[$k][$t] = isset($x[$t]) ? count($x[$t]) : 0; }
@@ -952,7 +965,7 @@ case 'probrep':                                         // faqat o'qish: Muammol
         if (!$o || empty($o['first']) || $now - (int)$o['first'] > 14 * 86400) continue;
         $nd[] = array('d' => substr(basename($f, '.php'), 0, 10), 'first' => (int)$o['first'], 'seen' => isset($o['seen']) ? (int)$o['seen'] : 0, 'runs' => isset($o['runs']) ? (int)$o['runs'] : 0,
             'v' => isset($o['ver']) ? $o['ver'] : '', 'fn' => isset($o['fn']) ? array_keys((array)$o['fn']) : array(), 'os' => isset($o['os']) ? $o['os'] : '', 'hw' => isset($o['hw']) ? $o['hw'] : null,
-            'cc' => isset($o['cc']) ? $o['cc'] : '', 'ch' => isset($o['ch']) ? $o['ch'] : '', 'pt' => isset($o['pt']) ? $o['pt'] : '', 'il' => isset($o['ilang']) ? $o['ilang'] : ''); }
+            'sb' => dev_sandbox($o) ? 1 : 0, 'cc' => isset($o['cc']) ? $o['cc'] : '', 'ch' => isset($o['ch']) ? $o['ch'] : '', 'pt' => isset($o['pt']) ? $o['pt'] : '', 'il' => isset($o['ilang']) ? $o['ilang'] : ''); }
     usort($nd, function ($a, $b) { return $b['first'] - $a['first']; });
     $act['newdev'] = array_slice($nd, 0, 120);
     $us = array(); $wkn = week_id();   // akkauntlar: o'yin statistikasi yig'ilyaptimi (kill, o'yin soni, oxirgi o'yin)
