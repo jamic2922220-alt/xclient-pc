@@ -26,6 +26,16 @@ Keyingi (egasi tanladi, 2026-11-13):
   kunlik sovg'a/sandiq umumiy. Server: xc_api.php dagi mavjud token/register/login, mobil uchun device turi 'm'.
 - ⏳ **Uzoq o'yindagi yiqilishlar**: o'yin xotirasi (gmem) o'lchanyapti - xotira to'lishimi, aniqlash.
 
+- 📌 **Mobil ilova - egasi tanladi (2026-11-15), keyin qilinadi:**
+  - M4 telefonda ro'yxatdan o'tish (xc_api register + do'st kodi `ref` maydoni - ikkalasiga sandiq);
+  - M5 tugmalar kattaligi/shaffofligi (TOUCH_PRO qatorlarini masshtablash), o'yin ichida joylash (`touch_enableedit`);
+  - M6 tayyor uslublar: Yangi boshlovchi (bitta o'q tugmasi, katta), PRO (bor), 4 barmoq (duck tepaga);
+  - M8 telefonda mashq: botlar (xarita, soni, `yb_difficulty`), aim test (`yb_freeze_bots 1`, `yb_ignore_enemies 1`,
+    `mp_timelimit 1`, natija cstrike/logs dan o'qiladi -> `aim_set`), granata (sv_cheats 1, `yb_quota 0`, noclip va granata tugmalari);
+  - M9 kuchsiz telefon rejimi (RAM/yadro bo'yicha gfx=low avtomatik);
+  - M10 yiqilish hisoboti (Android 11+ ApplicationExitInfo, Java xatolari) -> prob `mob_crash`/`mob_anr`/`mob_lowmem`;
+  - M12 do'stni chaqirish (Android ulashish oynasi, matnda taklif kodi = login).
+
 Kutilmoqda:
 - nDirect javobi: Windows 7 da tier0.dll TLS (dump: 85c2a708f2..._1794500973, admin kaliti bilan dmpget).
 - Launcher 1.0.143: chala yuklangan o'rnatuvchi (dl_short) va chuqur yengillashtirish (lagfix2) natijalari.
