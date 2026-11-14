@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Windows 7 – o'yin ochilmasa</title>
+<style>
+body{margin:0;background:#0d1117;color:#e6edf3;font:16px/1.55 Tahoma,Arial,sans-serif}
+.w{max-width:760px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:24px;margin:0 0 6px;color:#fff}
+h2{font-size:18px;margin:28px 0 8px;color:#ffb21e}
+p,li{color:#c9d4e0}
+.s{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px 16px;margin:12px 0}
+code{background:#0b0f14;border:1px solid #30363d;border-radius:4px;padding:2px 6px;color:#7ee787;font-family:Consolas,monospace}
+a{color:#58a6ff}
+.mut{color:#8b949e;font-size:14px}
+.ru{border-top:1px solid #30363d;margin-top:36px;padding-top:12px}
+</style>
+</head>
+<body><div class="w">
+<h1>Windows 7 da CS 1.6 ochilmasa</h1>
+<p class="mut">O'yin ochilishi bilan 1-2 soniyada yopilib qolsa (0xc0000005 xatosi) - Windows 7 ning tizim fayllari buzilgan yoki muhim yangilanishlari yetishmaydi. Quyidagi 3 qadamni tartib bilan bajaring.</p>
+
+<h2>1-qadam. Tizim fayllarini tuzatish (10-20 daqiqa)</h2>
+<div class="s"><ol>
+<li><b>Пуск</b> tugmasini bosing, qidiruvga <code>cmd</code> deb yozing.</li>
+<li>Chiqqan <b>cmd.exe</b> ustida sichqonchaning o'ng tugmasini bosing → <b>Запуск от имени администратора</b>.</li>
+<li>Qora oynaga <code>sfc /scannow</code> yozib Enter bosing va 100% bo'lguncha kuting.</li>
+<li>Kompyuterni qayta yoqing va o'yinni ochib ko'ring.</li>
+</ol></div>
+
+<h2>2-qadam. Muhim yangilanishlar (Microsoft saytidan)</h2>
+<div class="s">
+<p>Har bir havolani oching, <b>Windows 7 for x64</b> (64-bit) yoki <b>Windows 7</b> (32-bit) qatoridagi <b>Download</b> ni bosib o'rnating. Hammasidan keyin kompyuterni qayta yoqing.</p>
+<ul>
+<li><a href="https://www.catalog.update.microsoft.com/Search.aspx?q=KB2533623">KB2533623</a> - dasturlar DLL yuklashi uchun</li>
+<li><a href="https://www.catalog.update.microsoft.com/Search.aspx?q=KB2999226">KB2999226</a> - Universal C Runtime</li>
+<li><a href="https://www.catalog.update.microsoft.com/Search.aspx?q=KB4474419">KB4474419</a> - SHA-2 imzo qo'llab-quvvatlash</li>
+<li><a href="https://www.catalog.update.microsoft.com/Search.aspx?q=KB4490628">KB4490628</a> - xizmat steki yangilanishi</li>
+</ul>
+<p>Visual C++ kutubxonasi (Microsoft): <a href="https://aka.ms/vs/17/release/vc_redist.x86.exe">vc_redist.x86.exe</a> - 64-bit Windows'da ham shu <b>x86</b> versiyani o'rnating (o'yin 32-bit).</p>
+<p class="mut">Windows'ni bilsangiz: «Пуск» → «Центр обновления Windows» → barcha muhim yangilanishlarni o'rnatish ham shu ishni qiladi (uzoqroq).</p>
+</div>
+
+<h2>3-qadam. Baribir ochilmasa</h2>
+<div class="s"><p>Demak, o'yinning yangi versiyasi shu kompyuterdagi Windows 7 bilan ishlamayapti. Eng to'g'ri yo'l - <b>Windows 10</b> o'rnatish (4 GB xotirali kompyuterda yaxshi ishlaydi). X CLIENT Windows 10/11 da muammosiz ishlaydi.</p></div>
+
+<div class="ru">
+<h1>Windows 7: игра не запускается</h1>
+<p class="mut">Если игра закрывается через 1-2 секунды после запуска (ошибка 0xc0000005) - повреждены системные файлы Windows 7 или не хватает важных обновлений.</p>
+<div class="s"><ol>
+<li><b>Пуск</b> → введите <code>cmd</code> → правой кнопкой → <b>Запуск от имени администратора</b> → <code>sfc /scannow</code> → дождитесь 100% и перезагрузите компьютер.</li>
+<li>Установите обновления с сайта Microsoft: <a href="https://www.catalog.update.microsoft.com/Search.aspx?q=KB2533623">KB2533623</a>, <a href="https://www.catalog.update.microsoft.com/Search.aspx?q=KB2999226">KB2999226</a>, <a href="https://www.catalog.update.microsoft.com/Search.aspx?q=KB4474419">KB4474419</a>, <a href="https://www.catalog.update.microsoft.com/Search.aspx?q=KB4490628">KB4490628</a> и <a href="https://aka.ms/vs/17/release/vc_redist.x86.exe">Visual C++ x86</a>, затем перезагрузите компьютер.</li>
+<li>Если не помогло - установите Windows 10.</li>
+</ol></div>
+</div>
+</div></body></html>
