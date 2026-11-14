@@ -20,7 +20,8 @@ Keyingi (egasi tanladi, 2026-11-13):
   granatalarni qayta-qayta otish; ixtiyoriy - xaritani o'rganish (noclip, sv_cheats 1 faqat o'z serverida).
 - ✅ **Internetsiz rejim** (launcher 1.0.147+): internet yo'q bo'lsa o'yinda oflayn menyu (botlar, LAN, IP), LAN ro'yxati launcherdan.
 - ⏳ **Yangi o'yinchilar voronkasi**: upd/dl/dlh bosqichlari va probrep newdev - bir necha kun ma'lumot yig'ib, keyin tuzatish.
-- 📌 **Telefon + kompyuter bitta akkaunt** (egasi tanladi, 2026-11-14): mobil ilovaga (cssborka.uz-mobile, Xash3D mainui)
+- ✅ **Telefon + kompyuter bitta akkaunt** (2026-11-15, 1-bosqich): menyuda 6 xonali kod (mcode/mclaim), ilovada kirish, daraja/XP, kunlik sovg'a, onlayn do'stlar, o'yin paytida ping (mob=1, XP), do'stlarda "telefonda". Keyingi: telefondagi kill/o'yin statistikasi.
+  Asl reja: mobil ilovaga (cssborka.uz-mobile, Xash3D mainui)
   X CLIENT akkaunti - kirish (login/parol yoki kompyuterdagi menyudan QR), do'stlar onlayn, statistika (kill/o'yin),
   kunlik sovg'a/sandiq umumiy. Server: xc_api.php dagi mavjud token/register/login, mobil uchun device turi 'm'.
 - ⏳ **Uzoq o'yindagi yiqilishlar**: o'yin xotirasi (gmem) o'lchanyapti - xotira to'lishimi, aniqlash.

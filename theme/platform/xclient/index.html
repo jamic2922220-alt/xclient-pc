@@ -19,7 +19,7 @@
  * o'yin brauzeri cheksiz kutib, ekran ko'k bo'lib qolardi. Sinxron yuklash faqat server hozirgina javob bergandan keyin.
  * Qo'riqchi: menyu (xc.js) 20 s ichida ishga tushmasa - sahifa qayta yuklanadi (4 martagacha, oraliq oshib boradi). */
 (function () {
-  var V = '10206400';
+  var V = '10206500';
   window.XC_V = V;
   function nm() { try { return String(window.name || ''); } catch (e) { return ''; } }
   function has(t) { return ('|' + nm() + '|').indexOf('|' + t + '|') >= 0; }
@@ -66,7 +66,7 @@
   } catch (e) {}
 })();
 </script>
-<link rel="stylesheet" href="xc.css?v=10206400">
+<link rel="stylesheet" href="xc.css?v=10206500">
 <script>
 /* Xato bo'lsa ekranning tepasida ko'rsatamiz (o'yin brauzerida konsol yo'q) */
 window.XC_ERRS = [];
@@ -83,7 +83,7 @@ window.onerror = function (msg, url, line) {
   return false;
 };
 </script>
-<script src="xc_lang.js?v=10206400"></script>
+<script src="xc_lang.js?v=10206500"></script>
 </head>
 <body>
 <div id="app">
@@ -129,6 +129,11 @@ window.onerror = function (msg, url, line) {
   <!-- ===== o'ng ustun ===== -->
   <div id="col">
     <div class="card ann" id="ann" style="display:none"></div>
+    <!-- eski launcher: yangilash kartasi (opts.lver dan yangi versiya bo'lsa) -->
+    <div class="card mobcard updcard" id="updCard" data-act="updl" style="display:none">
+      <a class="cx" data-act="updx">&#215;</a>
+      <div class="mobi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg></div><div class="mobt"><b id="updT"></b><small data-t="up_s"></small></div>
+    </div>
     <!-- telefon ilovasi (Android): QR bilan yuklab olish -->
     <div class="card mobcard" id="mobCard" data-act="mobapp" style="display:none">
       <a class="cx" data-act="mobx">&#215;</a>
@@ -310,6 +315,6 @@ window.onerror = function (msg, url, line) {
   <div id="dbg"></div>
 </div>
 <script src="master.js"></script>
-<script src="xc.js?v=10206400"></script>
+<script src="xc.js?v=10206500"></script>
 </body>
 </html>

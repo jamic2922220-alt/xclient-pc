@@ -1131,3 +1131,11 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .lansv { margin: 6px 0 0; }
 .lansv .tx { display: block; width: 100%; margin-bottom: 6px; -webkit-box-sizing: border-box; box-sizing: border-box; }
 #srvTools .chip { padding: 0 9px; margin-right: 5px; }
+/* eski launcher: yangilash oynasidagi qadamlar */
+.upst { display: inline-block; text-align: left; margin: 10px auto 14px; padding-left: 22px; line-height: 1.7; color: #d8cfd4; }
+.upst li { margin: 2px 0; }
+/* telefon ilovasiga kirish kodi */
+.mcode { margin: 16px auto 0; padding: 14px 16px; max-width: 520px; border: 1px solid rgba(255, 59, 59, .45); -webkit-border-radius: 10px; border-radius: 10px; background: rgba(255, 59, 59, .07); }
+.mcode b { display: block; color: #fff; font-size: 15px; }
+.mcode small { display: block; color: #a99fa6; font-size: 12px; margin: 4px 0 10px; }
+.mcode .mcnum { font-size: 40px; font-weight: 700; letter-spacing: 6px; color: #fff; margin: 8px 0 4px; }

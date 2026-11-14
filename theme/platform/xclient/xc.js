@@ -369,7 +369,7 @@ function sparkTick() {
     s.left = Math.round(p.x) + 'px'; s.top = Math.round(p.y) + 'px'; s.opacity = FX.mode === 'snow' ? '0.85' : (p.life / p.max).toFixed(2);
   });
   // kirmaganlarga akkaunt kartasi sekin "nafas oladi"
-  if (!ME && !DB.acx && !DB.dnd && ++FX.n % 11 === 0) { var a = $('acct'); if (a) a.className = 'card acct' + (FX.n % 22 ? ' hi' : ''); }
+  if (!ME && !acxHidden() && !DB.dnd && ++FX.n % 11 === 0) { var a = $('acct'); if (a) a.className = 'card acct' + (FX.n % 22 ? ' hi' : ''); }
 }
 function fxLoop() {
   intro(); sparks();
@@ -390,6 +390,26 @@ var LITE = null;
 /* xc.html ni faqat X CLIENT o'rnatgan o'yin ochadi (launcher bosh sahifani shunga almashtiradi) - u yerda o'yin
  * launchersiz (eski boost-top yorlig'idan, 10 daqiqadan keyin yoki IP almashgan holda) ochilsa ham to'liq menyu */
 var ON_XC = /(^|\/)xc\.html$/i.test(location.pathname || '');
+/* eski launcher: menyuda yangilash kartasi. Launcher har ochilishda o'zi yangilanadi - eski qolgan bo'lsa
+ * avto-yangilash o'chirilgan yoki yuklab bo'lmagan. Yopsa 2 kun ko'rinmaydi */
+var LVER = '';
+function launcherOld() { return !!(PCID && LVER && VERSION && /^1\.0\.\d+$/.test(LVER) && !verGE(VERSION, LVER)); }
+function updCard() {
+  var c = $('updCard'); if (!c) return;
+  var on = launcherOld() && !LITE && !(DB.updx && now() - DB.updx < 2 * 864e5);
+  c.style.display = on ? '' : 'none';
+  if (on) $('updT').innerHTML = esc(T('up_t').replace('{v}', VERSION).replace('{n}', LVER));
+}
+function updPane() {
+  CLK.upd_open = (CLK.upd_open || 0) + 1; CLK_N++;
+  var off = OPTS && OPTS.auto === 0;
+  openSide('updl', T('up_h'), '<div class="qrw"><p class="qri">' + esc(T('up_t').replace('{v}', VERSION).replace('{n}', LVER)) + '</p>' +
+    (off ? '<p><b>' + esc(T('up_off')) + '</b></p><a class="btn red" data-act="updauto">' + esc(T('up_on')) + '</a>' : '') +
+    '<ol class="upst"><li>' + esc(T('up_1')) + '</li><li>' + esc(T('up_2')) + '</li><li>' + esc(T('up_3')) + '</li></ol>' +
+    '<div class="avurl"><input class="ipin" readonly value="cssborka.uz/xclient"><a class="cpy" data-copyip="https://cssborka.uz/xclient">' + esc(T('ip_copy')) + '</a></div></div>');
+}
+/* akkaunt kartasi yopilganmi: 3-yopishdan keyin butunlay, oldin - 5 kunga. acx=1 (eski menyu yoki serverdagi belgi) - vaqti noma'lum, yana ko'rsatiladi */
+function acxHidden() { if (!DB.acx) return false; if ((DB.acn || 0) >= 3) return true; return DB.acx > 1 && now() - DB.acx < 5 * 864e5; }
 function setLite(on) {
   if (on && ON_XC) on = false;
   if (LITE === on) return;
@@ -437,6 +457,7 @@ function loadOpts() {
     if (typeof OPTS.shots === 'object') OPTS.shots = 0;   // eski server: F11 ro'yxati 'shots' (galereya belgisi) ga tushgan edi
     if (r.o.f11) OPTS.f11 = r.o.f11;
     if (r.o.ver && !qparam('v')) { VERSION = r.o.ver; renderBar(); }
+    if (r.o.lver) { LVER = r.o.lver; updCard(); }
     if (r.o.age != null) setTimeout(function () { launchCheck(r.o.age); }, 3500);
     if (r.o.cachemb != null && !qparam('c')) CACHE_MB = r.o.cachemb;
     if (r.o.scr) OPTS.scr = r.o.scr;                   // monitor o'lchami (launcher)
@@ -459,7 +480,7 @@ var STATE_SYNCED = false, STATE_TM = 0;
 function stateData() {
   var h = [];
   each((DB.hist || []).slice(0, 50), function (x) { h.push({ ip: x.ip, name: x.name, map: x.map, t: x.t, d: x.d, k: x.k, x: x.x }); });
-  return { token: DB.forget ? '' : (DB.token || ''), fav: DB.fav.slice(0, 100), hist: h, binds: DB.binds || null, binds2: DB.binds2 || null, lang: DB.lang || '', wnSeen: DB.wnSeen || '', dnd: DB.dnd ? 1 : 0, acx: DB.acx ? 1 : 0, pxx: DB.pxx || 0, tour: DB.tour ? 1 : 0, rgo: DB.rgo || 0, rgn: DB.rgn || 0, demos: (DB.demos || []).slice(0, 40) };
+  return { token: DB.forget ? '' : (DB.token || ''), fav: DB.fav.slice(0, 100), hist: h, binds: DB.binds || null, binds2: DB.binds2 || null, lang: DB.lang || '', wnSeen: DB.wnSeen || '', dnd: DB.dnd ? 1 : 0, acx: DB.acx || 0, acn: DB.acn || 0, pxx: DB.pxx || 0, tour: DB.tour ? 1 : 0, rgo: DB.rgo || 0, rgn: DB.rgn || 0, demos: (DB.demos || []).slice(0, 40) };
 }
 function statePush() {
   if (!PCID || !STATE_SYNCED) return;
@@ -477,7 +498,8 @@ function stateSync() {
     if (!DB.lang && st.lang) { DB.lang = st.lang; setLang(st.lang); ch = true; }
     if (!DB.wnSeen && st.wnSeen) { DB.wnSeen = st.wnSeen; ch = true; }
     if (DB.dnd == null && st.dnd) { DB.dnd = 1; ch = true; }
-    if (!DB.acx && st.acx) { DB.acx = 1; ch = true; }
+    if (st.acx && (!DB.acx || st.acx > DB.acx)) { DB.acx = st.acx; ch = true; }
+    if ((st.acn | 0) > (DB.acn | 0)) { DB.acn = st.acn | 0; ch = true; }
     if (!DB.pxx && st.pxx) { DB.pxx = st.pxx; ch = true; }
     if (!DB.tour && st.tour) { DB.tour = 1; ch = true; }
     if (!DB.rgo && st.rgo) { DB.rgo = st.rgo; DB.rgn = st.rgn || 0; ch = true; }
@@ -1623,12 +1645,12 @@ function renderHome() {
     if (on > 3) return;
     var s = f.server ? srv(f.server) : null;
     fr += '<div class="tr"' + (f.server ? ' data-ip="' + esc(f.server) + '"' : ' style="cursor:default"') + '><div class="rk c av2" style="' + avStyle(f) + '">' + avInner(f, f.name) + '</div>' +
-      '<div class="nm">' + crown(f) + esc(f.name) + '</div><div class="mt"><span class="gm">\u25cf</span> ' + esc(f.server ? ((s && s.name) || f.server) + (f.map ? ' \u00b7 ' + f.map : '') : T('fr_menu')) + '</div>' +
+      '<div class="nm">' + crown(f) + esc(f.name) + '</div><div class="mt"><span class="gm">\u25cf</span> ' + esc((f.mob ? T('fr_mob') + (f.server ? ' \u00b7 ' : '') : '') + (f.server ? ((s && s.name) || f.server) + (f.map ? ' \u00b7 ' + f.map : '') : f.mob ? '' : T('fr_menu'))) + '</div>' +
       (f.server ? '<div class="go">' + esc(T('join')) + '</div>' : '') + '</div>';
   });
   if (ME && on < 3) fr += '<div class="tr frinv" data-act="ref"><div class="rk c">' + ico('gift') + '</div><div class="nm">' + esc(T('rf_cta')) + '</div><div class="mt">' + esc(T('rf_cta2')) + '</div></div>';
   $('frList').innerHTML = fr || '<div class="empty">' + (ME ? esc(T('no_fr')) : '<a data-act="login">' + esc(T('no_fr_login')) + '</a>') + '</div>';
-  $('acct').style.display = ME || DB.acx ? 'none' : ''; var xp = $('xpromo'); if (xp) xp.style.display = DB.pxx && now() - DB.pxx < 3 * 864e5 ? 'none' : ''; $('frCard').style.display = ME ? '' : 'none';
+  $('acct').style.display = ME || acxHidden() ? 'none' : ''; var xp = $('xpromo'); if (xp) xp.style.display = DB.pxx && now() - DB.pxx < 3 * 864e5 ? 'none' : ''; $('frCard').style.display = ME ? '' : 'none';
   var mc = $('mobCard'); if (mc) mc.style.display = ME && !LITE && !(DB.mobx && now() - DB.mobx < 14 * 864e5) ? '' : 'none';   // telefon ilovasi - akkaunti borlarga, yopsa 14 kun ko'rinmaydi
   $('frCnt').innerHTML = on ? on : '';
   $('mFriends').innerHTML = on ? esc(T('fr_on').replace('{n}', on)) : '';
@@ -2141,7 +2163,7 @@ function openFriends() {
     var offd = f.seen ? Math.floor((now() / 1000 - f.seen) / 86400) : 0;   // necha kundan beri kirmagan
     h += '<div class="tr" style="cursor:default">' + frAv(f) +
       '<div class="nm"><a class="frp" data-frprof="' + esc(f.login) + '">' + crown(f) + (f.clan ? '<span class="ctag">[' + esc(f.clan.tag) + ']</span> ' : '') + nickHtml(f) + '</a> ' + rankBadge(f) + ' <span class="mut" style="font-weight:normal;font-size:12px">' + esc(T('lvl').replace('{n}', f.level)) + '</span></div>' +
-      '<div class="mt">' + (f.online ? '<span class="gm">●</span> ' + esc(f.server ? T('fr_in') + ((s && s.name) || f.server) : T('fr_menu')) : esc(f.seen ? T('fr_last').replace('{t}', agoText(f.seen)) : T('fr_off'))) + '</div>' +
+      '<div class="mt">' + (f.online ? '<span class="gm">●</span> ' + esc((f.mob ? T('fr_mob') + (f.server ? ' \u00b7 ' : '') : '') + (f.server ? T('fr_in') + ((s && s.name) || f.server) : f.mob ? '' : T('fr_menu'))) : esc(f.seen ? T('fr_last').replace('{t}', agoText(f.seen)) : T('fr_off'))) + '</div>' +
       '<div class="fra">' + (!f.online && offd >= 3 ? '<a class="inv" data-mcall="' + esc(f.login) + '">' + esc(T('mc_btn')) + '</a>' : '') + '<a data-frcmp="' + esc(f.login) + '">VS</a><a class="ch" data-chat="' + esc(f.login) + '" data-chatn="' + esc(f.name) + '">' + ico('chat') + ' ' + esc(T('ch_btn')) + un + '</a>' +
       (f.online ? '<a class="ring" data-ring="' + esc(f.login) + '" title="' + esc(T('rg_btn')) + '">' + ico('phone') + '</a><a class="duel" data-duelp="' + esc(f.login) + '" data-dueln="' + esc(f.name) + '" title="' + esc(T('du_btn')) + '">' + ico('swords') + '</a>' : '') +
       (CONNECTED && f.online && f.server !== CONNECTED ? '<a class="inv" data-inv="' + esc(f.login) + '">' + esc(T('iv_btn')) + '</a>' : '') +
@@ -3461,7 +3483,7 @@ var PANES = {
     };
     return '<div class="pane l"><div class="ph2">' + esc(T('sy_lang')) + '</div><div class="lng">' + langs + '</div>' +
       '<div class="ph2 m">' + esc(T('sy_up')) + '</div>' +
-      '<div class="rowb"><b>' + esc(T('sy_ver')) + ' <span class="vbold">v' + esc(VERSION || '1.0') + '</span></b><small>' + esc(T('sy_new')) + '</small><span class="ok2">\u2713 ' + esc(T('sy_newb')) + '</span></div>' +
+      '<div class="rowb"><b>' + esc(T('sy_ver')) + ' <span class="vbold">v' + esc(VERSION || '1.0') + '</span></b><small>' + esc(launcherOld() ? T('up_t').replace('{v}', VERSION).replace('{n}', LVER) : T('sy_new')) + '</small>' + (launcherOld() ? '<a class="btn red" data-act="updl">' + esc(T('up_h')) + '</a>' : '<span class="ok2">\u2713 ' + esc(T('sy_newb')) + '</span>') + '</div>' +
       otg('auto', 'sy_auto', 'sy_auto2') + otg('beta', 'sy_beta') + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('sy_start')) + '</div>' +
       otg('start', 'sy_win') +
@@ -3752,7 +3774,8 @@ function mobApp() {
       qrCard('apk', T('mb_c1'), apk, T('mb_c1s'), T('mb_b1'), 'data-act="uapk"') +
       qrCard('site', T('mb_c2'), site, 'cssborka.uz/xclient', T('mb_b2'), 'data-act="usite"') + '</div>' +
       '<ol class="qrsteps"><li>' + esc(T('mb_s1')) + '</li><li>' + esc(T('mb_s2')) + '</li><li>' + esc(T('mb_s3')) + '</li></ol>' +
-      '<p class="qrnote">' + esc(T('mb_note')) + '</p></div>');
+      '<p class="qrnote">' + esc(T('mb_note')) + '</p>' +
+      (ME ? '<div class="mcode" id="mcBox"><b>' + esc(T('mc_t')) + '</b><small>' + esc(T('mc_s')) + '</small><a class="btn red" data-act="mcode">' + esc(T('mc_b')) + '</a></div>' : '') + '</div>');
     chime();
   };
   var x = new XMLHttpRequest(), done = false, fb = 'https://github.com/jamic2922220-alt/cssborka.uz-mobile/releases/latest/download/CS16-boosttop.apk';
@@ -3970,7 +3993,7 @@ function act(a) {
   if (a === 'trnext') { if (TOUR_I < TOUR.length - 1) { TOUR_I++; tourDraw(); } else tourEnd(); return; }
   if (a === 'trskip') return tourEnd();
   if (a === 'trreg') { tourEnd(); lgReg = true; return openLogin(); }
-  if (a === 'acctx') { DB.acx = 1; persist(); statePush(); renderAll(); return toast(T('ac_x'), 5000); }   // akkaunt kartasi bir marta yopiladi
+  if (a === 'acctx') { DB.acn = (DB.acn || 0) + 1; DB.acx = now(); persist(); statePush(); renderAll(); return toast(T(DB.acn >= 3 ? 'ac_x' : 'ac_x2'), 5000); }   // yopilsa 5 kundan keyin yana (ko'pi bilan 3 marta)
   if (a === 'rejq') { closeModal(); if (REJ_IP) startQueue(REJ_IP); return; }
   if (a === 'spwgo') { if (!srvSel) return; return DB.spw && DB.spw[srvSel] ? doConnect(srvSel, true) : spwAsk(srvSel, false); }
   if (a === 'spwdel') { if (DB.spw && srvSel) { delete DB.spw[srvSel]; persist(); } toast(T('pw_del'), 4000); return renderInfo(); }
@@ -3979,6 +4002,12 @@ function act(a) {
   if (a === 'coach_lag') { closeModal(); return lagFixPane(T('cc_blag'), false); }
   if (a === 'mobx') { DB.mobx = now(); persist(); renderAll(); return; }
   if (a === 'mobapp') return mobApp();
+  if (a === 'mcode') { CLK.mcode = (CLK.mcode || 0) + 1; CLK_N++; return api('mcode', {}, function (r) { var bx = $('mcBox'); if (!bx) return;
+    if (!r.ok) return toast(r.msg || 'Xato', 5000);
+    bx.innerHTML = '<b>' + esc(T('mc_t')) + '</b><div class="mcnum">' + esc(r.code.slice(0, 3) + ' ' + r.code.slice(3)) + '</div><small>' + esc(T('mc_s2')) + '</small>'; }); }
+  if (a === 'updl') return updPane();
+  if (a === 'updx') { DB.updx = now(); persist(); updCard(); return; }
+  if (a === 'updauto') { OPTS.auto = 1; api('opts_set', { d: PCID, o: JSON.stringify(OPTS) }, function (r) { toast(r.ok ? T('up_onok') : (r.msg || 'Xato'), 7000); if (r.ok) updPane(); }); return; }
   if (a === 'promox') { DB.pxx = now(); persist(); statePush(); renderAll(); return; }
   if (a === 'feedback') return openFeedback();
   if (a === 'fbsend') return sendFeedback();

@@ -196,7 +196,9 @@ function pub($u, $full) {
         'avc' => isset($u['avc']) ? $u['avc'] : '',
         'av' => !empty($u['avt']) ? 'xc_api.php?a=av&l=' . strtolower($u['login']) . '&t=' . $u['avt'] : '',
         'server' => is_online($u) && !empty($u['server']) ? $u['server'] : '', 'map' => is_online($u) && !empty($u['map']) ? $u['map'] : '',
+        'mob' => is_online($u) && !empty($u['mobt']) && time() - (int)$u['mobt'] < 150 ? 1 : 0,
     );
+    if ($full) $r['mobl'] = !empty($u['mob']) ? 1 : 0;   // telefon ilovasi ulanganmi (menyu kartasi)
     $st = isset($u['st']) && is_array($u['st']) ? $u['st'] : array();
     $r['ach'] = isset($u['ach']) ? array_keys($u['ach']) : array();
     $ch = rd('champ', array()); $r['champ'] = !empty($ch['login']) && $ch['login'] === strtolower($u['login']);
@@ -564,6 +566,18 @@ function daily_report() {
         . "NextClient menyu: " . $cnt($x['m']) . "\n"
         . "Akkauntlar: $users (kecha +$newu)\n"
         . "Klanlar: " . count((array)glob(XC_DIR . '/clans/*.php'));
+    /* qurilmalar: kecha birinchi ochganlar (antivirus tekshiruvisiz), o'yinga yetganlar, faol eski launcherlar */
+    $gs = rd('gh_stable', null); $lv = $gs && !empty($gs['version']) ? $gs['version'] : '';
+    $nd = 0; $ng = 0; $nsb = 0; $act7 = 0; $old7 = 0; $now = time();
+    foreach ((array)glob(XC_DIR . '/dev/*.php') as $f) { $o = json_decode(substr((string)@file_get_contents($f), strlen(XC_GUARD)), true); if (!$o) continue;
+        if (dev_sandbox($o)) { if (!empty($o['first']) && date('Y-m-d', (int)$o['first']) === $y) $nsb++; continue; }
+        if (!empty($o['first']) && date('Y-m-d', (int)$o['first']) === $y) { $nd++; if (!empty($o['fn']['game'])) $ng++; }
+        if (!empty($o['seen']) && $now - (int)$o['seen'] < 7 * 86400) { $act7++; if ($lv !== '' && !empty($o['ver']) && version_compare($o['ver'], $lv, '<')) $old7++; } }
+    $pr = rd('probs/' . $y, array()); $pc = function ($k) use ($pr) { return isset($pr[$k]) ? count($pr[$k]) : 0; };
+    $t .= "\n\nYangi kompyuterlar: $nd (o'yinni ochdi: $ng)" . ($nsb ? ", antivirus tekshiruvi: $nsb" : '')
+        . "\nYiqilishlar: o'yinda " . $pc('game_crash') . ", ochilmadi " . $pc('start_fail') . ", o'rnatilmadi " . ($pc('setup_fail') + $pc('dl_net'))
+        . ($pc('upd_fail') ? ", yangilanmadi " . $pc('upd_fail') : '')
+        . "\nFaol (7 kun): $act7" . ($lv !== '' ? ", eski launcherda: $old7 (oxirgisi $lv)" : '');
     if ($top) { $t .= "\nHafta qotillari:"; foreach (array_slice($top, 0, 3) as $i => $r) $t .= "\n" . ($i + 1) . ". " . $r[0] . " - " . $r[1] . " kill"; }
     tg_notify('daily', $t);
 }
@@ -1032,6 +1046,7 @@ case 'login':
     lock();                                              // qulf faqat yozish uchun - noto'g'ri urinishlar boshqalarni to'xtatmasin
     $u = user($login);
     touch_device($u);
+    if (p('mob') === '1') $u['mob'] = time();           // telefon ilovasidan kirdi
     save_user($u);
     out(array('ok' => true, 'token' => new_token($u['login']), 'me' => pub($u, true)));
 
@@ -1104,6 +1119,26 @@ case 'reset_do':                                         // 2) kod + yangi parol
     wr('tokens', $tokens);
     touch_device($u);
     save_user($u);
+    out(array('ok' => true, 'token' => new_token($u['login']), 'me' => pub($u, true)));
+
+/* ---------- telefon + kompyuter bitta akkaunt: kompyuterdagi menyu 6 xonali kod beradi (10 daqiqa), telefon ilovasi shu kod bilan kiradi ---------- */
+case 'mcode':
+    lock(); $u = auth();
+    if (rl_count('mc' . strtolower($u['login']), 3600) >= 20) fail('limit', 'Juda ko\'p urinish - keyinroq');
+    rl_add('mc' . strtolower($u['login']), 3600);
+    $mc = rd('mcodes', array()); $now = time();
+    foreach ($mc as $c => $x) if ($now - $x['t'] > 600 || $x['l'] === strtolower($u['login'])) unset($mc[$c]);   // eskilar va shu akkauntning oldingi kodi
+    do { $code = (string)mt_rand(100000, 999999); } while (isset($mc[$code]));
+    $mc[$code] = array('l' => strtolower($u['login']), 't' => $now); wr('mcodes', $mc);
+    out(array('ok' => true, 'code' => $code, 'ttl' => 600));
+case 'mclaim':
+    $code = preg_replace('/\D/', '', p('code'));
+    if (rl_count('mcl' . client_ip(), 900) >= 10) fail('limit', 'Juda ko\'p noto\'g\'ri urinish. 15 daqiqadan keyin qayta urinib ko\'ring');
+    lock(); $mc = rd('mcodes', array());
+    if (strlen($code) !== 6 || empty($mc[$code]) || time() - $mc[$code]['t'] > 600) { rl_add('mcl' . client_ip(), 900); unlock(); usleep(400000); fail('bad', 'Kod noto\'g\'ri yoki eskirgan - kompyuterda yangi kod oling'); }
+    $u = user($mc[$code]['l']); unset($mc[$code]); wr('mcodes', $mc);
+    if (!$u) fail('bad', 'Akkaunt topilmadi');
+    $u['mob'] = time(); save_user($u);
     out(array('ok' => true, 'token' => new_token($u['login']), 'me' => pub($u, true)));
 
 case 'me':
@@ -1203,6 +1238,7 @@ case 'ping':                                             // har daqiqada: onlayn
         $u['last'] = array('s' => $srv, 'm' => $u['map'], 't' => $now);   // oxirgi o'ynagan serveri (do'stlar profilida)
     } else { $u['server'] = ''; $u['map'] = ''; }
     $u['seen'] = $now;
+    if (p('mob') === '1') $u['mobt'] = $now; else unset($u['mobt']);   // telefondan o'ynayapti (do'stlar ro'yxatida "telefonda")
     $inv = array();                                      // do'stlardan kelgan takliflar (bir marta beriladi)
     if (!empty($u['inv'])) { foreach ((array)$u['inv'] as $i) if (is_array($i) && isset($i['t']) && $now - $i['t'] < 600) $inv[] = $i; $u['inv'] = array(); }
     $msgs = !empty($u['msgs']) ? $u['msgs'] : array(); $u['msgs'] = array();   // admin yuborgan shaxsiy xabarlar (bir marta)
@@ -1570,7 +1606,7 @@ case 'tg_unlink':
  * Kunlik fayl: probs/<sana> = [tur => [kompyuter => 1]] - har tur bo'yicha nechta kompyuterda bo'lgani ---------- */
 case 'prob':
     $k = p('k');
-    if (!in_array($k, array('net_slow', 'dl_net', 'dl_disk', 'dl_perm', 'av_del', 'setup_no', 'setup_fail', 'menu_wd', 'menu_lite', 'offline', 'dl_mirror', 'gpu_nodrv', 'safe_mode', 'autover', 'start_fail', 'game_crash', 'proc_fail', 'launch_err', 'smart_fix', 'elev_fixed', 'elev_uac', 'gpu_virt', 'fw_ok', 'fw_fail', 'ram_low', 'dl_short'), true)) out(array('ok' => true));
+    if (!in_array($k, array('net_slow', 'dl_net', 'dl_disk', 'dl_perm', 'av_del', 'setup_no', 'setup_fail', 'menu_wd', 'menu_lite', 'offline', 'dl_mirror', 'gpu_nodrv', 'safe_mode', 'autover', 'start_fail', 'game_crash', 'proc_fail', 'launch_err', 'smart_fix', 'elev_fixed', 'elev_uac', 'gpu_virt', 'fw_ok', 'fw_fail', 'ram_low', 'dl_short', 'upd_fail'), true)) out(array('ok' => true));
     if (rl_count('pb' . client_ip(), 3600) >= 30) out(array('ok' => true));
     rl_add('pb' . client_ip(), 3600);
     $who = strtolower(p('d')); if (!preg_match('/^[a-z0-9]{8,40}$/', $who)) $who = 'ip' . substr(md5(client_ip()), 0, 10);
@@ -1582,7 +1618,7 @@ case 'prob':
     if ($det !== '') probx_add($k, $who, $det);
     /* 8. Telegram: bugun shu muammo 5, 20, 50, 100 ta kompyuterga yetsa - adminga darhol xabar */
     $n = count($x[$k]); $nm = array('dl_net' => "CS 1.6 yuklanmadi (internet)", 'dl_disk' => "diskda joy yo'q", 'dl_perm' => "papkaga yozib bo'lmadi", 'av_del' => "antivirus faylni o'chirdi",
-        'setup_no' => "o'rnatishga ruxsat berilmadi", 'setup_fail' => "o'rnatuvchi ishga tushmadi", 'menu_wd' => "menyu 20 s da ochilmadi", 'gpu_nodrv' => "videokarta drayveri yo'q", 'gpu_virt' => "asosiy ekran virtual drayverda (GameFusion va h.k.)", 'fw_ok' => "LAN server: firewall ruxsati qo'shildi", 'ram_low' => "o'yin oldidan bo'sh xotira kam (1.5 GB dan kam)", 'dl_short' => "CS 1.6 o'rnatuvchisi chala yuklandi - qayta / zaxiradan yuklanmoqda", 'fw_fail' => "LAN server: firewall ruxsatiga «Да» bosilmadi (boshqalar ulana olmaydi)", 'safe_mode' => "3 marta ketma-ket yiqilish (xavfsiz rejim)", 'start_fail' => "o'yin ishga tushmayapti (0xc0000005, ko'pincha Windows 7)", 'dl_mirror' => "cssborka.uz dan yuklanmadi - zaxira manzil ishlatildi");
+        'setup_no' => "o'rnatishga ruxsat berilmadi", 'setup_fail' => "o'rnatuvchi ishga tushmadi", 'menu_wd' => "menyu 20 s da ochilmadi", 'gpu_nodrv' => "videokarta drayveri yo'q", 'gpu_virt' => "asosiy ekran virtual drayverda (GameFusion va h.k.)", 'fw_ok' => "LAN server: firewall ruxsati qo'shildi", 'ram_low' => "o'yin oldidan bo'sh xotira kam (1.5 GB dan kam)", 'dl_short' => "CS 1.6 o'rnatuvchisi chala yuklandi - qayta / zaxiradan yuklanmoqda", 'upd_fail' => "launcher yangilanmadi (fayl yuklanmadi)", 'fw_fail' => "LAN server: firewall ruxsatiga «Да» bosilmadi (boshqalar ulana olmaydi)", 'safe_mode' => "3 marta ketma-ket yiqilish (xavfsiz rejim)", 'start_fail' => "o'yin ishga tushmayapti (0xc0000005, ko'pincha Windows 7)", 'dl_mirror' => "cssborka.uz dan yuklanmadi - zaxira manzil ishlatildi");
     if ($det === '' && $k !== 'menu_lite' && $k !== 'offline') probx_add($k, $who, '-');
     if (isset($nm[$k]) && in_array($n, array(5, 20, 50, 100), true)) tg_notify('report', "X CLIENT muammo: bugun " . $n . " ta kompyuterda - " . $nm[$k] . ". Admin panel > Muammolar");
     out(array('ok' => true));
@@ -2192,6 +2228,7 @@ case 'opts_done':
     $key = isset($o['k']) ? $o['k'] : '';
     unset($o['k'], $o['kc'], $o['ip'], $o['st'], $o['fav'], $o['vc']);   // saqlangan holat (token) faqat dstate orqali, kalit bilan
     $o['rsk'] = rsk_of($o);
+    $gs = rd('gh_stable', null); if ($gs && !empty($gs['version'])) $o['lver'] = $gs['version'];   // oxirgi launcher (xclient/api.php keshi) - menyu eski launcherga "yangilang" kartasini ko'rsatadi
     $o['age'] = isset($o['seen']) ? max(0, time() - (int)$o['seen']) : -1;   // launcher oxirgi marta necha soniya oldin ochilgan (menyu: launchersiz kirishni aniqlaydi)
     out(array('ok' => true, 'o' => $o, 'd' => $d, 'k' => $claim ? $key : null));
 
@@ -2281,7 +2318,7 @@ case 'dstate':
         $tok = isset($in['token']) && is_string($in['token']) && preg_match('/^[a-f0-9]{40}$/', $in['token']) ? $in['token'] : '';
         $st = array('token' => $tok, 'fav' => array_slice($fav, 0, 100), 'hist' => $hist, 'binds' => $kv(isset($in['binds']) ? $in['binds'] : null), 'binds2' => $kv(isset($in['binds2']) ? $in['binds2'] : null),
             'lang' => isset($in['lang']) && is_string($in['lang']) && preg_match('/^[a-z]{2,3}$/', $in['lang']) ? $in['lang'] : '', 'wnSeen' => isset($in['wnSeen']) && is_string($in['wnSeen']) ? substr($in['wnSeen'], 0, 40) : '',
-            'dnd' => empty($in['dnd']) ? 0 : 1, 'acx' => empty($in['acx']) ? 0 : 1, 'pxx' => isset($in['pxx']) ? (int)$in['pxx'] : 0);
+            'dnd' => empty($in['dnd']) ? 0 : 1, 'acx' => empty($in['acx']) ? 0 : max(1, min(time() * 1000 + 864e5, (float)$in['acx'])), 'acn' => isset($in['acn']) ? max(0, min(9, (int)$in['acn'])) : 0, 'pxx' => isset($in['pxx']) ? (int)$in['pxx'] : 0);
         /* demolar ro'yxati (fayllar o'yin papkasida; menyu ularni o'zi ko'ra olmaydi) - o'yin brauzeri xotirasi tozalansa yo'qolmasin */
         $dm = array();
         foreach ((isset($in['demos']) && is_array($in['demos']) ? array_slice($in['demos'], 0, 40) : array()) as $x)
