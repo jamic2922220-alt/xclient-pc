@@ -1315,7 +1315,7 @@ int WINAPI GdipCreateBitmapFromScan0(INT w, INT h, INT stride, INT format, BYTE 
 typedef struct { GUID Guid; ULONG NumberOfValues; ULONG Type; void *Value; } XEncParam;
 typedef struct { UINT Count; XEncParam Parameter[1]; } XEncParams;
 static const GUID XC_ENC_QUALITY = { 0x1d5be4b5, 0xfa4a, 0x452d, { 0x9c, 0xdd, 0x5d, 0xb3, 0x51, 0x05, 0xe7, 0xeb } };
-static volatile LONG g_shot_busy = 0, g_shot_saved = 0;
+static volatile LONG g_shot_busy = 0, g_shot_saved = 0, g_shot_black = 0;
 static BOOL shot_dir(wchar_t *dir)
 {
     if (FAILED(SHGetFolderPathW(NULL, CSIDL_MYPICTURES | CSIDL_FLAG_CREATE, NULL, 0, dir))) return FALSE;
@@ -1352,7 +1352,9 @@ static BOOL shot_gdi(HWND game, wchar_t *out)
     BITMAPINFO bi; ZeroMemory(&bi, sizeof(bi)); bi.bmiHeader.biSize = sizeof(bi.bmiHeader); bi.bmiHeader.biWidth = w; bi.bmiHeader.biHeight = -h; bi.bmiHeader.biPlanes = 1; bi.bmiHeader.biBitCount = 32;
     void *bits = NULL; HBITMAP hb = CreateDIBSection(sdc, &bi, DIB_RGB_COLORS, &bits, NULL, 0); BOOL ok = FALSE;
     if (hb && bits) { HGDIOBJ old = SelectObject(mdc, hb); BitBlt(mdc, 0, 0, w, h, sdc, r.left, r.top, SRCCOPY | CAPTUREBLT); SelectObject(mdc, old); GdiFlush();
-        ok = shot_save((BYTE *)bits, (UINT)w, (UINT)h, (UINT)w * 4, out); }
+        BOOL blank = TRUE;   /* eksklyuziv to'liq ekranda GDI ham qora oladi - qora rasm saqlanmaydi */
+        for (int k = 0; k < w * h && blank; k += 997) if (((DWORD *)bits)[k] & 0xFFFFFF) blank = FALSE;
+        if (!blank) ok = shot_save((BYTE *)bits, (UINT)w, (UINT)h, (UINT)w * 4, out); }
     if (hb) DeleteObject(hb);
     DeleteDC(mdc); ReleaseDC(NULL, sdc);
     return ok;
@@ -1385,7 +1387,7 @@ static DWORD WINAPI shot_thread(LPVOID arg)
     if (!ok) ok = shot_gdi(game, out);
     CoUninitialize();
     if (ok) { InterlockedIncrement(&g_shot_saved); Beep(1800, 35); Sleep(40); Beep(2200, 35); shot_report(out); shot_thumb_now(out); }   /* menyudagi "Skrinshotlar" - ro'yxat va kichik rasm */
-    else Beep(400, 120);
+    else { Beep(400, 120); Sleep(60); Beep(400, 120); InterlockedExchange(&g_shot_black, 1); }   /* ikki past ovoz: olinmadi (to'liq ekran) - menyu sababini aytadi */
     InterlockedExchange(&g_shot_busy, 0);
     return 0;
 }

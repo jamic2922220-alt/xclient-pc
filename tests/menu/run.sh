@@ -43,6 +43,7 @@ node "$HERE/tg.js" || rc=1
 node "$HERE/offnade.js" || rc=1
 node "$HERE/feat2.js" || rc=1
 node "$HERE/upd.js" || rc=1
+node "$HERE/winm.js" || rc=1
 python3 "$HERE/visual.py" "$XC_SHOTS" ${1:-} || rc=1
 echo "Skrinshotlar: $XC_SHOTS"
 kill $SRV 2>/dev/null

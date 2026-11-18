@@ -1647,7 +1647,7 @@ case 'tg_unlink':
  * Kunlik fayl: probs/<sana> = [tur => [kompyuter => 1]] - har tur bo'yicha nechta kompyuterda bo'lgani ---------- */
 case 'prob':
     $k = p('k');
-    if (!in_array($k, array('net_slow', 'dl_net', 'dl_disk', 'dl_perm', 'av_del', 'setup_no', 'setup_fail', 'menu_wd', 'menu_lite', 'offline', 'dl_mirror', 'gpu_nodrv', 'safe_mode', 'autover', 'start_fail', 'game_crash', 'proc_fail', 'launch_err', 'smart_fix', 'elev_fixed', 'elev_uac', 'gpu_virt', 'fw_ok', 'fw_fail', 'ram_low', 'dl_short', 'upd_fail'), true)) out(array('ok' => true));
+    if (!in_array($k, array('net_slow', 'dl_net', 'dl_disk', 'dl_perm', 'av_del', 'setup_no', 'setup_fail', 'menu_wd', 'menu_lite', 'offline', 'dl_mirror', 'gpu_nodrv', 'safe_mode', 'autover', 'start_fail', 'game_crash', 'proc_fail', 'launch_err', 'smart_fix', 'elev_fixed', 'elev_uac', 'gpu_virt', 'fw_ok', 'fw_fail', 'ram_low', 'dl_short', 'upd_fail', 'shot_black'), true)) out(array('ok' => true));
     if (rl_count('pb' . client_ip(), 3600) >= 30) out(array('ok' => true));
     rl_add('pb' . client_ip(), 3600);
     $who = strtolower(p('d')); if (!preg_match('/^[a-z0-9]{8,40}$/', $who)) $who = 'ip' . substr(md5(client_ip()), 0, 10);
@@ -2248,7 +2248,7 @@ case 'opts_done':
         foreach (array('beta', 'auto', 'start', 'clean', 'verify', 'prio', 'shots', 'stretch', 'ontop', 'flash') as $k) if (isset($in[$k])) $o[$k] = $in[$k] ? 1 : 0;   // stretch: yon polosalarsiz (-stretchaspect); ontop/flash: serverga ulanganda oyna tepaga / ikonka miltillaydi
         if (isset($in['win'])) $o['win'] = in_array((int)$in['win'], array(0, 1, 2), true) ? (int)$in['win'] : 0;   // 0 to'liq ekran, 1 oyna, 2 oynali to'liq ekran (chegarasiz)
         if (isset($in['packs'])) $o['packs'] = preg_match('/^[a-z0-9_,\-]{0,200}$/', $in['packs']) ? $in['packs'] : '';
-        foreach (array('tune', 'macc', 'bgp') as $k) if (isset($in[$k])) $o[$k] = $in[$k] ? 1 : 0;   // o'yin paytida Windows'ni moslash (quvvat, sichqoncha, fon dasturlari)
+        foreach (array('tune', 'macc', 'bgp', 'winx') as $k) if (isset($in[$k])) $o[$k] = $in[$k] ? 1 : 0;   // winx: ko'rinish rejimini o'yinchi o'zi tanlagan (bo'lmasa Win10+ da chegarasiz)   // o'yin paytida Windows'ni moslash (quvvat, sichqoncha, fon dasturlari)
         if (!empty($in['dvroff'])) $o['dvroff'] = 1;                                   // Game Bar fon yozuvini o'chirish - launcher keyingi ochilishda bajaradi
         foreach (array('mic', 'rb') as $k) if (isset($in[$k])) $o[$k] = $in[$k] ? 1 : 0;   // videoda mikrofon, "oxirgi 30 soniya"
         if (!empty($in['rbx'])) $o['rbx'] = 1;                                        // "oxirgi 30 soniya" ni o'yinchi o'zi tanladi (bo'lmasa - avto: oddiy kompyuterda o'chiq)

@@ -1230,7 +1230,7 @@ static char *read_all(const wchar_t *path, long *len)
 /* ---------------------------------------------------------------- Tizim sozlamalari (menyudan) */
 /* O'yin ichidagi X CLIENT menyusi (Sozlamalar > Tizim) ularni xc_api.php ga shu kompyuter id'si (g_id)
  * bilan yozadi; XClient.exe har ishga tushganda o'qiydi va bajaradi. */
-static int  o_beta = -1, o_auto = 1, o_start = -1, o_win = 0, o_clean = 0, o_verify = 0, o_stretch = 0;   /* o_win: 0 to'liq ekran, 1 oyna, 2 chegarasiz oyna */
+static int  o_beta = -1, o_auto = 1, o_start = -1, o_win = 0, o_winx = 0, o_clean = 0, o_verify = 0, o_stretch = 0;   /* o_winx: rejimni o'yinchi o'zi tanlagan */   /* o_win: 0 to'liq ekran, 1 oyna, 2 chegarasiz oyna */
 static int  o_rsk = 3;                          /* klassik radar foni: 0 asl, 1 qora kontrast, 2 qora + halqalar, 3 taktik to'r (standart), 4 neon, 5 minimal, 6 kontrast kvadrat */
 static void radar_skin(int style);              /* xc_radar.c */
 static int  o_tune = 1, o_macc = 1, o_bgp = 1, o_dvroff = 0;   /* xc_tune.c: o'yin paytida Windows'ni moslash (menyu > Tizim) */
@@ -1325,7 +1325,7 @@ static void fetch_opts(void)
     char *r = http_get(url, NULL);
     if (!r || !strstr(r, "\"ok\":true")) { free(r); return; }
     o_beta = jint(r, "beta", -1); o_auto = jint(r, "auto", 1); o_start = jint(r, "start", -1);
-    o_win = jint(r, "win", 0); o_stretch = jint(r, "stretch", 0); o_clean = jint(r, "clean", 0); o_verify = jint(r, "verify", 0);
+    o_win = jint(r, "win", 0); o_winx = jint(r, "winx", 0); o_stretch = jint(r, "stretch", 0); o_clean = jint(r, "clean", 0); o_verify = jint(r, "verify", 0);
     o_rsk = jint(r, "rsk", 3); ini_set_int(L"rsk", o_rsk + 1);   /* +1: 0 - "hali yo'q" */
     o_tune = jint(r, "tune", 1); o_macc = jint(r, "macc", 1); o_bgp = jint(r, "bgp", 1); o_dvroff = jint(r, "dvroff", 0);
     if (cr[0]) ini_str(L"t_cr", NULL);
@@ -2532,14 +2532,24 @@ static BOOL run_game(void)
     }
     wchar_t vid[96] = L"";
     unsigned w = 0, h = 0;
-    if (o_win == 2) {   /* oynali to'liq ekran: chegarasiz oyna monitor o'lchamida - Alt+Tab tez, qora ekransiz */
+    /* Windows 10/11, o'lcham "Avto" va rejimni o'yinchi o'zi tanlamagan bo'lsa - chegarasiz oyna (monitor o'lchamida, ko'rinishi to'liq ekrandek).
+     * Eksklyuziv to'liq ekranda Alt+Tab monitor rejimini almashtirib ekranni 1-3 s qoraytirardi, F11 skrinshot va F10 video qora chiqardi
+     * (Windows ekran nusxasi eksklyuziv OpenGL ni ko'rmaydi). Past o'lcham (cho'zilgan 1024x768 va h.k.) va Windows 7/8 - eskicha to'liq ekran */
+    int owin = o_win;
+    if (owin == 0 && !o_winx && !o_res[0]) {
+        RTL_OSVERSIONINFOEXW vi; ZeroMemory(&vi, sizeof(vi)); vi.dwOSVersionInfoSize = sizeof(vi);
+        typedef LONG (WINAPI *RGV)(RTL_OSVERSIONINFOEXW *);
+        RGV rgv = (RGV)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetVersion");
+        if (rgv && rgv(&vi) == 0 && vi.dwMajorVersion >= 10) owin = 2;
+    }
+    if (owin == 2) {   /* oynali to'liq ekran: chegarasiz oyna monitor o'lchamida - Alt+Tab tez, qora ekransiz */
         DEVMODEW dm; ZeroMemory(&dm, sizeof(dm)); dm.dmSize = sizeof(dm);
         if (EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &dm) && dm.dmPelsWidth >= 640) { w = dm.dmPelsWidth; h = dm.dmPelsHeight; }
         else if (!(o_res[0] && sscanf(o_res, "%ux%u", &w, &h) == 2)) { w = 1024; h = 768; }
         _snwprintf(vid, 96, L" -width %u -height %u -window -noborder", w, h);
     }
-    else if (o_res[0] && sscanf(o_res, "%ux%u", &w, &h) == 2) _snwprintf(vid, 96, L" -width %u -height %u%s", w, h, o_win ? L" -window" : L" -full");
-    else if (o_win) {   /* oyna + "Avto": ish maydoniga (vazifalar paneli chiqarilgan) sig'adigan eng katta standart o'lcham, monitor formati bilan.
+    else if (o_res[0] && sscanf(o_res, "%ux%u", &w, &h) == 2) _snwprintf(vid, 96, L" -width %u -height %u%s", w, h, owin ? L" -window" : L" -full");
+    else if (owin) {   /* oyna + "Avto": ish maydoniga (vazifalar paneli chiqarilgan) sig'adigan eng katta standart o'lcham, monitor formati bilan.
                          * Oldin faqat -window edi - o'yin eski saqlangan o'lchamda (ko'pincha 800x600) ochilardi */
         RECT wa; DEVMODEW dm; ZeroMemory(&dm, sizeof(dm)); dm.dmSize = sizeof(dm);
         static const unsigned R169[][2] = { { 2560, 1440 }, { 1920, 1080 }, { 1600, 900 }, { 1366, 768 }, { 1280, 720 }, { 1024, 576 } };
@@ -2563,7 +2573,7 @@ static BOOL run_game(void)
     }
     /* -freq: busiz CS 1.6 to'liq ekranni ko'pincha 60 Hz da ochadi (144 Hz monitorda ham) - 100 FPS 60 Hz da notekis, "silliq emas".
      * Shu o'lcham uchun monitor qo'llaydigan eng yuqori chastotani tanlaymiz */
-    if (!o_win && w && h) {
+    if (!owin && w && h) {
         DWORD best = 0; DEVMODEW m; ZeroMemory(&m, sizeof(m)); m.dmSize = sizeof(m);
         for (DWORD i = 0; EnumDisplaySettingsW(NULL, i, &m); i++)
             if (m.dmPelsWidth == w && m.dmPelsHeight == h && m.dmBitsPerPel >= 32 && m.dmDisplayFrequency > best && m.dmDisplayFrequency <= 500) best = m.dmDisplayFrequency;
@@ -2623,6 +2633,13 @@ static BOOL run_game(void)
         tune_end();
         DWORD code = 0; GetExitCodeProcess(pi.hProcess, &code);
         rec_session_end();
+        if (InterlockedExchange(&g_shot_black, 0) && day_now() - ini_int(L"sbhint") >= 7) {   /* F11 to'liq ekranda qora oldi - sababi va yechimi (haftasiga ko'pi bilan 1 marta) */
+            ini_set_int(L"sbhint", day_now()); prob_send("shot_black", 0);
+            BOOL ru = !strncmp(g_lang, "ru", 2);
+            MessageBoxW(NULL, ru ? L"Скриншот (F11) не получился: в режиме «Весь экран» Windows не видит изображение игры.\n\nМеню X CLIENT → Настройки → Видео → Режим отображения → «Без рамки». Выглядит так же на весь экран, но Alt+Tab работает мгновенно, а F11 и F10 снимают нормально."
+                                 : L"Skrinshot (F11) olinmadi: «To‘liq» rejimda Windows o‘yin tasvirini ko‘ra olmaydi.\n\nX CLIENT menyusi → Sozlamalar → Video → Ko‘rinish rejimi → «Chegarasiz». Xuddi to‘liq ekrandek ko‘rinadi, lekin Alt+Tab bir zumda ishlaydi, F11 va F10 to‘g‘ri yozadi.",
+                        L"X CLIENT", MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND);
+        }
         ULONGLONG t0 = ((ULONGLONG)ft0.dwHighDateTime << 32) | ft0.dwLowDateTime;
         FILETIME ft1; GetSystemTimeAsFileTime(&ft1);
         ULONGLONG played = ((((ULONGLONG)ft1.dwHighDateTime << 32) | ft1.dwLowDateTime) - t0) / 10000000ULL;   /* soniya */

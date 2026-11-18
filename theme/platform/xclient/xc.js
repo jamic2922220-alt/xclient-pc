@@ -381,7 +381,7 @@ function fxLoop() {
  * xc_api.php ga yoziladi va XClient.exe ularni keyingi ishga tushishda bajaradi. */
 function qparam(k) { var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search || ''); return m ? decodeURIComponent(m[1]) : ''; }
 var PCID = /^[a-z0-9]{8,40}$/.test(qparam('xc')) ? qparam('xc') : '';   // kompyuter id (DB.pcid) va uning maxfiy kaliti (DB.pck) load() dan keyin olinadi
-var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '', hud: 100, vq: 'mid', dmf: null, vids: null, mic: 0, rb: 1, rbx: 0, rsk: 3, rskx: 0, tune: 1, macc: 1, bgp: 1, dvr: 0, dvroff: 0 }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
+var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, winx: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '', hud: 100, vq: 'mid', dmf: null, vids: null, mic: 0, rb: 1, rbx: 0, rsk: 3, rskx: 0, tune: 1, macc: 1, bgp: 1, dvr: 0, dvroff: 0 }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
 var OPTS_TRY = 0;
 /* To'liq X CLIENT menyusi faqat XCLauncher.exe orqali ochilganda. Menyu saytda turadi va boshqa boost-top sborkalari ham
  * uni ochadi - ularda "sodda rejim": tezkor o'yin, serverlar, sozlamalar + X CLIENT ni yuklab olish kartasi.
@@ -527,6 +527,8 @@ function copyIp(ip, inp) {
   } catch (e) { ok = false; }
   toast(ok ? T('ip_copied') + ' ' + ip : T('ip_ctrlc'), 3000);
 }
+/* launcher qaysi rejimda ochadi: Windows 10/11 + "Avto" o'lcham + o'yinchi o'zi tanlamagan bo'lsa - chegarasiz (launcher 1.0.155+) */
+function winEff() { var w = OPTS.win | 0; if (w === 0 && !OPTS.winx && !OPTS.res && HW && /Windows 1[01]/.test(HW.os || '') && verGE(VERSION, '1.0.155')) return 2; return w; }
 function saveOpts(msg) {
   if (!PCID) { toast(T('sy_nolaunch'), 4000); return; }
   api('opts_set', { d: PCID, o: JSON.stringify(OPTS) }, function (r) { toast(r.ok ? (msg || T('sy_next')) : (r.msg || 'Xato'), 3500); });
@@ -3257,7 +3259,8 @@ var PANES = {
       '<div class="fr"><div class="lb">' + esc(T('v_ar')) + '</div><div class="ct2 seg">' + vseg('ar', scrAr(), [['43', 'v_ar43'], ['169', 'v_ar169'], ['1610', 'v_ar1610']]) + '</div></div>' +
       '<div class="fr"><div class="lb">' + esc(T('sy_screen')) + '</div><div class="ct2"><a class="dd wide" data-dd="res"><span>' + esc(ddLabel('res')) + '</span><i>\u25be</i></a></div></div>' +
       (resSmall() ? '<div class="chk bad" style="margin:4px 0 8px">' + esc(T('v_small').replace('{m}', monRes().join('\u00d7')).replace('{r}', OPTS.res.replace('x', '\u00d7'))) + ' <a class="btn red" data-act="resauto" style="margin-left:6px">' + esc(T('v_small_go')) + '</a></div>' : '') +
-      '<div class="fr"><div class="lb">' + esc(T('v_mode')) + '</div><div class="ct2 seg">' + vseg('win', String(OPTS.win | 0), [['0', 'v_m_full'], ['1', 'v_m_win'], ['2', 'v_m_bl']]) + '</div></div>' +
+      '<div class="fr"><div class="lb">' + esc(T('v_mode')) + '</div><div class="ct2 seg">' + vseg('win', String(winEff()), [['0', 'v_m_full'], ['1', 'v_m_win'], ['2', 'v_m_bl']]) + '</div></div>' +
+      '<div class="mut small" style="margin:-4px 0 10px">' + esc(T(winEff() === 2 ? 'v_m_blh' : winEff() === 0 ? 'v_m_fullh' : 'v_m_winh')) + '</div>' +
       tg('vsync', 'v_vsync') + tg('hdm', 'v_hdm', 'v_rs') + tg('addons', 'v_addons', 'v_rs') + votg('stretch', 'v_stretch', 'v_rs') + tg('hor', 'v_hor') +
       tg('detail', 'v_detail') + votg('ontop', 'v_ontop') + votg('flash', 'v_flash') + '</div>';
   },
@@ -4430,7 +4433,7 @@ document.onclick = function (e) {
   if ((el = closest(t, 'data-ohud'))) { OPTS.hud = Number(el.getAttribute('data-ohud')); saveOpts(T('h_size4')); showSetTab('hud'); return; }
   if ((el = closest(t, 'data-vseg'))) { var vk = el.getAttribute('data-vseg'), vv = el.getAttribute('data-v');
     if (vk === 'ar') { DB.ar = vv; persist(); if (OPTS.res && resAr(OPTS.res) !== vv) { OPTS.res = ''; saveOpts(T('v_rs2')); } }
-    else { OPTS.win = +vv; saveOpts(T('v_rs2')); }
+    else { OPTS.win = +vv; OPTS.winx = 1; saveOpts(T('v_rs2')); }
     showSetTab('video'); return; }
   if ((el = closest(t, 'data-otg'))) { var ok2 = el.getAttribute('data-otg'); OPTS[ok2] = OPTS[ok2] ? 0 : 1; el.className = 'tg' + (OPTS[ok2] ? ' on' : ''); saveOpts(/^(tune|macc|bgp)$/.test(ok2) ? T('tn_next') : ''); if (ok2 === 'tune') showSetTab('pro'); return; }
   if ((el = closest(t, 'data-tg'))) { var k = el.getAttribute('data-tg'); E[k] = E[k] ? 0 : 1; if (k === 'hdm') E.hdmx = 1; el.className = 'tg' + (E[k] ? ' on' : ''); if (setTab === 'hud') { drawXhair(); var cd = $('xCode'); if (cd) cd.value = xcode(E); } return; }
