@@ -3283,7 +3283,7 @@ var PANES = {
       '<div class="ph2 m">' + esc(T('k_buy')) + '</div>' + tg('buykeys', 'k_buy2') +
       '<div class="mut" style="font-size:12px;line-height:20px">F1: M4A1/AK-47 \u00b7 F2: AWP \u00b7 F3: Kevlar+Helmet, Defuse kit \u00b7 F4: HE + 2\u00d7Flash + Smoke</div>' +
       '<a class="btn" style="margin:14px 8px 0 0" data-act="keysdef">' + esc(T('k_def')) + '</a><a class="btn out" style="margin:14px 0 0" data-act="keysfactory">' + esc(T('k_factory')) + '</a></div>' +
-      (KEYWAIT ? '<div class="kpick">' + esc(T('k_pick')) + ' ' + ['MOUSE3', 'MOUSE4', 'MOUSE5', 'MWHEELUP', 'MWHEELDOWN'].map(function (k) { return '<a data-pickkey="' + k + '">' + esc(T('kp_' + k)) + '</a>'; }).join('') + '<a data-pickkey="">' + esc(T('cancel')) + '</a></div>' : '');
+      (KEYWAIT ? '<div class="kpick">' + esc(T('k_pick')) + ' ' + ['MOUSE3', 'MOUSE4', 'MOUSE5', 'MWHEELUP', 'MWHEELDOWN', 'SHIFT', 'CTRL', 'ALT', 'SPACE', 'TAB', 'CAPSLOCK'].map(function (k) { return '<a data-pickkey="' + k + '">' + esc(LANG.uz['kp_' + k] != null ? T('kp_' + k) : k) + '</a>'; }).join('') + '<a data-pickkey="">' + esc(T('cancel')) + '</a></div>' : '');
   },
   mouse: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('mo_title')) + '</div>' + sl('sens', 'mo_sens', 0.5, 10, 0.1) + sl('zoom', 'mo_zoom', 0.2, 3, 0.05) +
@@ -3668,11 +3668,40 @@ var KEYNAMES = { 8: 'BACKSPACE', 9: 'TAB', 13: 'ENTER', 16: 'SHIFT', 17: 'CTRL',
   96: 'KP_INS', 97: 'KP_END', 98: 'KP_DOWNARROW', 99: 'KP_PGDN', 100: 'KP_LEFTARROW', 101: 'KP_5', 102: 'KP_RIGHTARROW', 103: 'KP_HOME',
   104: 'KP_UPARROW', 105: 'KP_PGUP', 106: '*', 107: 'KP_PLUS', 109: 'KP_MINUS', 110: 'KP_DEL', 111: 'KP_SLASH',
   186: 'SEMICOLON', 187: '=', 188: ',', 189: '-', 190: '.', 191: '/', 192: '`', 219: '[', 220: '\\', 221: ']', 222: "'" };
+/* O'yin ichidagi brauzer (CEF1) tugmani turlicha beradi: ba'zan keyCode o'rniga harf kodi (e=101 - KP_5 bilan bir xil!),
+ * rus/o'zbek kirill klaviaturasida - kirill harf. Avval keyIdentifier ("U+0045", "Shift"), keyin keyCode,
+ * harflar esa qaysi tilda bo'lmasin - klaviaturadagi joyi bo'yicha lotinga aylantiriladi (Е -> t emas, aynan tugma) */
+var KEYID = { Shift: 'SHIFT', Control: 'CTRL', Alt: 'ALT', Enter: 'ENTER', Tab: 'TAB', Up: 'UPARROW', Down: 'DOWNARROW', Left: 'LEFTARROW', Right: 'RIGHTARROW',
+  PageUp: 'PGUP', PageDown: 'PGDN', Home: 'HOME', End: 'END', Insert: 'INS', Pause: 'PAUSE', CapsLock: 'CAPSLOCK' };
+var CYR = { '\u0439': 'q', '\u0446': 'w', '\u0443': 'e', '\u043a': 'r', '\u0435': 't', '\u043d': 'y', '\u0433': 'u', '\u0448': 'i', '\u0449': 'o', '\u0437': 'p', '\u0445': '[', '\u044a': ']',
+  '\u0444': 'a', '\u044b': 's', '\u0432': 'd', '\u0430': 'f', '\u043f': 'g', '\u0440': 'h', '\u043e': 'j', '\u043b': 'k', '\u0434': 'l', '\u0436': 'SEMICOLON', '\u044d': "'",
+  '\u044f': 'z', '\u0447': 'x', '\u0441': 'c', '\u043c': 'v', '\u0438': 'b', '\u0442': 'n', '\u044c': 'm', '\u0431': ',', '\u044e': '.', '\u0451': '`',
+  '\u045e': 'o', '\u049b': 'p', '\u0493': '[', '\u04b3': ']' };   // o'zbek kirill: ў қ ғ ҳ
+function charKey(ch) {
+  ch = String(ch || '').toLowerCase();
+  if (!ch) return '';
+  if (/^[a-z0-9]$/.test(ch)) return ch;
+  if (CYR[ch]) return CYR[ch];
+  var P = { ' ': 'SPACE', ';': 'SEMICOLON', '=': '=', ',': ',', '-': '-', '.': '.', '/': '/', '`': '`', '[': '[', '\\': '\\', ']': ']', "'": "'", '*': '*' };
+  return P[ch] || '';
+}
 function keyName(e) {
-  var c = e.keyCode;
-  if (KEYNAMES[c]) return KEYNAMES[c];
-  if (c >= 112 && c <= 123) return 'F' + (c - 111);
+  var id = e.keyIdentifier || e.key || '';
+  if (KEYID[id]) return KEYID[id];
+  if (/^F([1-9]|1[0-2])$/.test(id)) return id;
+  var m = /^U\+([0-9A-Fa-f]{4})$/.exec(id), c = e.keyCode, num = (e.keyLocation || e.location) === 3;
+  if (m) {
+    var u = parseInt(m[1], 16);
+    if (u === 8) return 'BACKSPACE'; if (u === 9) return 'TAB'; if (u === 27) return ''; if (u === 32) return 'SPACE'; if (u === 127) return 'DEL';
+    if (!num) { var ck = charKey(String.fromCharCode(u)); if (ck) return ck; }
+  }
+  if (num && KEYNAMES[c] && c >= 96) return KEYNAMES[c];
+  if (c >= 16 && c <= 18) return KEYNAMES[c];
   if ((c >= 48 && c <= 57) || (c >= 65 && c <= 90)) return String.fromCharCode(c).toLowerCase();
+  if (c >= 97 && c <= 122 && !num && e.charCode === c) return String.fromCharCode(c);   // harf kodi kelgan (keyCode emas)
+  if (KEYNAMES[c] && !(c >= 96 && c <= 111 && !num && (e.which === c && e.charCode))) return KEYNAMES[c];
+  if (c >= 112 && c <= 123) return 'F' + (c - 111);
+  if (c > 127) return charKey(String.fromCharCode(c));   // kirill harf kodi
   return '';
 }
 function keyLabel(k) { return /^[a-z]$/.test(k) ? k.toUpperCase() : k; }
@@ -4616,10 +4645,11 @@ document.addEventListener('mousedown', function (e) {
 }, true);
 document.addEventListener('mousewheel', function (e) { if (!KEYWAIT) return; e.preventDefault(); finishWait(e.wheelDelta > 0 ? 'MWHEELUP' : 'MWHEELDOWN'); }, false);
 document.oncontextmenu = function () { return !KEYWAIT; };
+document.onkeypress = function (e) { if (!KEYWAIT) return; var kn = charKey(String.fromCharCode(e.charCode || e.which || 0)); if (kn) { finishWait(kn); return false; } };
 document.onkeydown = function (e) {
   var k = e.keyCode;
   if (k === 27 && !KEYWAIT) cmd('hideconsole');   // ochiq qolgan konsol ESC da menyu bilan birga chiqmasin (~ bilan ochish ishlayveradi)
-  if (KEYWAIT) { finishWait(k === 27 ? '' : keyName(e)); return false; }
+  if (KEYWAIT) { if (k === 27) { finishWait(''); return false; } var kn = keyName(e); if (kn) { finishWait(kn); return false; } return; }   // nomi aniqlanmasa - keypress da harf bo'yicha
   if ($('mdAsk').className === 'modal on') { if (k === 13) askDone(true); if (k === 27) askDone(false); return; }
   if (curModal === 'mdLogin' && k === 13) { doLogin(); return false; }
   if (curModal === 'mdSide' && k === 13 && $('chatIn')) { chatSend(); return false; }
