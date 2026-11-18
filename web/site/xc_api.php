@@ -304,6 +304,16 @@ function is_beta_tester() {
     $pc = ip_dev(3 * 86400);
     return $pc !== '' && !empty($c['beta_pcs']) && in_array($pc, $c['beta_pcs'], true);
 }
+/* bot nomi (t.me/NOM): admin panel saqlaganda yoziladi; bo'lmasa Telegram'dan (getMe) olib, keshda saqlaymiz */
+function tg_botname() {
+    $c = xc_cfg(); $bn = isset($c['tg_botname']) ? preg_replace('/[^A-Za-z0-9_]/', '', $c['tg_botname']) : '';
+    if ($bn !== '' || empty($c['tg_token'])) return $bn;
+    $k = rd('tgbn', array()); if (!empty($k['n']) && time() - (int)$k['t'] < 86400) return $k['n'];
+    $me = json_decode((string)@file_get_contents('https://api.telegram.org/bot' . $c['tg_token'] . '/getMe', false, stream_context_create(array('http' => array('timeout' => 4)))), true);
+    $bn = !empty($me['result']['username']) ? preg_replace('/[^A-Za-z0-9_]/', '', $me['result']['username']) : '';
+    if ($bn !== '') wr('tgbn', array('n' => $bn, 't' => time()));
+    return $bn;
+}
 function tg_send($chat, $text) {
     $c = xc_cfg(); if (empty($c['tg_token']) || !$chat) return;
     $ctx = stream_context_create(array('http' => array('method' => 'POST', 'timeout' => 3, 'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
@@ -342,7 +352,7 @@ function tg_bot_answer($chat, $txt) {
         return strtolower($sm[1]) === 'stop' ? "Eslatmalar o'chirildi. Qayta yoqish: /eslatma" : "Eslatmalar yoqildi: kunlik sovg'a va seriya haqida kechqurun xabar beraman. O'chirish: /stop";
     }
     if (preg_match('/^\/start\s+lg(\d{8})$/', $txt, $m)) {   // telefon ilovasi: "Telegram orqali kirish" (t.me/bot?start=lgKOD)
-        if (!$me) return "Bu Telegram hali X CLIENT akkauntiga ulanmagan.\nAvval kompyuterdagi X CLIENT menyusida: Sozlamalar > Akkaunt > \"Telegram'ni ulash\". Yoki ilovada kompyuterdagi kod / login va parol bilan kiring.";
+        if (!$me) return "Bu Telegram hali X CLIENT akkauntiga ulanmagan - shuning uchun Telegram orqali kirib bo'lmaydi.\n\nBir marta ulash kerak (keyin har safar bir bosishda kirasiz):\n1) Ilovada \"Kirish\" > kompyuterdagi 6 xonali kod (yoki login/parol) bilan kiring.\n2) Ilovada ismingizga bosing > \"Telegram'ni ulash\".\nYoki kompyuterda: X CLIENT menyusi > Sozlamalar > Akkaunt > \"Telegram'ni ulash\". Ulaganingiz uchun 1 ta sandiq sovg'a!";
         lock(); $lg = rd('tglogin', array());
         if (empty($lg[$m[1]]) || time() - $lg[$m[1]]['t'] > 600) { unlock(); return "Kod eskirgan. Ilovada \"Telegram orqali kirish\" ni qayta bosing."; }
         $lg[$m[1]]['l'] = strtolower($me['login']); wr('tglogin', $lg); unlock();
@@ -1150,8 +1160,9 @@ case 'mclaim':
 
 /* telefon ilovasi: Telegram orqali kirish (parolsiz). Ilova kod oladi va t.me/bot?start=lgKOD ni ochadi, bot akkauntni tasdiqlaydi, ilova tgl_st bilan kutadi */
 case 'tgl_code':
-    $c = xc_cfg(); $bn = isset($c['tg_botname']) ? preg_replace('/[^A-Za-z0-9_]/', '', $c['tg_botname']) : '';
-    if (empty($c['tg_bot']) || empty($c['tg_token']) || $bn === '') fail('off', 'Telegram bot hali yoqilmagan');
+    $c = xc_cfg();
+    if (empty($c['tg_bot']) || empty($c['tg_token'])) fail('off', 'Telegram orqali kirish hozircha o\'chiq. Kompyuterdagi kod yoki login/parol bilan kiring');
+    $bn = tg_botname(); if ($bn === '') fail('off', 'Telegram bot javob bermadi. Kompyuterdagi kod yoki login/parol bilan kiring');
     if (rl_count('tgl' . client_ip(), 3600) >= 20) fail('limit', 'Juda ko\'p urinish - keyinroq');
     rl_add('tgl' . client_ip(), 3600);
     lock(); $lg = rd('tglogin', array()); foreach ($lg as $k => $v) if (time() - $v['t'] > 600) unset($lg[$k]);
@@ -1624,7 +1635,7 @@ case 'tg_code':
     $codes = rd('tglink', array()); foreach ($codes as $k => $v) if (time() - $v['t'] > 900) unset($codes[$k]);
     do { $code = (string)mt_rand(100000, 999999); } while (isset($codes[$code]));
     $codes[$code] = array('l' => strtolower($u['login']), 't' => time()); wr('tglink', $codes);
-    $bn = isset($c['tg_botname']) ? preg_replace('/[^A-Za-z0-9_]/', '', $c['tg_botname']) : '';
+    $bn = tg_botname();
     out(array('ok' => true, 'code' => $code, 'bot' => $bn, 'link' => $bn !== '' ? 'https://t.me/' . $bn . '?start=' . $code : '', 'linked' => !empty($u['tgid']), 'gift' => empty($u['tgbonus'])));
 case 'tg_st':                                            // menyu: QR skanerlandimi (ulandi) - har 4 s so'raydi
     $u = auth();
