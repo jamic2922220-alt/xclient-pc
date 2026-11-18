@@ -594,6 +594,8 @@ function daily_report() {
     $t .= "\n\nYangi kompyuterlar: $nd (o'yinni ochdi: $ng)" . ($nsb ? ", antivirus tekshiruvi: $nsb" : '')
         . "\nYiqilishlar: o'yinda " . $pc('game_crash') . ", ochilmadi " . $pc('start_fail') . ", o'rnatilmadi " . ($pc('setup_fail') + $pc('dl_net'))
         . ($pc('upd_fail') ? ", yangilanmadi " . $pc('upd_fail') : '')
+        . "\nServerga kirish: qotdi " . $pc('join_stuck') . ", kirolmay chiqdi " . $pc('join_fail') . ", sekin " . $pc('join_slow')
+        . "\nTelefon: yiqildi " . ($pc('mob_crash') + $pc('mob_anr')) . ", kira olmadi " . $pc('mob_join')
         . "\nFaol (7 kun): $act7" . ($lv !== '' ? ", eski launcherda: $old7 (oxirgisi $lv)" : '');
     if ($top) { $t .= "\nHafta qotillari:"; foreach (array_slice($top, 0, 3) as $i => $r) $t .= "\n" . ($i + 1) . ". " . $r[0] . " - " . $r[1] . " kill"; }
     tg_notify('daily', $t);
@@ -1403,12 +1405,17 @@ case 'friend_del':
             unset($u['freq'][$fl], $t['fsent'][$me], $u['fsent'][$fl], $t['freq'][$me]);
             $st = 'friend';
         } elseif ($a === 'friend_add') {
-            if (count($u['fsent']) >= 50) fail('many', 'Juda ko\'p so\'rov yuborilgan');
-            if (count($t['freq']) >= 100) fail('many', 'Bu o\'yinchiga juda ko\'p so\'rov kelgan');
+            /* "Juda ko'p" xatosi chiqmasin: javobsiz qolgan eski so'rovlar (30 kundan eski) tozalanadi,
+             * chegaraga yetsa - eng eskisi o'chirilib yangisi qo'shiladi (oldin so'rov umuman yuborilmasdi) */
+            $old = time() - 30 * 86400;
+            foreach ($u['fsent'] as $kk => $tt) if ($tt < $old) unset($u['fsent'][$kk]);
+            foreach ($t['freq'] as $kk => $tt) if ($tt < $old) unset($t['freq'][$kk]);
+            if (count($u['fsent']) >= 300) { asort($u['fsent']); $u['fsent'] = array_slice($u['fsent'], -299, 299, true); }
+            if (count($t['freq']) >= 300) { asort($t['freq']); $t['freq'] = array_slice($t['freq'], -299, 299, true); }
             $u['fsent'][$fl] = time(); $t['freq'][$me] = time();
             $st = 'sent';
         } else fail('noreq', 'So\'rov topilmadi');
-        if (count($u['friends']) > 200) fail('many', 'Do\'stlar ko\'p');
+        if (count($u['friends']) > 2000) fail('many', 'Do\'stlar ko\'p');
     } elseif ($a === 'friend_decline') {
         unset($u['freq'][$fl], $t['fsent'][$me]);
     } else {
@@ -1647,7 +1654,7 @@ case 'tg_unlink':
  * Kunlik fayl: probs/<sana> = [tur => [kompyuter => 1]] - har tur bo'yicha nechta kompyuterda bo'lgani ---------- */
 case 'prob':
     $k = p('k');
-    if (!in_array($k, array('net_slow', 'dl_net', 'dl_disk', 'dl_perm', 'av_del', 'setup_no', 'setup_fail', 'menu_wd', 'menu_lite', 'offline', 'dl_mirror', 'gpu_nodrv', 'safe_mode', 'autover', 'start_fail', 'game_crash', 'proc_fail', 'launch_err', 'smart_fix', 'elev_fixed', 'elev_uac', 'gpu_virt', 'fw_ok', 'fw_fail', 'ram_low', 'dl_short', 'upd_fail', 'shot_black'), true)) out(array('ok' => true));
+    if (!in_array($k, array('net_slow', 'dl_net', 'dl_disk', 'dl_perm', 'av_del', 'setup_no', 'setup_fail', 'menu_wd', 'menu_lite', 'offline', 'dl_mirror', 'gpu_nodrv', 'safe_mode', 'autover', 'start_fail', 'game_crash', 'proc_fail', 'launch_err', 'smart_fix', 'elev_fixed', 'elev_uac', 'gpu_virt', 'fw_ok', 'fw_fail', 'ram_low', 'dl_short', 'upd_fail', 'shot_black', 'join_stuck', 'join_slow', 'join_fail', 'mob_crash', 'mob_anr', 'mob_lowmem', 'mob_join'), true)) out(array('ok' => true));
     if (rl_count('pb' . client_ip(), 3600) >= 30) out(array('ok' => true));
     rl_add('pb' . client_ip(), 3600);
     $who = strtolower(p('d')); if (!preg_match('/^[a-z0-9]{8,40}$/', $who)) $who = 'ip' . substr(md5(client_ip()), 0, 10);
@@ -1659,7 +1666,7 @@ case 'prob':
     if ($det !== '') probx_add($k, $who, $det);
     /* 8. Telegram: bugun shu muammo 5, 20, 50, 100 ta kompyuterga yetsa - adminga darhol xabar */
     $n = count($x[$k]); $nm = array('dl_net' => "CS 1.6 yuklanmadi (internet)", 'dl_disk' => "diskda joy yo'q", 'dl_perm' => "papkaga yozib bo'lmadi", 'av_del' => "antivirus faylni o'chirdi",
-        'setup_no' => "o'rnatishga ruxsat berilmadi", 'setup_fail' => "o'rnatuvchi ishga tushmadi", 'menu_wd' => "menyu 20 s da ochilmadi", 'gpu_nodrv' => "videokarta drayveri yo'q", 'gpu_virt' => "asosiy ekran virtual drayverda (GameFusion va h.k.)", 'fw_ok' => "LAN server: firewall ruxsati qo'shildi", 'ram_low' => "o'yin oldidan bo'sh xotira kam (1.5 GB dan kam)", 'dl_short' => "CS 1.6 o'rnatuvchisi chala yuklandi - qayta / zaxiradan yuklanmoqda", 'upd_fail' => "launcher yangilanmadi (fayl yuklanmadi)", 'fw_fail' => "LAN server: firewall ruxsatiga «Да» bosilmadi (boshqalar ulana olmaydi)", 'safe_mode' => "3 marta ketma-ket yiqilish (xavfsiz rejim)", 'start_fail' => "o'yin ishga tushmayapti (0xc0000005, ko'pincha Windows 7)", 'dl_mirror' => "cssborka.uz dan yuklanmadi - zaxira manzil ishlatildi");
+        'setup_no' => "o'rnatishga ruxsat berilmadi", 'setup_fail' => "o'rnatuvchi ishga tushmadi", 'menu_wd' => "menyu 20 s da ochilmadi", 'gpu_nodrv' => "videokarta drayveri yo'q", 'gpu_virt' => "asosiy ekran virtual drayverda (GameFusion va h.k.)", 'fw_ok' => "LAN server: firewall ruxsati qo'shildi", 'ram_low' => "o'yin oldidan bo'sh xotira kam (1.5 GB dan kam)", 'dl_short' => "CS 1.6 o'rnatuvchisi chala yuklandi - qayta / zaxiradan yuklanmoqda", 'upd_fail' => "launcher yangilanmadi (fayl yuklanmadi)", 'fw_fail' => "LAN server: firewall ruxsatiga «Да» bosilmadi (boshqalar ulana olmaydi)", 'safe_mode' => "3 marta ketma-ket yiqilish (xavfsiz rejim)", 'start_fail' => "o'yin ishga tushmayapti (0xc0000005, ko'pincha Windows 7)", 'dl_mirror' => "cssborka.uz dan yuklanmadi - zaxira manzil ishlatildi", 'join_stuck' => "serverga kirishda 60 s dan ko'p yuklanish (qotib qoldi)", 'join_fail' => "serverga kirolmay yuklanishda chiqib ketdi", 'mob_crash' => "telefon: ilova/o'yin yiqildi", 'mob_anr' => "telefon: o'yin qotib qoldi (ANR)", 'mob_join' => "telefon: serverga kira olmadi");
     if ($det === '' && $k !== 'menu_lite' && $k !== 'offline') probx_add($k, $who, '-');
     if (isset($nm[$k]) && in_array($n, array(5, 20, 50, 100), true)) tg_notify('report', "X CLIENT muammo: bugun " . $n . " ta kompyuterda - " . $nm[$k] . ". Admin panel > Muammolar");
     out(array('ok' => true));
@@ -1951,7 +1958,7 @@ case 'stat':
     $sid = preg_replace('/[^0-9]/', '', p('sid')); $ip = p('ip');
     if ($sid === '' || strlen($sid) > 15 || !preg_match('/^[a-z0-9.\-]{3,64}:\d{2,5}$/i', $ip)) fail('bad', 'bad');
     $dur = max(0, min(6 * 3600, (int)p('dur')));
-    if (p('cm') !== '') $u['cdiag'] = array('cm' => (int)p('cm'), 'ck' => (int)p('ck'), 'ks' => (int)p('ks'), 't' => time());   // tashxis: konsol qatorlari / tanilgan killlar / frag bo'yicha killlar
+    if (p('cm') !== '') $u['cdiag'] = array('cm' => (int)p('cm'), 'ck' => (int)p('ck'), 'ks' => (int)p('ks'), 'kl' => clean_str(p('kl'), 300), 'nm' => clean_str(p('nm'), 80), 't' => time());   // tashxis: konsol qatorlari / tanilgan killlar / frag bo'yicha killlar
     $ss = isset($u['ss']) && is_array($u['ss']) ? $u['ss'] : array();
     /* soxta statistika: o'yin vaqti saytning o'z soati bilan cheklanadi (o'yin birinchi marta ko'ringan paytdan beri),
      * eski (ro'yxatdan chiqib ketgan) o'yinni qayta yuborib bo'lmaydi, daqiqasiga 10 so'rovdan ko'p emas */

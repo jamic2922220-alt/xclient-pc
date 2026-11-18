@@ -613,6 +613,15 @@ var STAT_LAST = '';
  * (admin: hamma akkauntda k=0). Serverga ulangan paytda 90 s da bir sayt orqali (srvq.php - o'yin dvigateli emas, qotish yo'q)
  * TAB jadvalidagi fragni olamiz: o'sgan qismi kill. Xarita almashsa frag 0 dan boshlanadi - yangi asos */
 var SCORE_T = 0;
+/* server nikni o'zgartirishi mumkin: "(1)Nik", "[VIP] Nik", "Nik [UZ]", "X | Nik" - asosiy qismi bo'yicha solishtiramiz */
+function nameCore(n) { return String(n || '').replace(/^\s*\(\d+\)\s*/, '').replace(/^\s*(\[[^\]]{1,12}\]|\{[^}]{1,12}\}|<[^>]{1,12}>|[^\s|]{1,8}\s*\|)\s*/, '').replace(/\s*(\[[^\]]{1,12}\]|\{[^}]{1,12}\})\s*$/, '').trim().toLowerCase(); }
+function isMyName(n) {
+  n = String(n || '').trim(); if (!n) return false;
+  var c = nameCore(n), nm = myNames();
+  for (var i = 0; i < nm.length; i++) if (nm[i] === n || (c && nameCore(nm[i]) === c)) return true;
+  return false;
+}
+var KILL_SAMPLE = [];
 function myNames() { var a = []; each([MYNAME, readCvar('name'), PW_NAME || '', S && S.name ? fullName(S) : ''], function (n) { n = String(n || '').trim(); if (n && a.indexOf(n) < 0) a.push(n); }); return a; }
 function scoreTick() {
   if (!CONNECTED || !CUR || DEMO_PLAY || CUR.ip !== CONNECTED) return;
@@ -621,6 +630,7 @@ function scoreTick() {
     if (!r || !r.ok || !r.players || g !== CUR || CONNECTED !== ip) return;
     var nm = myNames(), me = null;
     each(r.players, function (x) { if (!me && nm.indexOf(String(x.name || '').trim()) >= 0) me = x; });
+    if (!me) each(r.players, function (x) { if (!me && isMyName(x.name)) me = x; });   // server nikka prefiks qo'shgan
     if (!me) return;
     var sc = Math.max(0, me.score | 0);
     if (g.sl == null || sc < g.sl) { g.sl = sc; return; }        // birinchi o'lchov yoki xarita almashdi - asos
@@ -636,7 +646,7 @@ function sendStat(g, done) {
   var key = g.t + ':' + (g.k || 0) + ':' + (g.x || 0) + ':' + Math.floor(dur / (done ? 1 : 300));
   if (key === STAT_LAST) { if (done) done(); return; }
   STAT_LAST = key;
-  api('stat', { sid: g.t, ip: g.ip, name: g.name || '', map: g.map || '', k: g.k || 0, d: g.x || 0, dur: dur, w: JSON.stringify(g.w || {}), cm: CON_N, ck: CON_K, ks: g.ks || 0 }, function (r) { if (done) done(); if (r.ok && ME) { ME.st = r.st; ME.ach = r.ach; if (r.xp != null) { ME.xp = r.xp; ME.level = r.level; ME.lvlxp = r.lvlxp; renderBar(); } achToast(r.newach); if (r.rankup) rankUp(r.rankup); } });
+  api('stat', { sid: g.t, ip: g.ip, name: g.name || '', map: g.map || '', k: g.k || 0, d: g.x || 0, dur: dur, w: JSON.stringify(g.w || {}), cm: CON_N, ck: CON_K, ks: g.ks || 0, kl: KILL_SAMPLE.join(' || ').slice(0, 300), nm: String(MYNAME || '').slice(0, 40) }, function (r) { if (done) done(); if (r.ok && ME) { ME.st = r.st; ME.ach = r.ach; if (r.xp != null) { ME.xp = r.xp; ME.level = r.level; ME.lvlxp = r.lvlxp; renderBar(); } achToast(r.newach); if (r.rankup) rankUp(r.rankup); } });
 }
 /* yangi daraja (birinchi marta): katta tabrik, ding ovozi; menyu yopiq bo'lsa - ochilganda ko'rsatiladi */
 function rankUp(rk) {
@@ -1520,7 +1530,38 @@ function demoCtl(c) {
   if (curModal === 'mdSettings' && setTab === 'demo') showSetTab('demo');
 }
 function stopRecord() { clearTimeout(REC_TM); if (REC) { cmd('stop'); REC = ''; } }
+/* ---- serverga kirish kuzatuvi: "Connecting to" dan o'yinga tushguncha (putinserver) qancha vaqt ketdi,
+ * qaysi faylda to'xtadi. 60 s da kirolmasa - join_stuck, kirsa-yu sekin bo'lsa - join_slow, kutib chiqib ketsa - join_fail */
+var JOIN = null, JOIN_TM = 0;
+function joinX(j) { return 'ip=' + j.ip + ' sec=' + Math.round((now() - j.t) / 1000) + ' files=' + j.nf + ' fail=' + j.fail + ' http=' + j.http + ' ver=' + VERSION + ' last=' + String(j.last || '-').slice(0, 160); }
+function joinProb(k, j) { api('prob', { k: k, d: PCID || '', x: joinX(j) }, function () {}); }
+function joinStart(ip) {
+  clearTimeout(JOIN_TM);
+  JOIN = { ip: ip, t: now(), last: '', nf: 0, fail: 0, http: 0, stuck: 0 };
+  var j = JOIN;
+  JOIN_TM = setTimeout(function () { if (JOIN === j) { j.stuck = 1; joinProb('join_stuck', j); } }, 60000);
+}
+function joinLine(txt) {
+  var c = /^\s*Connecting to\s+(\S+?)\.*\s*$/i.exec(txt);
+  if (c) { if (!DEMO_PLAY) joinStart(c[1]); return; }
+  if (!JOIN) return;
+  if (/failed to transmit|Error: server failed/i.test(txt)) { JOIN.fail++; JOIN.last = txt.trim(); }
+  else if (/^\s*\[HTTP\]/i.test(txt)) { JOIN.http = 1; JOIN.last = txt.trim(); }
+  else if (/^\s*(processing|downloading|Downloading)\b/i.test(txt)) { JOIN.nf++; JOIN.last = txt.trim(); }
+  else if (/connection rejected|server is full|banned|Bad password|Invalid protocol|Server shutting down|Disconnected|timed out/i.test(txt)) JOIN.last = txt.trim();
+}
+function joinDone() {
+  if (!JOIN) return;
+  var j = JOIN; JOIN = null; clearTimeout(JOIN_TM);
+  if (now() - j.t >= 40000) joinProb('join_slow', j);
+}
+function joinAbort() {
+  if (!JOIN) return;
+  var j = JOIN; JOIN = null; clearTimeout(JOIN_TM);
+  if (now() - j.t >= 8000) joinProb('join_fail', j);   // yuklanishda chiqib ketdi / uzildi
+}
 function onConnectEvt(addr, inGame) {
+  if (inGame) joinDone();
   if (BOT_PEND) setTimeout(botsApply, 1500);       // botlar bilan mashq: xarita yuklandi - bot sonini qayta yuboramiz
   if (!isLocalAddr(addr)) AIMT = null;            // haqiqiy serverda aim test hisobi va chatga yozish bo'lmaydi
   if (isLocalAddr(addr)) { LOCAL_ON = true; fxClass(); sparks(); return; }   // o'z serveri (botlar) - haqiqiy o'yin funksiyalarisiz
@@ -1538,6 +1579,7 @@ function onConnectEvt(addr, inGame) {
 }
 function onDisconnectEvt() {
   var was = CONNECTED;
+  if (JOIN && now() - JOIN.t > 1500) joinAbort();
   if (LOCAL_ON || (BOT_SESS && !CONNECTED)) { LOCAL_ON = false; BOT_SESS = null; BOT_PEND = null; if (AIMT) { if (AIMT.t0) aimtEnd(); AIMT = null; } fxClass(); sparks(); if (!was) return; }   // botlar bilan mashq tugadi
   gpEnd();
   setTimeout(musicSync, 500);
@@ -1564,6 +1606,7 @@ function onConsole(txt) {
   txt = String(txt || ''); CON_N++;
   spwConsole(txt); rejConsole(txt);
   CONLOG.push(txt); if (CONLOG.length > 400) CONLOG.shift();
+  joinLine(txt);
   var r = /Recording to (\S+?)(?:\.dem)?\.?\s*$/i.exec(txt);
   if (r && REC && r[1].indexOf(REC) === 0) demoAdd(REC);
   else if (REC && /(can'?t|cannot|not) record|must be connected/i.test(txt)) { REC = ''; if (S.demo && CONNECTED) startRecord(10000); }   // erta bo'ldi - keyinroq qayta
@@ -1575,9 +1618,13 @@ function onConsole(txt) {
     if (am && mine(am[1]) && !mine(am[2])) aimtKill(!!am[3]);
   }
   if (!CUR || !MYNAME) return;
+  if (KILL_SAMPLE.length < 3 && /\bkill/i.test(txt) && txt.length < 120) KILL_SAMPLE.push(txt.trim());   // tashxis: kill qatorlari qanday ko'rinishda keladi
   /* "A killed B with ak47", "*** A killed B with a headshot from ak47 ***", "A + C killed B with m4a1" (C - yordam bergan) */
   var m = /^(.+?) killed (.+?) with (a headshot from )?([\w\-]+)/.exec(txt.replace(/^\s*(\*\*\*\s*)?/, ''));
   if (!m) return;
+  /* server nikka prefiks qo'shgan bo'lsa ham o'zimizni taniymiz */
+  if (m[1] !== MYNAME && m[1].split(' + ')[0] !== MYNAME && isMyName(m[1].split(' + ')[0])) m[1] = MYNAME + m[1].slice(m[1].split(' + ')[0].length);
+  if (m[2] !== MYNAME && isMyName(m[2])) m[2] = MYNAME;
   CON_K++;
   var kp = m[1].split(' + '), killer = kp.length === 2 && kp[0] !== MYNAME && m[1] !== MYNAME ? kp[0] : m[1];
   if (m[1] !== MYNAME && kp.length === 2 && kp[0] === MYNAME) killer = MYNAME;

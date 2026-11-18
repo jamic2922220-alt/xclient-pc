@@ -111,6 +111,7 @@ static void prob_send(const char *kind, DWORD wait);   /* admin panel > Muammola
 static void fn_send(const char *stage);   /* admin panel > Voronka: birinchi ochilish bosqichlari (har bosqich bir marta) */
 static char g_probx[1800];
 static char g_updx[160];             /* yangilanish xatosi tafsiloti (upd_fail) */
+static BOOL g_upd_blocked = FALSE;    /* yangilanish ro'yxati umuman olinmadi (ko'pincha antivirus GitHub'ni bloklaydi) - o'yindan keyin yo'l-yo'riq */
 static DWORD g_played_s = 0;
 static char g_cmod[64];   /* oxirgi yiqilishda aybdor modul (aqlli tuzatish uchun), bo'lmasa bo'sh */   /* oxirgi o'yin necha soniya davom etdi (muammo hisobotiga) */   /* prob_send uchun qo'shimcha tafsilot (url-escape qilingan), bo'lmasa bo'sh */
 static volatile DWORD g_net_dl = 0;
@@ -2640,6 +2641,14 @@ static BOOL run_game(void)
                                  : L"Skrinshot (F11) olinmadi: «To‘liq» rejimda Windows o‘yin tasvirini ko‘ra olmaydi.\n\nX CLIENT menyusi → Sozlamalar → Video → Ko‘rinish rejimi → «Chegarasiz». Xuddi to‘liq ekrandek ko‘rinadi, lekin Alt+Tab bir zumda ishlaydi, F11 va F10 to‘g‘ri yozadi.",
                         L"X CLIENT", MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND);
         }
+        if (g_upd_blocked && day_now() - ini_int(L"uphint") >= 3) {   /* yangilanish yuklanmayapti (ESET va b. antivirus) - 3 kunda ko'pi bilan 1 marta */
+            g_upd_blocked = FALSE; ini_set_int(L"uphint", day_now());
+            BOOL ru = !strncmp(g_lang, "ru", 2);
+            if (MessageBoxW(NULL, ru ? L"X CLIENT не может обновиться: доступ к серверу обновлений (github.com) заблокирован - чаще всего это антивирус (ESET, Kaspersky, 360) или фильтр провайдера.\n\nЧто сделать:\n1) В антивирусе добавьте папку X CLIENT в исключения (или временно отключите веб-защиту) и перезапустите X CLIENT.\n2) Или скачайте свежий установщик с cssborka.uz/xclient и установите поверх - ваши настройки сохранятся.\n\nОткрыть cssborka.uz/xclient сейчас?"
+                                     : L"X CLIENT yangilana olmayapti: yangilanish serveri (github.com) bloklangan - ko‘pincha antivirus (ESET, Kaspersky, 360) yoki provayder filtri.\n\nNima qilish kerak:\n1) Antivirusda X CLIENT papkasini istisnolarga qo‘shing (yoki veb-himoyani vaqtincha o‘chiring) va X CLIENT ni qayta oching.\n2) Yoki cssborka.uz/xclient dan yangi o‘rnatuvchini yuklab, ustidan o‘rnating - sozlamalaringiz saqlanadi.\n\ncssborka.uz/xclient ni hozir ochaymi?",
+                            L"X CLIENT", MB_YESNO | MB_ICONWARNING | MB_SETFOREGROUND) == IDYES)
+                ShellExecuteW(NULL, L"open", L"https://cssborka.uz/xclient", NULL, NULL, SW_SHOWNORMAL);
+        }
         ULONGLONG t0 = ((ULONGLONG)ft0.dwHighDateTime << 32) | ft0.dwLowDateTime;
         FILETIME ft1; GetSystemTimeAsFileTime(&ft1);
         ULONGLONG played = ((((ULONGLONG)ft1.dwHighDateTime << 32) | ft1.dwLowDateTime) - t0) / 10000000ULL;   /* soniya */
@@ -2959,6 +2968,7 @@ static DWORD WINAPI worker(LPVOID unused)
             } else if (fails != 0) {   /* sababini bilish uchun: ro'yxat olinmadimi yoki qaysi fayl yuklanmadi */
                 char raw[220]; _snprintf(raw, sizeof(raw), "fails=%d from=%d to=%d %s", fails, g_build, u.build, g_updx); raw[219] = 0;
                 url_escape(g_probx, sizeof(g_probx), raw); prob_send("upd_fail", 0); g_probx[0] = 0;
+                if (!strncmp(g_updx, "man=fail", 8)) g_upd_blocked = TRUE;
             }
             if (fails > 0 && u.min && g_build < u.min) {
                 lstrcpyW(g_err, L"Majburiy yangilanishni yuklab bo‘lmadi. Internetni tekshiring.");
