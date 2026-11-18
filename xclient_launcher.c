@@ -702,18 +702,25 @@ static void setup_log_tail(const wchar_t *path, char *out, int n)
     static char buf[65536]; DWORD sz = GetFileSize(f, NULL), rd = 0;
     if (sz != INVALID_FILE_SIZE && sz > sizeof(buf) - 1) SetFilePointer(f, (LONG)(sz - (sizeof(buf) - 1)), NULL, FILE_BEGIN);
     ReadFile(f, buf, sizeof(buf) - 1, &rd, NULL); CloseHandle(f); buf[rd] = 0;
-    char *hit[3] = { 0 }; int nh = 0;
-    for (char *l = buf; l && *l; ) {
+    /* qatorlarga ajratamiz (vaqt belgisisiz, foydasiz qatorlarsiz) */
+    static char *ln[1500]; int nl = 0, last = -1;
+    for (char *l = buf; l && *l && nl < 1500; ) {
         char *e = strchr(l, '\n'); if (e) *e = 0;
-        if (strstr(l, "rror") || strstr(l, "failed") || strstr(l, "xception") || strstr(l, "orrupt") || strstr(l, "enied") || strstr(l, "annot ") || strstr(l, "Exit code")) { if (nh < 3) hit[nh++] = l; else { hit[0] = hit[1]; hit[1] = hit[2]; hit[2] = l; } }
+        size_t k = strlen(l); while (k && (l[k - 1] == '\r' || l[k - 1] == ' ')) l[--k] = 0;
+        if (k > 20 && l[4] == '-' && l[10] == ' ') { l += 19; while (*l == '.' || (*l >= '0' && *l <= '9')) l++; while (*l == ' ') l++; }   /* "2026-11-14 22:56:01.123" vaqtini tashlaymiz */
+        if (*l && !strstr(l, "RedirectionGuard")) {
+            ln[nl] = l;
+            if (strstr(l, "rror") || strstr(l, "failed") || strstr(l, "xception") || strstr(l, "orrupt") || strstr(l, "enied") || strstr(l, "annot ") || strstr(l, "Abort") || strstr(l, "Message box")) last = nl;
+            nl++;
+        }
         l = e ? e + 1 : NULL;
     }
-    for (int i = 0; i < nh; i++) {
-        char *l = hit[i]; size_t k = strlen(l); while (k && (l[k - 1] == '\r' || l[k - 1] == ' ')) l[--k] = 0;
-        if (k > 20 && l[4] == '-' && l[10] == ' ') { l += 19; while (*l == '.' || (*l >= '0' && *l <= '9')) l++; while (*l == ' ') l++; }   /* "2026-11-14 22:56:01.123" vaqtini tashlaymiz */
-        if (strlen(out) + strlen(l) + 3 >= (size_t)n) break;
+    /* oxirgi xato qatori va undan oldingi 5 qator - o'rnatuvchi nima uchun to'xtaganini shular ko'rsatadi (masalan "Caught EAbort" dan oldin) */
+    if (last < 0) last = nl - 1;
+    for (int i = last - 5 < 0 ? 0 : last - 5; i <= last && i >= 0; i++) {
+        if (strlen(out) + strlen(ln[i]) + 3 >= (size_t)n) break;
         if (out[0]) strcat(out, " ~ ");
-        strcat(out, l);
+        strcat(out, ln[i]);
     }
     if (!out[0]) lstrcpynA(out, "noerr", n);
 }
@@ -856,8 +863,8 @@ static BOOL ensure_game(const char *url)
         ULARGE_INTEGER fr; fr.QuadPart = 0; GetDiskFreeSpaceExW(g_dir, &fr, NULL, NULL);
         WIN32_FILE_ATTRIBUTE_DATA fa; ULONGLONG sz = 0;
         if (GetFileAttributesExW(tmp, GetFileExInfoStandard, &fa)) sz = ((ULONGLONG)fa.nFileSizeHigh << 32) | fa.nFileSizeLow;
-        char lg[400]; setup_log_tail(ilog, lg, sizeof(lg));
-        char raw[600]; _snprintf(raw, sizeof(raw), "inno=%lu/%lu local=%d size=%lluMB free=%lluMB full=%d log=%s", (unsigned long)ex1, (unsigned long)ex2, local ? 1 : 0, sz >> 20, (unsigned long long)(fr.QuadPart >> 20), sz == XC_GAME_SIZE, lg); raw[599] = 0;
+        char lg[560]; setup_log_tail(ilog, lg, sizeof(lg));
+        char raw[700]; _snprintf(raw, sizeof(raw), "inno=%lu/%lu local=%d size=%lluMB free=%lluMB full=%d log=%s", (unsigned long)ex1, (unsigned long)ex2, local ? 1 : 0, sz >> 20, (unsigned long long)(fr.QuadPart >> 20), sz == XC_GAME_SIZE, lg); raw[699] = 0;
         url_escape(g_probx, sizeof(g_probx), raw); prob_send("setup_fail", 4000); g_probx[0] = 0;
         if (ex2 == 2 || ex2 == 5) lstrcpyW(g_err, L"O‘rnatish oynasi yopib yuborildi. X CLIENT ni qayta oching va o‘rnatish oxirigacha kuting.");
         else if (ex1 == 4 || ex2 == 4 || ex1 == 7 || ex2 == 7) lstrcpyW(g_err, L"CS 1.6 o‘rnatishda xato bo‘ldi (diskda joy yoki antivirus). Kamida 2 GB joy bo‘shating, antivirusni vaqtincha o‘chirib X CLIENT ni qayta oching.");
