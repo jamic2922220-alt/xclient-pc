@@ -40,6 +40,11 @@ Keyingi (egasi tanladi, 2026-11-13):
   - M17 ovozli chat tugmasi: o'yinda bosib turib gapirish (+voicerecord touch tugmasi, mikrofon ruxsati);
   - M22 ilova nomi va ikonkasi: "X CLIENT Mobile".
 
+- ✅ **X-Client-Setup.exe qayta yig'ildi** (2026-11-18, launcher 1.0.154): 7-noyabrdagi o'rnatuvchidagi eski launcher
+  sekin internetda yangilanishni tekshirmasdi (g_net_dl = 1 ms) - yangi o'yinchilarning ~20% "1.0" da qotib qolardi.
+  Kuzatish: 1-2 kun probrep newdev da v="1.0" yo'qolishi, funnel n/inst nisbati (SmartScreen ta'siri).
+  Qoida: launcherda katta tuzatish bo'lsa - o'rnatuvchini ham yangilash (setup=true).
+
 Kutilmoqda:
 - nDirect javobi: Windows 7 da tier0.dll TLS (dump: 85c2a708f2..._1794500973, admin kaliti bilan dmpget).
 - Launcher 1.0.143: chala yuklangan o'rnatuvchi (dl_short) va chuqur yengillashtirish (lagfix2) natijalari.
