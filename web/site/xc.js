@@ -269,7 +269,7 @@ function pingPresence() {
 }
 
 /* ============================================================ serverlar */
-var PINNED = ['157.22.130.26:27015'];       // X CLIENT o'z serverlari
+var PINNED = ['212.47.58.89:27015'];       // X CLIENT o'z serverlari
 var SRV = {}, MASTER = [], TOP = [];
 var queue = [], running = 0, MAXQ = 12;
 function srv(ip) { if (!SRV[ip]) SRV[ip] = { ip: ip }; return SRV[ip]; }

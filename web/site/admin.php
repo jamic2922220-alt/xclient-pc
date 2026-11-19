@@ -635,7 +635,7 @@ if ($P === 'ann') {
         . '<div class="panel"><div class="ph">Yangi e\'lon</div><form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="ann_add">'
         . '<textarea name="text" maxlength="400" placeholder="Masalan: Bugun 20:00 da UZB ARENA serverida turnir! Sovrin - 1 oy VIP"></textarea>'
         . '<div class="row"><select name="type"><option value="info">Yangilik (ko\'k)</option><option value="promo">Reklama (qizil)</option><option value="warn">Muhim (sariq)</option></select>'
-            . '<input name="ip" maxlength="70" placeholder="Server IP (ixtiyoriy): 157.22.130.26:27015" style="max-width:300px">'
+            . '<input name="ip" maxlength="70" placeholder="Server IP (ixtiyoriy): 212.47.58.89:27015" style="max-width:300px">'
         . '<select name="days"><option value="1">1 kun</option><option value="3">3 kun</option><option value="7" selected>7 kun</option><option value="30">30 kun</option><option value="0">Muddatsiz</option></select><button class="btn red">E\'lon qilish</button></div>'
         . '<div class="mut small">E\'lon barcha o\'yinchilarning X CLIENT menyusida, pastki qatorda (nik va versiya orasida) chiqadi. Bir nechta bo\'lsa - navbat bilan almashadi, uzun matn yugurib o\'tadi. Server IP yozilsa - o\'yinchi bosganda shu serverga kiradi (reklama uchun qulay).</div></form></div>';
     echo '<div class="panel"><div class="ph">Barcha e\'lonlar</div><table class="list"><tr><th>Matn</th><th>Server</th><th>Turi</th><th>Qo\'shilgan</th><th>Muddati</th><th></th></tr>';
