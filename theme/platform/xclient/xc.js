@@ -1616,11 +1616,11 @@ function onConsole(txt) {
   /* kill qatorlari bo'laklab keladi: "Ism" + " killed " + "Ism2" + " with ak47" + "\n" (har biri alohida hodisa) -
    * shuning uchun qatorni yig'ib, "\n" kelganda tekshiramiz (avval har bo'lak alohida tekshirilib, kill hech qachon tanilmasdi) */
   if (!KILLBUF && /^\s*(\*\*\*\s*)?.+? killed .+? with (a headshot from )?[\w\-]+[\s*]*$/.test(txt)) { killLine(txt.replace(/\s+$/, '')); return; }   // butun qator bitta hodisada kelgan
-  KILLBUF += txt; clearTimeout(KILLBUF_TM);
+  if (!(CUR && MYNAME) && !(AIMT && AIMT.on)) { KILLBUF = ''; return; }   // o'yinda emas - hech narsa qilmaymiz (o'yin brauzeri o'yin bilan bitta oqimda)
+  KILLBUF += txt;
   if (KILLBUF.length > 600) KILLBUF = KILLBUF.slice(-600);
-  var nl = KILLBUF.lastIndexOf('\n');
-  if (nl >= 0) { var lines = KILLBUF.slice(0, nl).split('\n'); KILLBUF = KILLBUF.slice(nl + 1); each(lines, function (ln) { if (ln) killLine(ln); }); }
-  if (KILLBUF) KILLBUF_TM = setTimeout(function () { var ln = KILLBUF; KILLBUF = ''; if (ln) killLine(ln); }, 250);   // "\n" kelmasa
+  if (txt.indexOf('\n') >= 0) { var nl = KILLBUF.lastIndexOf('\n'), lines = KILLBUF.slice(0, nl).split('\n'); KILLBUF = KILLBUF.slice(nl + 1); for (var li = 0; li < lines.length; li++) if (lines[li]) killLine(lines[li]); }
+  if (KILLBUF && !KILLBUF_TM) KILLBUF_TM = setTimeout(function () { KILLBUF_TM = 0; var ln = KILLBUF; KILLBUF = ''; if (ln) killLine(ln); }, 250);   // "\n" kelmasa (bitta taymer, har bo'lakka emas)
 }
 var KILLBUF = '', KILLBUF_TM = 0;
 function killLine(txt) {
