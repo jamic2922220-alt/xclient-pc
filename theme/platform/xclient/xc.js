@@ -4713,6 +4713,9 @@ step('volfix', function () { setTimeout(function () { var v = parseFloat(readCva
 step('reapply', function () { if (DB.set) { var ra = function () { applySettings(S); applyBinds(); }; setTimeout(ra, 2500); setTimeout(ra, 12000); } else setTimeout(xhairApply, 2500); });
 step('fit();', function () { fit(); });
 step('window.onresize = fit;', function () { window.onresize = fit; });
+/* O'yin ekran o'lchamini o'zgartirganda (masalan 640x480) o'yin brauzeri ba'zan 'resize' hodisasini bermaydi -
+ * menyu 1600x900 deb chizilib, faqat chap-tepa bo'lagi kattalashib ko'rinardi. Har 1.5 s o'lchamni tekshiramiz */
+step('fitWatch', function () { var lw = 0, lh = 0; setInterval(function () { var w = window.innerWidth || document.documentElement.clientWidth, h = window.innerHeight || document.documentElement.clientHeight; if (w && h && (w !== lw || h !== lh)) { lw = w; lh = h; fit(); } }, 1500); });
 step('fxLoop();', function () { fxLoop(); });
 step('beat', function () { if (DB.beat !== new Date().toDateString()) api('beat', { nick: MYNAME || (S && S.name) || '', res: (screen.width || 0) + 'x' + (screen.height || 0), mv: VERSION }, function (r) { if (r.ok) { DB.beat = new Date().toDateString(); persist(); } }); });   // statistika: menyu ochildi
 step('loadAnn', function () { loadAnn(); });
@@ -4738,7 +4741,7 @@ if (DB.token) api('me', {}, function (r) { if (r.ok) { setMe(r.me); loadFriends(
 if (NC) {
   // o'yin ekrani ochildi (NextClient'ning o'z ro'yxatidan yoki konsoldan kirilsa ham) - menyu musiqasi o'chsin
   try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('hide', function () { UI_VIS = false; ESC_OPEN = false; clearTimeout(SHOW_TM); musicSync(); }); } catch (e) {}
-  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('show', function () { UI_VIS = true; ESC_OPEN = !!CONNECTED; musicSync(); restCheck(); showWork(); botsScore(); }); } catch (e) {}
+  try { if (NC.gameUi && NC.gameUi.addEventListener) NC.gameUi.addEventListener('show', function () { UI_VIS = true; ESC_OPEN = !!CONNECTED; fit(); musicSync(); restCheck(); showWork(); botsScore(); }); } catch (e) {}
   try {
     if (NC.addEventListener) {
       NC.addEventListener('connect', function (e) { onConnectEvt(e && e.detail && e.detail.address, false); });

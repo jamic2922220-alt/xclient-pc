@@ -2537,7 +2537,12 @@ static BOOL run_game(void)
      * Eksklyuziv to'liq ekranda Alt+Tab monitor rejimini almashtirib ekranni 1-3 s qoraytirardi, F11 skrinshot va F10 video qora chiqardi
      * (Windows ekran nusxasi eksklyuziv OpenGL ni ko'rmaydi). Past o'lcham (cho'zilgan 1024x768 va h.k.) va Windows 7/8 - eskicha to'liq ekran */
     int owin = o_win;
-    if (owin == 0 && !o_winx && !o_res[0]) {
+    /* o'yinchi o'lchamni qo'lda tanlagan, lekin u monitor o'lchamining o'zi bo'lsa - chegarasiz oyna ko'rinishi farq qilmaydi,
+     * Alt+Tab da esa qora ekran bo'lmaydi (o'lcham monitordan kichik bo'lsa - cho'zish uchun eskicha to'liq ekran qoladi) */
+    BOOL resIsDesk = FALSE;
+    if (o_res[0]) { unsigned rw = 0, rh = 0; DEVMODEW dd; ZeroMemory(&dd, sizeof(dd)); dd.dmSize = sizeof(dd);
+        if (sscanf(o_res, "%ux%u", &rw, &rh) == 2 && EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &dd) && rw == dd.dmPelsWidth && rh == dd.dmPelsHeight) resIsDesk = TRUE; }
+    if (owin == 0 && !o_winx && (!o_res[0] || resIsDesk)) {
         RTL_OSVERSIONINFOEXW vi; ZeroMemory(&vi, sizeof(vi)); vi.dwOSVersionInfoSize = sizeof(vi);
         typedef LONG (WINAPI *RGV)(RTL_OSVERSIONINFOEXW *);
         RGV rgv = (RGV)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetVersion");
