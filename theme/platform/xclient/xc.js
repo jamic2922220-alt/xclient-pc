@@ -1615,6 +1615,7 @@ function onConsole(txt) {
   if (/\b(wrote|writing|saved)\b.*\.(bmp|tga|jpg|png)\b/i.test(txt)) toast(T('sh_saved'), 2500);   // F5: skrinshot saqlandi
   /* kill qatorlari bo'laklab keladi: "Ism" + " killed " + "Ism2" + " with ak47" + "\n" (har biri alohida hodisa) -
    * shuning uchun qatorni yig'ib, "\n" kelganda tekshiramiz (avval har bo'lak alohida tekshirilib, kill hech qachon tanilmasdi) */
+  if (!KILLBUF && /^\s*(\*\*\*\s*)?.+? killed .+? with (a headshot from )?[\w\-]+[\s*]*$/.test(txt)) { killLine(txt.replace(/\s+$/, '')); return; }   // butun qator bitta hodisada kelgan
   KILLBUF += txt; clearTimeout(KILLBUF_TM);
   if (KILLBUF.length > 600) KILLBUF = KILLBUF.slice(-600);
   var nl = KILLBUF.lastIndexOf('\n');
