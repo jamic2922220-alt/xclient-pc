@@ -2504,6 +2504,39 @@ static BOOL smart_fix(BOOL startup)
     return TRUE;
 }
 
+/* ---------------------------------------------------------------- Visual C++ (o'yin ochilmasa) */
+/* "O'yin ishga tushmayapti (0xc0000005)" ning eng ko'p sababi - Visual C++ 2015-2022 (x86) yo'q.
+ * Endi sahifa ochilmaydi: launcher o'zi Microsoft'dan yuklab, jim o'rnatadi (Windows bir marta ruxsat so'raydi) */
+static BOOL vc_installed(void)
+{
+    static const wchar_t *keys[] = { L"SOFTWARE\\WOW6432Node\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\X86", L"SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\X86" };
+    for (int i = 0; i < 2; i++) {
+        HKEY k; DWORD v = 0, sz = sizeof(v), t = 0;
+        if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, keys[i], 0, KEY_READ, &k) != ERROR_SUCCESS) continue;
+        LONG r = RegQueryValueExW(k, L"Installed", NULL, &t, (BYTE *)&v, &sz); RegCloseKey(k);
+        if (r == ERROR_SUCCESS && v == 1) return TRUE;
+    }
+    return FALSE;
+}
+/* 1 - o'rnatildi, 0 - o'rnatilmadi, -1 - o'yinchi ruxsat bermadi */
+static int vc_install(void)
+{
+    wchar_t tmp[MAX_PATH], f[MAX_PATH];
+    if (!GetTempPathW(MAX_PATH, tmp)) return 0;
+    _snwprintf(f, MAX_PATH, L"%sxc_vc_redist_x86.exe", tmp); f[MAX_PATH - 1] = 0;
+    status(L"Visual C++ yuklanmoqda (13 MB)...", 1);
+    if (!http_download("https://aka.ms/vs/17/release/vc_redist.x86.exe", f)) return 0;
+    status(L"Visual C++ o\x2018rnatilmoqda...", 1);
+    SHELLEXECUTEINFOW se; ZeroMemory(&se, sizeof(se)); se.cbSize = sizeof(se);
+    se.fMask = SEE_MASK_NOCLOSEPROCESS; se.lpVerb = L"runas"; se.lpFile = f; se.lpParameters = L"/install /quiet /norestart"; se.nShow = SW_HIDE;
+    if (!ShellExecuteExW(&se)) { DWORD e = GetLastError(); DeleteFileW(f); return e == ERROR_CANCELLED ? -1 : 0; }
+    DWORD ec = 1;
+    if (se.hProcess) { WaitForSingleObject(se.hProcess, 300000); GetExitCodeProcess(se.hProcess, &ec); CloseHandle(se.hProcess); }
+    DeleteFileW(f);
+    char x[64]; _snprintf(x, sizeof(x), "exit=%lu", (unsigned long)ec); x[63] = 0; url_escape(g_probx, sizeof(g_probx), x);
+    return (ec == 0 || ec == 1638 || ec == 3010 || vc_installed()) ? 1 : 0;   /* 1638 - yangirog'i bor, 3010 - qayta yoqish kerak */
+}
+
 static BOOL run_game(void)
 {
     wchar_t exe[MAX_PATH], cmd[1024];
@@ -2686,6 +2719,22 @@ static BOOL run_game(void)
             ini_set_int(L"usehl", 0);
             if (smart_fix(TRUE)) { ini_set_int(L"crs", 0); CloseHandle(pi.hProcess); return FALSE; }   /* sabab aniq - o'shaning yo'l-yo'rig'i */
             BOOL ru = !strncmp(g_lang, "ru", 2);
+            if (!vc_installed() && ini_int(L"vcask") < 3) {   /* Visual C++ yo'q - o'zimiz o'rnatamiz (ko'pi bilan 3 marta taklif) */
+                ini_set_int(L"vcask", ini_int(L"vcask") + 1);
+                if (MessageBoxW(NULL, ru ? L"Игра не запускается: на компьютере нет Microsoft Visual C++ (x86), он нужен игре.\n\nX CLIENT скачает его с сайта Microsoft и установит сам (13 МБ). Windows один раз спросит разрешение - нажмите «Да».\n\nУстановить сейчас?"
+                                         : L"O\x2018yin ishga tushmayapti: kompyuterda Microsoft Visual C++ (x86) yo\x2018q, o\x2018yinga u kerak.\n\nX CLIENT uni Microsoft saytidan yuklab, o\x2018zi o\x2018rnatadi (13 MB). Windows bir marta ruxsat so\x2018raydi - «Да / Ha» ni bosing.\n\nHozir o\x2018rnatilsinmi?",
+                                L"X CLIENT", MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND) == IDYES) {
+                    int r = vc_install();
+                    prob_send(r == 1 ? "vc_ok" : r < 0 ? "vc_deny" : "vc_fail", 0); g_probx[0] = 0;
+                    ini_set_int(L"crs", 0); CloseHandle(pi.hProcess);
+                    if (r == 1) {
+                        MessageBoxW(NULL, ru ? L"Visual C++ установлен. Сейчас игра откроется снова." : L"Visual C++ o\x2018rnatildi. Hozir o\x2018yin qayta ochiladi.", L"X CLIENT", MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND);
+                        return TRUE;                 /* qayta urinamiz */
+                    }
+                    if (r == 0) ShellExecuteW(NULL, L"open", L"https://aka.ms/vs/17/release/vc_redist.x86.exe", NULL, NULL, SW_SHOWNORMAL);   /* o'zi o'rnatolmadi - qo'lda */
+                    return FALSE;
+                }
+            }
             if (MessageBoxW(NULL, ru ? L"Игра не запускается на этом компьютере (ошибка 0xc0000005 при запуске).\n\nЧаще всего помогает:\n1) Установить Microsoft Visual C++ 2015-2022 (x86) - откроется страница загрузки.\n2) Windows 7: установить обновления (Центр обновления Windows), особенно KB2999226 и SP1.\n3) Временно отключить антивирус (360, Avast и др.) или добавить папку игры в исключения.\n4) Перезагрузить компьютер.\n\nОткрыть страницу Visual C++ сейчас?"
                                  : L"O‘yin bu kompyuterda ishga tushmayapti (ishga tushishda 0xc0000005 xatosi).\n\nKo‘pincha yordam beradi:\n1) Microsoft Visual C++ 2015-2022 (x86) ni o‘rnatish - yuklash sahifasi ochiladi.\n2) Windows 7: yangilanishlarni o‘rnatish (Windows Update), ayniqsa KB2999226 va SP1.\n3) Antivirusni (360, Avast va boshq.) vaqtincha o‘chirish yoki o‘yin papkasini istisnoga qo‘shish.\n4) Kompyuterni qayta yoqish.\n\nVisual C++ sahifasi hozir ochilsinmi?",
                             L"X CLIENT", MB_YESNO | MB_ICONWARNING | MB_SETFOREGROUND) == IDYES)
@@ -2748,11 +2797,11 @@ static void menu_site_check(void)
  * bilan sekin ishlaydi va tez-tez yiqiladi. O'yinchiga 3 kunda bir marta aytamiz, xohlasa Windows Update ochiladi */
 static void gpu_check(void)
 {
-    DISPLAY_DEVICEW dd; wchar_t gpu[128] = L"";
+    DISPLAY_DEVICEW dd; wchar_t gpu[128] = L"", devid[128] = L"";
     for (DWORD i = 0; ; i++) {
         ZeroMemory(&dd, sizeof(dd)); dd.cb = sizeof(dd);
         if (!EnumDisplayDevicesW(NULL, i, &dd, 0)) break;
-        if (!gpu[0] || (dd.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE)) lstrcpynW(gpu, dd.DeviceString, 128);
+        if (!gpu[0] || (dd.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE)) { lstrcpynW(gpu, dd.DeviceString, 128); lstrcpynW(devid, dd.DeviceID, 128); }
         if (dd.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE) break;
     }
     CharLowerW(gpu);
@@ -2783,10 +2832,22 @@ static void gpu_check(void)
     if (day - ini_int(L"gpuw") < 3) return;
     ini_set_int(L"gpuw", day);
     BOOL ru = !strncmp(g_lang, "ru", 2);
-    if (MessageBoxW(g_wnd, ru ? L"На этом компьютере не установлен драйвер видеокарты (работает стандартный драйвер Windows).\n\nИз-за этого CS 1.6 может тормозить и вылетать. Установите драйвер видеокарты (Windows Update или сайт производителя ноутбука/видеокарты).\n\nОткрыть Windows Update сейчас?"
-                           : L"Bu kompyuterda videokarta drayveri o‘rnatilmagan (Windows’ning oddiy drayveri ishlayapti).\n\nShu sababli CS 1.6 sekin ishlashi va yiqilishi mumkin. Videokarta drayverini o‘rnating (Windows Update yoki noutbuk/videokarta ishlab chiqaruvchisi sayti).\n\nWindows Update hozir ochilsinmi?",
-                    L"X CLIENT", MB_YESNO | MB_ICONWARNING | MB_SETFOREGROUND) == IDYES) {
-        if ((INT_PTR)ShellExecuteW(NULL, L"open", L"ms-settings:windowsupdate", NULL, NULL, SW_SHOWNORMAL) <= 32)
+    /* drayver yo'q bo'lsa ham qurilma ID sida ishlab chiqaruvchi bor: PCI\VEN_10DE - NVIDIA, 1002 - AMD, 8086 - Intel.
+     * Shu ishlab chiqaruvchining "drayverni avtomatik aniqlash" sahifasini ochamiz (Windows Update o'rniga) */
+    CharUpperW(devid);
+    const wchar_t *vurl = NULL, *vname = NULL;
+    if (wcsstr(devid, L"VEN_10DE")) { vurl = L"https://www.nvidia.com/en-us/drivers/"; vname = L"NVIDIA"; }
+    else if (wcsstr(devid, L"VEN_1002")) { vurl = L"https://www.amd.com/en/support/download/drivers.html"; vname = L"AMD"; }
+    else if (wcsstr(devid, L"VEN_8086")) { vurl = L"https://www.intel.com/content/www/us/en/support/detect.html"; vname = L"Intel"; }
+    wchar_t m[700];
+    if (vurl) _snwprintf(m, 700, ru ? L"На этом компьютере не установлен драйвер видеокарты %s (работает стандартный драйвер Windows).\n\nИз-за этого CS 1.6 может тормозить и вылетать.\n\nОткрыть официальный сайт %s - там драйвер для вашей видеокарты определяется и скачивается автоматически?"
+                                    : L"Bu kompyuterda %s videokarta drayveri o\x2018rnatilmagan (Windows\x2019ning oddiy drayveri ishlayapti).\n\nShu sababli CS 1.6 sekin ishlashi va yiqilishi mumkin.\n\n%s rasmiy sayti ochilsinmi? U yerda videokartangizga mos drayver o\x2018zi aniqlanadi va yuklanadi.", vname, vname);
+    else _snwprintf(m, 700, ru ? L"На этом компьютере не установлен драйвер видеокарты (работает стандартный драйвер Windows).\n\nИз-за этого CS 1.6 может тормозить и вылетать. Установите драйвер видеокарты (Windows Update или сайт производителя ноутбука/видеокарты).\n\nОткрыть Windows Update сейчас?"
+                               : L"Bu kompyuterda videokarta drayveri o\x2018rnatilmagan (Windows\x2019ning oddiy drayveri ishlayapti).\n\nShu sababli CS 1.6 sekin ishlashi va yiqilishi mumkin. Videokarta drayverini o\x2018rnating (Windows Update yoki noutbuk/videokarta ishlab chiqaruvchisi sayti).\n\nWindows Update hozir ochilsinmi?");
+    m[699] = 0;
+    if (MessageBoxW(g_wnd, m, L"X CLIENT", MB_YESNO | MB_ICONWARNING | MB_SETFOREGROUND) == IDYES) {
+        if (vurl) ShellExecuteW(NULL, L"open", vurl, NULL, NULL, SW_SHOWNORMAL);
+        else if ((INT_PTR)ShellExecuteW(NULL, L"open", L"ms-settings:windowsupdate", NULL, NULL, SW_SHOWNORMAL) <= 32)
             ShellExecuteW(NULL, L"open", L"control.exe", L"/name Microsoft.WindowsUpdate", NULL, SW_SHOWNORMAL);   /* Windows 7 */
     }
 }
