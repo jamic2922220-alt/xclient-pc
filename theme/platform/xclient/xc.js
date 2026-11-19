@@ -1613,12 +1613,22 @@ function onConsole(txt) {
   /* demo tugadi yoki serverga ulanyapti - oddiy tezlik. Faqat aniq qatorlar: "Couldn't open file overviews/..." (radar xaritasi) demo xatosi emas */
   if (DEMO_PLAY) { var dm = /^\s*Completed demo|^\s*ERROR: couldn'?t open\.?\s*$|^\s*Connecting to/i.exec(txt); if (dm) demoEnd(dm[0]); }
   if (/\b(wrote|writing|saved)\b.*\.(bmp|tga|jpg|png)\b/i.test(txt)) toast(T('sh_saved'), 2500);   // F5: skrinshot saqlandi
+  /* kill qatorlari bo'laklab keladi: "Ism" + " killed " + "Ism2" + " with ak47" + "\n" (har biri alohida hodisa) -
+   * shuning uchun qatorni yig'ib, "\n" kelganda tekshiramiz (avval har bo'lak alohida tekshirilib, kill hech qachon tanilmasdi) */
+  KILLBUF += txt; clearTimeout(KILLBUF_TM);
+  if (KILLBUF.length > 600) KILLBUF = KILLBUF.slice(-600);
+  var nl = KILLBUF.lastIndexOf('\n');
+  if (nl >= 0) { var lines = KILLBUF.slice(0, nl).split('\n'); KILLBUF = KILLBUF.slice(nl + 1); each(lines, function (ln) { if (ln) killLine(ln); }); }
+  if (KILLBUF) KILLBUF_TM = setTimeout(function () { var ln = KILLBUF; KILLBUF = ''; if (ln) killLine(ln); }, 250);   // "\n" kelmasa
+}
+var KILLBUF = '', KILLBUF_TM = 0;
+function killLine(txt) {
   if (AIMT && AIMT.on) {                           // aim test (o'z serverida, CUR yo'q bo'lishi mumkin)
     var am = /^(.+?) killed (.+?) with (a headshot from )?([\w\-]+)/.exec(txt.replace(/^\s*(\*\*\*\s*)?/, '')), mine = function (n) { return !!n && (n === MYNAME || (S && (n === S.name || n === fullName(S)))); };
     if (am && mine(am[1]) && !mine(am[2])) aimtKill(!!am[3]);
   }
   if (!CUR || !MYNAME) return;
-  if (KILL_SAMPLE.length < 3 && /\bkill/i.test(txt) && txt.length < 120) KILL_SAMPLE.push(txt.trim());   // tashxis: kill qatorlari qanday ko'rinishda keladi
+  if (KILL_SAMPLE.length < 3 && / killed /i.test(txt) && txt.length < 160) KILL_SAMPLE.push(txt.trim());   // tashxis: kill qatorlari qanday ko'rinishda keladi
   /* "A killed B with ak47", "*** A killed B with a headshot from ak47 ***", "A + C killed B with m4a1" (C - yordam bergan) */
   var m = /^(.+?) killed (.+?) with (a headshot from )?([\w\-]+)/.exec(txt.replace(/^\s*(\*\*\*\s*)?/, ''));
   if (!m) return;
