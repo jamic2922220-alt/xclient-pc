@@ -51,6 +51,12 @@ function dev_sandbox($o) {
     $g = isset($o['hw']['gpu']) ? strtolower($o['hw']['gpu']) : ''; $ram = isset($o['hw']['ram']) ? (int)$o['hw']['ram'] : 0;
     $cc = isset($o['cc']) ? $o['cc'] : ''; $os = isset($o['os']) ? $o['os'] : '';
     if (strpos($os, 'LTSB') !== false) return true;
+    /* virtual mashina videokartasi (Hyper-V, VMware, VirtualBox, QEMU, "Standard VGA") va O'rta Osiyodan emas - antivirus tekshiruv mashinasi */
+    $local = $cc === '' || in_array($cc, array('uz', 'kz', 'tj', 'kg', 'tm', 'af', 'ru'), true);
+    foreach (array('hyper-v', 'virtual machine bus', 'vmware', 'virtualbox', 'qxl', 'red hat', 'standard vga', 'bochs', 'parallels') as $vg)
+        if (strpos($g, $vg) !== false && (!$local || ($ram > 0 && $ram <= 2100))) return true;
+    /* O'rta Osiyodan tashqari: 2 GB gacha xotira, videokarta nomi yo'q, server videokartasi (ASPEED) yoki IoT Enterprise - tekshiruv mashinasi */
+    if (!$local && (($ram > 0 && $ram <= 2100) || $g === '' || strpos($g, 'aspeed') !== false || stripos($os, 'IoT Enterprise') !== false)) return true;
     if (strpos($g, 'basic display') === false && strpos($g, 'basic render') === false) return false;
     return ($ram > 0 && $ram <= 2100) || ($cc !== '' && !in_array($cc, array('uz', 'kz', 'tj', 'kg', 'tm', 'af'), true));
 }
