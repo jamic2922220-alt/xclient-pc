@@ -3294,7 +3294,7 @@ var PANES = {
       '<div class="ph2 m">' + esc(T('k_buy')) + '</div>' + tg('buykeys', 'k_buy2') +
       '<div class="mut" style="font-size:12px;line-height:20px">F1: M4A1/AK-47 \u00b7 F2: AWP \u00b7 F3: Kevlar+Helmet, Defuse kit \u00b7 F4: HE + 2\u00d7Flash + Smoke</div>' +
       '<a class="btn" style="margin:14px 8px 0 0" data-act="keysdef">' + esc(T('k_def')) + '</a><a class="btn out" style="margin:14px 0 0" data-act="keysfactory">' + esc(T('k_factory')) + '</a></div>' +
-      (KEYWAIT ? '<div class="kpick">' + esc(T('k_pick')) + ' ' + ['MOUSE3', 'MOUSE4', 'MOUSE5', 'MWHEELUP', 'MWHEELDOWN', 'SHIFT', 'CTRL', 'ALT', 'SPACE', 'TAB', 'CAPSLOCK'].map(function (k) { return '<a data-pickkey="' + k + '">' + esc(LANG.uz['kp_' + k] != null ? T('kp_' + k) : k) + '</a>'; }).join('') + '<a data-pickkey="">' + esc(T('cancel')) + '</a></div>' : '');
+      (KEYWAIT ? '<div class="kpick">' + esc(T('k_pick')) + ' ' + ['MOUSE1', 'MOUSE2', 'MOUSE3', 'MOUSE4', 'MOUSE5', 'MWHEELUP', 'MWHEELDOWN', 'SHIFT', 'CTRL', 'ALT', 'SPACE', 'TAB', 'CAPSLOCK', 'e', 'q', 'f', 'r'].map(function (k) { return '<a data-pickkey="' + k + '">' + esc(LANG.uz['kp_' + k] != null ? T('kp_' + k) : keyLabel(k)) + '</a>'; }).join('') + '<a class="kx" data-pickkey="">' + esc(T('cancel')) + '</a></div>' : '');
   },
   mouse: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('mo_title')) + '</div>' + sl('sens', 'mo_sens', 0.5, 10, 0.1) + sl('zoom', 'mo_zoom', 0.2, 3, 0.05) +
@@ -3646,6 +3646,23 @@ function loadBinds() {
   if (DB.binds) for (var k in DB.binds) if (DB.binds.hasOwnProperty(k)) BINDS[k] = DB.binds[k];
   BINDS2 = DB.binds2 ? copy(DB.binds2) : {};
 }
+/* Asosiy tugmalar yo'qolib qolgan bo'lsa (masalan otish MOUSE1 tasodifan boshqa vazifaga o'tgan) - asl tugmaga qaytariladi.
+ * Faqat o'sha vazifada hech qanday tugma qolmagan bo'lsa; asl tugma boshqa vazifada bo'lsa - u yerdan olinadi (otish muhimroq) */
+var CORE_KEYS = ['+attack', '+attack2', '+forward', '+back', '+moveleft', '+moveright', '+jump', '+duck', '+reload'];
+function repairBinds() {
+  var fixed = [];
+  each(ACTIONS, function (ac) {
+    if (CORE_KEYS.indexOf(ac[0]) < 0 || !ac[3] || BINDS[ac[0]] || BINDS2[ac[0]]) return;
+    var key = ac[3];
+    for (var a in BINDS) if (BINDS.hasOwnProperty(a) && BINDS[a] === key) { if (CORE_KEYS.indexOf(a) >= 0) return; BINDS[a] = ''; }
+    for (var b in BINDS2) if (BINDS2.hasOwnProperty(b) && BINDS2[b] === key) { if (CORE_KEYS.indexOf(b) >= 0) return; BINDS2[b] = ''; }
+    BINDS[ac[0]] = key; fixed.push(key + '=' + ac[0]);
+  });
+  if (!fixed.length) return;
+  each(fixed, function (f) { var i = f.indexOf('='); cmd('bind ' + q(f.slice(0, i)) + ' ' + q(f.slice(i + 1))); });
+  DB.binds = BINDS; DB.binds2 = BINDS2; persist(); cloudSave();
+  api('prob', { k: 'bind_fix', d: PCID || '', x: fixed.join(' ') }, function () {});
+}
 function binAliases() {                        // tayyor bindlar uchun aliaslar
   cmd('alias +jumpthrow "+jump; -attack"'); cmd('alias -jumpthrow "-jump"');
   cmd('alias xc_qs "slot3; wait; lastinv"');
@@ -3673,6 +3690,7 @@ function applyBinds() {
   binAliases();
   for (var a in BINDS) if (BINDS.hasOwnProperty(a) && BINDS[a]) cmd('bind ' + q(BINDS[a]) + ' ' + q(a));
   for (var b in BINDS2) if (BINDS2.hasOwnProperty(b) && BINDS2[b]) cmd('bind ' + q(BINDS2[b]) + ' ' + q(b));
+  repairBinds();
 }
 var KEYNAMES = { 8: 'BACKSPACE', 9: 'TAB', 13: 'ENTER', 16: 'SHIFT', 17: 'CTRL', 18: 'ALT', 19: 'PAUSE', 20: 'CAPSLOCK', 32: 'SPACE',
   33: 'PGUP', 34: 'PGDN', 35: 'END', 36: 'HOME', 37: 'LEFTARROW', 38: 'UPARROW', 39: 'RIGHTARROW', 40: 'DOWNARROW', 45: 'INS', 46: 'DEL',
@@ -3715,12 +3733,15 @@ function keyName(e) {
   if (c > 127) return charKey(String.fromCharCode(c));   // kirill harf kodi
   return '';
 }
+var SETBIND_MOVED = [];
+function actName(a) { var n = a; each(ACTIONS, function (ac) { if (ac[0] === a) n = CUR_LANG === 'ru' || LFALL[CUR_LANG] === 'ru' ? ac[2] : ac[1]; }); return n; }
 function keyLabel(k) { return /^[a-z]$/.test(k) ? k.toUpperCase() : k; }
 function setBind(action, key, slot) {
-  var M = slot === 2 ? BINDS2 : BINDS, old = M[action];
+  var M = slot === 2 ? BINDS2 : BINDS, old = M[action], moved = [];
   // bitta tugma faqat bitta vazifada: boshqa joyda (1- yoki 2-ustunda) bo'lsa - o'sha yerdan olib tashlanadi
-  for (var a in BINDS) if (BINDS.hasOwnProperty(a) && BINDS[a] === key && !(M === BINDS && a === action)) BINDS[a] = '';
-  for (var b in BINDS2) if (BINDS2.hasOwnProperty(b) && BINDS2[b] === key && !(M === BINDS2 && b === action)) BINDS2[b] = '';
+  for (var a in BINDS) if (BINDS.hasOwnProperty(a) && key && BINDS[a] === key && !(M === BINDS && a === action)) { BINDS[a] = ''; moved.push(a); }
+  for (var b in BINDS2) if (BINDS2.hasOwnProperty(b) && key && BINDS2[b] === key && !(M === BINDS2 && b === action)) { BINDS2[b] = ''; moved.push(b); }
+  SETBIND_MOVED = moved;
   M[action] = key;
   binAliases();
   if (old && old !== key) cmd('unbind ' + q(old));
@@ -3730,7 +3751,13 @@ function setBind(action, key, slot) {
 function finishWait(key) {
   var a = KEYWAIT; KEYWAIT = '';
   if (key === 'BACKSPACE' && KEYSLOT === 2) { setBind(a, '', 2); }   // 2-tugmani tozalash
-  else if (key) { setBind(a, key, KEYSLOT); toast(keyLabel(key) + ' \u2192 ' + a); }
+  else if (key) {
+    setBind(a, key, KEYSLOT);
+    var mv = SETBIND_MOVED.map(actName).join(', ');
+    toast(keyLabel(key) + ' \u2192 ' + actName(a) + (mv ? ' \u00b7 ' + T('k_moved').replace('{a}', mv) : ''), mv ? 7000 : 3000);
+    /* otish/yurish kabi asosiy vazifa tugmasiz qolsa - ogohlantirish (keyingi ochilishda o'zi tiklanadi) */
+    each(SETBIND_MOVED, function (m) { if (CORE_KEYS.indexOf(m) >= 0 && !BINDS[m] && !BINDS2[m]) toast(T('k_core').replace('{a}', actName(m)), 9000); });
+  }
   showSetTab('keys');
 }
 
@@ -4651,10 +4678,19 @@ document.addEventListener('mousedown', function (e) {
   if (!KEYWAIT || closest(e.target || e.srcElement, 'data-bind') || closest(e.target || e.srcElement, 'data-bind2')) return;
   var pk = closest(e.target || e.srcElement, 'data-pickkey');   // sichqoncha yon tugmalari brauzerga kelmaydi - ro'yxatdan tanlash
   if (pk) { e.preventDefault(); e.stopPropagation(); var kk = pk.getAttribute('data-pickkey'); if (kk) finishWait(kk); else { KEYWAIT = ''; showSetTab('keys'); } return; }
-  var b = e.button === 0 ? 'MOUSE1' : e.button === 2 ? 'MOUSE2' : e.button === 1 ? 'MOUSE3' : e.button === 3 ? 'MOUSE4' : 'MOUSE5';
-  e.preventDefault(); e.stopPropagation(); finishWait(b);
+  /* chap tugma boshqa joyda bosilsa - bekor qilish. Oldin bu MOUSE1 deb olinardi va otish tugmasi (+attack) boshqa vazifaga
+   * o'tib ketardi ("o'q uzmayapti"). MOUSE1 kerak bo'lsa - ro'yxatdan tanlanadi */
+  e.preventDefault(); e.stopPropagation();
+  if (e.button === 0) { KEYWAIT = ''; showSetTab('keys'); return; }
+  finishWait(e.button === 2 ? 'MOUSE2' : e.button === 1 ? 'MOUSE3' : e.button === 3 ? 'MOUSE4' : 'MOUSE5');
 }, true);
-document.addEventListener('mousewheel', function (e) { if (!KEYWAIT) return; e.preventDefault(); finishWait(e.wheelDelta > 0 ? 'MWHEELUP' : 'MWHEELDOWN'); }, false);
+/* g'ildirak faqat kutilayotgan tugma ustida aylantirilsa olinadi - ro'yxatni aylantirish (scroll) tasodifan bind bo'lib qolmasin */
+document.addEventListener('mousewheel', function (e) {
+  if (!KEYWAIT) return;
+  var w = closest(e.target || e.srcElement, KEYSLOT === 2 ? 'data-bind2' : 'data-bind');
+  if (!w || w.getAttribute(KEYSLOT === 2 ? 'data-bind2' : 'data-bind') !== KEYWAIT) return;
+  e.preventDefault(); finishWait(e.wheelDelta > 0 ? 'MWHEELUP' : 'MWHEELDOWN');
+}, false);
 document.oncontextmenu = function () { return !KEYWAIT; };
 document.onkeypress = function (e) { if (!KEYWAIT) return; var kn = charKey(String.fromCharCode(e.charCode || e.which || 0)); if (kn) { finishWait(kn); return false; } };
 document.onkeydown = function (e) {
@@ -4696,7 +4732,7 @@ function step(name, fn) { try { fn(); } catch (e) { if (window.onerror) window.o
 step('load();', function () { load(); });
 step("if (DB.forget) { DB.token = ''; DB.forge", function () { if (DB.forget) { DB.token = ''; DB.forget = 0; persist(); } });      // "Eslab qolish" o'chirilgan bo'lsa - keyingi safar qayta kirish
 step('loadSettings();', function () { loadSettings(); });
-step('loadBinds();', function () { loadBinds(); binAliases(); });
+step('loadBinds();', function () { loadBinds(); binAliases(); repairBinds(); });
 step('seedFromGame();', function () { seedFromGame(); });
 // saqlangan sozlamalar har ochilishda qayta qo'yiladi: sborkaning userconfig.cfg / eski xclient_launcher.cfg ularni o'zgartirib yuboradi
 step('demo', function () { if (DB.dplay && now() - DB.dplay.t < 600000) { DEMO_PLAY = true; DEMO_CUR = DB.dplay.n; } });   // demo paytida menyu qayta yuklandi

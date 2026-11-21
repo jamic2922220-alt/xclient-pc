@@ -569,8 +569,9 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 #mdSettings .pane.l { overflow-y: auto; }
 #mdSettings .pane.l .vipbox { margin-top: 8px; padding-top: 6px; padding-bottom: 6px; }
 
-.kpick { position: absolute; left: 30px; right: 30px; bottom: 74px; padding: 12px 16px; background: #1d1418; border: 1px solid #ff3b3b; border-radius: 8px; color: #fff; z-index: 5; }
-.kpick a { display: inline-block; margin: 0 6px; padding: 6px 12px; background: #2b1c22; border: 1px solid rgba(255,255,255,.15); border-radius: 6px; color: #ffd0c4; cursor: pointer; }
+.kpick { position: fixed; left: 50%; bottom: 40px; width: 720px; max-width: 92%; margin-left: -360px; padding: 12px 16px; background: #1d1418; border: 1px solid #ff3b3b; border-radius: 8px; color: #fff; z-index: 50; box-shadow: 0 10px 40px rgba(0,0,0,.6); line-height: 22px; }
+.kpick a { display: inline-block; margin: 6px 4px 0; padding: 5px 11px; background: #2b1c22; border: 1px solid rgba(255,255,255,.15); border-radius: 6px; color: #ffd0c4; cursor: pointer; }
+.kpick a.kx { color: #fff; background: #3a1e24; }
 .kpick a:hover { border-color: #ff3b3b; }
 #mdSettings .pane.r { overflow-y: auto; }
 .stg { margin: 12px 0 6px; font-size: 12px; font-weight: bold; letter-spacing: 1px; color: #ff9a39; text-transform: uppercase; }
