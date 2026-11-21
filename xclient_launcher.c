@@ -694,10 +694,13 @@ static BOOL has_game(void)
 static DWORD g_setup_err = 0;
 /* Inno Setup chiqish kodi: 0 ok, 1-3 ishga tushmadi, 2/5 bekor qilindi, 4 o'rnatish paytida xato, 6 to'xtatildi, 7 tayyorlashda xato */
 static DWORD g_setup_exit = 0;
-/* Inno Setup jurnalidan xato qatorlarini olish (setup_fail sababini bilish uchun) */
+/* Inno Setup jurnalidan xato qatorlarini olish (setup_fail sababini bilish uchun).
+ * g_setup_abort: fayl yozilmadi ("Defaulting to Abort ... Abort/Retry/Ignore") - ko'pincha antivirus faylni to'sadi yoki fayl band;
+ * g_setup_file: o'sha faylning nomi (o'yinchiga aniq aytish uchun) */
+static int g_setup_abort; static wchar_t g_setup_file[64];
 static void setup_log_tail(const wchar_t *path, char *out, int n)
 {
-    out[0] = 0;
+    out[0] = 0; g_setup_abort = 0; g_setup_file[0] = 0;
     HANDLE f = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
     if (f == INVALID_HANDLE_VALUE) { lstrcpynA(out, "nolog", n); return; }
     static char buf[65536]; DWORD sz = GetFileSize(f, NULL), rd = 0;
@@ -716,9 +719,25 @@ static void setup_log_tail(const wchar_t *path, char *out, int n)
         }
         l = e ? e + 1 : NULL;
     }
-    /* oxirgi xato qatori va undan oldingi 5 qator - o'rnatuvchi nima uchun to'xtaganini shular ko'rsatadi (masalan "Caught EAbort" dan oldin) */
+    /* fayl yozilmay "Abort" bo'ldimi va qaysi fayl (oxirgi "Dest filename:") */
+    int ab = -1;
+    for (int i = 0; i < nl; i++) if (strstr(ln[i], "Defaulting to Abort")) ab = i;
+    if (ab >= 0) {
+        g_setup_abort = 1;
+        for (int i = ab; i >= 0 && i > ab - 12; i--) {
+            char *q = strstr(ln[i], "Dest filename:");
+            if (!q) continue;
+            char *bn = strrchr(q, '\\'); if (!bn) bn = strrchr(q, ':'); if (bn) bn++; else bn = q + 14;
+            while (*bn == ' ') bn++;
+            MultiByteToWideChar(CP_ACP, 0, bn, -1, g_setup_file, 63); g_setup_file[63] = 0; break;
+        }
+        last = ab;
+    }
+    /* oxirgi xato qatori, undan oldingi 4 qator va keyingi 2 qator: Inno "Defaulting to Abort ...:" dan KEYIN asl xatoni yozadi
+     * (masalan "DeleteFile failed; code 5. Отказано в доступе") */
     if (last < 0) last = nl - 1;
-    for (int i = last - 5 < 0 ? 0 : last - 5; i <= last && i >= 0; i++) {
+    int end = last + 2 < nl ? last + 2 : nl - 1;
+    for (int i = last - 4 < 0 ? 0 : last - 4; i <= end && i >= 0; i++) {
         if (strlen(out) + strlen(ln[i]) + 3 >= (size_t)n) break;
         if (out[0]) strcat(out, " ~ ");
         strcat(out, ln[i]);
@@ -867,7 +886,11 @@ static BOOL ensure_game(const char *url)
         char lg[560]; setup_log_tail(ilog, lg, sizeof(lg));
         char raw[700]; _snprintf(raw, sizeof(raw), "inno=%lu/%lu local=%d size=%lluMB free=%lluMB full=%d log=%s", (unsigned long)ex1, (unsigned long)ex2, local ? 1 : 0, sz >> 20, (unsigned long long)(fr.QuadPart >> 20), sz == XC_GAME_SIZE, lg); raw[699] = 0;
         url_escape(g_probx, sizeof(g_probx), raw); prob_send("setup_fail", 4000); g_probx[0] = 0;
-        if (ex2 == 2 || ex2 == 5) lstrcpyW(g_err, L"O‘rnatish oynasi yopib yuborildi. X CLIENT ni qayta oching va o‘rnatish oxirigacha kuting.");
+        if (g_setup_abort) { _snwprintf(g_err, sizeof(g_err) / sizeof(g_err[0]) - 1,
+            L"Antivirus o‘yin faylini (%s) to‘sdi. Antivirusda «%s» papkasini istisnoga qo‘shing yoki uni 10 daqiqaga o‘chiring va X CLIENT ni qayta oching.",
+            g_setup_file[0] ? g_setup_file : L"dll", g_dir);
+        g_err[sizeof(g_err) / sizeof(g_err[0]) - 1] = 0; }
+        else if (ex2 == 2 || ex2 == 5) lstrcpyW(g_err, L"O‘rnatish oynasi yopib yuborildi. X CLIENT ni qayta oching va o‘rnatish oxirigacha kuting.");
         else if (ex1 == 4 || ex2 == 4 || ex1 == 7 || ex2 == 7) lstrcpyW(g_err, L"CS 1.6 o‘rnatishda xato bo‘ldi (diskda joy yoki antivirus). Kamida 2 GB joy bo‘shating, antivirusni vaqtincha o‘chirib X CLIENT ni qayta oching.");
     }
     if (!local) DeleteFileW(tmp);                 /* o'yinchining o'z (oflayn) faylini o'chirmaymiz */
