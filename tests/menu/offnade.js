@@ -1,0 +1,67 @@
+/* Granata mashqi (botsiz, F3 granatalar, F4 uchish, xarita joylari) va internetsiz oflayn menyu (offline.html) */
+const { page, qrDecode } = require('./lib');
+const path = require('path'), fs = require('fs'), os = require('os');
+(async () => {
+  const { b, p, errs } = await page({ db: { token: process.env.XC_TOKEN, device: 'testdev0001', fx: 1, lang: 'uz', dnd: 0, tour: 1, wnSeen: 'x', tgAsk: Date.now(), tgAskN: 3, bots: { m: 'nade', map: 'de_dust2', lan: 0 }, set: { name: 'testa', tag: '' } }, wait: 1500 });
+  const res = []; const ok = (c, m) => res.push((c ? 'ok  ' : 'XATO') + ' ' + m);
+  const clk = sel => p.evaluate(s => { const e = document.querySelector(s); if (e) e.click(); return !!e; }, sel);
+  await clk('.mi[data-act=bots]'); await p.waitForTimeout(300);
+  const t = await p.evaluate(() => document.getElementById('sideBody').textContent);
+  ok(/Granata mashqi/.test(t) && /F3/.test(t) && /Mid doors/.test(t), 'granata mashqi: tugmalar va de_dust2 joylari ko\'rinadi');
+  ok(!/Botlar darajasi/.test(t), 'botlar soni/darajasi yashirin (botsiz rejim)');
+  await p.evaluate(() => { window.LOG.length = 0; }); await clk('[data-act=botgo]'); await p.waitForTimeout(300);
+  const log = await p.evaluate(() => window.LOG);
+  ok(log.includes('sv_cheats 1') && log.includes('bind F3 xcnade') && log.includes('bind F4 noclip'), 'sv_cheats 1, F3/F4 tugmalari');
+  ok(log.includes('bot_quota 0') && log.includes('map de_dust2'), 'botsiz (bot_quota 0), xarita ochiladi');
+  await clk('.mi[data-act=bots]'); await p.waitForTimeout(300); await clk('[data-bm=std]'); await p.waitForTimeout(200);
+  await p.evaluate(() => { window.LOG.length = 0; }); await clk('[data-act=botgo]'); await p.waitForTimeout(300);
+  ok((await p.evaluate(() => window.LOG)).includes('sv_cheats 0'), 'oddiy botlar o\'yinida sv_cheats 0 qaytadi');
+  /* aim test: birinchi kill bilan 60 s, natija chatga (say), rekord saqlanadi va haftalik TOP ga */
+  await clk('.mi[data-act=bots]'); await p.waitForTimeout(300); await clk('[data-bm=aimt]'); await p.waitForTimeout(500);
+  const at = await p.evaluate(() => document.getElementById('sideBody').textContent);
+  ok(/HAFTALIK TOP-10/.test(at) && /60 soniya/.test(at), 'aim test oynasi: tushuntirish va haftalik TOP');
+  const sent = []; p.on('request', r => { const d = r.postData() || ''; if (/a=aim_set/.test(d)) sent.push(d); });
+  await p.evaluate(() => { window.LOG.length = 0; }); await clk('[data-act=botgo]'); await p.waitForTimeout(300);
+  const lg = await p.evaluate(() => window.LOG);
+  ok(lg.includes('bot_stop 1') && lg.includes('bot_dont_shoot 1') && lg.includes('bot_quota 13'), 'aim test: 13 ta joyida turgan, otmaydigan bot');
+  await p.evaluate(() => (window.L.putinserver || []).forEach(f => f({ detail: { address: 'loopback' } })));
+  await p.evaluate(() => { const c = window.L.con_message || []; const send = t => c.forEach(f => f({ detail: { text: t } }));
+    send('testa killed Bot1 with ak47'); send('*** testa killed Bot2 with a headshot from ak47 ***'); send('testa killed Bot3 with deagle'); send('Bot4 killed testa with ak47'); });
+  await p.waitForTimeout(1000);
+  ok((await p.evaluate(() => window.LOG)).some(x => /60 soniya boshlandi/.test(x)), 'birinchi kill bilan 60 soniya boshlandi (chatda)');
+  await p.waitForTimeout(61000);
+  const say = (await p.evaluate(() => window.LOG)).filter(x => /^say /.test(x)).pop() || '';
+  ok(/3 kill, 33% headshot/.test(say) && /REKORD/.test(say), 'natija chatda: ' + say);
+  await p.waitForTimeout(800);
+  ok(sent.length === 1 && /k=3&h=1/.test(sent[0]), 'natija haftalik reytingga yuborildi');
+  /* telefon ilovasi kartasi: bosh ekranda, bosilsa QR + APK havolasi */
+  await p.evaluate(() => { document.querySelectorAll('[data-act="close"]').forEach(c => { if (c.offsetParent) c.click(); }); });
+  ok(await p.evaluate(() => getComputedStyle(document.getElementById('mobCard')).display !== 'none'), 'bosh ekranda "Telefonda ham o\'yna" kartasi');
+  await clk('#mobCard'); await p.waitForTimeout(800);
+  const mb = await p.evaluate(() => ({ t: document.getElementById('sideBody').textContent, qr: document.querySelectorAll('#sideBody .tgqr').length === 2, u: (document.querySelector('#sideBody .ipin') || {}).value || '' }));
+  const mq = await qrDecode(p, '#sideBody .qrc-apk .tgqr'), sq = await qrDecode(p, '#sideBody .qrc-site .tgqr');
+  ok(/CS16-boosttop\.apk$/.test(mq) && /Android/.test(mb.t), 'telefon: 1-QR (APK) skanerlanadi (' + mq + ')');
+  ok(sq === 'https://cssborka.uz/xclient/', '2-QR (cssborka.uz) skanerlanadi (' + sq + ')');
+  const vc = []; p.on('request', r => { const d = r.postData() || ''; if (/a=vcmd/.test(d)) vc.push(decodeURIComponent(d)); });
+  await clk('#sideBody .qrc-site .qrl'); await p.waitForTimeout(500); await clk('#sideBody .qrc-apk .qrb'); await p.waitForTimeout(500);
+  ok(vc.some(x => /c=usite/.test(x)) && vc.some(x => /c=uapk/.test(x)), 'pastdagi havola va tugma saytni brauzerda ochadi (usite, uapk)');
+  await p.screenshot({ path: '/tmp/claude-0/-home-user/c174bc30-11c3-5deb-b9e4-d277fe0ca5fd/scratchpad/mobapp.png' });
+  /* oflayn menyu: kompyuterdagi fayl, LAN ro'yxati lan.js dan */
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xcoff'));
+  fs.copyFileSync(path.join(__dirname, '../../theme/platform/xclient/offline.html'), path.join(dir, 'offline.html'));
+  fs.writeFileSync(path.join(dir, 'lan.js'), 'window.XC_LAN = "192.168.1.7:27015|Ali \\"LAN\\" сервер|de_dust2|3|12";\n');
+  const q = await b.newPage(); const e2 = []; q.on('pageerror', e => e2.push(e.message));
+  await q.addInitScript(() => { window.EX = []; window.nextclient = { exec: c => window.EX.push(c.trim()) }; });
+  await q.goto('file://' + dir + '/offline.html');
+  await q.click('[data-a=lan]'); await q.waitForTimeout(400);
+  const rows = await q.locator('.srv').allInnerTexts();
+  ok(rows.length === 1 && /Ali "LAN" сервер/.test(rows[0]), 'oflayn: LAN server ro\'yxatda (' + rows.join('|').replace(/\s+/g, ' ') + ')');
+  await q.click('.srv'); await q.click('[data-a=bots]'); await q.click('[data-a=botgo]');
+  const ex = await q.evaluate(() => window.EX);
+  ok(ex.includes('connect 192.168.1.7:27015') && ex.includes('map de_dust2') && ex.includes('sv_lan 1'), 'oflayn: LAN serverga ulanish va botlar bilan o\'yin');
+  ok(!e2.length, 'oflayn menyuda JS xato yo\'q' + (e2.length ? ': ' + e2.join('|') : ''));
+  const fails = res.filter(x => x.startsWith('XATO'));
+  console.log(res.join('\n'));
+  console.log((fails.length || errs.length ? 'FAIL' : 'PASS') + ' offnade (' + (res.length - fails.length) + '/' + res.length + (errs.length ? ', JS xato: ' + errs.join('|') : '') + ')');
+  await b.close(); process.exit(fails.length || errs.length ? 1 : 0);
+})();
