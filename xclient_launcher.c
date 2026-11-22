@@ -1691,6 +1691,23 @@ static void apply_packs(void)
 
 /* O'yinni tezlashtirish: Windows to'liq ekran "optimizatsiya"sini o'chirish (eski o'yinlarda FPS va kirish kechikishi) */
 static void compat_token(const wchar_t *exe, const wchar_t *tok, int on);
+static int g_dpi_game = 0;                        /* o'yin jismoniy o'lchamda (HIGHDPIAWARE) ochilyaptimi */
+/* Monitorning haqiqiy (jismoniy) o'lchami. Launcher DPI ni bilmaydi - Windows masshtabi 125%/150% bo'lsa EnumDisplaySettings
+ * kichraytirilgan o'lchamni beradi (1920x1080 -> 1280x720). Faqat shu chaqiruv uchun oqimni DPI biladigan qilamiz (Windows 10 1607+) */
+static BOOL phys_desktop(unsigned *pw, unsigned *ph)
+{
+    typedef HANDLE (WINAPI *STDAC)(HANDLE);
+    STDAC f = (STDAC)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetThreadDpiAwarenessContext");
+    if (!f) return FALSE;
+    HANDLE old = f((HANDLE)-4);                   /* DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 */
+    if (!old) old = f((HANDLE)-3);                /* PER_MONITOR_AWARE (eski Windows 10) */
+    if (!old) return FALSE;
+    DEVMODEW dm; ZeroMemory(&dm, sizeof(dm)); dm.dmSize = sizeof(dm);
+    BOOL ok = EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &dm) && dm.dmPelsWidth >= 640;
+    f(old);
+    if (ok) { *pw = dm.dmPelsWidth; *ph = dm.dmPelsHeight; }
+    return ok;
+}
 static void compat_flags(const wchar_t *exe, int on) { compat_token(exe, L"DISABLEDXMAXIMIZEDWINDOWEDMODE", on); }
 /* Windows "Масштаб" 125%/150% (ko'pchilik noutbuklar): o'yin DPI ni bilmaydi - chegarasiz/oynali rejimda Windows uning tasvirini
  * rasm kabi cho'zadi, yozuvlar ham, grafika ham xira bo'ladi (eksklyuziv to'liq ekranda bunday emas edi). HIGHDPIAWARE =
@@ -2597,11 +2614,16 @@ static BOOL run_game(void)
      * Eksklyuziv to'liq ekranda Alt+Tab monitor rejimini almashtirib ekranni 1-3 s qoraytirardi, F11 skrinshot va F10 video qora chiqardi
      * (Windows ekran nusxasi eksklyuziv OpenGL ni ko'rmaydi). Past o'lcham (cho'zilgan 1024x768 va h.k.) va Windows 7/8 - eskicha to'liq ekran */
     int owin = o_win;
+    g_dpi_game = 0;
     /* o'yinchi o'lchamni qo'lda tanlagan, lekin u monitor o'lchamining o'zi bo'lsa - chegarasiz oyna ko'rinishi farq qilmaydi,
      * Alt+Tab da esa qora ekran bo'lmaydi (o'lcham monitordan kichik bo'lsa - cho'zish uchun eskicha to'liq ekran qoladi) */
-    BOOL resIsDesk = FALSE;
+    BOOL resIsDesk = FALSE, resPhys = FALSE;
     if (o_res[0]) { unsigned rw = 0, rh = 0; DEVMODEW dd; ZeroMemory(&dd, sizeof(dd)); dd.dmSize = sizeof(dd);
-        if (sscanf(o_res, "%ux%u", &rw, &rh) == 2 && EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &dd) && rw == dd.dmPelsWidth && rh == dd.dmPelsHeight) resIsDesk = TRUE; }
+        if (sscanf(o_res, "%ux%u", &rw, &rh) == 2 && EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &dd) && rw == dd.dmPelsWidth && rh == dd.dmPelsHeight) resIsDesk = TRUE;
+        /* masshtab 125%+: tanlangan o'lcham monitorning haqiqiy o'lchami (1920x1080) - bu ham "monitor o'lchami" (oldin bu holda
+         * eksklyuziv to'liq ekran ochilib, Alt+Tab da qorayish va qora skrinshot bo'lardi) */
+        unsigned pw0 = 0, ph0 = 0;
+        if (!resIsDesk && rw && phys_desktop(&pw0, &ph0) && rw == pw0 && rh == ph0) { resIsDesk = TRUE; resPhys = TRUE; } }
     if (owin == 0 && !o_winx && (!o_res[0] || resIsDesk)) {
         RTL_OSVERSIONINFOEXW vi; ZeroMemory(&vi, sizeof(vi)); vi.dwOSVersionInfoSize = sizeof(vi);
         typedef LONG (WINAPI *RGV)(RTL_OSVERSIONINFOEXW *);
@@ -2612,6 +2634,11 @@ static BOOL run_game(void)
         DEVMODEW dm; ZeroMemory(&dm, sizeof(dm)); dm.dmSize = sizeof(dm);
         if (EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &dm) && dm.dmPelsWidth >= 640) { w = dm.dmPelsWidth; h = dm.dmPelsHeight; }
         else if (!(o_res[0] && sscanf(o_res, "%ux%u", &w, &h) == 2)) { w = 1024; h = 768; }
+        /* Masshtab 125%+ va o'lcham "Avto": o'yin haqiqiy piksellarda (tiniq) - oyna jismoniy o'lchamda va HIGHDPIAWARE.
+         * Ikkalasi albatta birga: 1.0.160 da belgi qo'yilib, o'lcham kichraytirilganicha qolgan edi - o'yin oynani
+         * noto'g'ri o'lchamda ochib, Alt+Tab da qorayish va qora skrinshot qaytgan edi */
+        unsigned pw = 0, ph = 0;
+        if ((!o_res[0] || resPhys) && phys_desktop(&pw, &ph) && (pw != w || ph != h)) { w = pw; h = ph; g_dpi_game = 1; }
         _snwprintf(vid, 96, L" -width %u -height %u -window -noborder", w, h);
     }
     else if (o_res[0] && sscanf(o_res, "%ux%u", &w, &h) == 2) _snwprintf(vid, 96, L" -width %u -height %u%s", w, h, owin ? L" -window" : L" -full");
@@ -2667,7 +2694,7 @@ static BOOL run_game(void)
     PROCESS_INFORMATION pi;
     meta_save();
     if (o_ok && safe != 1) compat_flags(exe, o_prio);
-    compat_token(exe, L"HIGHDPIAWARE", 1);   /* masshtab 125%+ da xira tasvir bo'lmasin */
+    compat_token(exe, L"HIGHDPIAWARE", g_dpi_game);   /* faqat yuqoridagi holatda; qolgan hollarda (1.0.160 qo'ygan) belgi olinadi */
     BOOL again = FALSE;
     FILETIME ft0; GetSystemTimeAsFileTime(&ft0);
     InterlockedExchange(&g_game_seen, 0);
