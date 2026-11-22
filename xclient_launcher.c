@@ -2623,7 +2623,7 @@ static BOOL run_game(void)
         /* masshtab 125%+: tanlangan o'lcham monitorning haqiqiy o'lchami (1920x1080) - bu ham "monitor o'lchami" (oldin bu holda
          * eksklyuziv to'liq ekran ochilib, Alt+Tab da qorayish va qora skrinshot bo'lardi) */
         unsigned pw0 = 0, ph0 = 0;
-        if (!resIsDesk && rw && phys_desktop(&pw0, &ph0) && rw == pw0 && rh == ph0) { resIsDesk = TRUE; resPhys = TRUE; } }
+        (void)pw0; (void)ph0; (void)resPhys; }   /* jismoniy o'lcham bo'yicha moslash (1.0.160-161) o'chirilgan - Alt+Tab da qorayib, o'yin chiqib ketardi */
     if (owin == 0 && !o_winx && (!o_res[0] || resIsDesk)) {
         RTL_OSVERSIONINFOEXW vi; ZeroMemory(&vi, sizeof(vi)); vi.dwOSVersionInfoSize = sizeof(vi);
         typedef LONG (WINAPI *RGV)(RTL_OSVERSIONINFOEXW *);
@@ -2638,7 +2638,7 @@ static BOOL run_game(void)
          * Ikkalasi albatta birga: 1.0.160 da belgi qo'yilib, o'lcham kichraytirilganicha qolgan edi - o'yin oynani
          * noto'g'ri o'lchamda ochib, Alt+Tab da qorayish va qora skrinshot qaytgan edi */
         unsigned pw = 0, ph = 0;
-        if ((!o_res[0] || resPhys) && phys_desktop(&pw, &ph) && (pw != w || ph != h)) { w = pw; h = ph; g_dpi_game = 1; }
+        (void)pw; (void)ph;   /* 1.0.159 holati: o'yin DPI ni bilmaydi, oyna shu (Windows bergan) o'lchamda */
         _snwprintf(vid, 96, L" -width %u -height %u -window -noborder", w, h);
     }
     else if (o_res[0] && sscanf(o_res, "%ux%u", &w, &h) == 2) _snwprintf(vid, 96, L" -width %u -height %u%s", w, h, owin ? L" -window" : L" -full");
@@ -2694,7 +2694,7 @@ static BOOL run_game(void)
     PROCESS_INFORMATION pi;
     meta_save();
     if (o_ok && safe != 1) compat_flags(exe, o_prio);
-    compat_token(exe, L"HIGHDPIAWARE", g_dpi_game);   /* faqat yuqoridagi holatda; qolgan hollarda (1.0.160 qo'ygan) belgi olinadi */
+    compat_token(exe, L"HIGHDPIAWARE", 0);   /* 1.0.160 qo'ygan belgini olib tashlaymiz (o'yin Alt+Tab da qorayib chiqib ketardi) */
     BOOL again = FALSE;
     FILETIME ft0; GetSystemTimeAsFileTime(&ft0);
     InterlockedExchange(&g_game_seen, 0);
