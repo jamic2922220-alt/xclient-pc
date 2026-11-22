@@ -1690,11 +1690,15 @@ static void apply_packs(void)
 }
 
 /* O'yinni tezlashtirish: Windows to'liq ekran "optimizatsiya"sini o'chirish (eski o'yinlarda FPS va kirish kechikishi) */
-static void compat_flags(const wchar_t *exe, int on)
+static void compat_token(const wchar_t *exe, const wchar_t *tok, int on);
+static void compat_flags(const wchar_t *exe, int on) { compat_token(exe, L"DISABLEDXMAXIMIZEDWINDOWEDMODE", on); }
+/* Windows "Масштаб" 125%/150% (ko'pchilik noutbuklar): o'yin DPI ni bilmaydi - chegarasiz/oynali rejimda Windows uning tasvirini
+ * rasm kabi cho'zadi, yozuvlar ham, grafika ham xira bo'ladi (eksklyuziv to'liq ekranda bunday emas edi). HIGHDPIAWARE =
+ * xususiyatlardagi "Переопределить масштабирование: Приложение" - o'yin haqiqiy piksellarda chiziladi, tiniq */
+static void compat_token(const wchar_t *exe, const wchar_t *tok, int on)
 {
     HKEY k;
-    /* boshqa moslik sozlamalari (RUNASADMIN, HIGHDPIAWARE ...) saqlanadi - faqat o'z belgimizni qo'shamiz/olamiz */
-    const wchar_t *tok = L"DISABLEDXMAXIMIZEDWINDOWEDMODE";
+    /* boshqa moslik sozlamalari (RUNASADMIN va h.k.) saqlanadi - faqat berilgan belgini qo'shamiz/olamiz */
     if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers", 0, NULL, 0, KEY_QUERY_VALUE | KEY_SET_VALUE, NULL, &k, NULL) != ERROR_SUCCESS) return;
     wchar_t cur[512] = L"", out[600] = L""; DWORD sz = sizeof(cur) - sizeof(wchar_t), type = 0;
     LONG qr = RegQueryValueExW(k, exe, NULL, &type, (BYTE *)cur, &sz);
@@ -2663,6 +2667,7 @@ static BOOL run_game(void)
     PROCESS_INFORMATION pi;
     meta_save();
     if (o_ok && safe != 1) compat_flags(exe, o_prio);
+    compat_token(exe, L"HIGHDPIAWARE", 1);   /* masshtab 125%+ da xira tasvir bo'lmasin */
     BOOL again = FALSE;
     FILETIME ft0; GetSystemTimeAsFileTime(&ft0);
     InterlockedExchange(&g_game_seen, 0);
