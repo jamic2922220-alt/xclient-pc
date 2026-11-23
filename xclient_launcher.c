@@ -645,12 +645,28 @@ static BOOL ensure_installed(BOOL *fresh)
         }
     }
 
-    /* o'rnatish papkasi */
-    const wchar_t *cands[2] = { L"C:\\Games\\XClient", NULL };
+    /* o'rnatish papkasi. O'yinchi exe ni o'zi tanlagan papkaga qo'yib ochgan bo'lsa (masalan D:\Games\X CLIENT) - shu yerga
+     * o'rnatamiz (oldin hamma vaqt C:\Games\XClient ga ko'chardi, D: dagi papka bo'sh qolardi). Yuklab olinganlar, ish stoli,
+     * hujjatlar, vaqtinchalik papka va disk ildizi bo'lsa - o'sha diskdagi \Games\XClient ga */
+    wchar_t own[MAX_PATH] = L"", drv[MAX_PATH] = L"";
+    {
+        wchar_t prof[MAX_PATH] = L"", low[MAX_PATH]; lstrcpynW(low, selfDir, MAX_PATH); CharLowerW(low);
+        GetEnvironmentVariableW(L"USERPROFILE", prof, MAX_PATH); CharLowerW(prof);
+        size_t pl = wcslen(prof), sl = wcslen(low);
+        const wchar_t *leaf = wcsrchr(low, L'\\'); leaf = leaf ? leaf + 1 : low;
+        BOOL special = sl <= 3 || (pl > 3 && !wcsncmp(low, prof, pl)) || wcsstr(low, L"\\temp") || wcsstr(low, L"\\windows")
+            || wcsstr(low, L"\\program files") || !wcscmp(leaf, L"downloads") || !wcscmp(leaf, L"\x0437\x0430\x0433\x0440\x0443\x0437\x043a\x0438")   /* "загрузки" */
+            || !wcscmp(leaf, L"desktop") || !wcscmp(leaf, L"\x0440\x0430\x0431\x043e\x0447\x0438\x0439 \x0441\x0442\x043e\x043b");   /* "рабочий стол" */
+        if (!special && selfDir[1] == L':') lstrcpyW(own, selfDir);
+        else if (selfDir[1] == L':' && towupper(selfDir[0]) != L'C') { _snwprintf(drv, MAX_PATH, L"%c:\\Games\\XClient", selfDir[0]); drv[MAX_PATH - 1] = 0; }
+    }
+    const wchar_t *cands[4] = { own[0] ? own : NULL, drv[0] ? drv : NULL, L"C:\\Games\\XClient", NULL };
     wchar_t la[MAX_PATH];
-    if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, la))) { wcscat(la, L"\\XClient"); cands[1] = la; }
-    for (int i = 0; i < 2 && cands[i]; i++) {
-        CreateDirectoryW(L"C:\\Games", NULL);
+    if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, la))) { wcscat(la, L"\\XClient"); cands[3] = la; }
+    for (int i = 0; i < 4; i++) {
+        if (!cands[i]) continue;
+        wchar_t par[MAX_PATH]; lstrcpynW(par, cands[i], MAX_PATH);   /* "X:\Games" ham bo'lsin */
+        wchar_t *ps = wcsrchr(par, L'\\'); if (ps && ps - par > 2) { *ps = 0; CreateDirectoryW(par, NULL); }
         CreateDirectoryW(cands[i], NULL);
         wchar_t probe[MAX_PATH];
         path_join(probe, cands[i], L"xclient.ini");
