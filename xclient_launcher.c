@@ -2527,7 +2527,9 @@ static void dbg_probe(const wchar_t *exe, const wchar_t *cmd, char *out, size_t 
     char last[48] = "", fc[160] = "", sc[160] = "", ext[160] = "", acc[40] = "", stk[300] = "";
     wchar_t c[1024]; lstrcpynW(c, cmd, 1024);
     STARTUPINFOW si = { sizeof(si) }; PROCESS_INFORMATION pi;
-    if (!CreateProcessW(exe, c, NULL, NULL, FALSE, DEBUG_ONLY_THIS_PROCESS, NULL, g_dir, &si, &pi)) { _snprintf(out, cap, "dbgfail=%lu", GetLastError()); out[cap - 1] = 0; return; }
+    BOOL noext = appinit_on() && spawn_noext(exe, c, DEBUG_ONLY_THIS_PROCESS, &si, &pi);   /* haqiqiy ochilishdek: AppInit DLL siz */
+    if (!noext && !CreateProcessW(exe, c, NULL, NULL, FALSE, DEBUG_ONLY_THIS_PROCESS, NULL, g_dir, &si, &pi)) { _snprintf(out, cap, "dbgfail=%lu", GetLastError()); out[cap - 1] = 0; return; }
+    char va[200] = "";                               /* yiqilgan manzil kimga tegishli (tier0.dll o'z joyiga tushmagan bo'lsa - o'sha joyni kim egallagan) */
     DWORD t0 = GetTickCount(), exitc = 0; BOOL done = FALSE;
     while (!done && GetTickCount() - t0 < 25000) {
         DEBUG_EVENT de;
@@ -2553,6 +2555,15 @@ static void dbg_probe(const wchar_t *exe, const wchar_t *cmd, char *out, size_t 
             for (int i = 0; i < nm; i++) if (mods[i].base <= a && (bi < 0 || mods[i].base > mods[bi].base)) bi = i;
             char *dst = de.u.Exception.dwFirstChance ? fc : sc;
             if (code == EXCEPTION_ACCESS_VIOLATION && !stk[0]) { dbg_stack(pi.hProcess, de.dwThreadId, mods, nm, stk, sizeof(stk)); dbg_dump(pi.hProcess, pi.dwProcessId, de.dwThreadId, er); }   /* birinchi xotira xatosi - stek va damp */
+            if (code == EXCEPTION_ACCESS_VIOLATION && !va[0] && er->NumberParameters >= 2) {
+                ULONG_PTR ta = er->ExceptionInformation[1]; MEMORY_BASIC_INFORMATION mb; ZeroMemory(&mb, sizeof(mb));
+                VirtualQueryEx(pi.hProcess, (LPCVOID)ta, &mb, sizeof(mb));
+                const char *own = "-"; for (int i = 0; i < nm; i++) if ((ULONG_PTR)mb.AllocationBase == mods[i].base) own = mods[i].name;
+                ULONG_PTR t0 = 0; for (int i = 0; i < nm; i++) if (!_stricmp(mods[i].name, "tier0.dll")) t0 = mods[i].base;
+                DWORD pref = 0; { wchar_t tp[MAX_PATH]; path_join(tp, g_dir, L"tier0.dll"); HANDLE h = CreateFileW(tp, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+                    if (h != INVALID_HANDLE_VALUE) { BYTE hb[1024]; DWORD rd = 0; if (ReadFile(h, hb, sizeof(hb), &rd, NULL) && rd >= 0x40) { DWORD pe = *(DWORD *)(hb + 0x3c); if (pe + 0x38 < rd) pref = *(DWORD *)(hb + pe + 0x34); } CloseHandle(h); } }
+                _snprintf(va, sizeof(va), " va=%lx st=%lx ty=%lx ab=%lx own=%s t0=%lx/%lx noext=%d", (unsigned long)ta, (unsigned long)mb.State, (unsigned long)mb.Type, (unsigned long)(ULONG_PTR)mb.AllocationBase, own, (unsigned long)t0, (unsigned long)pref, noext ? 1 : 0); va[sizeof(va) - 1] = 0;
+            }
             if (!de.u.Exception.dwFirstChance && code == EXCEPTION_ACCESS_VIOLATION && er->NumberParameters >= 2 && !acc[0]) {   /* o'qish/yozish/ishga tushirish va manzil */
                 _snprintf(acc, sizeof(acc), " acc=%c@%lx", er->ExceptionInformation[0] == 0 ? 'r' : er->ExceptionInformation[0] == 1 ? 'w' : 'x', (unsigned long)er->ExceptionInformation[1]); acc[sizeof(acc) - 1] = 0; }
             if (!dst[0]) { _snprintf(dst, 160, "%08lx mod=%s+%lx", code, bi >= 0 ? mods[bi].name : "?", bi >= 0 ? (unsigned long)(a - mods[bi].base) : (unsigned long)a); dst[159] = 0;
@@ -2567,7 +2578,7 @@ static void dbg_probe(const wchar_t *exe, const wchar_t *cmd, char *out, size_t 
     }
     if (!done || sc[0]) TerminateProcess(pi.hProcess, 1);
     CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
-    _snprintf(out, cap, "%s%s%s%s%s exit=%08lx last=%s n=%d ext=%s stk=%s%s", sc[0] ? "dbg=" : "", sc, acc, fc[0] ? " fc=" : "", fc, (unsigned long)exitc, last[0] ? last : "-", nm, ext[0] ? ext : "-", stk[0] ? stk : "-", done ? "" : " timeout");
+    _snprintf(out, cap, "%s%s%s%s%s%s exit=%08lx last=%s n=%d ext=%s stk=%s%s", sc[0] ? "dbg=" : "", sc, acc, fc[0] ? " fc=" : "", fc, va, (unsigned long)exitc, last[0] ? last : "-", nm, ext[0] ? ext : "-", stk[0] ? stk : "-", done ? "" : " timeout");
     out[cap - 1] = 0;
 }
 
