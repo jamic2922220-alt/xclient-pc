@@ -1790,9 +1790,62 @@ static DWORD_PTR game_aff_mask(void)
     return m;
 }
 static int cpu_count(void) { SYSTEM_INFO si; GetSystemInfo(&si); return (int)si.dwNumberOfProcessors; }
+/* AppInit_DLLs: Windows bu ro'yxatdagi DLL ni har bir dasturga majburan yuklaydi. Ba'zi klublarda u yerda
+ * C:\Program Files\Common Files\System\symsrv.dll turibdi - u cstrike.exe himoyasi bilan to'qnashib, o'yin ochilishdayoq
+ * 0xc0000005 bilan yiqiladi (klubdagi hamma kompyuterda). Bunday kompyuterda o'yin "extension point disable" siyosati bilan
+ * ochiladi: AppInit DLL, global hook va eski LSP o'yinga yuklanmaydi. Kompyuter sozlamasiga tegilmaydi. Windows 8+ */
+static char g_appinit[200] = "";
+static BOOL appinit_on(void)
+{
+    HKEY k; BOOL on = FALSE; g_appinit[0] = 0;
+    /* o'yin 32-bitli: 64-bitli Windows'da WOW6432Node dagi qiymat o'qiladi (launcher ham 32-bitli - avtomatik o'sha) */
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Windows", 0, KEY_QUERY_VALUE, &k) == ERROR_SUCCESS) {
+        wchar_t v[260] = L""; DWORD sz = sizeof(v) - sizeof(wchar_t), t = 0, load = 0, ls = sizeof(load);
+        if (RegQueryValueExW(k, L"AppInit_DLLs", NULL, &t, (BYTE *)v, &sz) == ERROR_SUCCESS && (t == REG_SZ || t == REG_EXPAND_SZ)) {
+            v[259] = 0; wchar_t *q = v; while (*q == L' ' || *q == L',') q++;
+            if (*q) { on = TRUE; WideCharToMultiByte(CP_UTF8, 0, q, -1, g_appinit, sizeof(g_appinit), NULL, NULL); }
+        }
+        if (on && RegQueryValueExW(k, L"LoadAppInit_DLLs", NULL, &t, (BYTE *)&load, &ls) == ERROR_SUCCESS && t == REG_DWORD && !load) on = FALSE;
+        RegCloseKey(k);
+    }
+    return on;
+}
+static BOOL spawn_noext(const wchar_t *exe, wchar_t *cmd, DWORD flags, STARTUPINFOW *si, PROCESS_INFORMATION *pi)
+{
+    typedef BOOL (WINAPI *IPTAL)(void *, DWORD, DWORD, SIZE_T *);
+    typedef BOOL (WINAPI *UPTA)(void *, DWORD, DWORD_PTR, void *, SIZE_T, void *, SIZE_T *);
+    typedef void (WINAPI *DPTAL)(void *);
+    HMODULE k32 = GetModuleHandleW(L"kernel32.dll");
+    IPTAL ip = (IPTAL)GetProcAddress(k32, "InitializeProcThreadAttributeList");
+    UPTA up = (UPTA)GetProcAddress(k32, "UpdateProcThreadAttribute");
+    DPTAL dp = (DPTAL)GetProcAddress(k32, "DeleteProcThreadAttributeList");
+    if (!ip || !up || !dp) return FALSE;
+    SIZE_T asz = 0; ip(NULL, 1, 0, &asz);
+    void *al = HeapAlloc(GetProcessHeap(), 0, asz);
+    if (!al) return FALSE;
+    BOOL ok = FALSE;
+    if (ip(al, 1, 0, &asz)) {
+        DWORD64 pol = (DWORD64)1 << 32;               /* PROCESS_CREATION_MITIGATION_POLICY_EXTENSION_POINT_DISABLE_ALWAYS_ON */
+        if (up(al, 0, 0x00020007 /* PROC_THREAD_ATTRIBUTE_MITIGATION_POLICY */, &pol, sizeof(pol), NULL, NULL)) {
+            STARTUPINFOEXW sx; ZeroMemory(&sx, sizeof(sx)); sx.StartupInfo = *si; sx.StartupInfo.cb = sizeof(sx); sx.lpAttributeList = al;
+            ok = CreateProcessW(exe, cmd, NULL, NULL, FALSE, flags | EXTENDED_STARTUPINFO_PRESENT, NULL, g_dir, &sx.StartupInfo, pi);
+        }
+        dp(al);
+    }
+    HeapFree(GetProcessHeap(), 0, al);
+    return ok;
+}
 static BOOL game_spawn(const wchar_t *exe, wchar_t *cmd, STARTUPINFOW *si, PROCESS_INFORMATION *pi)
 {
     DWORD_PTR am = game_aff_mask();
+    if (appinit_on()) {
+        if (spawn_noext(exe, cmd, am ? CREATE_SUSPENDED : 0, si, pi)) {
+            if (am) { SetProcessAffinityMask(pi->hProcess, am); ResumeThread(pi->hThread); }
+            static BOOL told = FALSE;
+            if (!told) { told = TRUE; char raw[220]; _snprintf(raw, sizeof(raw), "dll=%s", g_appinit); raw[219] = 0; url_escape(g_probx, sizeof(g_probx), raw); prob_send("appinit", 0); g_probx[0] = 0; }
+            return TRUE;
+        }
+    }
     if (am && CreateProcessW(exe, cmd, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, g_dir, si, pi)) {
         SetProcessAffinityMask(pi->hProcess, am);
         ResumeThread(pi->hThread);
@@ -2834,6 +2887,11 @@ static BOOL run_game(void)
                     return FALSE;
                 }
             }
+            if (vc_installed()) {                     /* Visual C++ bor - uni taklif qilmaymiz (o'rnatuvchi "yangiroq versiya bor" xatosini berardi) */
+                MessageBoxW(NULL, ru ? L"Игра не запускается на этом компьютере (ошибка 0xc0000005 при запуске).\n\nЧто можно сделать:\n1) Временно отключить антивирус или добавить папку игры в исключения.\n2) Закрыть программы, которые встраиваются в игры (оверлеи, программы клуба).\n3) Перезагрузить компьютер.\n\nЕсли не поможет - напишите нам в Direct (cssborka.uz)."
+                                     : L"O\x2018yin bu kompyuterda ishga tushmayapti (ishga tushishda 0xc0000005 xatosi).\n\nNima qilish mumkin:\n1) Antivirusni vaqtincha o\x2018chirish yoki o\x2018yin papkasini istisnoga qo\x2018shish.\n2) O\x2018yinlarga aralashadigan dasturlarni (overlay, klub dasturi) yopish.\n3) Kompyuterni qayta yoqish.\n\nYordam bermasa - Directga yozing (cssborka.uz).",
+                            L"X CLIENT", MB_OK | MB_ICONWARNING | MB_SETFOREGROUND);
+            } else
             if (MessageBoxW(NULL, ru ? L"Игра не запускается на этом компьютере (ошибка 0xc0000005 при запуске).\n\nЧаще всего помогает:\n1) Установить Microsoft Visual C++ 2015-2022 (x86) - откроется страница загрузки.\n2) Windows 7: установить обновления (Центр обновления Windows), особенно KB2999226 и SP1.\n3) Временно отключить антивирус (360, Avast и др.) или добавить папку игры в исключения.\n4) Перезагрузить компьютер.\n\nОткрыть страницу Visual C++ сейчас?"
                                  : L"O‘yin bu kompyuterda ishga tushmayapti (ishga tushishda 0xc0000005 xatosi).\n\nKo‘pincha yordam beradi:\n1) Microsoft Visual C++ 2015-2022 (x86) ni o‘rnatish - yuklash sahifasi ochiladi.\n2) Windows 7: yangilanishlarni o‘rnatish (Windows Update), ayniqsa KB2999226 va SP1.\n3) Antivirusni (360, Avast va boshq.) vaqtincha o‘chirish yoki o‘yin papkasini istisnoga qo‘shish.\n4) Kompyuterni qayta yoqish.\n\nVisual C++ sahifasi hozir ochilsinmi?",
                             L"X CLIENT", MB_YESNO | MB_ICONWARNING | MB_SETFOREGROUND) == IDYES)
