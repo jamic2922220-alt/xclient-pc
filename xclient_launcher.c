@@ -137,6 +137,7 @@ static HINTERNET open_url_raw(const char *url)
 /* O'z saytimizga so'rovlar avval https bilan (internet-kafe, provayder tarmog'ida o'qib/o'zgartirib bo'lmasin).
  * Ishlamasa (Windows 7 da TLS 1.2 yo'q, sertifikat muammosi) - shu ishga tushish davomida http. Sertifikat tekshiruvi o'chirilmaydi. */
 static BOOL g_https_bad = FALSE;
+static BOOL g_tls_fixed = FALSE;                   /* Windows 7: TLS 1.2 shu ochilishda yoqildi (hisobotga) */
 static HINTERNET open_url(const char *url)
 {
     static const char own[] = "http://mmb.boost-top.com/";
@@ -3166,6 +3167,22 @@ static DWORD WINAPI worker(LPVOID unused)
     tune_recover();                               /* oldingi safar launcher o'yin paytida yopilib qolgan bo'lsa - Windows sozlamalarini qaytarish */
     crash_prune();
 
+    /* Windows 7/Vista: WinINet da TLS 1.1/1.2 odatda o'chiq - GitHub (yangilanish) ochilmaydi ("man=fail", o'yinchi eski versiyada
+     * qoladi). Internet Explorer sozlamasidagi "TLS 1.1/1.2 ishlatish" belgisini shu foydalanuvchi uchun yoqamiz (InternetOpen dan oldin) */
+    {
+        RTL_OSVERSIONINFOEXW vi; ZeroMemory(&vi, sizeof(vi)); vi.dwOSVersionInfoSize = sizeof(vi);
+        typedef LONG (WINAPI *RGV)(RTL_OSVERSIONINFOEXW *);
+        RGV rgv = (RGV)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetVersion");
+        if (rgv && rgv(&vi) == 0 && vi.dwMajorVersion == 6 && vi.dwMinorVersion <= 1) {
+            HKEY k;
+            if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", 0, NULL, 0, KEY_QUERY_VALUE | KEY_SET_VALUE, NULL, &k, NULL) == ERROR_SUCCESS) {
+                DWORD v = 0xA0, t = 0, sz = sizeof(v);
+                if (RegQueryValueExW(k, L"SecureProtocols", NULL, &t, (BYTE *)&v, &sz) != ERROR_SUCCESS || t != REG_DWORD) v = 0xA0;   /* odatiy: SSL3 + TLS1.0 */
+                if (!(v & 0x800)) { v |= 0xA00; if (RegSetValueExW(k, L"SecureProtocols", 0, REG_DWORD, (const BYTE *)&v, sizeof(v)) == ERROR_SUCCESS) g_tls_fixed = TRUE; }
+                RegCloseKey(k);
+            }
+        }
+    }
     g_net = InternetOpenA("XClient", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
     /* ulanish 6 s: sayt javob bermasa launcher 15 s kutib turmaydi (yuklab olishda o'qish kutishi 15 s qoladi) */
     DWORD to = 6000, rto = 15000;
@@ -3221,6 +3238,7 @@ static DWORD WINAPI worker(LPVOID unused)
             DWORD keep = g_net_dl; g_net_dl = 0;             /* yangilanish ma'lumoti keldi - internet bor, fayllarni oxirigacha yuklaymiz */
             int fails = sync_files(&u, &selfUp);
             if (keep) { DWORD dl = GetTickCount() + 10000; g_net_dl = dl ? dl : 1; }
+            if (g_tls_fixed) { char raw[40]; _snprintf(raw, sizeof(raw), "upd=%s", fails == 0 ? "ok" : "fail"); raw[39] = 0; url_escape(g_probx, sizeof(g_probx), raw); prob_send("tls12_on", 0); g_probx[0] = 0; }
             if (fails == 0) {
                 fn_send("upd");
                 if (autov) ini_set_int(L"autover", 0);
