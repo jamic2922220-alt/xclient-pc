@@ -1760,8 +1760,28 @@ static BOOL drop_runasadmin(const wchar_t *exe)
     RegCloseKey(k);
     return changed;
 }
+/* Ko'p yadroli (8+ oqim) ba'zi kompyuterlarda eski o'yin fayllari (tier0.dll oqimi) ishga tushishdayoq 0xc0000005 bilan
+ * yiqiladi. Shunday bo'lsa keyingi ochilishda o'yin birinchi 4 ta yadroda ochiladi (CS 1.6 ga yetarli). ini "affx":
+ * 0 - sinalmagan, 1 - sinalmoqda, 2 - yordam berdi (doim shunday), 3 - yordam bermadi */
+static DWORD_PTR game_aff_mask(void)
+{
+    int a = ini_int(L"affx");
+    if (a != 1 && a != 2) return 0;
+    DWORD_PTR pm = 0, sm = 0;
+    if (!GetProcessAffinityMask(GetCurrentProcess(), &pm, &sm) || !sm) return 0;
+    DWORD_PTR m = 0; int n = 0;
+    for (int i = 0; i < (int)(sizeof(DWORD_PTR) * 8) && n < 4; i++) if (sm & ((DWORD_PTR)1 << i)) { m |= (DWORD_PTR)1 << i; n++; }
+    return m;
+}
+static int cpu_count(void) { SYSTEM_INFO si; GetSystemInfo(&si); return (int)si.dwNumberOfProcessors; }
 static BOOL game_spawn(const wchar_t *exe, wchar_t *cmd, STARTUPINFOW *si, PROCESS_INFORMATION *pi)
 {
+    DWORD_PTR am = game_aff_mask();
+    if (am && CreateProcessW(exe, cmd, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, g_dir, si, pi)) {
+        SetProcessAffinityMask(pi->hProcess, am);
+        ResumeThread(pi->hThread);
+        return TRUE;
+    }
     if (CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, g_dir, si, pi)) return TRUE;
     if (GetLastError() != ERROR_ELEVATION_REQUIRED) return FALSE;
     if (drop_runasadmin(exe) && CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, g_dir, si, pi)) { prob_send("elev_fixed", 0); return TRUE; }
@@ -2250,7 +2270,8 @@ static DWORD WINAPI game_icon_thread(LPVOID arg)
         if (WaitForSingleObject(proc, 2000) != WAIT_TIMEOUT) goto out;
         g.w = NULL; EnumWindows(game_win_cb, (LPARAM)&g); found = g.w != NULL;
     }
-    if (found) { InterlockedExchange(&g_game_seen, 1); fn_send("game"); }
+    if (found) { InterlockedExchange(&g_game_seen, 1); fn_send("game");
+                 if (ini_int(L"affx") == 1) { ini_set_int(L"affx", 2); prob_send("aff_ok", 0); } }   /* 4 yadroda ochildi - shu kompyuterda doim shunday */
     for (k = 0; found && k < 4; k++) {
         if (WaitForSingleObject(proc, waits[k]) != WAIT_TIMEOUT) break;
         g.w = NULL; EnumWindows(game_win_cb, (LPARAM)&g);
@@ -2772,6 +2793,13 @@ static BOOL run_game(void)
                 return TRUE;
             }
             ini_set_int(L"usehl", 0);
+            { int ax = ini_int(L"affx");
+              if (ax == 0 && cpu_count() > 4) {            /* 2-chora: o'yinni 4 ta yadroda avtomatik qayta ochamiz */
+                  ini_set_int(L"affx", 1); prob_send("start_aff", 0);
+                  CloseHandle(pi.hProcess);
+                  return TRUE;
+              }
+              if (ax == 1 || ax == 2) ini_set_int(L"affx", 3); }   /* 4 yadroda ham ochilmadi (3 - sinalgan; GetPrivateProfileInt manfiyni 0 deb o'qiydi) */
             if (smart_fix(TRUE)) { ini_set_int(L"crs", 0); CloseHandle(pi.hProcess); return FALSE; }   /* sabab aniq - o'shaning yo'l-yo'rig'i */
             BOOL ru = !strncmp(g_lang, "ru", 2);
             if (!vc_installed() && ini_int(L"vcask") < 3) {   /* Visual C++ yo'q - o'zimiz o'rnatamiz (ko'pi bilan 3 marta taklif) */
