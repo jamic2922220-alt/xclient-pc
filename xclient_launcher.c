@@ -666,6 +666,11 @@ static BOOL ensure_installed(BOOL *fresh)
     if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, la))) { wcscat(la, L"\\XClient"); cands[3] = la; }
     for (int i = 0; i < 4; i++) {
         if (!cands[i]) continue;
+        if (i < 2) {                                 /* o'yinchi papkasi / boshqa disk: CS 1.6 uchun ~2 GB joy bo'lmasa - C: ga (o'yin u yerda yo'q bo'lsa) */
+            wchar_t root[4] = { cands[i][0], L':', L'\\', 0 }; ULARGE_INTEGER fr; fr.QuadPart = 0;
+            wchar_t g1[MAX_PATH]; path_join(g1, cands[i], L"cstrike.exe");
+            if (GetFileAttributesW(g1) == INVALID_FILE_ATTRIBUTES && GetDiskFreeSpaceExW(root, &fr, NULL, NULL) && fr.QuadPart < 2000ULL * 1048576ULL) continue;
+        }
         wchar_t par[MAX_PATH]; lstrcpynW(par, cands[i], MAX_PATH);   /* "X:\Games" ham bo'lsin */
         wchar_t *ps = wcsrchr(par, L'\\'); if (ps && ps - par > 2) { *ps = 0; CreateDirectoryW(par, NULL); }
         CreateDirectoryW(cands[i], NULL);
