@@ -1789,6 +1789,29 @@ static DWORD_PTR game_aff_mask(void)
     for (int i = 0; i < (int)(sizeof(DWORD_PTR) * 8) && n < 4; i++) if (sm & ((DWORD_PTR)1 << i)) { m |= (DWORD_PTR)1 << i; n++; }
     return m;
 }
+/* tier0.dll "ASLR" belgisi (DllCharacteristics 0x40): Windows uni 0x10000000 dan boshqa manzilga ko'chiradi, cstrike.exe himoyasi esa
+ * eski manzilga (0x100532cc) yozib, o'yin ochilishdayoq 0xc0000005 bilan yiqiladi (klubdagi kompyuterlarda tasdiqlandi: belgi
+ * olingach o'yin ochildi). Belgini olamiz - tier0 o'z manziliga yuklanadi. Asl fayl tier0.dll.bak bo'lib qoladi. 1 - o'zgartirildi */
+static int tier0_unaslr(void)
+{
+    wchar_t f[MAX_PATH], bk[MAX_PATH]; path_join(f, g_dir, L"tier0.dll"); _snwprintf(bk, MAX_PATH, L"%s.bak", f); bk[MAX_PATH - 1] = 0;
+    HANDLE h = CreateFileW(f, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    if (h == INVALID_HANDLE_VALUE) return 0;
+    BYTE hb[1024]; DWORD rd = 0; int r = 0;
+    if (ReadFile(h, hb, sizeof(hb), &rd, NULL) && rd >= 0x40 && hb[0] == 'M' && hb[1] == 'Z') {
+        DWORD pe = *(DWORD *)(hb + 0x3c);
+        if (pe + 0x60 <= rd && !memcmp(hb + pe, "PE\0\0", 4) && *(WORD *)(hb + pe + 0x18) == 0x10b) {   /* PE32 */
+            WORD dc = *(WORD *)(hb + pe + 0x5e);
+            if (dc & 0x40) {
+                if (GetFileAttributesW(bk) == INVALID_FILE_ATTRIBUTES) CopyFileW(f, bk, TRUE);
+                dc &= ~0x40; DWORD wr = 0;
+                if (SetFilePointer(h, (LONG)(pe + 0x5e), NULL, FILE_BEGIN) != INVALID_SET_FILE_POINTER && WriteFile(h, &dc, 2, &wr, NULL) && wr == 2) r = 1;
+            }
+        }
+    }
+    CloseHandle(h);
+    return r;
+}
 static int cpu_count(void) { SYSTEM_INFO si; GetSystemInfo(&si); return (int)si.dwNumberOfProcessors; }
 /* AppInit_DLLs: Windows bu ro'yxatdagi DLL ni har bir dasturga majburan yuklaydi. Ba'zi klublarda u yerda
  * C:\Program Files\Common Files\System\symsrv.dll turibdi - u cstrike.exe himoyasi bilan to'qnashib, o'yin ochilishdayoq
@@ -2865,6 +2888,11 @@ static BOOL run_game(void)
               } }
             prob_send("start_fail", 3000);
             g_probx[0] = 0;
+            if (tier0_unaslr()) {                       /* 1-chora (klubda tasdiqlangan): tier0.dll ASLR belgisi - olib, darrov qayta ochamiz */
+                prob_send("t0_fix", 0);
+                CloseHandle(pi.hProcess);
+                return TRUE;
+            }
             wchar_t hl[MAX_PATH]; path_join(hl, g_dir, L"hl.exe");
             BOOL isHl = !_wcsicmp(wcsrchr(exe, L'\\') ? wcsrchr(exe, L'\\') + 1 : exe, L"hl.exe");
             if (!isHl && GetFileAttributesW(hl) != INVALID_FILE_ATTRIBUTES) {   /* 1-chora: hl.exe bilan avtomatik qayta */
