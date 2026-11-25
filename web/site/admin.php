@@ -213,6 +213,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($u && $act === 'acc_del') { @unlink(XC_DIR . '/users/' . $l . '.php'); flash($l . " o'chirildi"); }
         go('?p=accounts&q=' . urlencode(g('q')));
     }
+    if ($act === 'ios_key') {                                // iPhone imzosi: maxfiy kalit faqat shu serverda (xc_data/ios/key.php) yaratiladi
+        if (!function_exists('openssl_pkey_new')) { flash('PHP da openssl yo\'q'); go('?p=ios'); }
+        $old = rd('ios/key', array());
+        if (!empty($old['pem']) && pp('sure') !== '1') { flash('Kalit allaqachon bor'); go('?p=ios'); }
+        $pk = openssl_pkey_new(array('private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA));
+        $csr = $pk ? openssl_csr_new(array('commonName' => 'X CLIENT', 'emailAddress' => 'ios@boost-top.com', 'countryName' => 'UZ'), $pk, array('digest_alg' => 'sha256')) : false;
+        if (!$pk || !$csr || !openssl_pkey_export($pk, $pem) || !openssl_csr_export($csr, $cs)) { flash('Kalit yaratib bo\'lmadi: ' . openssl_error_string()); go('?p=ios'); }
+        wr('ios/key', array('pem' => $pem, 'csr' => $cs, 't' => time())); @unlink(XC_DIR . '/ios/cert.php');
+        flash('Kalit yaratildi. Endi CSR faylni yuklab oling va Apple ga yuklang.'); go('?p=ios');
+    }
+    if ($act === 'ios_cer' || $act === 'ios_prov') {         // Apple dan olingan .cer / .mobileprovision (maxfiy emas, lekin UDID lar bor - xc_data da)
+        $f = isset($_FILES['f']['tmp_name']) && is_uploaded_file($_FILES['f']['tmp_name']) ? (string)file_get_contents($_FILES['f']['tmp_name'], false, null, 0, 2000000) : '';
+        if ($f === '') { flash('Fayl tanlanmadi'); go('?p=ios'); }
+        if ($act === 'ios_cer') {
+            $pem = strpos($f, '-----BEGIN CERTIFICATE-----') !== false ? $f : "-----BEGIN CERTIFICATE-----\n" . chunk_split(base64_encode($f), 64, "\n") . "-----END CERTIFICATE-----\n";
+            $x = @openssl_x509_read($pem); $k = rd('ios/key', array());
+            if (!$x) { flash('Bu Apple sertifikati (.cer) emas'); go('?p=ios'); }
+            if (empty($k['pem']) || !openssl_x509_check_private_key($x, $k['pem'])) { flash('Sertifikat shu serverdagi kalitga mos emas - Apple ga aynan shu sahifadagi CSR ni yuklang'); go('?p=ios'); }
+            $i = openssl_x509_parse($x);
+            wr('ios/cert', array('pem' => $pem, 'cn' => isset($i['subject']['CN']) ? $i['subject']['CN'] : '', 'to' => isset($i['validTo_time_t']) ? $i['validTo_time_t'] : 0, 't' => time()));
+            flash('Sertifikat saqlandi'); go('?p=ios');
+        }
+        $a = strpos($f, '<?xml'); $b = strpos($f, '</plist>');
+        if ($a === false || $b === false) { flash('Bu .mobileprovision fayl emas'); go('?p=ios'); }
+        $xml = substr($f, $a, $b - $a + 8);
+        preg_match('#<key>Name</key>\s*<string>([^<]*)</string>#', $xml, $nm); preg_match('#<key>ExpirationDate</key>\s*<date>([^<]*)</date>#', $xml, $ex);
+        preg_match('#<key>application-identifier</key>\s*<string>([^<]*)</string>#', $xml, $ap);
+        $ud = array(); if (preg_match('#<key>ProvisionedDevices</key>\s*<array>(.*?)</array>#s', $xml, $pd)) { preg_match_all('#<string>([^<]+)</string>#', $pd[1], $mm); $ud = array_map('strtoupper', $mm[1]); }
+        if (!$ud) { flash('Profilda iPhone lar yo\'q - Apple da «Ad Hoc» profil yarating va iPhone larni belgilang'); go('?p=ios'); }
+        wr('ios/prov', array('b64' => base64_encode($f), 'name' => isset($nm[1]) ? $nm[1] : '', 'exp' => isset($ex[1]) ? strtotime($ex[1]) : 0, 'app' => isset($ap[1]) ? $ap[1] : '', 'n' => count($ud), 't' => time()));
+        $db = rd('ios/devices', array()); foreach ($db as $u => $o) $db[$u]['ok'] = in_array($u, $ud, true) ? 1 : 0; wr('ios/devices', $db);
+        flash('Profil saqlandi: ' . count($ud) . ' ta iPhone. Endi serverda imzolash buyrug\'ini ishga tushiring.'); go('?p=ios');
+    }
+    if ($act === 'ios_ok' || $act === 'ios_del') {           // iPhone: Apple ga qo'shildi / o'chirish
+        $db = rd('ios/devices', array()); $u = strtoupper(pp('u'));
+        if ($act === 'ios_del') unset($db[$u]); elseif ($u === 'ALL') { foreach ($db as $k => $o) $db[$k]['ok'] = 1; } elseif (isset($db[$u])) $db[$u]['ok'] = empty($db[$u]['ok']) ? 1 : 0;
+        wr('ios/devices', $db); flash('Saqlandi'); go('?p=ios');
+    }
     if ($act === 'repkey_new') { $k = rnd(20); wr('repkey', array('h' => hash('sha256', $k), 't' => time())); flash('Yangi o\'qish kaliti (faqat hozir ko\'rinadi, nusxa oling): ' . $k); go('?p=prob'); }
     if ($act === 'repkey_del') { @unlink(XC_DIR . '/repkey.php'); flash('O\'qish kaliti o\'chirildi'); go('?p=prob'); }
     if ($act === 'ann_add' && pp('text') !== '') {
@@ -432,9 +470,23 @@ if ($P === 'installs' && g('csv')) {
     exit;
 }
 
+/* ---------- iPhone: Apple Developer > Devices > "Register Multiple Devices" uchun fayl ---------- */
+if ($P === 'ios' && g('csr')) {
+    $k = rd('ios/key', array());
+    if (empty($k['csr'])) go('?p=ios');
+    header('Content-Type: application/octet-stream'); header('Content-Disposition: attachment; filename="XCLIENT.certSigningRequest"');
+    echo $k['csr']; exit;
+}
+if ($P === 'ios' && g('txt')) {
+    header('Content-Type: text/plain; charset=utf-8'); header('Content-Disposition: attachment; filename="xclient-iphones-' . date('Ymd') . '.txt"');
+    echo "Device ID\tDevice Name\tDevice Platform\n";
+    foreach (rd('ios/devices', array()) as $u => $o) if (g('txt') === 'all' || empty($o['ok'])) echo $u . "\t" . substr(preg_replace('/[^A-Za-z0-9 _\-]/', '', (isset($o['n']) && $o['n'] !== '' ? $o['n'] : 'iPhone') . ' ' . substr($u, -4)), 0, 50) . "\tios\n";
+    exit;
+}
+
 /* ---------- sahifa ---------- */
 $NAV = array('dash' => array('Infopanel', '⌂'), 'online' => array('Onlayn', '●'), 'players' => array("O'yinchilar", '☺'), 'installs' => array("O'rnatishlar", '↓'), 'accounts' => array('Akkauntlar', '✉'),
-    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'stats' => array('Statistika', '★'), 'churn' => array('Ketganlar', '↘'), 'fb' => array('Fikrlar', '✎'), 'clips' => array('Kliplar', '▶'), 'crash' => array('Yiqilishlar', '✖'), 'lag' => array('Lag', '≈'), 'clicks' => array('Tugmalar', '⊙'), 'ret' => array('Natijalar', '↗'), 'funnel' => array('Voronka', '▽'), 'prob' => array('Muammolar', '⚑'), 'menuver' => array('Menyu versiyalari', '⇅'), 'feat' => array('Funksiyalar', '◧'), 'speed' => array('Tezlik', '⚡'), 'promo' => array('Reklama', '$'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
+    'ann' => array("E'lonlar", '!'), 'reports' => array('Xatolar', '⚠'), 'upd' => array('Yangilanishlar', '⟳'), 'packs' => array('Paketlar', '▤'), 'stats' => array('Statistika', '★'), 'churn' => array('Ketganlar', '↘'), 'fb' => array('Fikrlar', '✎'), 'clips' => array('Kliplar', '▶'), 'crash' => array('Yiqilishlar', '✖'), 'lag' => array('Lag', '≈'), 'clicks' => array('Tugmalar', '⊙'), 'ret' => array('Natijalar', '↗'), 'funnel' => array('Voronka', '▽'), 'prob' => array('Muammolar', '⚑'), 'menuver' => array('Menyu versiyalari', '⇅'), 'feat' => array('Funksiyalar', '◧'), 'speed' => array('Tezlik', '⚡'), 'promo' => array('Reklama', '$'), 'ios' => array('iPhone', '\u{F8FF}'), 'tg' => array('Telegram', '➤'), 'api' => array('API', '⌘'), 'settings' => array('Sozlamalar', '⚙'));
 $devCount = count((array)glob(XC_DIR . '/dev/*.php')); $ncCount = count((array)glob(XC_DIR . '/nc/*.php')); $accCount = count((array)glob(XC_DIR . '/users/*.php')); $repCount = count((array)glob(XC_DIR . '/reports/*.php'));
 $fbCount = count((array)glob(XC_DIR . '/feedback/*.php'));
 $badge = array('players' => $devCount + $ncCount, 'installs' => $devCount, 'accounts' => $accCount, 'reports' => $repCount, 'fb' => $fbCount);
@@ -1074,6 +1126,32 @@ if ($P === 'tg') {
 }
 
 /* ===== API ===== */
+if ($P === 'ios') {
+    $db = rd('ios/devices', array()); uasort($db, function ($a, $b) { return $b['t'] - $a['t']; });
+    $new = 0; foreach ($db as $o) if (empty($o['ok'])) $new++;
+    echo '<div class="panel"><div class="ph">iPhone ro\'yxati (' . count($db) . ', yangi: ' . $new . ')</div>'
+        . '<div class="mut small" style="margin-bottom:10px">O\'yinchilar <b>ios.php</b> sahifasida iPhone raqamini yuboradi. Apple yiliga 100 ta iPhone ga ruxsat beradi.<br>'
+        . '1) «Yangilarini yuklab olish» → 2) developer.apple.com → Devices → «+» → Register Multiple Devices → shu faylni yuklang → 3) «Hammasi qo\'shildi» ni bosing → 4) GitHub da iPhone yig\'ishni qayta ishga tushiring (yangi ro\'yxat ilovaga kiradi).</div>'
+        . '<a class="btn" href="?p=ios&txt=new">Yangilarini yuklab olish (txt)</a> <a class="btn" href="?p=ios&txt=all">Hammasi (txt)</a> '
+        . '<form method="post" style="display:inline">' . csrf_in() . '<input type="hidden" name="act" value="ios_ok"><input type="hidden" name="u" value="all"><button class="btn">Hammasi qo\'shildi</button></form></div>';
+    $ik = rd('ios/key', array()); $ic = rd('ios/cert', array()); $ip = rd('ios/prov', array());
+    $st = function ($ok, $t) { return '<span style="color:' . ($ok ? '#3ccf6e' : '#f5c518') . '">' . ($ok ? '✓ ' : '○ ') . $t . '</span>'; };
+    echo '<div class="panel"><div class="ph">Imzo (Apple Developer)</div><div class="mut small" style="margin-bottom:10px">Maxfiy kalit faqat shu serverda turadi. Hech kimga (chatga ham) yubormang.</div>'
+        . '<div class="kv"><span>1. Kalit va CSR</span><b>' . $st(!empty($ik['pem']), !empty($ik['pem']) ? 'bor · <a href="?p=ios&csr=1">CSR ni yuklab olish</a>' : 'yo\'q') . '</b></div>'
+        . (empty($ik['pem']) ? '<form method="post">' . csrf_in() . '<input type="hidden" name="act" value="ios_key"><button class="btn red">Kalit va CSR yaratish</button></form>' : '')
+        . '<div class="kv"><span>2. Sertifikat (.cer)</span><b>' . $st(!empty($ic['pem']), !empty($ic['pem']) ? h($ic['cn']) . ' · ' . dt($ic['to']) . ' gacha' : 'Apple dan «Apple Distribution» sertifikatini yuklang') . '</b></div>'
+        . '<form method="post" enctype="multipart/form-data">' . csrf_in() . '<input type="hidden" name="act" value="ios_cer"><input type="file" name="f" accept=".cer,.crt,.pem"> <button class="btn">Yuklash</button></form>'
+        . '<div class="kv"><span>3. Profil (.mobileprovision)</span><b>' . $st(!empty($ip['b64']), !empty($ip['b64']) ? h($ip['name']) . ' · ' . (int)$ip['n'] . ' iPhone · ' . dt($ip['exp']) . ' gacha' : 'Ad Hoc profil, bundle: uz.cssborka.xclient') . '</b></div>'
+        . '<form method="post" enctype="multipart/form-data">' . csrf_in() . '<input type="hidden" name="act" value="ios_prov"><input type="file" name="f" accept=".mobileprovision"> <button class="btn">Yuklash</button></form>'
+        . '<div class="kv"><span>4. Imzolash (serverda)</span><b>' . (is_file(__DIR__ . '/mobile/X-CLIENT.ipa') ? $st(1, 'mobile/X-CLIENT.ipa · ' . dt(filemtime(__DIR__ . '/mobile/X-CLIENT.ipa'))) : $st(0, 'hali yo\'q')) . '</b></div></div>';
+    echo '<div class="panel"><table class="list"><tr><th>Nik</th><th>iPhone</th><th>UDID</th><th>Yuborgan</th><th>Apple</th><th></th></tr>';
+    foreach ($db as $u => $o) echo '<tr><td>' . h(isset($o['n']) ? $o['n'] : '') . '</td><td>' . h((isset($o['p']) ? $o['p'] : '') . ' · iOS ' . (isset($o['v']) ? $o['v'] : '')) . '</td><td><code>' . h($u) . '</code></td><td>' . dt($o['t']) . '</td>'
+        . '<td>' . (empty($o['ok']) ? '<b style="color:#f5c518">yangi</b>' : '<b style="color:#3ccf6e">qo\'shilgan</b>') . '</td><td>'
+        . '<form method="post" style="display:inline">' . csrf_in() . '<input type="hidden" name="act" value="ios_ok"><input type="hidden" name="u" value="' . h($u) . '"><button class="btn">✓</button></form> '
+        . '<form method="post" style="display:inline">' . csrf_in() . '<input type="hidden" name="act" value="ios_del"><input type="hidden" name="u" value="' . h($u) . '"><button class="btn red">✖</button></form></td></tr>';
+    if (!$db) echo '<tr><td colspan="6" class="mut">Hali hech kim yubormagan. O\'yinchilarga havola: <b>mmb.boost-top.com/ios.php</b></td></tr>';
+    echo '</table></div>';
+}
 if ($P === 'api') {
     $base = 'https://' . (isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'mmb.boost-top.com') . '/admin.php';
     echo '<h1>API kalitlari</h1><div class="panel"><div class="ph">Kalitlar <form method="post" class="inl r">' . csrf_in() . '<input type="hidden" name="act" value="api_new"><input name="name" placeholder="Nomi (masalan: boost-top sayt)"><button class="btn red">Yaratish</button></form></div><table class="list"><tr><th>Nomi</th><th>Kalit</th><th>Yaratilgan</th><th></th></tr>';
