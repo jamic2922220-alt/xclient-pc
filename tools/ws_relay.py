@@ -74,6 +74,86 @@ def frame(data, op=2):
     return h + data
 
 
+# ---- fastdl: server qo'shimcha fayllarini (sv_downloadurl) brauzer o'rniga yuklab berish ----
+# Brauzerdagi dvijok HTTP orqali yuklay olmaydi. Sahifa so'raydi: GET /dl?s=IP:PORT&f=models/x.mdl
+# Ko'prik serverning sv_downloadurl ini (A2S_RULES) bilib, faylni o'sha yerdan olib beradi.
+import re, urllib.request, urllib.parse
+DL_EXT = ('.bsp', '.wad', '.mdl', '.wav', '.spr', '.tga', '.bmp', '.txt', '.res', '.png', '.mp3', '.jpg')
+DL_MAX = 80 << 20
+_rules = {}
+
+
+async def server_rules(ip, port):
+    """GoldSrc A2S_RULES (challenge + bo'lingan paketlar). 10 daqiqa keshlanadi."""
+    k = (ip, port); c = _rules.get(k)
+    if c and time.time() - c[0] < 600:
+        return c[1]
+    loop = asyncio.get_running_loop()
+    q = asyncio.Queue()
+
+    class P(asyncio.DatagramProtocol):
+        def datagram_received(self, d, a):
+            q.put_nowait(d)
+    tr, _ = await loop.create_datagram_endpoint(P, remote_addr=(ip, port))
+    rules = {}
+    try:
+        tr.sendto(b'\xff\xff\xff\xffV\xff\xff\xff\xff')
+        d = await asyncio.wait_for(q.get(), 3)
+        if d[:5] == b'\xff\xff\xff\xffA':
+            tr.sendto(b'\xff\xff\xff\xffV' + d[5:9])
+            d = await asyncio.wait_for(q.get(), 3)
+        if d[:4] == b'\xfe\xff\xff\xff':                       # bo'lingan javob
+            parts, total = {}, None
+            while True:
+                n = d[8]; total = n & 0x0f; parts[n >> 4] = d[9:]
+                if len(parts) >= total:
+                    break
+                d = await asyncio.wait_for(q.get(), 3)
+            d = b''.join(parts[i] for i in sorted(parts))
+        if d[:5] == b'\xff\xff\xff\xffE':
+            f = d[7:].split(b'\x00')
+            for i in range(0, len(f) - 1, 2):
+                rules[f[i].decode('latin1').lower()] = f[i + 1].decode('latin1')
+    except Exception:
+        pass
+    finally:
+        tr.close()
+    _rules[k] = (time.time(), rules)
+    return rules
+
+
+def _fetch(url):
+    req = urllib.request.Request(url, headers={'User-Agent': 'Half-Life'})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        data = r.read(DL_MAX + 1)
+    return None if len(data) > DL_MAX else data
+
+
+async def serve_dl(w, target):
+    q = urllib.parse.parse_qs(urllib.parse.urlsplit(target).query)
+    s, f = (q.get('s') or [''])[0], (q.get('f') or [''])[0].lstrip('/')
+    code, body = 404, b''
+    m = re.match(r'^(\d{1,3}(?:\.\d{1,3}){3}):(\d{2,5})$', s)
+    if m and allowed(m.group(1), int(m.group(2))) and re.match(r'^[A-Za-z0-9_\-./ ]{1,160}$', f) and '..' not in f and f.lower().endswith(DL_EXT):
+        base = (await server_rules(m.group(1), int(m.group(2)))).get('sv_downloadurl', '').strip()
+        u = urllib.parse.urlsplit(base)
+        if u.scheme in ('http', 'https') and u.hostname:
+            try:
+                ok = ipaddress.IPv4Address(socket.gethostbyname(u.hostname)).is_global or ALLOW_PRIVATE
+            except Exception:
+                ok = False
+            if ok:
+                try:
+                    data = await asyncio.to_thread(_fetch, base.rstrip('/') + '/' + urllib.parse.quote(f))
+                    if data is not None:
+                        code, body = 200, data
+                except Exception:
+                    code = 404
+    w.write(('HTTP/1.1 %d %s\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: public, max-age=86400\r\nConnection: close\r\n\r\n'
+             % (code, 'OK' if code == 200 else 'Not Found', len(body))).encode() + body)
+    await w.drain(); w.close()
+
+
 async def handle(r, w):
     global conns
     peer = (w.get_extra_info('peername') or ('?',))[0]
@@ -88,6 +168,9 @@ async def handle(r, w):
             hdrs[k.strip().lower()] = v.strip()
     peer = hdrs.get('x-real-ip', peer)
     key = hdrs.get('sec-websocket-key')
+    target = req.decode('latin1').split('\r\n')[0].split(' ')
+    if not key and len(target) > 1 and target[0] == 'GET' and target[1].startswith('/dl?'):
+        return await serve_dl(w, target[1])
     origin = hdrs.get('origin', '')
     if not key or (origin and not origin.startswith(ORIGINS) and not ALLOW_PRIVATE) or conns >= MAX_CONN or per_ip.get(peer, 0) >= MAX_PER_IP:
         w.write(b'HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n'); await w.drain(); w.close(); return
