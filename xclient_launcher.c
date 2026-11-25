@@ -2550,6 +2550,27 @@ static void dmp_upload(const char *kind)
     }
     free(b);
 }
+/* O'yin ichidagi yiqilish: Windows jurnalida ko'pincha yozuv yo'q ("noevent") - o'yinning tier0.dll i o'zi ushlab, o'yin
+ * papkasiga minidamp (*.mdmp / *.dmp) yozadi. Yiqilishdan keyin paydo bo'lgan eng yangi dampni saytga (admin > damplar) yuboramiz */
+static BOOL game_dump_find(ULONGLONG since)
+{
+    static const wchar_t *pat[] = { L"*.mdmp", L"*.dmp" };
+    ULONGLONG best = 0; wchar_t bp[MAX_PATH] = L"";
+    for (int i = 0; i < 2; i++) {
+        wchar_t q[MAX_PATH]; path_join(q, g_dir, pat[i]);
+        WIN32_FIND_DATAW fd; HANDLE h = FindFirstFileW(q, &fd);
+        if (h == INVALID_HANDLE_VALUE) continue;
+        do {
+            ULONGLONG t = ((ULONGLONG)fd.ftLastWriteTime.dwHighDateTime << 32) | fd.ftLastWriteTime.dwLowDateTime;
+            ULONGLONG sz = ((ULONGLONG)fd.nFileSizeHigh << 32) | fd.nFileSizeLow;
+            if (t >= since && t > best && sz >= 1024 && sz <= 48ULL * 1048576) { best = t; path_join(bp, g_dir, fd.cFileName); }
+        } while (FindNextFileW(h, &fd));
+        FindClose(h);
+    }
+    if (!bp[0]) return FALSE;
+    lstrcpynW(g_dmp, bp, MAX_PATH);
+    return TRUE;
+}
 static void dbg_probe(const wchar_t *exe, const wchar_t *cmd, char *out, size_t cap)
 {
     static DbgMod mods[400]; int nm = 0;
@@ -2954,7 +2975,10 @@ static BOOL run_game(void)
             DWORD since = (DWORD)((t0 / 10000000ULL) - 11644473600ULL);
             g_cmod[0] = 0; Sleep(1500); crash_detail(g_probx, sizeof(g_probx), since);
             if (g_gmem) { size_t pl = strlen(g_probx); _snprintf(g_probx + pl, sizeof(g_probx) - pl, "%%20gmem=%luMB", (unsigned long)g_gmem); g_probx[sizeof(g_probx) - 1] = 0; }   /* yiqilish oldidan o'yin xotirasi */
+            BOOL gd = game_dump_find(t0);           /* o'yin o'zi yozgan damp bo'lsa - qo'shib yuboramiz */
+            if (gd) { size_t pl = strlen(g_probx); _snprintf(g_probx + pl, sizeof(g_probx) - pl, "%%20dmp=1"); g_probx[sizeof(g_probx) - 1] = 0; }
             prob_send("game_crash", 3000); g_probx[0] = 0;
+            if (gd) { dmp_upload("game"); g_dmp[0] = 0; }
             smart_fix(FALSE);                        /* sabab ma'lum bo'lsa (drayver, overlay, antivirus...) - aniq yo'l-yo'riq */
         }
         if (crashed) {
