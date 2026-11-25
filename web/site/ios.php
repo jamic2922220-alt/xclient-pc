@@ -93,55 +93,64 @@ if ($a === 'manifest') {
     exit;
 }
 
-/* ---------- o'yinchi sahifasi ---------- */
+/* ---------- o'yinchi sahifasi ----------
+ * Bepul rejim (hozir): imzosiz mobile/X-CLIENT-ios.ipa yuklab olinadi, o'yinchi o'zi o'rnatadi (Sideloadly - kompyuter orqali).
+ * Pullik rejim (Apple Developer akkaunt bo'lsa): imzolangan mobile/X-CLIENT.ipa bor bo'lsa - UDID ro'yxati + havola orqali o'rnatish */
 header('Content-Type: text/html; charset=utf-8'); header('Cache-Control: no-store');
-$ipa = is_file(__DIR__ . '/mobile/X-CLIENT.ipa');
+$signed = is_file(__DIR__ . '/mobile/X-CLIENT.ipa');
+$free = __DIR__ . '/mobile/X-CLIENT-ios.ipa';
+$freeOk = is_file($free);
+$fv = trim((string)@file_get_contents(__DIR__ . '/mobile/ios_free_ver.txt')); if (!preg_match('/^[0-9.]{1,12}$/', $fv)) $fv = '';
 $install = 'itms-services://?action=download-manifest&url=' . rawurlencode(base_url() . 'ios.php?a=manifest');
 ?><!doctype html>
 <html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>X CLIENT - iPhone</title>
 <style>
-:root{--bg:#0e0f13;--card:#181a21;--fg:#f2f2f5;--mut:#9a9caa;--red:#e5383b;--ok:#3ccf6e;--line:#2a2d38}
+:root{--bg:#0e0f13;--card:#181a21;--fg:#f2f2f5;--mut:#9a9caa;--red:#e5383b;--ok:#3ccf6e;--warn:#f5c518;--line:#2a2d38}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,system-ui,Segoe UI,Roboto,sans-serif}
 .w{max-width:560px;margin:0 auto;padding:24px max(16px,env(safe-area-inset-left)) 40px}
 h1{font-size:26px;margin:8px 0 4px}h1 span{color:var(--red)}.mut{color:var(--mut);font-size:14px}
 .c{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin:16px 0}
 .c h2{font-size:18px;margin:0 0 10px}.n{display:inline-flex;width:26px;height:26px;border-radius:50%;background:var(--red);align-items:center;justify-content:center;font-weight:700;font-size:14px;margin-right:8px}
-ol{padding-left:20px;margin:8px 0}li{margin:4px 0}
+ol{padding-left:20px;margin:8px 0}li{margin:5px 0}a{color:#ff6b6e}
 input{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:#0b0c10;color:var(--fg);font-size:16px;margin:8px 0}
 .b{display:block;text-align:center;background:var(--red);color:#fff;text-decoration:none;font-weight:700;padding:14px;border-radius:12px;border:0;width:100%;font-size:17px}
-.b.g{background:#2a2d38}.ok{border-color:var(--ok)}.ok h2{color:var(--ok)}.bad{border-color:var(--red)}
+.b.g{background:#2a2d38}.ok{border-color:var(--ok)}.ok h2{color:var(--ok)}.bad{border-color:var(--red)}.warn{border-color:var(--warn)}.warn h2{color:var(--warn)}
 </style></head><body><div class="w">
 <h1><span>X</span> CLIENT · iPhone</h1>
-<div class="mut">CS 1.6 iPhone uchun. Kompyuter kerak emas — faqat Safari.</div>
+<div class="mut">CS 1.6 iPhone uchun<?php echo $fv ? ' · versiya ' . h($fv) : ''; ?> · bepul</div>
+<?php if ($signed): ?>
 <?php if (isset($_GET['ok'])): ?>
-<div class="c ok"><h2>✓ iPhone qabul qilindi</h2>
-<div>Raqamingiz ro'yxatga yozildi. Ro'yxatga qo'shilgach (odatda 1 kun ichida), shu sahifadagi <b>«O'yinni o'rnatish»</b> tugmasi ishlaydi.</div>
-<div class="mut" style="margin-top:8px">Endi Sozlamalar → Umumiy → VPN va qurilma boshqaruvi dagi «X CLIENT - iPhone ro'yxati» profilini o'chirib tashlasangiz bo'ladi — u endi kerak emas.</div></div>
-<?php elseif (isset($_GET['err'])): ?>
-<div class="c bad"><h2>Xato</h2><div>iPhone raqamini o'qib bo'lmadi. Qaytadan urinib ko'ring (faqat Safari da).</div></div>
+<div class="c ok"><h2>✓ iPhone qabul qilindi</h2><div>Ro'yxatga qo'shilgach, quyidagi «O'yinni o'rnatish» tugmasi ishlaydi.</div></div>
 <?php endif; ?>
 <div class="c"><h2><span class="n">1</span>iPhone ni ro'yxatga yozish</h2>
-<div class="mut">Bir marta qilinadi. Apple faqat ro'yxatdagi iPhone larga o'rnatishga ruxsat beradi.</div>
-<form method="get" action="ios.php"><input type="hidden" name="a" value="cfg">
-<input name="n" maxlength="24" placeholder="O'yindagi nikingiz" autocomplete="off" required>
+<form method="get" action="ios.php"><input type="hidden" name="a" value="cfg"><input name="n" maxlength="24" placeholder="O'yindagi nikingiz" autocomplete="off" required>
 <button class="b" type="submit">Ro'yxatga yozish</button></form>
-<ol class="mut">
-<li>«Ruxsat berish» ni bosing — profil yuklanadi.</li>
-<li>Sozlamalar ni oching → yuqorida «Profil yuklandi» → «O'rnatish».</li>
-<li>iPhone parolini kiriting. Telefon raqamni yuboradi va shu sahifaga qaytadi.</li>
-</ol></div>
-<div class="c"><h2><span class="n">2</span>O'yinni o'rnatish</h2>
-<?php if ($ipa): ?>
-<a class="b" href="<?php echo h($install); ?>">O'yinni o'rnatish</a>
-<ol class="mut">
-<li>«O'rnatish» ni bosing — ilova bosh ekranda yuklana boshlaydi.</li>
-<li>Birinchi ochishda: Sozlamalar → Maxfiylik va xavfsizlik → <b>Developer Mode</b> ni yoqing (iOS 16+), telefon qayta yonadi.</li>
-<li>Birinchi ochilishda o'yin fayllari yuklanadi (~280 MB, Wi-Fi tavsiya).</li>
-</ol>
-<div class="mut">«Ilovani o'rnatib bo'lmadi» desa — iPhone ingiz hali ro'yxatga qo'shilmagan, biroz kuting.</div>
-<?php else: ?>
-<a class="b g">Tez orada</a><div class="mut" style="margin-top:8px">iPhone versiyasi tayyorlanyapti. Hozir 1-qadamni bajarib qo'ying — tayyor bo'lganda darhol o'rnata olasiz.</div>
+<div class="mut">Safari da oching → «Ruxsat berish» → Sozlamalar → «Profil yuklandi» → «O'rnatish».</div></div>
+<div class="c"><h2><span class="n">2</span>O'yinni o'rnatish (kompyutersiz)</h2><a class="b" href="<?php echo h($install); ?>">O'yinni o'rnatish</a>
+<div class="mut" style="margin-top:8px">«O'rnatib bo'lmadi» desa - iPhone hali ro'yxatda emas.</div></div>
 <?php endif; ?>
+<div class="c"><h2><span class="n"><?php echo $signed ? '3' : '1'; ?></span>iPhone faylini yuklab olish</h2>
+<?php if ($freeOk): ?>
+<a class="b" href="mobile/X-CLIENT-ios.ipa<?php echo $fv ? '?v=' . h($fv) : ''; ?>" download>X-CLIENT.ipa yuklab olish (<?php echo round(filesize($free) / 1048576); ?> MB)</a>
+<div class="mut" style="margin-top:8px">Bu fayl telefonga to'g'ridan-to'g'ri o'rnatilmaydi - Apple qoidasi bo'yicha uni o'z Apple ID ingiz bilan «imzolash» kerak. Quyidagi yo'l bepul.</div>
+<?php else: ?>
+<a class="b g">Tez orada</a>
+<?php endif; ?>
+</div>
+<div class="c"><h2><span class="n"><?php echo $signed ? '4' : '2'; ?></span>O'rnatish (bepul, kompyuter orqali)</h2>
+<ol>
+<li>Kompyuterga <b>Sideloadly</b> ni o'rnating: <a href="https://sideloadly.io" target="_blank" rel="noopener">sideloadly.io</a> (Windows yoki Mac). Windows da <b>iTunes</b> ham kerak - apple.com saytidagisini o'rnating (Microsoft Store dagisi emas).</li>
+<li>iPhone ni kabel bilan kompyuterga ulang, telefonda «Ishonish» ni bosing.</li>
+<li>Sideloadly ni oching, <b>X-CLIENT.ipa</b> faylini oynaga tashlang.</li>
+<li>«Apple account» ga o'z Apple ID (pochta) ingizni yozing → <b>Start</b>. Parolni faqat Sideloadly so'raganda, o'sha oynaga yozing.</li>
+<li>iPhone da: Sozlamalar → Umumiy → <b>VPN va qurilma boshqaruvi</b> → Apple ID ingiz → «Ishonish».</li>
+<li>iOS 16 va yangi: Sozlamalar → Maxfiylik va xavfsizlik → <b>Developer Mode</b> → yoqing (telefon qayta yonadi).</li>
+<li>X CLIENT ni oching - birinchi marta o'yin fayllari yuklanadi (~280 MB, Wi-Fi tavsiya), keyin o'yin o'zi boshlanadi.</li>
+</ol>
+<div class="mut">Bepul Apple ID bilan o'yin <b>7 kun</b> ishlaydi. Keyin iPhone ni yana ulab, Sideloadly da qayta «Start» bosing - o'yin va sozlamalar saqlanib qoladi.</div>
+</div>
+<div class="c warn"><h2>⚠ Telefonning o'zida o'rnatish (ESign, Scarlet va h.k.)</h2>
+<div class="mut">Ba'zi o'yinchilar bu faylni shunday ilovalar orqali kompyutersiz o'rnatadi. Ular boshqa kompaniyalarning sertifikatlaridan foydalanadi: Apple ularni tez-tez bloklaydi, o'yin birdan ochilmay qolishi mumkin, shaxsiy ma'lumotlar uchun ham xavfli. X CLIENT bunga kafolat bermaydi - o'z xavfingizga.</div>
 </div>
 </div></body></html>
