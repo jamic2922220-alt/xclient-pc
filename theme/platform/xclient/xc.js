@@ -1932,6 +1932,9 @@ function ddItems(kind) {
 function monRes() { var m = /^(\d{3,5})x(\d{3,5})$/.exec(OPTS && OPTS.scr || ''); return m ? [+m[1], +m[2]] : null; }
 /* tanlangan o'lcham monitordan ancha kichik (eski tanlov qolib ketgan) - rasm xira. Lagni tuzatish ataylab kichraytirgan bo'lsa - aytmaymiz */
 function resSmall() { var mon = monRes(), m = /^(\d+)x(\d+)$/.exec(OPTS && OPTS.res || ''); return !!(mon && m && +m[1] < mon[0] * 0.75 && OPTS.res !== DB.lagres); }
+/* 4:3 "cho'zilgan" o'ynaydiganlar uchun eng tiniq 4:3 o'lcham (ko'rinish o'sha, piksel ko'proq): 800x600 monitorga 2-3 barobar
+ * cho'zilib xira bo'lardi. Hamma videokartalarda bor standart rejimlar */
+function best43() { var mon = monRes(), h = mon ? mon[1] : 1080; return h >= 960 ? '1280x960' : h >= 768 ? '1024x768' : '800x600'; }
 function resAr(r) { var m = /^(\d+)x(\d+)$/.exec(r || ''); if (!m) return ''; var k = m[1] / m[2]; return k < 1.45 ? '43' : k < 1.7 ? '1610' : '169'; }
 function scrAr() { return DB.ar || resAr(OPTS.res) || resAr(OPTS.scr) || resAr((screen.width || 1920) + 'x' + (screen.height || 1080)) || '169'; }
 function ddValue(kind) { return kind === 'map' ? FMAP : kind === 'mode' ? FMODE : kind === 'xpre' ? E.xp : kind === 'xsz' ? E.xs : OPTS.res || ''; }
@@ -3316,7 +3319,8 @@ var PANES = {
       '<div class="pane r"><div class="ph2">' + esc(T('v_scr')) + '</div>' +
       '<div class="fr"><div class="lb">' + esc(T('v_ar')) + '</div><div class="ct2 seg">' + vseg('ar', scrAr(), [['43', 'v_ar43'], ['169', 'v_ar169'], ['1610', 'v_ar1610']]) + '</div></div>' +
       '<div class="fr"><div class="lb">' + esc(T('sy_screen')) + '</div><div class="ct2"><a class="dd wide" data-dd="res"><span>' + esc(ddLabel('res')) + '</span><i>\u25be</i></a></div></div>' +
-      (resSmall() ? '<div class="chk bad" style="margin:4px 0 8px">' + esc(T('v_small').replace('{m}', monRes().join('\u00d7')).replace('{r}', OPTS.res.replace('x', '\u00d7'))) + ' <a class="btn red" data-act="resauto" style="margin-left:6px">' + esc(T('v_small_go')) + '</a></div>' : '') +
+      (resSmall() ? '<div class="chk bad" style="margin:4px 0 8px">' + esc(T('v_small').replace('{m}', monRes().join('\u00d7')).replace('{r}', OPTS.res.replace('x', '\u00d7'))) + ' <a class="btn red" data-act="resauto" style="margin-left:6px">' + esc(T('v_small_go')) + '</a>' +
+        (resAr(OPTS.res) === '43' && best43() !== OPTS.res ? ' <a class="btn" data-act="res43" style="margin-left:6px">' + esc(T('v_small43').replace('{r}', best43().replace('x', '\u00d7'))) + '</a><div class="mut small" style="margin-top:6px">' + esc(T('v_small43h')) + '</div>' : '') + '</div>' : '') +
       '<div class="fr"><div class="lb">' + esc(T('v_mode')) + '</div><div class="ct2 seg">' + vseg('win', String(winEff()), [['0', 'v_m_full'], ['1', 'v_m_win'], ['2', 'v_m_bl']]) + '</div></div>' +
       '<div class="mut small" style="margin:-4px 0 10px">' + esc(T(winEff() === 2 ? 'v_m_blh' : winEff() === 0 ? 'v_m_fullh' : 'v_m_winh')) + '</div>' +
       tg('vsync', 'v_vsync') + tg('hdm', 'v_hdm', 'v_rs') + tg('addons', 'v_addons', 'v_rs') + votg('stretch', 'v_stretch', 'v_rs') + tg('hor', 'v_hor') +
@@ -4097,6 +4101,7 @@ function act(a) {
   if (a === 'botgo') return botsGo();
   if (a === 'lagfix') return lagFix();
   if (a === 'lagfix2') return lagFix(true);
+  if (a === 'res43') { OPTS.res = best43(); saveOpts(T('v_rs2')); return showSetTab('video'); }   // 4:3 saqlanadi, rasm tiniqroq
   if (a === 'resauto') { OPTS.res = ''; saveOpts(T('v_rs2')); return showSetTab('video'); }   // o'yin monitor o'lchamida (tiniq)
   if (a === 'servers') return openServers('internet');
   if (a === 'friends') return openFriends();
