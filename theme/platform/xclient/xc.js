@@ -536,6 +536,12 @@ function winEff() { var w = OPTS.win | 0; if (w === 0 && !OPTS.winx && !OPTS.res
  * o'yin eski to'liq ekranda ochilib Win+Shift+S / Alt+Tab o'yinni chiqarib yuboradi. Bir marta "Avto" (monitor o'lchami, chegarasiz
  * oyna) ga o'tkazamiz. Tegmaymiz: ataylab 4:3 / boshqa format (cho'zilgan) tanlaganlar, kuchsiz kompyuterda lag tuzatish kichraytirgani */
 function nativeFix() {
+  /* qo'lda "To'liq" tanlangan (Windows 10/11): eksklyuziv to'liq ekranda Win+Shift+S va Alt+Tab o'yinni yig'ib qo'yib qora ekran beradi.
+   * Bir marta "Chegarasiz" ga (ko'rinishi bir xil). Ataylab kichik 4:3 o'lchamdagilarga tegmaymiz - ularga cho'zish uchun To'liq kerak */
+  if (!DB.blfix && (OPTS.win | 0) === 0 && OPTS.winx && HW && /Windows 1[01]/.test(HW.os || '') && (!OPTS.res || resAr(OPTS.res) === resAr((monRes() || [16, 9]).join('x')))) {
+    DB.blfix = 1; persist(); OPTS.win = 2; OPTS.winx = 1;
+    if (!OPTS.res || DB.natfix) { saveOpts(T('bl_fix')); return; }
+  }
   if (DB.natfix || !OPTS.res) return;
   var mon = monRes(), m = /^(\d+)x(\d+)$/.exec(OPTS.res);
   if (!mon || !m) return;

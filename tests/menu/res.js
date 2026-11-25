@@ -4,9 +4,9 @@ const { page } = require('./lib');
 (async () => {
   const { b, p, errs } = await page({ db: { device: 'testdev0005', fx: 1, lang: 'uz', pcid: 'testpc0000001', pck: 'k' }, wait: 1000 });
   const res = []; const ok = (c, m) => res.push((c ? 'ok  ' : 'XATO') + ' ' + m);
-  let saved = null, lagres = '', ores = '800x600';
+  let saved = null, lagres = '', ores = '800x600', extra = {};
   await p.route('**/xc_api.php*', r => { const d = r.request().postData() || '';
-    if (/^a=opts&/.test(d)) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, d: 'testpc0000001', o: { res: lagres || ores, scr: '1920x1080', win: 0, age: 5 } }) });
+    if (/^a=opts&/.test(d)) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, d: 'testpc0000001', o: Object.assign({ res: lagres || ores, scr: '1920x1080', win: 0, age: 5 }, extra) }) });
     if (/^a=opts_set&/.test(d)) { saved = JSON.parse(decodeURIComponent(/o=([^&]*)/.exec(d)[1])); return r.fulfill({ contentType: 'application/json', body: '{"ok":true}' }); }
     return r.continue(); });
   await p.reload(); await p.waitForTimeout(4000);
@@ -30,6 +30,11 @@ const { page } = require('./lib');
   await p.reload(); await p.waitForTimeout(4000);
   ok(saved && saved.res === '', '1280x720 (monitor 1920x1080) - o\'zi Avto ga o\'tdi');
   ok(await p.evaluate(() => JSON.parse(localStorage.getItem('xclient')).natfix === 1), 'bir marta: belgi saqlandi (keyingi ochilishda qayta o\'zgartirilmaydi)');
+  /* qo'lda "To'liq" (winx) + Windows 10 - bir marta Chegarasiz (Win+Shift+S o'yinni yig'masin) */
+  saved = null; ores = ''; extra = { winx: 1, hw: { cpu: 8, ram: 16000 }, os: 'Windows 10 Pro' };
+  await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('xclient')); delete d.blfix; delete d.natfix; localStorage.setItem('xclient', JSON.stringify(d)); });
+  await p.reload(); await p.waitForTimeout(4000);
+  ok(saved && saved.win === 2, "qo'lda To'liq - o'zi Chegarasiz ga o'tdi (" + (saved ? saved.win : '-') + ')');
   const fails = res.filter(x => x.startsWith('XATO'));
   console.log(res.join('\n'));
   console.log((fails.length || errs.length ? 'FAIL' : 'PASS') + ' res (' + (res.length - fails.length) + '/' + res.length + (errs.length ? ', JS xato: ' + errs.join('|') : '') + ')');
