@@ -119,6 +119,9 @@ input{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);ba
 </style></head><body><div class="w">
 <h1><span>X</span> CLIENT · iPhone</h1>
 <div class="mut">CS 1.6 iPhone uchun<?php echo $fv ? ' · versiya ' . h($fv) : ''; ?> · bepul</div>
+<div class="c ok"><h2>▶ Eng oson: brauzerda o'ynash</h2>
+<div>Hech narsa o'rnatilmaydi, kompyuter kerak emas, bepul. Safari da oching → «Ulashish» → <b>«Bosh ekranga qo'shish»</b> - ilova kabi ochiladi.</div>
+<a class="b" style="margin-top:10px" href="play/">Brauzerda o'ynash</a></div>
 <?php if ($signed): ?>
 <?php if (isset($_GET['ok'])): ?>
 <div class="c ok"><h2>✓ iPhone qabul qilindi</h2><div>Ro'yxatga qo'shilgach, quyidagi «O'yinni o'rnatish» tugmasi ishlaydi.</div></div>
