@@ -135,20 +135,24 @@ async def serve_dl(w, target):
     code, body = 404, b''
     m = re.match(r'^(\d{1,3}(?:\.\d{1,3}){3}):(\d{2,5})$', s)
     if m and allowed(m.group(1), int(m.group(2))) and re.match(r'^[A-Za-z0-9_\-./ ]{1,160}$', f) and '..' not in f and f.lower().endswith(DL_EXT):
-        base = (await server_rules(m.group(1), int(m.group(2)))).get('sv_downloadurl', '').strip()
-        u = urllib.parse.urlsplit(base)
-        if u.scheme in ('http', 'https') and u.hostname:
-            try:
-                ok = ipaddress.IPv4Address(socket.gethostbyname(u.hostname)).is_global or ALLOW_PRIVATE
-            except Exception:
-                ok = False
-            if ok:
-                try:
-                    data = await asyncio.to_thread(_fetch, base.rstrip('/') + '/' + urllib.parse.quote(f))
-                    if data is not None:
-                        code, body = 200, data
-                except Exception:
-                    code = 404
+        dl = (await server_rules(m.group(1), int(m.group(2)))).get('sv_downloadurl', '').strip()
+        # sv_downloadurl ko'pincha ommaviy qoidalarda yo'q (faqat ulangan o'yinchiga yuboriladi) - X CLIENT serverlarida fastdl :8090 da
+        for base in ([dl] if dl else []) + ['http://%s:8090/' % m.group(1)]:
+          if code == 200:
+            break
+          u = urllib.parse.urlsplit(base)
+          if u.scheme in ('http', 'https') and u.hostname:
+              try:
+                  ok = ipaddress.IPv4Address(socket.gethostbyname(u.hostname)).is_global or ALLOW_PRIVATE
+              except Exception:
+                  ok = False
+              if ok:
+                  try:
+                      data = await asyncio.to_thread(_fetch, base.rstrip('/') + '/' + urllib.parse.quote(f))
+                      if data is not None:
+                          code, body = 200, data
+                  except Exception:
+                      code = 404
     w.write(('HTTP/1.1 %d %s\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: public, max-age=86400\r\nConnection: close\r\n\r\n'
              % (code, 'OK' if code == 200 else 'Not Found', len(body))).encode() + body)
     await w.drain(); w.close()
