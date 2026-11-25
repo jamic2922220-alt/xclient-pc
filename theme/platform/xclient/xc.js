@@ -466,6 +466,7 @@ function loadOpts() {
     if (r.o.safe && !SAFE) { SAFE = 1; fxClass(); sparks(); }
     if (r.o.cpuhi && now() / 1000 - r.o.cpuhi < 3 * 86400 && DB.cpuhi !== r.o.cpuhi && !(S && S.lowgfx)) { var ch = r.o.cpuhi; setTimeout(function () { cpuHiOffer(ch, 0); }, 9000); }   // oxirgi o'yinda kompyuter kuchi yetmadi
     if (r.o.hw) { HW = r.o.hw; if (r.o.os) HW.os = r.o.os; if (DB.fx == null && hwClass() === 'weak') { DB.fx = 0; persist(); sparks(); api('prob', { k: 'menu_lite', d: PCID || '' }, function () {}); } }   // kuchsiz kompyuter - yengil menyu
+    nativeFix();                                   // HW dan keyin (kuchsiz kompyuterni bilish uchun)
     heroLoad();
     if (!DB.lang && /^(ru|uz|en)$/.test(r.o.ilang || '')) { DB.lang = r.o.ilang; setLang(DB.lang); persist(); }   // o'rnatishda tanlangan til
     var rt = OPTS.rsk ? 1 : 0;                   // radar foni launcherda (1.0.91+); cl_radartype unga mos bo'lsin (qora fonlar - to'liq radar)
@@ -531,6 +532,20 @@ function copyIp(ip, inp) {
 }
 /* launcher qaysi rejimda ochadi: Windows 10/11 + "Avto" o'lcham + o'yinchi o'zi tanlamagan bo'lsa - chegarasiz (launcher 1.0.155+) */
 function winEff() { var w = OPTS.win | 0; if (w === 0 && !OPTS.winx && !OPTS.res && HW && /Windows 1[01]/.test(HW.os || '') && verGE(VERSION, '1.0.155')) return 2; return w; }
+/* O'yin monitordan kichik o'lchamda (masalan 1920x1080 monitorda 1280x720) - rasm cho'zilib menyu, Tab dagi ismlar, yozuvlar xira,
+ * o'yin eski to'liq ekranda ochilib Win+Shift+S / Alt+Tab o'yinni chiqarib yuboradi. Bir marta "Avto" (monitor o'lchami, chegarasiz
+ * oyna) ga o'tkazamiz. Tegmaymiz: ataylab 4:3 / boshqa format (cho'zilgan) tanlaganlar, kuchsiz kompyuterda lag tuzatish kichraytirgani */
+function nativeFix() {
+  if (DB.natfix || !OPTS.res) return;
+  var mon = monRes(), m = /^(\d+)x(\d+)$/.exec(OPTS.res);
+  if (!mon || !m) return;
+  var w = +m[1], h = +m[2];
+  if (w >= mon[0] && h >= mon[1]) { DB.natfix = 1; persist(); return; }
+  if (resAr(OPTS.res) !== resAr(mon[0] + 'x' + mon[1])) return;   // 4:3 cho'zilgan - o'yinchining tanlovi
+  if (OPTS.res === DB.lagres && pcWeak()) return;                   // kuchsiz kompyuterda FPS uchun ataylab kichraytirilgan
+  DB.natfix = 1; persist();
+  OPTS.res = ''; saveOpts(T('nat_fix'));
+}
 function saveOpts(msg) {
   if (!PCID) { toast(T('sy_nolaunch'), 4000); return; }
   api('opts_set', { d: PCID, o: JSON.stringify(OPTS) }, function (r) { toast(r.ok ? (msg || T('sy_next')) : (r.msg || 'Xato'), 3500); });

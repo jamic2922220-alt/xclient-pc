@@ -4,9 +4,9 @@ const { page } = require('./lib');
 (async () => {
   const { b, p, errs } = await page({ db: { device: 'testdev0005', fx: 1, lang: 'uz', pcid: 'testpc0000001', pck: 'k' }, wait: 1000 });
   const res = []; const ok = (c, m) => res.push((c ? 'ok  ' : 'XATO') + ' ' + m);
-  let saved = null, lagres = '';
+  let saved = null, lagres = '', ores = '800x600';
   await p.route('**/xc_api.php*', r => { const d = r.request().postData() || '';
-    if (/^a=opts&/.test(d)) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, d: 'testpc0000001', o: { res: lagres || '800x600', scr: '1920x1080', win: 0, age: 5 } }) });
+    if (/^a=opts&/.test(d)) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, d: 'testpc0000001', o: { res: lagres || ores, scr: '1920x1080', win: 0, age: 5 } }) });
     if (/^a=opts_set&/.test(d)) { saved = JSON.parse(decodeURIComponent(/o=([^&]*)/.exec(d)[1])); return r.fulfill({ contentType: 'application/json', body: '{"ok":true}' }); }
     return r.continue(); });
   await p.reload(); await p.waitForTimeout(4000);
@@ -24,6 +24,12 @@ const { page } = require('./lib');
   await p.click('#setBody [data-dd="res"]'); await p.waitForTimeout(300);
   const dd = await p.evaluate(() => document.getElementById('ddList').textContent);
   ok(/\(1920 × 1080\)/.test(dd) && dd.indexOf('1920 × 1080') >= 0, 'ro\'yxatda "Avto (1920 × 1080)" - monitor o\'lchami, o\'yinniki emas');
+  /* 16:9 monitorda kichik 16:9 o'lcham (1280x720) - bir marta o'zi "Avto" ga (tiniq, skrinshot ishlaydi); 4:3 ga tegmaydi (yuqorida) */
+  saved = null; ores = '1280x720';
+  await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('xclient')); delete d.natfix; localStorage.setItem('xclient', JSON.stringify(d)); });
+  await p.reload(); await p.waitForTimeout(4000);
+  ok(saved && saved.res === '', '1280x720 (monitor 1920x1080) - o\'zi Avto ga o\'tdi');
+  ok(await p.evaluate(() => JSON.parse(localStorage.getItem('xclient')).natfix === 1), 'bir marta: belgi saqlandi (keyingi ochilishda qayta o\'zgartirilmaydi)');
   const fails = res.filter(x => x.startsWith('XATO'));
   console.log(res.join('\n'));
   console.log((fails.length || errs.length ? 'FAIL' : 'PASS') + ' res (' + (res.length - fails.length) + '/' + res.length + (errs.length ? ', JS xato: ' + errs.join('|') : '') + ')');
