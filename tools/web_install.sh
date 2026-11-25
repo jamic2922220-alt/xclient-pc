@@ -23,6 +23,19 @@ wget -q -O /tmp/xc_web.zip "$URL" || { echo "XATO: yuklanmadi"; exit 1; }
 rm -rf "$MMB/play.new" && mkdir -p "$MMB/play.new" && python3 -m zipfile -e /tmp/xc_web.zip "$MMB/play.new" || { echo "XATO: ochilmadi"; exit 1; }
 rm -rf "$MMB/play.old"; [ -d "$MMB/play" ] && mv "$MMB/play" "$MMB/play.old"
 mv "$MMB/play.new" "$MMB/play" && rm -rf "$MMB/play.old" /tmp/xc_web.zip
+# sahifa (index.html, main.js) brauzerda eslab qolinmasin - yangilanish darhol yetib borsin; katta fayllar keshlanadi
+cat > "$MMB/play/.htaccess" <<'HT'
+<IfModule mod_headers.c>
+  <FilesMatch "^(index\.html|main\.js|manifest\.json)$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+</IfModule>
+<IfModule mod_expires.c>
+  <FilesMatch "^(index\.html|main\.js|manifest\.json)$">
+    ExpiresActive Off
+  </FilesMatch>
+</IfModule>
+HT
 chown -R --reference="$MMB" "$MMB/play"
 echo "   -> https://$HOST/play/"
 
