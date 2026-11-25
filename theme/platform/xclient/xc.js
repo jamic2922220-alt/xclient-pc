@@ -383,7 +383,7 @@ function fxLoop() {
  * xc_api.php ga yoziladi va XClient.exe ularni keyingi ishga tushishda bajaradi. */
 function qparam(k) { var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search || ''); return m ? decodeURIComponent(m[1]) : ''; }
 var PCID = /^[a-z0-9]{8,40}$/.test(qparam('xc')) ? qparam('xc') : '';   // kompyuter id (DB.pcid) va uning maxfiy kaliti (DB.pck) load() dan keyin olinadi
-var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, winx: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '', hud: 100, vq: 'mid', dmf: null, vids: null, mic: 0, rb: 1, rbx: 0, rsk: 3, rskx: 0, tune: 1, macc: 1, bgp: 1, dvr: 0, dvroff: 0 }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
+var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, winx: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '', hud: 100, chat: 1, vq: 'mid', dmf: null, vids: null, mic: 0, rb: 1, rbx: 0, rsk: 3, rskx: 0, tune: 1, macc: 1, bgp: 1, dvr: 0, dvroff: 0 }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
 var OPTS_TRY = 0;
 /* To'liq X CLIENT menyusi faqat XCLauncher.exe orqali ochilganda. Menyu saytda turadi va boshqa boost-top sborkalari ham
  * uni ochadi - ularda "sodda rejim": tezkor o'yin, serverlar, sozlamalar + X CLIENT ni yuklab olish kartasi.
@@ -2393,7 +2393,7 @@ var DEF = {
   roll: 0, rollspd: 200, bobv: 0.13, bobl: 0.32, boblow: 8, bobcam: 1, lagsc: 1, lagsp: 8, fovlerp: 0, camsc: 1,
   rtracks: 0, rfull: 1, rbg: 0, rallies: 1, rns: 0.8, rhs: 1, dtime: 6, drpc: 1, drpcs: 1, drpcj: 1, mmusic: 1,
   bob: 0.01, picmip: 0, detail: 0, shadows: 1, minm: 0, interp: 0.01, lw: 1, lc: 1, hisnd: 1, mixa: 0.1, loop: 0, saytm: 5, ngpos: 1, pro: 0, gfxc: '', xgm: 0, xmig: 0, pmig: 0, gmig: 0, brmig: 0,
-  awps: 0, awpz: 1, awpxc: '0 230 255', awpxs: 'small'
+  awps: 0, awpz: 1, awpxc: '0 230 255', awpxs: 'small', dvm: 1, tss: 0, steps: 0
 };
 var S = null, E = null;
 var CVARS = { sens: 'sensitivity', zoom: 'zoom_sensitivity_ratio', raw: 'm_rawinput', filter: 'm_filter', vol: 'volume', vscale: 'voice_scale', voice: 'voice_enable',
@@ -2407,7 +2407,7 @@ var CVARS = { sens: 'sensitivity', zoom: 'zoom_sensitivity_ratio', raw: 'm_rawin
   rtracks: 'hud_radar_tracks', rfull: 'hud_radar_fullmap', rbg: 'hud_radar_bg', rallies: 'hud_radar_allies', rns: 'hud_radar_name_size', rhs: 'hud_radar_health_size',
   dtime: 'hud_deathnotice_time', drpc: 'cl_discordrpc', drpcs: 'cl_discordrpc_server', drpcj: 'cl_discordrpc_join',
   bob: 'cl_bob', picmip: 'gl_picmip', detail: 'r_detailtextures', shadows: 'cl_shadows', minm: 'cl_minmodels', interp: 'ex_interp', lw: 'cl_lw', lc: 'cl_lc',
-  hisnd: 'hisound', mixa: '_snd_mixahead', loop: 'voice_loopback', saytm: 'hud_saytext_time', ngpos: 'net_graphpos' };
+  hisnd: 'hisound', mixa: '_snd_mixahead', dvm: 'r_drawviewmodel', tss: 'hud_takesshots', loop: 'voice_loopback', saytm: 'hud_saytext_time', ngpos: 'net_graphpos' };
 function loadSettings() {
   S = copy(DEF);
   if (DB.set) for (var k in DB.set) if (DB.set.hasOwnProperty(k) && DEF.hasOwnProperty(k)) S[k] = DB.set[k];
@@ -2520,6 +2520,8 @@ function settingsCmds(s) {
   ULTRA_WAS = !!s.ultra;
   /* 10208500 dagi "tiniq teksturalar" o'yinchilarga yoqmadi - bir marta CS 1.6 ning asl qiymatlariga qaytaramiz */
   if (!DB.texrev) { c.push('gl_ansio 16', 'gl_max_size 512', 'gl_texturemode GL_LINEAR_MIPMAP_LINEAR'); DB.texrev = 1; persist(); }
+  /* qurolni yashirish, xarita oxirida avtomatik skrinshot, aniq qadam tovushlari (xona aks-sadosi o'chiq - qadamlar yo'nalishi aniqroq) */
+  c.push('r_drawviewmodel ' + (s.dvm === 0 ? 0 : 1), 'hud_takesshots ' + (s.tss ? 1 : 0), 'room_off ' + (s.steps ? 1 : 0));
   c.push('cl_bob ' + s.bob, 'gl_picmip 0', 'r_detailtextures ' + s.detail, 'cl_shadows ' + s.shadows, 'cl_minmodels 0',
     'ex_interp ' + s.interp, 'cl_lw ' + s.lw, 'cl_lc ' + s.lc, 'voice_loopback ' + s.loop,
     'hud_saytext_time ' + s.saytm, 'net_graphpos ' + s.ngpos);
@@ -3336,7 +3338,7 @@ var PANES = {
   sound: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('so_title')) + '</div>' + sl('vol', 'so_vol', 0, 1, 0.05) + sl('mus', 'so_mus', 0, 1, 0.05) + sl('vscale', 'so_vscale', 0, 2, 0.1) + '</div>' +
       '<div class="pane r"><div class="ph2">&nbsp;</div>' + tg('voice', 'so_voice') + tg('micwarm', 'so_micwarm', 'so_micwarm2') + tg('micfix', 'so_micfix', 'so_micfix2') + tg('loop', 'so_loop') + tg('mute', 'so_mute') + tg('uisnd', 'so_ui', 'so_ui2') +
-      '<div class="ph2 m">' + esc(T('so_q')) + '</div>' + tg('hisnd', 'so_hi') + seg('mixa', 'so_mix', [[0.1, 'so_mix2'], [0.15, 'so_mix3']]) + '</div>';
+      '<div class="ph2 m">' + esc(T('so_q')) + '</div>' + tg('hisnd', 'so_hi') + tg('steps', 'so_steps', 'so_steps2') + seg('mixa', 'so_mix', [[0.1, 'so_mix2'], [0.15, 'so_mix3']]) + '</div>';
   },
   video: function () {
     return '<div class="pane l"><div class="ph2">' + esc(T('v_title')) + '</div>' +
@@ -3508,8 +3510,9 @@ var PANES = {
       return sub + '<div class="pane l hp"><div class="ph2">' + esc(T('h_size')) + '</div>' +
         '<div class="fr"><div class="lb">' + esc(T('h_size2')) + '</div><div class="ct2 seg">' + hz + '</div></div>' +
         '<div class="mut" style="margin:-6px 0 10px;font-size:12px">' + esc(PCID ? T('h_size3') : T('sy_nolaunch')) + '</div>' +
+        '<div class="fr"><div class="lb">' + esc(T('ch_size')) + '</div><div class="ct2 seg">' + vseg('chat', String(OPTS.chat == null ? 1 : OPTS.chat), [['0', 'ch_s'], ['1', 'ch_m'], ['2', 'ch_l']]) + '</div></div>' +
         '<div class="ph2 m">' + esc(T('hx_kill')) + '</div>' + sl('dmax', 'h_kills', 3, 10, 1) + sl('dtime', 'h_dtime', 2, 15, 1, null, 's') + tg('hs', 'h_hs') + '</div>' +
-        '<div class="pane r hp"><div class="ph2">' + esc(T('h_title')) + '</div>' + tg('netg', 'h_net', 'h_net2') + seg('ngpos', 'h_ngpos', [[3, 'h_ng3'], [2, 'h_ng2'], [1, 'h_ng1']]) + tg('cid', 'h_cid') + tg('nover', 'h_draw') + '</div>';
+        '<div class="pane r hp"><div class="ph2">' + esc(T('h_title')) + '</div>' + tg('netg', 'h_net', 'h_net2') + seg('ngpos', 'h_ngpos', [[3, 'h_ng3'], [2, 'h_ng2'], [1, 'h_ng1']]) + tg('cid', 'h_cid') + tg('nover', 'h_draw') + tg('dvm', 'h_dvm', 'h_dvm2') + tg('tss', 'h_tss', 'h_tss2') + '</div>';
     }
     var pal = ['255 59 59', '50 250 50', '0 230 255', '255 210 60', '255 80 220', '255 255 255'];
     if (pal.indexOf(E.xc) < 0 && /^\d+ \d+ \d+$/.test(E.xc)) pal.push(E.xc);
@@ -4579,6 +4582,7 @@ document.onclick = function (e) {
   }
   if ((el = closest(t, 'data-ohud'))) { OPTS.hud = Number(el.getAttribute('data-ohud')); saveOpts(T('h_size4')); showSetTab('hud'); return; }
   if ((el = closest(t, 'data-vseg'))) { var vk = el.getAttribute('data-vseg'), vv = el.getAttribute('data-v');
+    if (vk === 'chat') { OPTS.chat = +vv; saveOpts(T('ch_next')); showSetTab('hud'); return; }
     if (vk === 'ar') { DB.ar = vv; persist(); if (OPTS.res && resAr(OPTS.res) !== vv) { OPTS.res = ''; saveOpts(T('v_rs2')); } }
     else { OPTS.win = +vv; OPTS.winx = 1; saveOpts(T('v_rs2')); }
     showSetTab('video'); return; }

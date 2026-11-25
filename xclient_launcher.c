@@ -1291,7 +1291,7 @@ static BOOL pc_weak(void)
     MEMORYSTATUSEX ms; ms.dwLength = sizeof(ms); SYSTEM_INFO si; GetSystemInfo(&si);
     return si.dwNumberOfProcessors < 4 || (GlobalMemoryStatusEx(&ms) && (ms.ullTotalPhys >> 20) < 6144);
 }
-static int  o_prio = 0, o_shots = 0, o_spray = 0, o_sprays = 0, o_ok = 0, o_hud = 100;   /* o_hud: HUD kattaligi, % */   /* o_ok: sozlamalar saytdan olindi */
+static int  o_prio = 0, o_shots = 0, o_spray = 0, o_sprays = 0, o_ok = 0, o_hud = 100, o_chat = 1;   /* o_hud: HUD kattaligi, %; o_chat: chat yozuvi 0 kichik / 1 o'rta / 2 katta */   /* o_ok: sozlamalar saytdan olindi */
 static char o_res[16] = "", o_packs[256] = "", o_sprayh[72] = "";   /* o_sprayh: spray faylining sha256 (sayt beradi) */
 
 static int jint(const char *b, const char *k, int def)
@@ -1375,7 +1375,7 @@ static void fetch_opts(void)
     o_rsk = jint(r, "rsk", 3); ini_set_int(L"rsk", o_rsk + 1);   /* +1: 0 - "hali yo'q" */
     o_tune = jint(r, "tune", 1); o_macc = jint(r, "macc", 1); o_bgp = jint(r, "bgp", 1); o_dvroff = jint(r, "dvroff", 0);
     if (cr[0]) ini_str(L"t_cr", NULL);
-    o_prio = jint(r, "prio", 0); o_hud = jint(r, "hud", 100); o_shots = jint(r, "shots", 0); o_spray = jint(r, "spray", 0); o_sprays = jint(r, "sprays", 0);
+    o_prio = jint(r, "prio", 0); o_hud = jint(r, "hud", 100); o_chat = jint(r, "chat", 1); o_shots = jint(r, "shots", 0); o_spray = jint(r, "spray", 0); o_sprays = jint(r, "sprays", 0);
     jstr(r, "packs", o_packs, sizeof(o_packs));
     jstr(r, "sprayh", o_sprayh, sizeof(o_sprayh));
     if (strlen(o_sprayh) != 64) o_sprayh[0] = 0;
@@ -2169,6 +2169,36 @@ static void hud_scale_dir(const wchar_t *sub, int pct)
     FILE *f = _wfopen(st, L"wb");
     if (f) { fprintf(f, "%d", pct); fclose(f); }
 }
+/* Chat va ekrandagi o'yin xabarlari EngineFont bilan chiziladi (cstrike/resource/TrackerScheme.res, xc_theme dan keladi).
+ * O'yinchi tanlagan o'lchamga qarab "tall" qiymatlari almashtiriladi (5 ta o'lcham oralig'i). Har ochilishda dizayn qo'yilgandan keyin */
+static void chat_font(void)
+{
+    static const int T[3][5] = { { 12, 13, 14, 20, 24 }, { 14, 16, 18, 22, 26 }, { 16, 19, 22, 26, 30 } };
+    int k = o_chat < 0 || o_chat > 2 ? 1 : o_chat;
+    wchar_t p[MAX_PATH]; path_join(p, g_dir, L"cstrike\\resource\\TrackerScheme.res");
+    long len = 0; char *b = read_all(p, &len);
+    if (!b) return;
+    char *e = strstr(b, "\"EngineFont\""), *end = e ? strstr(e, "\"CreditsFont\"") : NULL;
+    if (!e || !end) { free(b); return; }
+    char *out = (char *)malloc(len + 64); if (!out) { free(b); return; }
+    size_t o = 0; char *c = b; int i = 0; BOOL ch = FALSE;
+    while (*c) {
+        if (c > e && c < end && i < 5 && !strncmp(c, "\"tall\"", 6)) {
+            char *q = strchr(c + 6, '"'), *q2 = q ? strchr(q + 1, '"') : NULL;
+            if (q && q2 && q2 < end) {
+                char num[8]; _snprintf(num, sizeof(num), "%d", T[k][i]); num[7] = 0;
+                size_t pre = (size_t)(q + 1 - c); memcpy(out + o, c, pre); o += pre;
+                if ((size_t)(q2 - q - 1) != strlen(num) || strncmp(q + 1, num, strlen(num))) ch = TRUE;
+                memcpy(out + o, num, strlen(num)); o += strlen(num);
+                c = q2; i++; continue;
+            }
+        }
+        out[o++] = *c++;
+    }
+    out[o] = 0;
+    if (ch) { FILE *f = _wfopen(p, L"wb"); if (f) { fwrite(out, 1, o, f); fclose(f); } }
+    free(out); free(b);
+}
 static void hud_scale(void)
 {
     int pct = o_hud == 150 || o_hud == 200 || o_hud == 125 ? o_hud : 100;
@@ -2745,6 +2775,7 @@ static BOOL run_game(void)
     ensure_scheme();
     ensure_launcher_cfg();
     if (o_ok) hud_scale();
+    if (o_ok) chat_font();                       /* chat yozuvi o'lchami (Sozlamalar > HUD) */
     { int rs = ini_int(L"rsk"); if (!o_ok && rs > 0) o_rsk = rs - 1; }   /* sayt javob bermasa - oxirgi tanlov */
     radar_skin(o_rsk);
     path_join(exe, g_dir, L"cstrike.exe");
