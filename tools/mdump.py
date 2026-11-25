@@ -7,7 +7,7 @@ for f in glob.glob(D + '/*.dmp'):
     except Exception: m = {}
     fs.append((os.path.getmtime(f), f, m))
 fs.sort(reverse=True)
-pick = [x for x in fs if x[2].get('k') == 'start' and (len(sys.argv) < 2 or os.path.basename(x[1]).startswith(sys.argv[1]))]
+pick = [x for x in fs if len(sys.argv) < 2 or os.path.basename(x[1]).startswith(sys.argv[1]) or x[2].get('k') == sys.argv[1]]   # argument: qurilma boshi yoki tur (start/game)
 if not pick: print('damp topilmadi:', [os.path.basename(x[1]) for x in fs[:8]]); sys.exit()
 _, f, meta = pick[0]; b = open(f, 'rb').read()
 print('== FAYL', os.path.basename(f), len(b), meta)
