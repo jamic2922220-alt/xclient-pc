@@ -28,14 +28,23 @@ echo "   -> https://$HOST/play/"
 
 echo "== 2) Ko'prik (WebSocket <-> o'yin serverlari)"
 mkdir -p /opt/xc_relay && wget -qO /opt/xc_relay/ws_relay.py "$RAW/ws_relay.py" || { echo "XATO: ws_relay.py yuklanmadi"; exit 1; }
-# saytning SSL sertifikati (nginx sozlamasidan)
-CONF=$(grep -rls "server_name[^;]*$HOST" /etc/nginx/ 2>/dev/null | head -1)
-CERT=$(grep -h "ssl_certificate " $CONF 2>/dev/null | head -1 | awk '{print $2}' | tr -d ';')
-KEY=$(grep -h "ssl_certificate_key" $CONF 2>/dev/null | head -1 | awk '{print $2}' | tr -d ';')
-if [ ! -f "$CERT" ] || [ ! -f "$KEY" ]; then
-  for d in /etc/letsencrypt/live/$HOST /var/www/httpd-cert; do
-    [ -f "$d/fullchain.pem" ] && CERT=$d/fullchain.pem && KEY=$d/privkey.pem
+# saytning SSL sertifikati (nginx / FastPanel sozlamasidan; qo'shtirnoq, include va boshqa fayllar ham)
+CERT=""; KEY=""
+for CONF in $(grep -rls "$HOST" /etc/nginx/ 2>/dev/null); do
+  C=$(grep -hE "^\s*ssl_certificate\s" "$CONF" | head -1 | sed -E 's/^\s*ssl_certificate\s+//; s/[";]//g; s/\s+$//')
+  K=$(grep -hE "^\s*ssl_certificate_key\s" "$CONF" | head -1 | sed -E 's/^\s*ssl_certificate_key\s+//; s/[";]//g; s/\s+$//')
+  if [ -f "$C" ] && [ -f "$K" ]; then CERT=$C; KEY=$K; echo "   nginx: $CONF"; break; fi
+done
+if [ -z "$CERT" ]; then
+  for C in /var/www/httpd-cert/*/$HOST*.crt /var/www/httpd-cert/$HOST*.crt /etc/letsencrypt/live/$HOST/fullchain.pem; do
+    [ -f "$C" ] || continue
+    K=${C%.crt}.key; [ "${C##*.}" = "pem" ] && K=$(dirname "$C")/privkey.pem
+    [ -f "$K" ] && CERT=$C && KEY=$K && break
   done
+fi
+if [ -z "$CERT" ]; then
+  echo "   topilmadi. nginx dagi ssl qatorlari:"; grep -rhn "ssl_certificate" /etc/nginx/ 2>/dev/null | grep -i "boost" | head -6
+  ls -la /var/www/httpd-cert/ 2>/dev/null | head
 fi
 [ -f "$CERT" ] && [ -f "$KEY" ] || { echo "XATO: $HOST uchun SSL sertifikat topilmadi (nginx: $CONF)"; exit 1; }
 echo "   sertifikat: $CERT"
