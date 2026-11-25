@@ -41,10 +41,13 @@ PY
 echo "== Oxirgi iPhone yig'ishi (GitHub)"
 read -r TAG URL < <(curl -s "https://api.github.com/repos/$REPO/releases?per_page=30" | python3 -c '
 import json, sys
+best = None
 for r in json.load(sys.stdin):
     if r["tag_name"].startswith("ios-build-"):
         a = [x for x in r["assets"] if x["name"].endswith(".ipa")]
-        if a: print(r["tag_name"], a[0]["browser_download_url"]); break')
+        n = int(r["tag_name"].rsplit("-", 1)[1])
+        if a and (best is None or n > best[0]): best = (n, r["tag_name"], a[0]["browser_download_url"])
+if best: print(best[1], best[2])')
 [ -n "$URL" ] || { echo "XATO: GitHub da iPhone yig'ishi topilmadi"; rm -f key.pem; exit 1; }
 VER="1.0.${TAG#ios-build-}"
 echo "   $TAG (versiya $VER)"

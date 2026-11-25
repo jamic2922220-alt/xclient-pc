@@ -13,10 +13,13 @@ REPO=jamic2922220-alt/cssborka.uz-mobile
 echo "== 1) Brauzer versiyasi (GitHub)"
 read -r TAG URL < <(curl -s "https://api.github.com/repos/$REPO/releases?per_page=30" | python3 -c '
 import json, sys
+best = None
 for r in json.load(sys.stdin):
     if r["tag_name"].startswith("web-build-"):
         a = [x for x in r["assets"] if x["name"] == "xc_web.zip"]
-        if a: print(r["tag_name"], a[0]["browser_download_url"]); break')
+        n = int(r["tag_name"].rsplit("-", 1)[1])
+        if a and (best is None or n > best[0]): best = (n, r["tag_name"], a[0]["browser_download_url"])
+if best: print(best[1], best[2])')
 [ -n "$URL" ] || { echo "XATO: GitHub da web-build topilmadi"; exit 1; }
 echo "   $TAG"
 wget -q -O /tmp/xc_web.zip "$URL" || { echo "XATO: yuklanmadi"; exit 1; }
