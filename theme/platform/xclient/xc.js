@@ -188,7 +188,9 @@ function fit() {
   /* Kichik ekranda (z < 1) "zoom" bilan o'yin brauzeri matnni kichraytirmaydi (eng kichik shrift chegarasi) -
    * yozuvlar kattalashib, oynadan chiqib ketardi. Shuning uchun kichraytirish transform bilan: hammasi bir xil
    * nisbatda kichrayadi. Katta ekranda (z >= 1) zoom - matn tiniq qoladi. */
-  if (z < 1) {
+  /* 0.6 dan katta (1024x768 va undan katta ekranlar) - zoom: matn har safar o'z o'lchamida chiziladi, tiniq (transform rasmni
+   * kichraytirib xira qilardi). Juda kichik ekranda (800x600, 640x480) - transform: zoom da eng kichik shrift chegarasi yozuvlarni chiqarib yuborardi */
+  if (z < 0.6) {
     app.style.zoom = 1;
     app.style.webkitTransformOrigin = '0 0'; app.style.transformOrigin = '0 0';
     app.style.webkitTransform = 'scale(' + z + ')'; app.style.transform = 'scale(' + z + ')';
@@ -2492,6 +2494,9 @@ function settingsCmds(s) {
   if (s.ultra) c.push('cl_weather 0', 'gl_spriteblend 0', 'violence_hblood 0', 'violence_hgibs 0', 'cl_corpsestay 0', 'r_mirroralpha 0', 'gl_wateramp 0', 'gl_keeptjunctions 0');
   else if (s.ultra === 0 && ULTRA_WAS) c.push('cl_weather 1', 'gl_spriteblend 1', 'violence_hblood 1', 'violence_hgibs 1', 'cl_corpsestay 600', 'r_mirroralpha 1', 'gl_keeptjunctions 1');
   ULTRA_WAS = !!s.ultra;
+  /* tiniq teksturalar: anizotrop filtr (qiya devor/pollar xiralashmaydi), trilinear, katta teksturalar kichraytirilmaydi.
+   * Faqat kuchli kompyuterda (4+ yadro, 6+ GB) va yengil grafika yoqilmagan bo'lsa - kuchsizda FPS tushmasin */
+  if (HW && !pcWeak() && !s.lowgfx && !s.ultra) c.push('gl_ansio 8', 'gl_texturemode GL_LINEAR_MIPMAP_LINEAR', 'gl_max_size 1024');
   c.push('cl_bob ' + s.bob, 'gl_picmip 0', 'r_detailtextures ' + s.detail, 'cl_shadows ' + s.shadows, 'cl_minmodels 0',
     'ex_interp ' + s.interp, 'cl_lw ' + s.lw, 'cl_lc ' + s.lc, 'voice_loopback ' + s.loop,
     'hud_saytext_time ' + s.saytm, 'net_graphpos ' + s.ngpos);
