@@ -24,17 +24,32 @@ const { page } = require('./lib');
   await p.click('#setBody [data-dd="res"]'); await p.waitForTimeout(300);
   const dd = await p.evaluate(() => document.getElementById('ddList').textContent);
   ok(/\(1920 × 1080\)/.test(dd) && dd.indexOf('1920 × 1080') >= 0, 'ro\'yxatda "Avto (1920 × 1080)" - monitor o\'lchami, o\'yinniki emas');
-  /* 16:9 monitorda kichik 16:9 o'lcham (1280x720) - bir marta o'zi "Avto" ga (tiniq, skrinshot ishlaydi); 4:3 ga tegmaydi (yuqorida) */
-  saved = null; ores = '1280x720';
-  await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('xclient')); delete d.natfix; localStorage.setItem('xclient', JSON.stringify(d)); });
-  await p.reload(); await p.waitForTimeout(4000);
-  ok(saved && saved.res === '', '1280x720 (monitor 1920x1080) - o\'zi Avto ga o\'tdi');
-  ok(await p.evaluate(() => JSON.parse(localStorage.getItem('xclient')).natfix === 1), 'bir marta: belgi saqlandi (keyingi ochilishda qayta o\'zgartirilmaydi)');
-  /* qo'lda "To'liq" (winx) + Windows 10 - bir marta Chegarasiz (Win+Shift+S o'yinni yig'masin) */
-  saved = null; ores = ''; extra = { winx: 1, hw: { cpu: 8, ram: 16000 }, os: 'Windows 10 Pro' };
-  await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('xclient')); delete d.blfix; delete d.natfix; localStorage.setItem('xclient', JSON.stringify(d)); });
-  await p.reload(); await p.waitForTimeout(4000);
-  ok(saved && saved.win === 2, "qo'lda To'liq - o'zi Chegarasiz ga o'tdi (" + (saved ? saved.win : '-') + ')');
+  /* lib har yuklashda localStorage ni tiklaydi - belgilarni sessionStorage orqali undan keyin qo'yamiz */
+  await p.addInitScript(() => { try { const x = JSON.parse(sessionStorage.getItem('xdbx') || 'null'); if (!x) return; const d = JSON.parse(localStorage.getItem('xclient')); for (const k in x) { if (x[k] === null) delete d[k]; else d[k] = x[k]; } localStorage.setItem('xclient', JSON.stringify(d)); } catch (e) {} });
+  const setDb = (o) => p.evaluate((o) => sessionStorage.setItem('xdbx', JSON.stringify(o)), o);
+  /* kichik o'lcham endi o'zi "Avto" ga o'tmaydi (FPS tushardi) */
+  saved = null; ores = '1280x720'; extra = { hw: { cpu: 8, ram: 16000, gpu: 'NVIDIA GeForce GTX 1060' }, os: 'Windows 10 Pro' };
+  await setDb({ natfix: null, fpsrev: 1 }); await p.reload(); await p.waitForTimeout(4000);
+  ok(!saved, '1280x720 (monitor 1920x1080) - o\'zgartirilmadi (' + (saved ? saved.res : '-') + ')');
+  /* avval monitor o'lchamiga o'tkazilgan + ichki videokarta - bir marta 1280x720 ga qaytadi */
+  saved = null; ores = ''; extra = { hw: { cpu: 4, ram: 8000, gpu: 'Intel(R) UHD Graphics' }, os: 'Windows 10 Pro' };
+  await setDb({ natfix: 1, fpsrev: null }); await p.reload(); await p.waitForTimeout(4000);
+  ok(saved && saved.res === '1280x720', 'ichki videokarta: o\'lcham 1280x720 ga qaytdi (' + (saved ? saved.res : '-') + ')');
+  /* kuchli kompyuter: tegilmaydi */
+  saved = null; extra = { hw: { cpu: 8, ram: 16000, gpu: 'NVIDIA GeForce GTX 1060' }, os: 'Windows 10 Pro' };
+  await setDb({ natfix: 1, fpsrev: null, lagres: null }); await p.reload(); await p.waitForTimeout(4000);
+  ok(!saved || saved.res === '', 'kuchli kompyuter: Avto qoladi');
+  /* chegarasizga o'tkazilgan ichki videokarta - yana To'liq */
+  saved = null; extra = { win: 2, winx: 1, hw: { cpu: 4, ram: 8000, gpu: 'Intel(R) HD Graphics 620' }, os: 'Windows 10 Pro' };
+  await setDb({ natfix: null, blfix: 1, fpsrev: null }); await p.reload(); await p.waitForTimeout(4000);
+  ok(saved && saved.win === 0, 'ichki videokarta: chegarasizdan yana To\'liq ga (' + (saved ? saved.win : '-') + ')');
+  /* qo'lda "To'liq" (winx) + Windows 10 + kuchli kompyuter - bir marta Chegarasiz; ichki videokartada - yo'q */
+  saved = null; extra = { winx: 1, hw: { cpu: 8, ram: 16000, gpu: 'NVIDIA GeForce GTX 1060' }, os: 'Windows 10 Pro' };
+  await setDb({ blfix: null, natfix: null, fpsrev: 1 }); await p.reload(); await p.waitForTimeout(4000);
+  ok(saved && saved.win === 2, "kuchli: qo'lda To'liq - o'zi Chegarasiz ga o'tdi (" + (saved ? saved.win : '-') + ')');
+  saved = null; extra = { winx: 1, hw: { cpu: 4, ram: 8000, gpu: 'Intel(R) UHD Graphics' }, os: 'Windows 10 Pro' };
+  await setDb({ blfix: null, fpsrev: 1 }); await p.reload(); await p.waitForTimeout(4000);
+  ok(!saved, "ichki videokarta: To'liq qoladi");
   const fails = res.filter(x => x.startsWith('XATO'));
   console.log(res.join('\n'));
   console.log((fails.length || errs.length ? 'FAIL' : 'PASS') + ' res (' + (res.length - fails.length) + '/' + res.length + (errs.length ? ', JS xato: ' + errs.join('|') : '') + ')');

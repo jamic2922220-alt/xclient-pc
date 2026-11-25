@@ -535,22 +535,27 @@ function winEff() { var w = OPTS.win | 0; if (w === 0 && !OPTS.winx && !OPTS.res
 /* O'yin monitordan kichik o'lchamda (masalan 1920x1080 monitorda 1280x720) - rasm cho'zilib menyu, Tab dagi ismlar, yozuvlar xira,
  * o'yin eski to'liq ekranda ochilib Win+Shift+S / Alt+Tab o'yinni chiqarib yuboradi. Bir marta "Avto" (monitor o'lchami, chegarasiz
  * oyna) ga o'tkazamiz. Tegmaymiz: ataylab 4:3 / boshqa format (cho'zilgan) tanlaganlar, kuchsiz kompyuterda lag tuzatish kichraytirgani */
+/* ichki (protsessordagi) videokarta yoki kuchsiz kompyuter: katta o'lcham va chegarasiz oyna FPS ni sezilarli tushiradi */
+function fpsWeak() { return pcWeak() || hwClass() === 'weak' || /intel|radeon\(tm\) (vega|graphics)|vega \d/i.test(HW && HW.gpu || ''); }
+function lowRes() { var a = resAr(OPTS.scr) || '169'; return a === '43' ? '1024x768' : a === '1610' ? '1280x800' : '1280x720'; }
 function nativeFix() {
-  /* qo'lda "To'liq" tanlangan (Windows 10/11): eksklyuziv to'liq ekranda Win+Shift+S va Alt+Tab o'yinni yig'ib qo'yib qora ekran beradi.
-   * Bir marta "Chegarasiz" ga (ko'rinishi bir xil). Ataylab kichik 4:3 o'lchamdagilarga tegmaymiz - ularga cho'zish uchun To'liq kerak */
-  if (!DB.blfix && (OPTS.win | 0) === 0 && OPTS.winx && HW && /Windows 1[01]/.test(HW.os || '') && (!OPTS.res || resAr(OPTS.res) === resAr((monRes() || [16, 9]).join('x')))) {
-    DB.blfix = 1; persist(); OPTS.win = 2; OPTS.winx = 1;
-    if (!OPTS.res || DB.natfix) { saveOpts(T('bl_fix')); return; }
+  /* 10208700/10208800 dagi avtomatik "monitor o'lchami" va "chegarasiz oyna" ko'p kompyuterda FPS ni tushirdi (o'yinchilar: "qotyapti").
+   * Bir marta qaytaramiz: o'lchami kattalashtirilganlarga - lagni tuzatishdagi o'lcham yoki (kuchsiz/ichki videokartada) 1280x720;
+   * kuchsiz/ichki videokartada chegarasiz oynadan yana to'liq ekranga. Bundan keyin o'lchamga o'zimiz tegmaymiz */
+  if (!DB.fpsrev) {
+    DB.fpsrev = 1; persist();
+    var ch = 0, mon = monRes();
+    if (DB.natfix === 1 && !OPTS.res && mon && mon[0] > 1280) {
+      var to = DB.lagres || (fpsWeak() ? lowRes() : '');
+      if (to) { OPTS.res = to; DB.lagres = to; persist(); ch = 1; }
+    }
+    if (DB.blfix && (OPTS.win | 0) === 2 && fpsWeak()) { OPTS.win = 0; ch = 1; }
+    if (ch) { saveOpts(T('fps_rev')); return; }
   }
-  if (DB.natfix || !OPTS.res) return;
-  var mon = monRes(), m = /^(\d+)x(\d+)$/.exec(OPTS.res);
-  if (!mon || !m) return;
-  var w = +m[1], h = +m[2];
-  if (w >= mon[0] && h >= mon[1]) { DB.natfix = 1; persist(); return; }
-  if (resAr(OPTS.res) !== resAr(mon[0] + 'x' + mon[1])) return;   // 4:3 cho'zilgan - o'yinchining tanlovi
-  if (OPTS.res === DB.lagres && pcWeak()) return;                   // kuchsiz kompyuterda FPS uchun ataylab kichraytirilgan
-  DB.natfix = 1; persist();
-  OPTS.res = ''; saveOpts(T('nat_fix'));
+  /* qo'lda "To'liq" (Windows 10/11): eksklyuziv to'liq ekranda Win+Shift+S o'yinni yig'ib qo'yadi - faqat kuchli kompyuterda chegarasizga */
+  if (!DB.blfix && (OPTS.win | 0) === 0 && OPTS.winx && HW && !fpsWeak() && /Windows 1[01]/.test(HW.os || '') && (!OPTS.res || resAr(OPTS.res) === resAr((monRes() || [16, 9]).join('x')))) {
+    DB.blfix = 1; persist(); OPTS.win = 2; OPTS.winx = 1; saveOpts(T('bl_fix'));
+  }
 }
 function saveOpts(msg) {
   if (!PCID) { toast(T('sy_nolaunch'), 4000); return; }
