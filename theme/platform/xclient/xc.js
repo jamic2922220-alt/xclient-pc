@@ -2365,13 +2365,13 @@ var DEF = {
   name: '', tag: 'X | ', net: 'fast', aimnet: 1, dl: 1, spray: 1, mp3off: 0, hand: 1, fastsw: 1, aws: 1, buykeys: 0, queue: 1, reconn: 1, rest: 0, demo: 0, dmig: 0, dmig2: 0,
   sens: 2.5, zoom: 1.2, raw: 1, filter: 0, inv: 0,
   vol: 0.8, mus: 0.4, voice: 1, vscale: 1, mute: 1, micwarm: 1, micfix: 0,
-  fps: 100, showfps: 0, uisnd: 1, uics: 0, uimig: 0, ultra: 0, ann: 1, gamma: 2.5, bright: 1, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
+  fps: 100, showfps: 0, uisnd: 1, uics: 0, uimig: 0, ultra: 0, ann: 1, gamma: 2.6, bright: 2, fov: 90, vmfov: 90, hor: 1, vsync: 0, dyn: 1, decals: 1000,
   xp: 'pro', xt: 0, xs: 'small', xc: '50 250 50', xtr: 0, xdyn: 0, xthick: 1, xgap: 3, xout: 0, netg: 0, hs: 1, radar: 1, cid: 1, nover: 1, dmax: 5,
   rscale: 115, ropac: 100, rnames: 0, rhp: 0, rmode: 1, rround: 1, rrot: 1, rmap: 0.8,
   vmx: 0, vmy: 0, vmz: 0, vmshift: 0, bobst: 0, lagst: 0, camint: 0,
   roll: 0, rollspd: 200, bobv: 0.13, bobl: 0.32, boblow: 8, bobcam: 1, lagsc: 1, lagsp: 8, fovlerp: 0, camsc: 1,
   rtracks: 0, rfull: 1, rbg: 0, rallies: 1, rns: 0.8, rhs: 1, dtime: 6, drpc: 1, drpcs: 1, drpcj: 1, mmusic: 1,
-  bob: 0.01, picmip: 0, detail: 0, shadows: 1, minm: 0, interp: 0.01, lw: 1, lc: 1, hisnd: 1, mixa: 0.1, loop: 0, saytm: 5, ngpos: 1, pro: 0, gfxc: '', xgm: 0, xmig: 0, pmig: 0, gmig: 0,
+  bob: 0.01, picmip: 0, detail: 0, shadows: 1, minm: 0, interp: 0.01, lw: 1, lc: 1, hisnd: 1, mixa: 0.1, loop: 0, saytm: 5, ngpos: 1, pro: 0, gfxc: '', xgm: 0, xmig: 0, pmig: 0, gmig: 0, brmig: 0,
   awps: 0, awpz: 1, awpxc: '0 230 255', awpxs: 'small'
 };
 var S = null, E = null;
@@ -2409,6 +2409,9 @@ function loadSettings() {
     S.detail = 0; if (gm) S.gamma = 2.5; S.gmig = 1; if (DB.set) DB.set = S;
     cmd('r_detailtextures 0'); if (gm) cmd('gamma 2.5');   // saqlangan sozlamasi yo'q o'yinchida ham o'yinga darhol
   }
+  /* yorqinroq (egasining talabi): o'zgartirmagan o'yinchilarga yangi standart. Gamma 2.6 dan oshmaydi - baland gamma xaritalarni
+   * g'alati ko'rsatgan edi (gmig), asosiy yorug'lik brightness bilan */
+  if (!S.brmig) { if (S.gamma === 2.5 && (S.bright === 1 || S.bright == null)) { S.gamma = 2.6; S.bright = 2; } S.brmig = 1; if (DB.set) DB.set = S; }
   if (S.gfxc) {
     // CS 1.6 standarti: detal teksturalar o'chiq, soya va yorug'lik yoqiq
     var g = { detail: 0, shadows: 1, dyn: 1 };
@@ -2494,9 +2497,8 @@ function settingsCmds(s) {
   if (s.ultra) c.push('cl_weather 0', 'gl_spriteblend 0', 'violence_hblood 0', 'violence_hgibs 0', 'cl_corpsestay 0', 'r_mirroralpha 0', 'gl_wateramp 0', 'gl_keeptjunctions 0');
   else if (s.ultra === 0 && ULTRA_WAS) c.push('cl_weather 1', 'gl_spriteblend 1', 'violence_hblood 1', 'violence_hgibs 1', 'cl_corpsestay 600', 'r_mirroralpha 1', 'gl_keeptjunctions 1');
   ULTRA_WAS = !!s.ultra;
-  /* tiniq teksturalar: anizotrop filtr (qiya devor/pollar xiralashmaydi), trilinear, katta teksturalar kichraytirilmaydi.
-   * Faqat kuchli kompyuterda (4+ yadro, 6+ GB) va yengil grafika yoqilmagan bo'lsa - kuchsizda FPS tushmasin */
-  if (HW && !pcWeak() && !s.lowgfx && !s.ultra) c.push('gl_ansio 8', 'gl_texturemode GL_LINEAR_MIPMAP_LINEAR', 'gl_max_size 1024');
+  /* 10208500 dagi "tiniq teksturalar" o'yinchilarga yoqmadi - bir marta CS 1.6 ning asl qiymatlariga qaytaramiz */
+  if (!DB.texrev) { c.push('gl_ansio 16', 'gl_max_size 512', 'gl_texturemode GL_LINEAR_MIPMAP_LINEAR'); DB.texrev = 1; persist(); }
   c.push('cl_bob ' + s.bob, 'gl_picmip 0', 'r_detailtextures ' + s.detail, 'cl_shadows ' + s.shadows, 'cl_minmodels 0',
     'ex_interp ' + s.interp, 'cl_lw ' + s.lw, 'cl_lc ' + s.lc, 'voice_loopback ' + s.loop,
     'hud_saytext_time ' + s.saytm, 'net_graphpos ' + s.ngpos);
