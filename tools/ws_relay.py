@@ -89,7 +89,7 @@ async def handle(r, w):
     peer = hdrs.get('x-real-ip', peer)
     key = hdrs.get('sec-websocket-key')
     origin = hdrs.get('origin', '')
-    if not key or (origin and not origin.startswith(ORIGINS)) or conns >= MAX_CONN or per_ip.get(peer, 0) >= MAX_PER_IP:
+    if not key or (origin and not origin.startswith(ORIGINS) and not ALLOW_PRIVATE) or conns >= MAX_CONN or per_ip.get(peer, 0) >= MAX_PER_IP:
         w.write(b'HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n'); await w.drain(); w.close(); return
     acc = base64.b64encode(hashlib.sha1(key.encode() + GUID).digest())
     w.write(b'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + acc + b'\r\n\r\n')
