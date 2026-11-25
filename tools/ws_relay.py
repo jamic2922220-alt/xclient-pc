@@ -158,6 +158,23 @@ async def serve_dl(w, target):
     await w.drain(); w.close()
 
 
+# ---- diagnostika: brauzerdagi o'yin qotib qolsa jurnal tagini shu yerga yuboradi (xotirada, oxirgi 30 ta; IP saqlanmaydi) ----
+import json, collections
+_dbg = collections.deque(maxlen=30)
+
+
+async def serve_dbg(r, w, method, hdrs):
+    if method == 'POST':
+        n = min(int(hdrs.get('content-length', '0') or 0), 40000)
+        body = (await r.readexactly(n)).decode('utf-8', 'replace') if n > 0 else ''
+        _dbg.append({'t': int(time.time()), 'log': body[-12000:]})
+        out = b'{"ok":true}'
+    else:
+        out = json.dumps(list(_dbg)[::-1], ensure_ascii=False).encode()
+    w.write(b'HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: ' + str(len(out)).encode() + b'\r\nConnection: close\r\n\r\n' + out)
+    await w.drain(); w.close()
+
+
 async def handle(r, w):
     global conns
     peer = (w.get_extra_info('peername') or ('?',))[0]
@@ -175,6 +192,8 @@ async def handle(r, w):
     target = req.decode('latin1').split('\r\n')[0].split(' ')
     if not key and len(target) > 1 and target[0] == 'GET' and target[1].startswith('/dl?'):
         return await serve_dl(w, target[1])
+    if not key and len(target) > 1 and target[0] in ('GET', 'POST') and target[1].split('?')[0] == '/dbg':
+        return await serve_dbg(r, w, target[0], hdrs)
     origin = hdrs.get('origin', '')
     if not key or (origin and not origin.startswith(ORIGINS) and not ALLOW_PRIVATE) or conns >= MAX_CONN or per_ip.get(peer, 0) >= MAX_PER_IP:
         w.write(b'HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n'); await w.drain(); w.close(); return
