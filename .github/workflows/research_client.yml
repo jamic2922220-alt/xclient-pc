@@ -1,0 +1,51 @@
+# Vaqtinchalik tadqiqot: CS 1.6 yig'masini o'rnatib, client.dll / hw.dll / NextClient tuzilishini o'rganish (o'yinchilarga ta'sir qilmaydi)
+name: research-client
+on:
+  push:
+    branches: [claude/research-client]
+jobs:
+  scan:
+    runs-on: windows-latest
+    steps:
+      - name: O'yinni yuklab o'rnatish
+        shell: pwsh
+        run: |
+          curl.exe -fsSL --retry 3 -o game.exe "https://cssborka.uz/uploads/files/1791198609_6ac38591b615c_CS_1_6_boost-top_PRO_2_5_3.exe"
+          Start-Process -Wait -FilePath .\game.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/NOICONS','/DIR=C:\cs'
+          Get-ChildItem C:\cs -Recurse -Include *.dll,*.exe,*.ini,*.cfg -File | Where-Object { $_.FullName -notmatch '\\maps\\|\\sound\\|\\models\\' } | Select-Object @{n='f';e={$_.FullName.Replace('C:\cs\','')}},Length | Format-Table -AutoSize | Out-String -Width 300 | Out-File files.txt
+          Get-Content files.txt | Select-Object -First 300
+      - name: PE tahlili (import/export, satrlar)
+        shell: pwsh
+        run: |
+          pip install pefile | Out-Null
+          @'
+          import pefile, os, re, sys
+          root = r'C:\cs'
+          out = open('pe.txt', 'w', encoding='utf-8')
+          for rel in ['hl.exe', 'cstrike.exe', 'hw.dll', 'sw.dll', 'client.dll', r'cstrike\cl_dlls\client.dll', r'valve\cl_dlls\client.dll', 'tier0.dll', 'vstdlib.dll', 'next_lib.dll', 'libcef.dll', 'filesystem_stdio.dll', r'cstrike\dlls\mp.dll']:
+              p = os.path.join(root, rel)
+              if not os.path.exists(p): out.write('== %s: YOQ\n' % rel); continue
+              out.write('== %s (%d bayt)\n' % (rel, os.path.getsize(p)))
+              try:
+                  pe = pefile.PE(p)
+                  out.write('  ImageBase=%x DllChar=%x sections=%s\n' % (pe.OPTIONAL_HEADER.ImageBase, pe.OPTIONAL_HEADER.DllCharacteristics, [s.Name.rstrip(b'\0').decode('latin1') for s in pe.sections]))
+                  if hasattr(pe, 'DIRECTORY_ENTRY_IMPORT'):
+                      for e in pe.DIRECTORY_ENTRY_IMPORT: out.write('  import %s (%d)\n' % (e.dll.decode('latin1'), len(e.imports)))
+                  if hasattr(pe, 'DIRECTORY_ENTRY_EXPORT'):
+                      ex = [s.name.decode('latin1') for s in pe.DIRECTORY_ENTRY_EXPORT.symbols if s.name]
+                      out.write('  exports %d: %s\n' % (len(ex), ', '.join(ex[:60])))
+              except Exception as e: out.write('  pe xato: %s\n' % e)
+              b = open(p, 'rb').read()
+              for kw in [b'NextClient', b'nextclient', b'libcef', b'cef_', b'xash', b'Xash', b'cl_crosshair', b'crosshair', b'HUD_Redraw', b'Initialize', b'F(', b'protect', b'Themida', b'VMProtect', b'.vmp', b'enigma']:
+                  n = b.count(kw)
+                  if n: out.write('  satr %r: %d\n' % (kw.decode(), n))
+          out.close()
+          '@ | Out-File -Encoding utf8 pe.py
+          python pe.py
+          Get-Content pe.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research
+          path: |
+            files.txt
+            pe.txt
