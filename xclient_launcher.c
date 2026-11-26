@@ -450,9 +450,14 @@ static int sync_files(const UpdInfo *u, BOOL *selfUpdated)
     static const char RAWP[] = "https://raw.githubusercontent.com/jamic2922220-alt/xclient-pc/";
     char mir[300] = "";
     if (!_strnicmp(u->base, RAWP, sizeof(RAWP) - 1)) { _snprintf(mir, sizeof(mir), "https://cdn.jsdelivr.net/gh/jamic2922220-alt/xclient-pc@%s", u->base + sizeof(RAWP) - 1); mir[sizeof(mir) - 1] = 0; }
+    /* 2-zaxira: o'z saytimiz (Windows 7 GitHub/jsDelivr ning yangi shifrlariga ulana olmaydi). Faqat shu commit (40 belgi) */
+    char mir2[200] = "";
+    { const char *sh = u->base + sizeof(RAWP) - 1; size_t hl = 0; while (isxdigit((unsigned char)sh[hl])) hl++;
+      if (!_strnicmp(u->base, RAWP, sizeof(RAWP) - 1) && hl == 40 && !sh[40]) { _snprintf(mir2, sizeof(mir2), "https://mmb.boost-top.com/xclient/f.php?s=%.40s&p=", sh); mir2[sizeof(mir2) - 1] = 0; } }
     g_updx[0] = 0;
     char *man = http_get(u->manifest, NULL);
     if (!man && mir[0]) { char mu[360]; _snprintf(mu, sizeof(mu), "%s/manifest.txt", mir); mu[sizeof(mu) - 1] = 0; man = http_get(mu, NULL); if (man) lstrcpynA(g_updx, "man=mirror", sizeof(g_updx)); }
+    if (!man && mir2[0]) { char mu[360]; _snprintf(mu, sizeof(mu), "%smanifest.txt", mir2); mu[sizeof(mu) - 1] = 0; man = http_get(mu, NULL); if (man) lstrcpynA(g_updx, "man=site", sizeof(g_updx)); }
     if (!man) { lstrcpynA(g_updx, "man=fail", sizeof(g_updx)); return -1; }
 
     int total = 0, done = 0, fails = 0;
@@ -500,8 +505,9 @@ static int sync_files(const UpdInfo *u, BOOL *selfUpdated)
 
         BOOL ok = FALSE;
         size_t rl = strlen(rel); BOOL isExe = rl > 4 && !_stricmp(rel + rl - 4, ".exe");
-        for (int attempt = 0; attempt < 3 && !ok; attempt++) {
+        for (int attempt = 0; attempt < 4 && !ok; attempt++) {
             if (attempt == 2 && mir[0] && !isExe) { _snprintf(url, sizeof(url), "%s/%s", mir, enc); url[sizeof(url) - 1] = 0; }   /* 3-urinish - zaxira manzildan */
+            if (attempt == 3) { if (!mir2[0]) break; _snprintf(url, sizeof(url), "%s%s", mir2, enc); url[sizeof(url) - 1] = 0; }   /* 4-urinish - o'z saytimiz (Windows 7) */
             if (http_download(url, tmp) && sha256_file(tmp, have, &hs) && hs == size && !_stricmp(have, sha)) ok = TRUE;
             else Sleep(800);
         }
@@ -658,6 +664,8 @@ static BOOL ensure_installed(BOOL *fresh)
         BOOL special = sl <= 3 || (pl > 3 && !wcsncmp(low, prof, pl)) || wcsstr(low, L"\\temp") || wcsstr(low, L"\\windows")
             || wcsstr(low, L"\\program files") || !wcscmp(leaf, L"downloads") || !wcscmp(leaf, L"\x0437\x0430\x0433\x0440\x0443\x0437\x043a\x0438")   /* "загрузки" */
             || !wcscmp(leaf, L"desktop") || !wcscmp(leaf, L"\x0440\x0430\x0431\x043e\x0447\x0438\x0439 \x0441\x0442\x043e\x043b");   /* "рабочий стол" */
+        /* CS 1.6 o'rnatuvchisi (Inno) lotin bo'lmagan harfli papkani qabul qilmaydi ("Tanlangan papka nomida lotin bo'lmagan belgilar") */
+        for (const wchar_t *q = selfDir; *q; q++) if (*q > 0x7E) { special = TRUE; break; }
         if (!special && selfDir[1] == L':') lstrcpyW(own, selfDir);
         else if (selfDir[1] == L':' && towupper(selfDir[0]) != L'C') { _snwprintf(drv, MAX_PATH, L"%c:\\Games\\XClient", selfDir[0]); drv[MAX_PATH - 1] = 0; }
     }
@@ -666,6 +674,8 @@ static BOOL ensure_installed(BOOL *fresh)
     if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, la))) { wcscat(la, L"\\XClient"); cands[3] = la; }
     for (int i = 0; i < 4; i++) {
         if (!cands[i]) continue;
+        { BOOL asc = TRUE; for (const wchar_t *q = cands[i]; *q; q++) if (*q > 0x7E) { asc = FALSE; break; }   /* masalan C:\Users\Алексей\AppData */
+          if (!asc) continue; }
         if (i < 2) {                                 /* o'yinchi papkasi / boshqa disk: CS 1.6 uchun ~2 GB joy bo'lmasa - C: ga (o'yin u yerda yo'q bo'lsa) */
             wchar_t root[4] = { cands[i][0], L':', L'\\', 0 }; ULARGE_INTEGER fr; fr.QuadPart = 0;
             wchar_t g1[MAX_PATH]; path_join(g1, cands[i], L"cstrike.exe");
