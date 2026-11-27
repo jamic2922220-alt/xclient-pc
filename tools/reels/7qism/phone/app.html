@@ -1,0 +1,57 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:Roboto,"Segoe UI",Arial,sans-serif}
+body{width:540px;height:1170px;background:#0A1426;color:#EAF2FF;position:relative;overflow:hidden}
+.sb{height:34px;display:flex;justify-content:space-between;align-items:center;padding:0 22px;font-size:14px;color:#cfe0ff}
+.head{display:flex;align-items:center;padding:12px 16px 10px}
+.head .t{flex:1}.head b{font-size:21px;display:block}.head i{font-style:normal;color:#FFB21E;font-weight:700;font-size:13px}
+.btn{background:#22385C;color:#fff;border-radius:8px;padding:9px 14px;font-weight:700;font-size:13px;margin-left:8px}
+.content{padding:0 12px}
+.card{border-radius:12px;padding:12px 14px;margin:4px 0 10px}
+.acc{background:#2A1218;border:1px solid #E0353F}
+.row{display:flex;align-items:center}
+.av{width:44px;height:44px;border-radius:6px;margin-right:10px;background:linear-gradient(135deg,#ff4d4d,#7a1020);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:20px}
+.nm{font-size:16px;font-weight:700;color:#FF9A3C}.lv{font-size:12px;color:#FFB21E;font-weight:700;margin-top:2px}
+.red{background:#E0353F}.grow{flex:1}
+.bar{height:6px;background:#3a2a30;border-radius:3px;margin:9px 0}.bar i{display:block;height:6px;width:62%;background:#1E8CFF;border-radius:3px}
+.h{font-size:13px;font-weight:700;margin:2px 0 4px}
+.fr{font-size:13px;color:#EAF2FF;padding:4px 0}.fr span{color:#4CD964}.fr em{font-style:normal;color:#9FB6D6}
+.foot{display:flex;justify-content:space-between;font-size:11px;color:#9FB6D6;margin-top:8px}
+.sec{font-size:15px;font-weight:700;color:#FFB21E;padding:12px 4px 6px}
+.srv{background:#13213A;border:1px solid #22385C;border-radius:12px;padding:11px 12px;margin-bottom:8px;display:flex;align-items:center}
+.rk{width:30px;height:30px;border-radius:8px;background:#1E8CFF;display:flex;align-items:center;justify-content:center;font-weight:900;margin-right:10px}
+.sn{font-size:14px;font-weight:700}.pills{margin-top:5px;font-size:11px}
+.p{display:inline-block;border-radius:6px;padding:2px 7px;margin-right:5px;font-weight:700}
+.join{background:#1E8CFF;border-radius:8px;padding:9px 12px;font-weight:700;font-size:12px}
+.ping{font-size:11px;color:#4CD964;margin-right:8px}
+.bottom{position:absolute;left:0;right:0;bottom:0;background:#081020;padding:10px 12px 14px}
+.play{background:#1E8CFF;border-radius:8px;height:48px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px}
+.ad{text-align:center;font-size:12px;color:#9FB6D6;padding-top:8px}
+.off{background:#13213A;border:1px solid #FFB21E}
+.dlg{position:absolute;left:28px;right:28px;top:300px;background:#fff;color:#222;border-radius:8px;padding:22px 22px 14px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.dlg h3{font-size:19px;margin-bottom:10px}.dlg p{font-size:13px;color:#333;line-height:1.4}
+.code{font-size:34px;text-align:center;letter-spacing:6px;border-bottom:2px solid #1E8CFF;padding:12px 0 6px;margin:14px 0}
+.tg{background:#2AA3DE;color:#fff;border-radius:8px;height:42px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+.acts{display:flex;justify-content:space-between;margin-top:14px;font-size:13px;font-weight:700;color:#1E8CFF;text-transform:uppercase}
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.55)}
+</style></head><body>
+<div class="sb"><span>21:47</span><span>4G ▮▮▮ 86%</span></div>
+<div class="head"><div class="t"><b>CS 1.6 boost-top</b><i>Eng yaxshi serverlar</i></div><span class="btn">⚙</span><span class="btn">Yangilash</span></div>
+<div class="content" id="c"></div>
+<div class="bottom"><div class="play">O'YINNI OCHISH</div><div class="ad">Serveringizni shu yerga chiqarish: boost-top.com</div></div>
+<script>
+var mode=(location.search.match(/m=(\w+)/)||[0,'acc'])[1], c=document.getElementById('c'), h='';
+if(mode==='login'){
+ h+='<div class="card acc"><div class="row"><div class="grow"><div style="font-weight:700;font-size:15px">X CLIENT akkaunti</div><div style="font-size:12px;color:#9FB6D6;margin-top:2px">Kompyuterdagi akkaunting bilan kir: daraja, XP, do\'stlar va kunlik sovg\'a umumiy</div></div><span class="btn red">Kirish</span></div></div>';
+}else{
+ h+='<div class="card acc"><div class="row"><div class="av">S</div><div class="grow"><div class="nm">Sardor</div><div class="lv">Daraja 12  ·  620 / 1000 XP</div></div><span class="btn red">Kunlik sovg\'a</span></div><div class="bar"><i></i></div>'+
+ '<div class="h">Onlayn do\'stlar</div><div class="fr"><span>●</span>  Night  —  <em>telefonda · 212.47.58.89:27015</em></div><div class="fr"><span>●</span>  limonchik  —  <em>212.47.58.89:27015</em></div><div class="fr"><span>●</span>  Usmon  —  <em>menyuda</em></div>'+
+ '<div class="foot"><span>O\'yindagi vaqt uchun XP kompyuterdagidek yoziladi</span><b>Chiqish</b></div></div>';
+}
+if(mode==='off') h+='<div class="card off"><div class="row"><div class="grow"><div style="font-weight:700;font-size:15px">Internet yo\'qmi? Muammo emas</div><div style="font-size:12px;color:#9FB6D6;margin-top:2px">Botlar bilan o\'yna - internet kerak emas</div></div><span class="btn" style="background:#B07A10">Botlar bilan</span></div></div>';
+h+='<div class="sec">⭐ Mening serverlarim</div>';
+[['212.47.58.89:27015','de_dust2','24/32',48],['212.47.58.40:27015','de_inferno','17/32',51],['185.228.90.26:27002','de_mirage','12/24',66],['84.54.82.234:27015','de_nuke','9/20',72]].forEach(function(s,i){
+ h+='<div class="srv"><div class="rk">'+(i+1)+'</div><div class="grow"><div class="sn">'+s[0]+'</div><div class="pills"><span class="p" style="background:#F39A1E">'+s[1]+'</span><span class="p" style="background:#8E5CF0">'+s[2]+'</span></div></div><span class="ping">'+s[3]+' ms</span><span class="join">ULANISH</span></div>';
+});
+c.innerHTML=h;
+if(mode==='login'){var d=document.createElement('div');d.className='dim';document.body.appendChild(d);var g=document.createElement('div');g.className='dlg';g.innerHTML='<h3>Kompyuterdagi kod</h3><p>Kompyuterda X CLIENT menyusi → «Telefonda ham o\'yna» → «Kod olish». 6 xonali kodni shu yerga yozing:</p><div class="code">213464</div><div class="tg">Telegram orqali</div><div class="acts"><span style="color:#888">Bekor qilish</span><span>Login va parol</span><span>Kirish</span></div>';document.body.appendChild(g);}
+</script></body></html>

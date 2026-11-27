@@ -1,0 +1,41 @@
+X CLIENT - MAXFIYLIK SIYOSATI / PRIVACY POLICY
+
+== O'ZBEKCHA ==
+
+X CLIENT (XClient.exe va o'yin ichidagi X CLIENT menyusi) mmb.boost-top.com saytiga quyidagi ma'lumotlarni yuboradi:
+
+1. Ishlash uchun zarur (o'chirib bo'lmaydi):
+   - yangilanish tekshiruvi: launcher versiyasi;
+   - kompyuterning tasodifiy identifikatori (hech qanday shaxsiy ma'lumotdan olinmaydi) - sozlamalaringiz, akkauntingiz va do'stlaringizni shu kompyuterga bog'lash uchun;
+   - siz o'zingiz bajargan amallar: akkauntga kirish, profil, do'stlar, chat, bulutga saqlangan sozlamalar, siz yuklagan klip/skrinshotlar, "Xatolik haqida xabar" tugmasi bilan yuborilgan jurnal.
+
+2. Statistika va xato hisobotlari (o'chirish mumkin):
+   - kompyuter turi (Windows versiyasi, protsessor, xotira, videokarta, antivirus nomi);
+   - launcher va o'yindagi xatolar, o'yin yiqilganda xato kodi va yiqilish fayli (crash dump);
+   - o'yin tezligi (FPS/protsessor yuklamasi) va serverga ulanish natijasi.
+   Bu ma'lumotlar faqat X CLIENT dagi xatolarni topish va tuzatish uchun ishlatiladi, sotilmaydi va uchinchi shaxslarga berilmaydi.
+   O'chirish: X CLIENT menyusi > Sozlamalar > Kengaytirilgan > "Statistika va xato hisobotlari".
+
+Launcher kompyuteringizda quyidagilarni o'zgartirishi mumkin (o'yinni ishlatish uchun): o'yin papkasi, Windows Firewall da o'yin uchun ruxsat, Windows 7 da internet (TLS 1.2) sozlamasi, o'yin fayllarining moslik belgilari. Hammasi X CLIENT o'chirilganda (Uninstall) qaytariladi yoki o'yin papkasi bilan o'chadi.
+
+Savollar: mmb.boost-top.com
+
+== ENGLISH ==
+
+X CLIENT (XClient.exe and the in-game X CLIENT menu) sends the following data to mmb.boost-top.com:
+
+1. Required for operation (cannot be disabled):
+   - update check: the launcher version;
+   - a random computer identifier (not derived from personal data), used to link your settings, account and friends to this PC;
+   - actions you perform yourself: signing in, profile, friends, chat, cloud-saved settings, clips/screenshots you upload, logs you send with the "Report a problem" button.
+
+2. Statistics and error reports (can be disabled):
+   - PC type (Windows version, CPU, RAM, GPU, antivirus name);
+   - launcher and game errors; on a game crash, the error code and the crash dump file;
+   - game performance (FPS/CPU load) and server connection results.
+   This data is used only to find and fix problems in X CLIENT. It is not sold or shared with third parties.
+   To disable: X CLIENT menu > Settings > Advanced > "Statistics and error reports".
+
+To run the game, the launcher may change: the game folder, a Windows Firewall rule for the game, the TLS 1.2 internet setting on Windows 7, and compatibility flags of game files. These are removed by uninstalling X CLIENT or together with the game folder.
+
+Contact: mmb.boost-top.com
