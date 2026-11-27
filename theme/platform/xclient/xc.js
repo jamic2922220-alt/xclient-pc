@@ -383,7 +383,7 @@ function fxLoop() {
  * xc_api.php ga yoziladi va XClient.exe ularni keyingi ishga tushishda bajaradi. */
 function qparam(k) { var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search || ''); return m ? decodeURIComponent(m[1]) : ''; }
 var PCID = /^[a-z0-9]{8,40}$/.test(qparam('xc')) ? qparam('xc') : '';   // kompyuter id (DB.pcid) va uning maxfiy kaliti (DB.pck) load() dan keyin olinadi
-var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, winx: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '', hud: 100, chat: 1, vq: 'mid', dmf: null, vids: null, mic: 0, rb: 1, rbx: 0, rsk: 3, rskx: 0, tune: 1, macc: 1, bgp: 1, dvr: 0, dvroff: 0 }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
+var HW = null, OPTS = { beta: 0, auto: 1, start: 0, res: '', win: 0, winx: 0, clean: 0, verify: 0, prio: 0, shots: 0, packs: '', hud: 100, chat: 1, tele: 1, vq: 'mid', dmf: null, vids: null, mic: 0, rb: 1, rbx: 0, rsk: 3, rskx: 0, tune: 1, macc: 1, bgp: 1, dvr: 0, dvroff: 0 }, CACHE_MB = parseInt(qparam('c'), 10) || 0;
 var OPTS_TRY = 0;
 /* To'liq X CLIENT menyusi faqat XCLauncher.exe orqali ochilganda. Menyu saytda turadi va boshqa boost-top sborkalari ham
  * uni ochadi - ularda "sodda rejim": tezkor o'yin, serverlar, sozlamalar + X CLIENT ni yuklab olish kartasi.
@@ -3451,6 +3451,7 @@ var PANES = {
       '<div class="rowb"><b>' + esc(T('hw_title')) + ' <span class="gr">' + esc(HW ? T('hw_' + hwClass()) : '') + '</span></b><small>' + esc(hwText()) + '</small>' +
       (HW ? '<a class="btn" data-act="hwauto">' + esc(T('hw_auto')) + '</a>' : '') + '</div>' +
       '<div class="fr w"><div class="lb">' + esc(T('pr_prio')) + '<small>' + esc(T('pr_prio2')) + '</small></div><div class="tg' + (OPTS.prio ? ' on' : '') + '" data-otg="prio"><i></i></div></div>' +
+      votg('tele', 'pr_tele', 'pr_tele2') +
       tunePane() + '</div>' +
       '<div class="pane r"><div class="ph2">' + esc(T('pr_net')) + '</div>' +
       '<div class="rowb"><b>' + esc(T('nt_title')) + '</b><small>' + esc(NETT_RUN ? T('nt_run') : NETT ? T('nt_res').replace('{p}', NETT.best).replace('{j}', NETT.jit).replace('{l}', NETT.loss) + ' \u2192 ' + T('n_' + NETT.rec.net) : T('nt_desc')) + '</small>' +

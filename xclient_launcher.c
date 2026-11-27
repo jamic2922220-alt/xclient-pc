@@ -1301,7 +1301,11 @@ static BOOL pc_weak(void)
     MEMORYSTATUSEX ms; ms.dwLength = sizeof(ms); SYSTEM_INFO si; GetSystemInfo(&si);
     return si.dwNumberOfProcessors < 4 || (GlobalMemoryStatusEx(&ms) && (ms.ullTotalPhys >> 20) < 6144);
 }
-static int  o_prio = 0, o_shots = 0, o_spray = 0, o_sprays = 0, o_ok = 0, o_hud = 100, o_chat = 1;   /* o_hud: HUD kattaligi, %; o_chat: chat yozuvi 0 kichik / 1 o'rta / 2 katta */   /* o_ok: sozlamalar saytdan olindi */
+static int  o_prio = 0, o_shots = 0, o_spray = 0, o_sprays = 0, o_ok = 0, o_hud = 100, o_chat = 1;
+/* o_tele: statistika va xato hisobotlari (Sozlamalar > Tizim). 0 bo'lsa - prob/fn/perf/dump/kompyuter ma'lumoti yuborilmaydi.
+ * Saytdan sozlamalar kelguncha (birinchi so'rovlar) xclient.ini dagi "notele" ishlatiladi */
+static int  o_tele = -1;
+static int tele_on(void) { if (o_tele < 0) o_tele = ini_int(L"notele") ? 0 : 1; return o_tele; }   /* o_hud: HUD kattaligi, %; o_chat: chat yozuvi 0 kichik / 1 o'rta / 2 katta */   /* o_ok: sozlamalar saytdan olindi */
 static char o_res[16] = "", o_packs[256] = "", o_sprayh[72] = "";   /* o_sprayh: spray faylining sha256 (sayt beradi) */
 
 static int jint(const char *b, const char *k, int def)
@@ -1369,14 +1373,14 @@ static void fetch_opts(void)
     char url[6200], hw[800], dm[3200], sl[1800];
     char v[48];
     url_escape(v, sizeof(v), g_version[0] ? g_version : XC_VERSTR);   /* birinchi ochilish - exe versiyasi */
-    hw_query(hw, sizeof(hw));
+    hw[0] = 0; if (tele_on()) hw_query(hw, sizeof(hw));   /* statistika o'chiq - kompyuter ma'lumoti yuborilmaydi */
     vid_list(dm, sizeof(dm));                     /* menyudagi "Videolarim" - papkadagi haqiqiy MP4 lar */
     shot_list(sl, sizeof(sl));                    /* va F11 skrinshotlar */
     wchar_t ini[MAX_PATH]; ini_path(ini);
     unsigned cmb = (unsigned)GetPrivateProfileIntW(L"x", L"cachemb", 0, ini);   /* o'yin paytida fonda hisoblangan (cache_maint) */
     wchar_t wcr[24]; char cr[24] = ""; ini_get(L"t_cr", wcr, 24);         /* oxirgi yiqilish: "kod~fayllar" - bir marta yuboriladi */
     WideCharToMultiByte(CP_UTF8, 0, wcr, -1, cr, sizeof(cr), NULL, NULL);
-    if (strspn(cr, "0123456789abcdef~") != strlen(cr)) cr[0] = 0;
+    if (strspn(cr, "0123456789abcdef~") != strlen(cr) || !tele_on()) cr[0] = 0;
     _snprintf(url, sizeof(url), XC_SITE "xc_api.php?a=hello&d=%s&v=%s&cache=%u&dvr=%d&safe=%d%s%s%s%s%s", g_id, v, cmb, dvr_state(), ini_int(L"crs") >= 3 ? 1 : 0, cr[0] ? "&cr=" : "", cr, hw, dm, sl); url[sizeof(url) - 1] = 0;
     char *r = http_get(url, NULL);
     if (!r || !strstr(r, "\"ok\":true")) { free(r); return; }
@@ -1385,6 +1389,7 @@ static void fetch_opts(void)
     o_rsk = jint(r, "rsk", 3); ini_set_int(L"rsk", o_rsk + 1);   /* +1: 0 - "hali yo'q" */
     o_tune = jint(r, "tune", 1); o_macc = jint(r, "macc", 1); o_bgp = jint(r, "bgp", 1); o_dvroff = jint(r, "dvroff", 0);
     if (cr[0]) ini_str(L"t_cr", NULL);
+    { int t = jint(r, "tele", 1) ? 1 : 0; if (t != tele_on()) ini_set_int(L"notele", !t); o_tele = t; }
     o_prio = jint(r, "prio", 0); o_hud = jint(r, "hud", 100); o_chat = jint(r, "chat", 1); o_shots = jint(r, "shots", 0); o_spray = jint(r, "spray", 0); o_sprays = jint(r, "sprays", 0);
     jstr(r, "packs", o_packs, sizeof(o_packs));
     jstr(r, "sprayh", o_sprayh, sizeof(o_sprayh));
@@ -2571,7 +2576,7 @@ static void dbg_dump(HANDLE proc, DWORD pid, DWORD tid, EXCEPTION_RECORD *er)
 static char *share_post(const char *path, const void *data, DWORD len);   /* xc_rec.c */
 static void dmp_upload(const char *kind)
 {
-    if (!g_dmp[0]) return;
+    if (!g_dmp[0] || !tele_on()) return;
     FILETIME ft; GetSystemTimeAsFileTime(&ft);
     int day = (int)(((((ULONGLONG)ft.dwHighDateTime << 32) | ft.dwLowDateTime) / 10000000ULL) / 86400ULL);
     if (ini_int(L"dmpday") == day) return;
@@ -3135,7 +3140,7 @@ static void fn_send(const char *stage)
 {
     static const char *ok[] = { "inst", "game", "p10", "upd", "dl", "dlh" };   /* upd - birinchi yangilanish tugadi, dl - o'yin yuklash boshlandi, dlh - yarmi */
     const char *st = NULL; for (int i = 0; i < 6; i++) if (!strcmp(stage, ok[i])) st = ok[i];
-    if (!st || !g_net || !g_id[0]) return;
+    if (!st || !g_net || !g_id[0] || !tele_on()) return;
     wchar_t k[16]; _snwprintf(k, 16, L"fn_%S", st); k[15] = 0;
     if (ini_int(k)) return;
     ini_set_int(k, 1);
@@ -3185,7 +3190,7 @@ static void sys_ctx(char *out, size_t cap)
 }
 static void prob_send(const char *kind, DWORD wait)
 {
-    if (!g_net) return;
+    if (!g_net || !tele_on()) { g_probx[0] = 0; return; }
     lstrcpynA(g_prob, kind, sizeof(g_prob));
     { char ctx[300], esc[600]; sys_ctx(ctx, sizeof(ctx)); url_escape(esc, sizeof(esc), ctx);
       size_t l = strlen(g_probx);

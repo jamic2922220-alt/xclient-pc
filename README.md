@@ -1,5 +1,7 @@
 # xclient-pc
 
+> Litsenziya: X CLIENT o'z kodi — [GPL-3.0](LICENSE) (doirasi: [NOTICE.md](NOTICE.md)) · [Maxfiylik / Privacy](PRIVACY.txt) · [Code signing policy](CODE_SIGNING_POLICY.md)
+
 X CLIENT — Counter-Strike 1.6 (PC) uchun bitta `XClient.exe`.
 
 `XClient.exe` ishga tushganda:

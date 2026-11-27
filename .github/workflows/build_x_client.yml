@@ -126,7 +126,7 @@ jobs:
         shell: cmd
         timeout-minutes: 25
         run: |
-          copy /Y own\installer.nsi . && copy /Y own\xclient.ico .
+          copy /Y own\installer.nsi . && copy /Y own\xclient.ico . && copy /Y own\PRIVACY.txt .
           if not exist "%ProgramFiles(x86)%\NSIS\makensis.exe" choco install nsis -y --no-progress
           rem CS 1.6 (boost-top PRO) o'rnatuvchisi ham ichiga qo'shiladi - yuklab bo'lmasa, faqat launcher
           curl -fsSL --retry 3 --connect-timeout 30 --max-time 900 -o game_setup.exe "https://cssborka.uz/uploads/files/1791198609_6ac38591b615c_CS_1_6_boost-top_PRO_2_5_3.exe" || del game_setup.exe

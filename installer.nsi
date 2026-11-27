@@ -37,6 +37,13 @@ VIAddVersionKey "ProductVersion" "${VER}"
 !define MUI_FINISHPAGE_RUN_FUNCTION RunUnelevated
 !define MUI_DIRECTORYPAGE_TEXT_TOP "CS 1.6 kompyuteringizda bor bo'lsa, o'sha papkani tanlang. Yo'q bo'lsa - shu papka qolsin, XCLauncher.exe o'yinni o'zi yuklab o'rnatadi.$\r$\n$\r$\nЕсли CS 1.6 уже установлена - выберите её папку. Если нет - оставьте эту, XCLauncher.exe сам скачает игру."
 
+; maxfiylik: launcher nima yuboradi va nimani o'zgartiradi (SignPath sharti - o'rnatishda ko'rsatiladi)
+!define MUI_PAGE_HEADER_TEXT "Maxfiylik / Privacy"
+!define MUI_PAGE_HEADER_SUBTEXT "X CLIENT qanday ma'lumot yuboradi / What data X CLIENT sends"
+!define MUI_LICENSEPAGE_TEXT_TOP "Statistikani keyin menyuda o'chirish mumkin / Statistics can be turned off later in the menu"
+!define MUI_LICENSEPAGE_BUTTON "Davom etish / Next >"
+!define MUI_LICENSEPAGE_TEXT_BOTTOM " "
+!insertmacro MUI_PAGE_LICENSE "PRIVACY.txt"
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH

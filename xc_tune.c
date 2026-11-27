@@ -406,7 +406,7 @@ static void perf_end(DWORD played)
     if (g_perf_th) { WaitForSingleObject(g_perf_th, 8000); CloseHandle(g_perf_th); g_perf_th = NULL; }
     if (g_perf.h) { CloseHandle(g_perf.h); g_perf.h = NULL; }
     g_gmem = g_perf.gmem;
-    if (g_perf.n < 6 || played < 120) return;              /* 2 daqiqadan kam - ma'lumot yetarli emas */
+    if (g_perf.n < 6 || played < 120 || !tele_on()) return;   /* statistika o'chiq */              /* 2 daqiqadan kam - ma'lumot yetarli emas */
     char url[300];
     if (g_perf_dump) { char t[200]; _snprintf(t, sizeof(t), "gc=%d g90=%d sc=%d ram=%lu cores=%lu n=%d", (int)(g_perf.gsum * 100 / g_perf.n), g_perf.n90 * 100 / g_perf.n, (int)(g_perf.ssum * 100 / g_perf.n), (unsigned long)g_perf.ramMin, (unsigned long)g_perf.cores, g_perf.n); t[199] = 0;
         HANDLE f = CreateFileW(g_perf_dump, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL); if (f != INVALID_HANDLE_VALUE) { DWORD w; WriteFile(f, t, (DWORD)strlen(t), &w, NULL); CloseHandle(f); } return; }
