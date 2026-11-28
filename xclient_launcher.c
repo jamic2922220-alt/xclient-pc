@@ -1305,6 +1305,7 @@ static int  o_prio = 0, o_shots = 0, o_spray = 0, o_sprays = 0, o_ok = 0, o_hud 
 /* o_tele: statistika va xato hisobotlari (Sozlamalar > Tizim). 0 bo'lsa - prob/fn/perf/dump/kompyuter ma'lumoti yuborilmaydi.
  * Saytdan sozlamalar kelguncha (birinchi so'rovlar) xclient.ini dagi "notele" ishlatiladi */
 static int  o_tele = -1;
+static int  o_pf = 0;                    /* admin > Funksiyalar: server fayllarini oldindan yuklash (sukut bo'yicha o'chiq) */
 static int tele_on(void) { if (o_tele < 0) o_tele = ini_int(L"notele") ? 0 : 1; return o_tele; }   /* o_hud: HUD kattaligi, %; o_chat: chat yozuvi 0 kichik / 1 o'rta / 2 katta */   /* o_ok: sozlamalar saytdan olindi */
 static char o_res[16] = "", o_packs[256] = "", o_sprayh[72] = "";   /* o_sprayh: spray faylining sha256 (sayt beradi) */
 
@@ -1390,6 +1391,7 @@ static void fetch_opts(void)
     o_tune = jint(r, "tune", 1); o_macc = jint(r, "macc", 1); o_bgp = jint(r, "bgp", 1); o_dvroff = jint(r, "dvroff", 0);
     if (cr[0]) ini_str(L"t_cr", NULL);
     { int t = jint(r, "tele", 1) ? 1 : 0; if (t != tele_on()) ini_set_int(L"notele", !t); o_tele = t; }
+    o_pf = jint(r, "pf", 0);
     o_prio = jint(r, "prio", 0); o_hud = jint(r, "hud", 100); o_chat = jint(r, "chat", 1); o_shots = jint(r, "shots", 0); o_spray = jint(r, "spray", 0); o_sprays = jint(r, "sprays", 0);
     jstr(r, "packs", o_packs, sizeof(o_packs));
     jstr(r, "sprayh", o_sprayh, sizeof(o_sprayh));
@@ -2945,7 +2947,7 @@ static BOOL run_game(void)
         g_played_s = (DWORD)played;
         perf_end((DWORD)played);
         if (played >= 600) fn_send("p10");
-        if (played >= 60 && !ini_int(L"nopf")) {     /* o'yin yopildi - server fayllarini endi (fonda, alohida jarayonda) yuklaymiz */
+        if (played >= 60 && o_pf && !ini_int(L"nopf")) {     /* o'yin yopildi - server fayllarini endi (fonda, alohida jarayonda) yuklaymiz */
             wchar_t pc[MAX_PATH * 2 + 40]; _snwprintf(pc, MAX_PATH * 2 + 40, L"\"%s\" --prefetch \"%s\"", g_self, g_dir); pc[MAX_PATH * 2 + 39] = 0;
             STARTUPINFOW psi = { sizeof(psi) }; PROCESS_INFORMATION ppi;
             if (CreateProcessW(g_self, pc, NULL, NULL, FALSE, CREATE_NO_WINDOW | IDLE_PRIORITY_CLASS, NULL, g_dir, &psi, &ppi)) { CloseHandle(ppi.hThread); CloseHandle(ppi.hProcess); }
@@ -3324,6 +3326,35 @@ static DWORD WINAPI prefetch_th(LPVOID unused)
         url_escape(g_probx, sizeof(g_probx), raw); prob_send("prefetch", 0); g_probx[0] = 0; }
     return 0;
 }
+/* 1.0.177 o'yin paytida cstrike_downloads ga yuklagan fayllar (2026-11-28 07:42-08:45 UTC): ba'zi kompyuterlarda shundan keyin
+ * har qaysi serverda MOTD/jamoa tanlashda o'yin qotgan. Shu oraliqda yozilgan fayllarni bir marta o'chiramiz - kerak bo'lsa
+ * o'yin ularni serverdan qayta (to'g'ri nusxasini) yuklaydi */
+static int pf_clean_dir(const wchar_t *dir, ULONGLONG a, ULONGLONG b)
+{
+    wchar_t q[MAX_PATH]; _snwprintf(q, MAX_PATH, L"%s\\*", dir); q[MAX_PATH - 1] = 0;
+    WIN32_FIND_DATAW fd; HANDLE h = FindFirstFileW(q, &fd); int n = 0;
+    if (h == INVALID_HANDLE_VALUE) return 0;
+    do {
+        if (!wcscmp(fd.cFileName, L".") || !wcscmp(fd.cFileName, L"..")) continue;
+        wchar_t f[MAX_PATH]; _snwprintf(f, MAX_PATH, L"%s\\%s", dir, fd.cFileName); f[MAX_PATH - 1] = 0;
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) continue;
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) { n += pf_clean_dir(f, a, b); continue; }
+        size_t l = wcslen(fd.cFileName);
+        ULONGLONG t = ((ULONGLONG)fd.ftLastWriteTime.dwHighDateTime << 32) | fd.ftLastWriteTime.dwLowDateTime;
+        if ((l > 5 && !_wcsicmp(fd.cFileName + l - 5, L".xcpf")) || (t >= a && t <= b)) { if (DeleteFileW(f)) n++; }
+    } while (FindNextFileW(h, &fd));
+    FindClose(h); return n;
+}
+static void pf_clean177(void)
+{
+    if (ini_int(L"pfc1") || !g_dir[0]) return;
+    ini_set_int(L"pfc1", 1);
+    const ULONGLONG E = 11644473600ULL;
+    ULONGLONG a = (1795851720ULL + E) * 10000000ULL, b = (1795855500ULL + E) * 10000000ULL;
+    wchar_t d[MAX_PATH]; path_join(d, g_dir, L"cstrike_downloads");
+    int n = pf_clean_dir(d, a, b);
+    if (n) { char raw[40]; _snprintf(raw, sizeof(raw), "clean=%d", n); raw[39] = 0; url_escape(g_probx, sizeof(g_probx), raw); prob_send("prefetch", 0); g_probx[0] = 0; }
+}
 static DWORD WINAPI side_jobs(LPVOID unused)
 {
     (void)unused;
@@ -3351,6 +3382,7 @@ static DWORD WINAPI worker(LPVOID unused)
     if (!handle_running_game()) { g_play = FALSE; PostMessageW(g_wnd, WM_XC_DONE, 0, 0); return 0; }
     tune_recover();                               /* oldingi safar launcher o'yin paytida yopilib qolgan bo'lsa - Windows sozlamalarini qaytarish */
     crash_prune();
+    pf_clean177();                               /* 1.0.177 o'yin paytida yuklagan fayllar - bir marta tozalanadi */
 
     /* Windows 7/Vista: WinINet da TLS 1.1/1.2 odatda o'chiq - GitHub (yangilanish) ochilmaydi ("man=fail", o'yinchi eski versiyada
      * qoladi). Internet Explorer sozlamasidagi "TLS 1.1/1.2 ishlatish" belgisini shu foydalanuvchi uchun yoqamiz (InternetOpen dan oldin) */

@@ -358,7 +358,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         cfg_save(); flash('Beta testerlar saqlandi'); go('?p=menuver');
     }
     if ($act === 'beta_myip') { $ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : ''; if (!isset($CFG['beta_ips'])) $CFG['beta_ips'] = array(); if ($ip && !in_array($ip, $CFG['beta_ips'])) $CFG['beta_ips'][] = $ip; cfg_save(); flash('IP qo\'shildi: ' . $ip); go('?p=menuver'); }
-    if ($act === 'feat_save') { $CFG['feat'] = array(); foreach (array('duel', 'chest', 'ring', 'wall', 'suggest', 'daily', 'feedback', 'particles', 'anim', 'holiday', 'clicks') as $k) $CFG['feat'][$k] = pp('f_' . $k) ? 1 : 0; cfg_save(); flash('Funksiyalar saqlandi - o\'yinchilar menyuni qayta ochganda kuchga kiradi'); go('?p=feat'); }
+    if ($act === 'feat_save') { $CFG['feat'] = array(); foreach (array('duel', 'chest', 'ring', 'wall', 'suggest', 'daily', 'feedback', 'particles', 'anim', 'holiday', 'clicks', 'prefetch') as $k) $CFG['feat'][$k] = pp('f_' . $k) ? 1 : 0; cfg_save(); flash('Funksiyalar saqlandi - o\'yinchilar menyuni qayta ochganda kuchga kiradi'); go('?p=feat'); }
     if ($act === 'jserr_clear') { wr('jserr', array()); go('?p=reports'); }
     if ($act === 'wn_save') {
         $items = array(); foreach (preg_split('/\r?\n/', (string)pp('items')) as $x) { $x = trim($x); if ($x !== '') $items[] = mb_substr($x, 0, 300, 'UTF-8'); }
@@ -884,10 +884,11 @@ if ($P === 'menuver') {
 /* ===== FUNKSIYALAR: har birini alohida o'chirish ===== */
 if ($P === 'feat') {
     $F = array('duel' => 'Duel', 'chest' => 'Sandiqlar', 'ring' => "Qo'ng'iroq", 'wall' => 'Profil devori', 'suggest' => "Do'st tavsiyalari", 'daily' => 'Kunlik mukofot',
-        'feedback' => 'Taklif / shikoyat tugmasi', 'particles' => 'Uchqun / qor zarrachalari', 'anim' => 'Animatsiyalar (jonli ramka va h.k.)', 'holiday' => 'Bayram bezaklari', 'clicks' => 'Tugma statistikasi yig\'ish');
+        'feedback' => 'Taklif / shikoyat tugmasi', 'particles' => 'Uchqun / qor zarrachalari', 'anim' => 'Animatsiyalar (jonli ramka va h.k.)', 'holiday' => 'Bayram bezaklari', 'clicks' => 'Tugma statistikasi yig\'ish',
+        'prefetch' => 'Server fayllarini oldindan yuklash (launcher, o\'yin yopilgandan keyin fonda; muammo bo\'lsa o\'chiring)');
     $cur = isset($CFG['feat']) ? $CFG['feat'] : array();
     echo '<h1>Funksiyalar</h1><div class="panel"><div class="ph">Biror funksiya muammo qilsa - butun menyuni qaytarmasdan faqat o\'shani o\'chiring</div><form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="feat_save">';
-    foreach ($F as $k => $n) echo '<label class="chk"><input type="checkbox" name="f_' . $k . '" value="1"' . (!isset($cur[$k]) || !empty($cur[$k]) ? ' checked' : '') . '> ' . h($n) . '</label>';
+    foreach ($F as $k => $n) echo '<label class="chk"><input type="checkbox" name="f_' . $k . '" value="1"' . ((isset($cur[$k]) ? !empty($cur[$k]) : $k !== 'prefetch') ? ' checked' : '') . '> ' . h($n) . '</label>';
     echo '<button class="btn red">Saqlash</button></form></div>';
 }
 

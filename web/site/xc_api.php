@@ -2240,6 +2240,7 @@ case 'opts_done':
         wr($ipk, array('d' => $d, 't' => time()));
         $ho = with_forced_packs($o, $d); unset($ho['k'], $ho['kc'], $ho['st'], $ho['fav'], $ho['ip']);   // launcherga saqlangan holat (token) kerak emas
         $ho['rsk'] = rsk_of($o);
+        $cf = xc_cfg(); $ho['pf'] = !empty($cf['feat']['prefetch']) ? 1 : 0;   // admin > Funksiyalar: server fayllarini oldindan yuklash (sukut: o'chiq)
         out(array('ok' => true, 'o' => $ho));
     }
     $claim = false;
