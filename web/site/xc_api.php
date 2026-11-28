@@ -320,10 +320,12 @@ function tg_botname() {
     if ($bn !== '') wr('tgbn', array('n' => $bn, 't' => time()));
     return $bn;
 }
-function tg_send($chat, $text) {
+function tg_send($chat, $text, $kb = null) {
     $c = xc_cfg(); if (empty($c['tg_token']) || !$chat) return;
+    $q = array('chat_id' => $chat, 'text' => $text, 'disable_web_page_preview' => 1);
+    if ($kb) $q['reply_markup'] = json_encode($kb);
     $ctx = stream_context_create(array('http' => array('method' => 'POST', 'timeout' => 3, 'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
-        'content' => http_build_query(array('chat_id' => $chat, 'text' => $text, 'disable_web_page_preview' => 1)))));
+        'content' => http_build_query($q))));
     @file_get_contents('https://api.telegram.org/bot' . $c['tg_token'] . '/sendMessage', false, $ctx);
 }
 /* O'yinchilar uchun bot: HTTPS webhook shart emas - menyu so'rovlari kelganda 10 soniyada bir getUpdates bilan yangi xabarlarni olamiz */
@@ -341,14 +343,40 @@ function tg_bot_poll() {
         $st['off'] = max((int)$st['off'], (int)$up['update_id']);
         if (empty($up['message']['text']) || empty($up['message']['chat']['id']) || $up['message']['chat']['type'] !== 'private') continue;
         $chat = $up['message']['chat']['id']; $txt = trim($up['message']['text']);
-        tg_send($chat, tg_bot_answer($chat, $txt));
+        $GLOBALS['tg_me'] = '';
+        $ans = tg_bot_answer($chat, $txt);
+        tg_send($chat, $ans, tg_kb($GLOBALS['tg_me'] !== '' ? user($GLOBALS['tg_me']) : null));
+    }
+    if (empty($st['cmds']) || $st['cmds'] !== 2) {         // Telegram'dagi "/" menyusi - bir marta
+        $cm = array(array('command' => 'me', 'description' => 'Statistikam'), array('command' => 'friends', 'description' => "Onlayn do'stlar"),
+            array('command' => 'top', 'description' => 'Hafta TOP qotillari'), array('command' => 'online', 'description' => "Kim o'ynayapti"),
+            array('command' => 'stop', 'description' => "Eslatmalarni o'chirish"), array('command' => 'eslatma', 'description' => 'Eslatmalarni yoqish'),
+            array('command' => 'help', 'description' => 'Yordam'));
+        $cx = stream_context_create(array('http' => array('method' => 'POST', 'timeout' => 3, 'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
+            'content' => http_build_query(array('commands' => json_encode($cm))))));
+        $rr = json_decode((string)@file_get_contents('https://api.telegram.org/bot' . $c['tg_token'] . '/setMyCommands', false, $cx), true);
+        if (!empty($rr['ok'])) $st['cmds'] = 2;
     }
     wr('tgbot', $st);
     flock($h, LOCK_UN); fclose($h);
 }
+/* botdagi pastki tugmalar: ulangan o'yinchiga - hamma buyruqlar (eslatma/do'st xabari holatiga qarab), ulanmaganga - yordam */
+function tg_btns() { return array('📊 Statistikam' => '/me', "👥 Onlayn do'stlar" => '/friends', '🏆 Hafta TOP' => '/top', "🟢 Kim o'ynayapti" => '/online',
+    "🔕 Eslatmalarni o'chirish" => '/stop', '🔔 Eslatmalarni yoqish' => '/eslatma', "🙈 Do'st xabarlarini o'chirish" => '/dostoff', "🎮 Do'st xabarlarini yoqish" => '/doston', '❓ Yordam' => '/help'); }
+function tg_kb($u) {
+    if (!$u) return array('keyboard' => array(array(array('text' => '❓ Yordam'))), 'resize_keyboard' => true, 'is_persistent' => true);
+    return array('keyboard' => array(
+        array(array('text' => '📊 Statistikam'), array('text' => "👥 Onlayn do'stlar")),
+        array(array('text' => '🏆 Hafta TOP'), array('text' => "🟢 Kim o'ynayapti")),
+        array(array('text' => empty($u['tgoff']) ? "🔕 Eslatmalarni o'chirish" : '🔔 Eslatmalarni yoqish'),
+              array('text' => empty($u['tgfroff']) ? "🙈 Do'st xabarlarini o'chirish" : "🎮 Do'st xabarlarini yoqish")),
+        array(array('text' => '❓ Yordam'))), 'resize_keyboard' => true, 'is_persistent' => true);
+}
 function tg_bot_answer($chat, $txt) {
     $me = null;
+    $bt = tg_btns(); if (isset($bt[$txt])) $txt = $bt[$txt];
     foreach ((array)glob(XC_DIR . '/users/*.php') as $f) { $x = user(basename($f, '.php')); if ($x && !empty($x['tgid']) && (string)$x['tgid'] === (string)$chat) { $me = $x; break; } }
+    if ($me) $GLOBALS['tg_me'] = $me['login'];
     if (preg_match('/^\/(dostoff|doston)$/i', $txt, $sm) && $me) {   // do'stlar o'yinga kirganda xabar
         lock(); $u = user($me['login']); if ($u) { if (strtolower($sm[1]) === 'dostoff') $u['tgfroff'] = 1; else unset($u['tgfroff']); save_user($u); } unlock();
         return strtolower($sm[1]) === 'dostoff' ? "Do'stlar o'yinga kirganda xabar bermayman. Qayta yoqish: /doston" : "Do'stlaringiz o'yinga kirganda xabar beraman. O'chirish: /dostoff";
@@ -372,7 +400,7 @@ function tg_bot_answer($chat, $txt) {
         $u = user($codes[$m[1]]['l']); if (!$u) return 'Akkaunt topilmadi.';
         $u['tgid'] = $chat; $gift = empty($u['tgbonus']);
         if ($gift) { $u['tgbonus'] = 1; $u['chb'] = (int)@$u['chb'] + 1; }   // ulash sovg'asi - bir marta sandiq
-        save_user($u); unset($codes[$m[1]]); wr('tglink', $codes); unlock();
+        save_user($u); unset($codes[$m[1]]); wr('tglink', $codes); unlock(); $GLOBALS['tg_me'] = $u['login'];
         return "Ulandi! Salom, " . $u['name'] . "." . ($gift ? "\n\xF0\x9F\x8E\x81 Sovg'a: 1 ta sandiq - X CLIENT menyusida oching!" : '') . "\nKechqurun kunlik sovg'a va seriya haqida eslatib turaman (o'chirish: /stop).\n/me - statistikam\n/friends - onlayn do'stlar\n/top - hafta qotillari\n/online - hozir o'ynayotganlar";
     }
     if (!$me) return "Salom! Bu X CLIENT boti.\nAkkauntingizni ulash: X CLIENT menyusida Sozlamalar > Akkaunt > \"Telegram'ni ulash\" ni bosing va chiqqan 6 xonali kodni shu yerga yozing.";
@@ -396,7 +424,7 @@ function tg_bot_answer($chat, $txt) {
         $n = 0; $srv = 0; foreach ((array)glob(XC_DIR . '/users/*.php') as $f) { $x = user(basename($f, '.php')); if ($x && is_online($x)) { $n++; if (!empty($x['server'])) $srv++; } }
         return "Hozir X CLIENT da: $n kishi ($srv tasi serverda o'ynayapti).";
     }
-    return "/me - statistikam\n/friends - onlayn do'stlar\n/top - hafta qotillari\n/online - hozir o'ynayotganlar";
+    return "Salom, " . $me['name'] . "! Pastdagi tugmalardan foydalaning:\n📊 Statistikam - darajangiz, kill, K/D\n👥 Onlayn do'stlar - kim qaysi serverda\n🏆 Hafta TOP - haftaning eng ko'p kill qilganlari\n🟢 Kim o'ynayapti - hozir X CLIENT da nechta kishi\n🔕/🔔 Eslatmalar - kechki kunlik sovg'a eslatmasi\n🙈/🎮 Do'st xabarlari - do'stingiz o'yinga kirganda xabar";
 }
 /* Telegram eslatmalari (botga ulanganlar, /stop - o'chirish). 20 daqiqada bir tekshiriladi (har qanday API so'rovida, qulf bilan):
  *  - kechqurun 18-22 (Toshkent): kunlik seriya bor, bugun hali kirmagan - "seriya uzilmasin, bugun +N XP"
