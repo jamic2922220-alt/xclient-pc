@@ -16,7 +16,12 @@ html[data-theme="light"] .bt-xc { background: #fff1f2; color: #c81e2a !important
 a.bt-xc.bt-xc-ico { display: inline-flex !important; width: 34px !important; min-width: 34px !important; height: 34px !important; padding: 0 !important; margin: 0 0 0 6px !important;
   background: rgba(214, 35, 47, .12) !important; border: 1px solid rgba(239, 68, 68, .6) !important; border-radius: 8px !important; box-shadow: none !important; }
 a.bt-xc.bt-xc-ico .bt-xc-logo { width: 20px; height: 20px; }
-@media (max-width: 760px) { a.bt-xc.bt-xc-ico { margin: 6px 0 0 !important; } }
+/* telefon: jadval kartochkasida o'yin tugmasi va X CLIENT yonma-yon, katak ichida (chetga chiqmasin) */
+@media (max-width: 760px) {
+  #all_servers td.boost-server-connect { display: flex !important; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: nowrap; min-width: 0; overflow: hidden; padding-right: 8px !important; box-sizing: border-box; }
+  #all_servers td.boost-server-connect > * { flex: none; }
+  a.bt-xc.bt-xc-ico { margin: 0 !important; width: 32px !important; min-width: 32px !important; height: 32px !important; }
+}
 
 /* bo'sh TOP kataklari o'rniga bitta taklif */
 .bt-fix-promo-box > *:not(.bt-fix-promo) { display: none !important; }

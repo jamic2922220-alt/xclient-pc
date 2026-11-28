@@ -8,7 +8,7 @@
  * O'chirish: main.tpl dagi bt-fix.css / bt-fix.js qatorlarini olib tashlash kifoya. */
 (function () {
   'use strict';
-  var NOIMG = 'media/maps/cs16/noimage.png';
+  var NOIMG = '/media/maps/cs16/noimage.png?v=2';   /* v=2: yangi umumiy rasm (CS 1.6) - brauzer keshidagi eskisi chiqmasin */
   var XC_JOIN = 'https://mmb.boost-top.com/j.php?s=';
   function lang() {
     var l = '';
@@ -55,11 +55,28 @@
     [].forEach.call(document.querySelectorAll('img[src*="noimage"]'), function (img) {
       if (img.__btScan) return; img.__btScan = 1;
       var nm = (img.getAttribute('alt') || '').trim();
-      if (!/^[A-Za-z0-9_\-]{3,60}$/.test(nm)) return;
-      var c = mapCandidates('/media/maps/cs16/' + nm + '.jpg');
-      if (!c.length) return;
+      var c = /^[A-Za-z0-9_\-]{3,60}$/.test(nm) ? mapCandidates('/media/maps/cs16/' + nm + '.jpg') : [];
+      if (!c.length) { if ((img.getAttribute('src') || '').indexOf('v=2') < 0) img.src = NOIMG; return; }
       img.__btTry = c;
       img.src = c.shift();
+    });
+  }
+
+  /* "Популярные карты" plitkalari rasmni CSS fon (--btr-img) qilib oladi - rasm yo'q bo'lsa jigarrang fon qolardi */
+  function fixMapTiles() {
+    [].forEach.call(document.querySelectorAll('.bt-map-row'), function (r) {
+      if (r.__btUrl) { if (r.style.getPropertyValue('--btr-img').indexOf(r.__btUrl) < 0) r.style.setProperty('--btr-img', 'url("' + r.__btUrl + '")', 'important'); return; }   /* boshqa skript qayta yozib yuborsa */
+      if (r.__btImg) return; r.__btImg = 1;
+      var n = ((r.querySelector('.mono') || {}).textContent || '').trim().replace(/[^a-zA-Z0-9_\-$.]/g, '');
+      if (!n) return;
+      var list = ['/media/maps/cs16/' + n + '.jpg'].concat(mapCandidates('/media/maps/cs16/' + n + '.jpg'), [NOIMG]);
+      (function tryNext() {
+        var u = list.shift(); if (!u) return;
+        var im = new Image();
+        im.onload = function () { r.__btUrl = u; r.style.setProperty('--btr-img', 'url("' + u + '")', 'important'); };
+        im.onerror = tryNext;
+        im.src = u;
+      })();
     });
   }
 
@@ -155,7 +172,7 @@
   function run() {
     if (busy) { pending = true; return; }
     busy = true;
-    try { retryNoimg(); walk(document.body); fixTitles(document); fixFreeSlots(); addXc(document); addAlt(document); } catch (e) {}
+    try { retryNoimg(); fixMapTiles(); walk(document.body); fixTitles(document); fixFreeSlots(); addXc(document); addAlt(document); } catch (e) {}
     busy = false;
     if (pending) { pending = false; setTimeout(run, 300); }
   }

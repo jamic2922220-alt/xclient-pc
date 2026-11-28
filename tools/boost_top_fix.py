@@ -9,7 +9,7 @@ Nima qiladi:
     aynan bir marta topilmasa, HECH NARSA o'zgartirilmaydi;
   * yangi fayllar: css/bt-fix.css, js/bt-fix.js;
   * shablon keshi (engine_cache/template) tozalanadi - sayt yangi shablonni o'qisin.
-Qaytarish:  cd <sayt papkasi> && tar xzf /root/bt_zaxira_<vaqt>.tgz && rm -f templates/user/boost-top/css/bt-fix.css templates/user/boost-top/js/bt-fix.js && rm -rf engine_cache/template/*
+Qaytarish:  cd <sayt papkasi> && tar xzf /root/bt_zaxira_<vaqt>.tgz   (asl noimage.png ham shu arxivda) && rm -f templates/user/boost-top/css/bt-fix.css templates/user/boost-top/js/bt-fix.js && rm -rf engine_cache/template/*
 """
 import json, os, shutil, sys, tarfile, time
 
@@ -37,7 +37,7 @@ for f, hunks in patch.items():
 
 bk = '/root/bt_zaxira_%s.tgz' % time.strftime('%Y-%m-%d_%H%M')
 with tarfile.open(bk, 'w:gz') as tz:
-    for f in list(patch) + [T + 'css/bt-fix.css', T + 'js/bt-fix.js']:
+    for f in list(patch) + [T + 'css/bt-fix.css', T + 'js/bt-fix.js', 'media/maps/cs16/noimage.png']:
         if os.path.isfile(os.path.join(site, f)): tz.add(os.path.join(site, f), arcname=f)
 print('zaxira:', bk)
 
@@ -54,6 +54,12 @@ for f, txt in new.items():
 for f in ['css/bt-fix.css', 'js/bt-fix.js']:
     d = os.path.join(site, T + f); shutil.copyfile(os.path.join(src, os.path.basename(f)), d); own(d); os.chmod(d, 0o644)
     print("qo'yildi:", T + f)
+
+# rasmi yo'q xaritalar uchun umumiy rasm (CS 1.6 rasmi) - asl noimage.png zaxirada
+ni = os.path.join(src, 'noimage.png'); nd = os.path.join(site, 'media/maps/cs16/noimage.png')
+if os.path.isfile(ni) and os.path.isdir(os.path.dirname(nd)):
+    if not os.path.isfile(nd) or open(nd, 'rb').read() != open(ni, 'rb').read():
+        shutil.copyfile(ni, nd); own(nd); os.chmod(nd, 0o644); print("qo'yildi: media/maps/cs16/noimage.png (rasmi yo'q xaritalar uchun)")
 
 cache = os.path.join(site, 'engine_cache', 'template'); n = 0
 if os.path.isdir(cache):
