@@ -1062,6 +1062,9 @@ table.mgt td.lnk { cursor: pointer; color: #ff8a7a; }
 .mobcard .mobt small { display: block; color: #a99fa6; font-size: 12px; margin-top: 3px; }
 .mobcard .cx { position: absolute; right: 8px; top: 6px; width: 26px; height: 26px; line-height: 24px; text-align: center; font-size: 20px; color: #bba; -webkit-border-radius: 13px; cursor: pointer; z-index: 2; }
 .mobcard .cx:hover { color: #fff; background: rgba(255,255,255,.12); }
+.tgcard { border-color: rgba(42, 171, 238, .5); }
+.tgcard:hover { border-color: #2aabee; }
+.tgcard .mobi { color: #2aabee; }
 /* ---- QR oynalari (Telegram, telefon ilovasi): QR o'rtada, oq ramka, katta tugma va pastda bosiladigan havola ---- */
 .qrw { text-align: center; }
 .qri { margin: 0 30px 10px; font-size: 15px; line-height: 1.5; color: #fff; }

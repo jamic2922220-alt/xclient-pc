@@ -397,6 +397,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             @file_get_contents('https://api.telegram.org/bot' . $CFG['tg_token'] . '/deleteWebhook', false, stream_context_create(array('http' => array('timeout' => 5)))); }
         cfg_save(); flash('Telegram sozlamalari saqlandi'); go('?p=tg');
     }
+    if ($act === 'tg_bc') {                               // bot orqali hammaga e'lon - navbatga qo'yiladi, xc_api.php 20 tadan yuboradi
+        $txt = trim(mb_substr((string)pp('text'), 0, 2000, 'UTF-8'));
+        if ($txt === '' || !pp('sure')) { flash('Matnni yozing va «Ha, yuborilsin» belgisini qo\'ying'); go('?p=tg'); }
+        $ids = array(); foreach ((array)glob(XC_DIR . '/users/*.php') as $f) { $x = rd('users/' . basename($f, '.php'), null); if ($x && !empty($x['tgid']) && empty($x['tgoff'])) $ids[] = $x['tgid']; }
+        $ids = array_values(array_unique($ids));
+        wr('tgbcq', array('text' => $txt, 'q' => $ids, 'ok' => 0, 't' => time()));
+        flash('E\'lon navbatga qo\'yildi: ' . count($ids) . ' kishi. Bir necha daqiqada hammaga yetib boradi');
+        go('?p=tg');
+    }
     if ($act === 'tg_test') {
         $ctx = stream_context_create(array('http' => array('method' => 'POST', 'timeout' => 5, 'ignore_errors' => true, 'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
             'content' => http_build_query(array('chat_id' => isset($CFG['tg_chat']) ? $CFG['tg_chat'] : '', 'text' => "X CLIENT admin: sinov xabari ✓")))));
@@ -1116,7 +1125,7 @@ if ($P === 'tg') {
     $ev = isset($CFG['tg_ev']) ? $CFG['tg_ev'] : array('install' => 1, 'account' => 1, 'report' => 1);
     $ck = function ($k, $t) use ($ev) { return '<label class="chk"><input type="checkbox" name="ev_' . $k . '" value="1"' . (!empty($ev[$k]) ? ' checked' : '') . '> ' . $t . '</label>'; };
     echo '<h1>Telegram xabarnomalar</h1><div class="grid2"><div class="panel"><div class="ph">Sozlash</div><form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="tg_save">'
-        . '<label>Bot token</label><input name="token" type="password" autocomplete="off" value="" placeholder="' . (!empty($CFG['tg_token']) ? 'saqlangan ✓ (…' . h(substr($CFG['tg_token'], -4)) . ') - almashtirish uchun yangisini yozing' : '123456:ABC-DEF...') . '">'
+        . '<label>Bot token</label><input name="token" type="password" autocomplete="new-password" value="" placeholder="' . (!empty($CFG['tg_token']) ? 'saqlangan ✓ (…' . h(substr($CFG['tg_token'], -4)) . ') - almashtirish uchun yangisini yozing' : '123456:ABC-DEF...') . '">'
         . (!empty($CFG['tg_token']) ? '<label class="chk"><input type="checkbox" name="tg_del" value="1"> Tokenni o\'chirish</label>' : '')
         . '<label>Chat ID (siz yoki guruh)</label><input name="chat" value="' . h(isset($CFG['tg_chat']) ? $CFG['tg_chat'] : '') . '" placeholder="123456789 yoki -100...">'
         . $ck('cheat', 'Ehtimoliy chiter (24 soatda 3+ shikoyat)') . $ck('install', 'Yangi X CLIENT o\'rnatish') . $ck('account', 'Yangi akkaunt') . $ck('report', 'Xatolik haqida xabar') . $ck('daily', 'Kunlik hisobot (har kuni 9:00 dan keyin) va hafta chempioni') . $ck('feedback', 'Menyudan taklif / shikoyat')
@@ -1124,6 +1133,14 @@ if ($P === 'tg') {
         . '<div class="ph" style="margin-top:14px">O\'yinchilar uchun bot</div><label class="chk"><input type="checkbox" name="tg_bot" value="1"' . (!empty($CFG['tg_bot']) ? ' checked' : '') . '> O\'yinchilar shu botga akkauntini ulaydi: /me, /friends, /top, /online' . (!empty($CFG['tg_botname']) ? ' (@' . h($CFG['tg_botname']) . ')' : '') . '</label>'
         . '<button class="btn red">Saqlash</button></form><form method="post" style="margin-top:10px">' . csrf_in() . '<input type="hidden" name="act" value="tg_test"><button class="btn">Sinov xabarini yuborish</button></form></div>'
         . '<div class="panel"><div class="ph">Qanday ulash</div><ol class="help"><li>Telegram\'da <b>@BotFather</b> ga yozing → <b>/newbot</b> → bot nomini bering. U <b>token</b> beradi.</li><li>Yaratilgan botingizga <b>/start</b> yozing.</li><li><b>@userinfobot</b> ga yozing - u sizning <b>Chat ID</b> raqamingizni beradi.</li><li>Ikkalasini shu yerga yozib, Saqlash va "Sinov xabari"ni bosing.</li></ol></div></div>';
+    /* hammaga e'lon: botga ulangan va eslatmalarni o'chirmagan o'yinchilar (navbat bilan, 20 tadan) */
+    $q = rd('tgbcq', null); $nlink = 0; $nsend = 0;
+    foreach ((array)glob(XC_DIR . '/users/*.php') as $f) { $x = rd('users/' . basename($f, '.php'), null); if ($x && !empty($x['tgid'])) { $nlink++; if (empty($x['tgoff'])) $nsend++; } }
+    echo '<div class="panel" style="margin-top:16px"><div class="ph">Hammaga e\'lon (botga ulangan o\'yinchilar)</div>'
+        . '<div class="mut small" style="margin-bottom:8px">Botga ulangan: <b>' . $nlink . '</b> · xabar oladi (eslatmalarni o\'chirmaganlar): <b>' . $nsend . '</b>'
+        . ($q && !empty($q['q']) ? ' · <span style="color:#f5c518">yuborilmoqda: yana ' . count($q['q']) . ' ta (yuborildi: ' . (int)@$q['ok'] . ')</span>' : ($q ? ' · oxirgi e\'lon ' . date('d.m H:i', (int)$q['t']) . ' da yuborildi: ' . (int)@$q['ok'] . ' ta' : '')) . '</div>'
+        . '<form method="post" class="frm">' . csrf_in() . '<input type="hidden" name="act" value="tg_bc"><textarea name="text" rows="4" maxlength="2000" placeholder="Masalan: Bugun 20:00 da turnir! Sovrin - 100 000 so\'m. Ro\'yxatdan o\'tish: X CLIENT menyusida"></textarea>'
+        . '<label class="chk"><input type="checkbox" name="sure" value="1"> Ha, ' . $nsend . ' kishiga yuborilsin</label><button class="btn red">Hammaga yuborish</button></form></div>';
 }
 
 /* ===== API ===== */

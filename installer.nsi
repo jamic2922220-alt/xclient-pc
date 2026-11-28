@@ -170,4 +170,5 @@ Section "Uninstall"
   Delete "$INSTDIR\XClient-Uninstall.exe"
   RMDir "$INSTDIR"
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\XClient"
+  DeleteRegKey HKCU "Software\Classes\xclient"
 SectionEnd

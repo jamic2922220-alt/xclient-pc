@@ -1739,7 +1739,12 @@ function renderHome() {
   if (ME && on < 3) fr += '<div class="tr frinv" data-act="ref"><div class="rk c">' + ico('gift') + '</div><div class="nm">' + esc(T('rf_cta')) + '</div><div class="mt">' + esc(T('rf_cta2')) + '</div></div>';
   $('frList').innerHTML = fr || '<div class="empty">' + (ME ? esc(T('no_fr')) : '<a data-act="login">' + esc(T('no_fr_login')) + '</a>') + '</div>';
   $('acct').style.display = ME || acxHidden() ? 'none' : ''; var xp = $('xpromo'); if (xp) xp.style.display = DB.pxx && now() - DB.pxx < 3 * 864e5 ? 'none' : ''; $('frCard').style.display = ME ? '' : 'none';
-  var mc = $('mobCard'); if (mc) mc.style.display = ME && !LITE && !(DB.mobx && now() - DB.mobx < 14 * 864e5) ? '' : 'none';   // telefon ilovasi - akkaunti borlarga, yopsa 14 kun ko'rinmaydi
+  var mc = $('mobCard'); if (mc) mc.style.display = ME && !LITE && !(DB.mobx && now() - DB.mobx < 14 * 864e5) ? '' : 'none';
+  var tc = $('tgCard'); if (tc) {   // Telegram bot: ulanmaganlarga - doim (yopsa 14 kun), ulanganlarga - "botni ochish" (yopsa 60 kun)
+    var tl = !!(ME && ME.tglinked), tx = DB.tgx && now() - DB.tgx < (tl ? 60 : 14) * 864e5;
+    tc.style.display = ME && !LITE && !tx ? '' : 'none';
+    var ts = $('tgcS'); if (ts) ts.innerHTML = esc(T(tl ? 'tgc_s2' : 'tgc_s'));
+  }   // telefon ilovasi - akkaunti borlarga, yopsa 14 kun ko'rinmaydi
   $('frCnt').innerHTML = on ? on : '';
   $('mFriends').innerHTML = on ? esc(T('fr_on').replace('{n}', on)) : '';
   renderBar();
@@ -4160,6 +4165,7 @@ function act(a) {
   if (a === 'coach_aim' || a === 'coach_nade') { DB.bots = DB.bots || {}; DB.bots.m = a === 'coach_aim' ? 'aimt' : 'nade'; var cm = ACT_EL && ACT_EL.getAttribute('data-cmap'); if (cm && BOT_MAPS.indexOf(cm) >= 0) DB.bots.map = cm; persist(); closeModal(); return botsPane(); }
   if (a === 'coach_lag') { closeModal(); return lagFixPane(T('cc_blag'), false); }
   if (a === 'mobx') { DB.mobx = now(); persist(); renderAll(); return; }
+  if (a === 'tgx') { DB.tgx = now(); persist(); renderAll(); return; }
   if (a === 'mobapp') return mobApp();
   if (a === 'mcode') { CLK.mcode = (CLK.mcode || 0) + 1; CLK_N++; return api('mcode', {}, function (r) { var bx = $('mcBox'); if (!bx) return;
     if (!r.ok) return toast(r.msg || 'Xato', 5000);

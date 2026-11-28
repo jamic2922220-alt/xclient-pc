@@ -16,7 +16,7 @@ X CLIENT (XClient.exe va o'yin ichidagi X CLIENT menyusi) mmb.boost-top.com sayt
    Bu ma'lumotlar faqat X CLIENT dagi xatolarni topish va tuzatish uchun ishlatiladi, sotilmaydi va uchinchi shaxslarga berilmaydi.
    O'chirish: X CLIENT menyusi > Sozlamalar > Kengaytirilgan > "Statistika va xato hisobotlari".
 
-Launcher kompyuteringizda quyidagilarni o'zgartirishi mumkin (o'yinni ishlatish uchun): o'yin papkasi, Windows Firewall da o'yin uchun ruxsat, Windows 7 da internet (TLS 1.2) sozlamasi, o'yin fayllarining moslik belgilari. Hammasi X CLIENT o'chirilganda (Uninstall) qaytariladi yoki o'yin papkasi bilan o'chadi.
+Launcher kompyuteringizda quyidagilarni o'zgartirishi mumkin (o'yinni ishlatish uchun): o'yin papkasi, Windows Firewall da o'yin uchun ruxsat, Windows 7 da internet (TLS 1.2) sozlamasi, o'yin fayllarining moslik belgilari, xclient:// havolalarini ochish (Telegram botdagi "Kirish" tugmasi uchun). Hammasi X CLIENT o'chirilganda (Uninstall) qaytariladi yoki o'yin papkasi bilan o'chadi.
 
 Savollar: mmb.boost-top.com
 
@@ -36,6 +36,6 @@ X CLIENT (XClient.exe and the in-game X CLIENT menu) sends the following data to
    This data is used only to find and fix problems in X CLIENT. It is not sold or shared with third parties.
    To disable: X CLIENT menu > Settings > Advanced > "Statistics and error reports".
 
-To run the game, the launcher may change: the game folder, a Windows Firewall rule for the game, the TLS 1.2 internet setting on Windows 7, and compatibility flags of game files. These are removed by uninstalling X CLIENT or together with the game folder.
+To run the game, the launcher may change: the game folder, a Windows Firewall rule for the game, the TLS 1.2 internet setting on Windows 7, compatibility flags of game files, and the xclient:// link handler (for the "Join" button in the Telegram bot). These are removed by uninstalling X CLIENT or together with the game folder.
 
 Contact: mmb.boost-top.com

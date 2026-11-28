@@ -19,7 +19,7 @@
  * o'yin brauzeri cheksiz kutib, ekran ko'k bo'lib qolardi. Sinxron yuklash faqat server hozirgina javob bergandan keyin.
  * Qo'riqchi: menyu (xc.js) 20 s ichida ishga tushmasa - sahifa qayta yuklanadi (4 martagacha, oraliq oshib boradi). */
 (function () {
-  var V = '10209100';
+  var V = '10209200';
   window.XC_V = V;
   function nm() { try { return String(window.name || ''); } catch (e) { return ''; } }
   function has(t) { return ('|' + nm() + '|').indexOf('|' + t + '|') >= 0; }
@@ -66,7 +66,7 @@
   } catch (e) {}
 })();
 </script>
-<link rel="stylesheet" href="xc.css?v=10209100">
+<link rel="stylesheet" href="xc.css?v=10209200">
 <script>
 /* Xato bo'lsa ekranning tepasida ko'rsatamiz (o'yin brauzerida konsol yo'q) */
 window.XC_ERRS = [];
@@ -83,7 +83,7 @@ window.onerror = function (msg, url, line) {
   return false;
 };
 </script>
-<script src="xc_lang.js?v=10209100"></script>
+<script src="xc_lang.js?v=10209200"></script>
 </head>
 <body>
 <div id="app">
@@ -138,6 +138,11 @@ window.onerror = function (msg, url, line) {
     <div class="card mobcard" id="mobCard" data-act="mobapp" style="display:none">
       <a class="cx" data-act="mobx">&#215;</a>
       <div class="mobi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg></div><div class="mobt"><b data-t="mb_t"></b><small data-t="mb_s"></small></div>
+    </div>
+    <!-- Telegram bot: akkauntni ulash (statistika, do'stlar, serverlar) -->
+    <div class="card mobcard tgcard" id="tgCard" data-act="tglink" style="display:none">
+      <a class="cx" data-act="tgx">&#215;</a>
+      <div class="mobi"><svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M21.9 4.3l-3.1 14.8c-.2 1-.8 1.3-1.7.8l-4.7-3.5-2.3 2.2c-.3.3-.5.5-1 .5l.3-4.8 8.8-7.9c.4-.3-.1-.5-.6-.2L6.8 13l-4.6-1.4c-1-.3-1-1 .2-1.5l18-6.9c.8-.3 1.6.2 1.5 1.1z"/></svg></div><div class="mobt"><b data-t="tgc_t"></b><small id="tgcS"></small></div>
     </div>
     <!-- sodda rejim (oddiy launcher): X CLIENT ni yuklab olish kartasi -->
     <div class="card xpcard" id="xpromo" data-act="promo">
@@ -315,6 +320,6 @@ window.onerror = function (msg, url, line) {
   <div id="dbg"></div>
 </div>
 <script src="master.js"></script>
-<script src="xc.js?v=10209100"></script>
+<script src="xc.js?v=10209200"></script>
 </body>
 </html>

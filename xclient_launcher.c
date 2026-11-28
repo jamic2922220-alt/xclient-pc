@@ -2779,6 +2779,35 @@ static int vc_install(void)
     return (ec == 0 || ec == 1638 || ec == 3010 || vc_installed()) ? 1 : 0;   /* 1638 - yangirog'i bor, 3010 - qayta yoqish kerak */
 }
 
+/* xclient://connect/IP:PORT - Telegram botdagi "Kirish" tugmasi (mmb.boost-top.com/j.php) X CLIENT ni ochib, serverga ulaydi.
+ * Protokol HKCU ga yoziladi (administrator kerak emas), o'chirilganda uninstaller olib tashlaydi */
+static wchar_t g_join[72] = L"";
+static void join_parse(const wchar_t *cl)
+{
+    const wchar_t *p = cl ? wcsstr(cl, L"xclient://connect/") : NULL; if (!p) return;
+    p += 18; wchar_t t[72]; int n = 0, colon = 0, dig = 0;
+    for (; *p && n < 70; p++) {
+        wchar_t c = *p;
+        if (c == L'/' || c == L'"' || c == L' ') break;
+        if (c == L':') { if (colon++) return; }
+        else if (colon) { if (c < L'0' || c > L'9') return; dig++; }
+        else if (!((c >= L'a' && c <= L'z') || (c >= L'A' && c <= L'Z') || (c >= L'0' && c <= L'9') || c == L'.' || c == L'-')) return;
+        t[n++] = c;
+    }
+    t[n] = 0;
+    if (colon == 1 && dig >= 2 && dig <= 5 && n > 4) lstrcpynW(g_join, t, 72);
+}
+static void reg_proto(void)
+{
+    HKEY k; wchar_t v[MAX_PATH + 16];
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Classes\\xclient", 0, NULL, 0, KEY_WRITE, NULL, &k, NULL) == ERROR_SUCCESS) {
+        static const wchar_t nm[] = L"URL:X CLIENT"; RegSetValueExW(k, NULL, 0, REG_SZ, (const BYTE *)nm, sizeof(nm));
+        RegSetValueExW(k, L"URL Protocol", 0, REG_SZ, (const BYTE *)L"", sizeof(wchar_t)); RegCloseKey(k); }
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Classes\\xclient\\DefaultIcon", 0, NULL, 0, KEY_WRITE, NULL, &k, NULL) == ERROR_SUCCESS) {
+        _snwprintf(v, MAX_PATH + 16, L"\"%s\",0", g_self); v[MAX_PATH + 15] = 0; RegSetValueExW(k, NULL, 0, REG_SZ, (const BYTE *)v, (DWORD)((wcslen(v) + 1) * sizeof(wchar_t))); RegCloseKey(k); }
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Classes\\xclient\\shell\\open\\command", 0, NULL, 0, KEY_WRITE, NULL, &k, NULL) == ERROR_SUCCESS) {
+        _snwprintf(v, MAX_PATH + 16, L"\"%s\" \"%%1\"", g_self); v[MAX_PATH + 15] = 0; RegSetValueExW(k, NULL, 0, REG_SZ, (const BYTE *)v, (DWORD)((wcslen(v) + 1) * sizeof(wchar_t))); RegCloseKey(k); }
+}
 static BOOL run_game(void)
 {
     wchar_t exe[MAX_PATH], cmd[1024];
@@ -2889,6 +2918,7 @@ static BOOL run_game(void)
         ini_set_int(L"safeu", 0); ini_set_int(L"safefx", 1); safe = 2;
     }
     _snwprintf(cmd, 1024, L"\"%s\" -game cstrike%s%s -noforcemparms -noforcemaccel +exec xclient_launcher.cfg%s", exe, vid, o_stretch ? L" -stretchaspect" : L"", safe ? L" +exec xclient_safe.cfg" : L"");
+    if (g_join[0] && wcslen(cmd) + wcslen(g_join) + 12 < 1024) { wcscat(cmd, L" +connect "); wcscat(cmd, g_join); g_join[0] = 0; }   /* Telegram bot "Kirish" (xclient://connect/IP:PORT) */
     STARTUPINFOW si = { sizeof(si) };
     PROCESS_INFORMATION pi;
     meta_save();
@@ -3374,6 +3404,7 @@ static DWORD WINAPI worker(LPVOID unused)
     }
     ini_load();
     game_dir_link();                              /* o'yin papkasida "O'YINNI SHU YERDAN OCHING" yorlig'i */
+    reg_proto();                                  /* xclient:// havolalari (Telegram bot "Kirish") */
     if (!g_key[0]) read_trailer();
     make_id();
     ini_save();
@@ -3649,6 +3680,7 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, LPWSTR cmdline, int show)
     _snwprintf(old, MAX_PATH, L"%s.old", g_self); old[MAX_PATH - 1] = 0;
     DeleteFileW(old);
 
+    join_parse(cmdline);                          /* xclient://connect/IP:PORT */
     /* bitta nusxa: ikki marta bosilsa ikkinchisi bir xil fayllarni bir vaqtda yangilab, o'yinni ikki marta ochmasin */
     HANDLE one = CreateMutexW(NULL, FALSE, L"Local\\XClientLauncher");
     if ((one && GetLastError() == ERROR_ALREADY_EXISTS) || (!one && GetLastError() == ERROR_ACCESS_DENIED)) {   /* denied: admin huquqidagi nusxa ishlayapti */
