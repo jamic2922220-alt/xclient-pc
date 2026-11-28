@@ -18,7 +18,7 @@ $u = $login !== '' ? rd('users/' . $login, null) : null;
 if (!$u || !function_exists('imagecreatetruecolor')) { header('HTTP/1.1 404 Not Found'); exit; }
 
 @mkdir(XC_DIR . '/cards', 0755, true);
-$cache = XC_DIR . '/cards/' . $login . '.png';
+$cache = XC_DIR . '/cards/' . $login . '.v2.png';   // v2: matnlar katakka sig'adi (uzun nik, '549.1 soat' ustma-ust tushardi)
 header('Content-Type: image/png');
 header('Cache-Control: public, max-age=1800');
 if (is_file($cache) && time() - filemtime($cache) < 1800) { readfile($cache); exit; }
@@ -40,8 +40,11 @@ $c = function ($r, $g, $b, $a = 0) use ($im) { return imagecolorallocatealpha($i
 for ($y = 0; $y < $H; $y++) { $t = $y / $H; imageline($im, 0, $y, $W, $y, $c((int)(22 - 10 * $t), (int)(10 - 4 * $t), (int)(14 - 6 * $t))); }
 for ($r = 520; $r > 0; $r -= 8) imagefilledellipse($im, 860, 160, $r * 2, $r * 2, $c(200, 30, 40, 126));
 imagefilledrectangle($im, 0, 0, 14, $H, $c(255, 59, 59));
-$txt = function ($size, $x, $y, $col, $s, $center = false) use ($im, $font, $W) {
+/* $maxw: matn shu kenglikdan oshsa - shrift kichraytiriladi (uzun nik, katta raqamlar katakdan chiqib ketmasin) */
+$txt = function ($size, $x, $y, $col, $s, $center = false, $maxw = 0) use ($im, $font, $W) {
     if (!is_file($font)) { imagestring($im, 5, $center ? $W / 2 - strlen($s) * 4 : $x, $y - 14, $s, $col); return; }
+    if (!$maxw) $maxw = $center ? $W - 60 : $W - $x - 50;
+    while ($size > 12) { $b = imagettfbbox($size, 0, $font, $s); if ($b[2] - $b[0] <= $maxw) break; $size -= 2; }
     if ($center) { $b = imagettfbbox($size, 0, $font, $s); $x = (int)(($W - ($b[2] - $b[0])) / 2); }
     imagettftext($im, $size, 0, $x, $y, $col, $font, $s);
 };
@@ -50,17 +53,17 @@ $logo = @imagecreatefrompng(__DIR__ . '/spray_logo.png');
 if ($logo) { imagecopyresampled($im, $logo, 70, 60, 0, 0, 120, 112, imagesx($logo), imagesy($logo)); imagedestroy($logo); }
 $txt(40, 210, 135, $white, 'X CLIENT'); $txt(24, 212, 172, $red, 'COUNTER-STRIKE 1.6');
 $name = (isset($u['clan']['tag']) ? '[' . $u['clan']['tag'] . '] ' : '') . $u['name'];
-$txt(78, 70, 330, $white, mb_substr($name, 0, 18, 'UTF-8'));
+$txt(78, 70, 330, $white, mb_substr($name, 0, 32, 'UTF-8'));
 $txt(30, 74, 390, $isChamp ? $gold : $org, ($isChamp ? 'HAFTA CHEMPIONI · ' : '') . $lvl . '-daraja · ID ' . $u['id']);
 // 4 ta katta raqam
 $box = function ($x, $y, $val, $lab) use ($im, $c, $txt, $white, $mut) {
     imagefilledrectangle($im, $x, $y, $x + 450, $y + 190, $c(255, 255, 255, 118));
     imagerectangle($im, $x, $y, $x + 450, $y + 190, $c(255, 90, 90, 90));
-    $txt(72, $x + 34, $y + 110, $white, (string)$val);
-    $txt(24, $x + 38, $y + 160, $mut, $lab);
+    $txt(72, $x + 34, $y + 110, $white, (string)$val, false, 450 - 68);
+    $txt(24, $x + 38, $y + 160, $mut, $lab, false, 450 - 70);
 };
 $box(70, 450, $k, 'KILL'); $box(560, 450, $kd, 'K/D');
-$box(70, 670, $hours . ' soat', "O'YNAGAN VAQT"); $box(560, 670, $fav, 'SEVIMLI QUROL');
+$box(70, 670, $hours >= 100 ? (string)round($hours) : (string)$hours, "O'YNAGAN VAQT (SOAT)"); $box(560, 670, $fav, 'SEVIMLI QUROL');
 $txt(28, 74, 935, $mut, 'Yutuqlar: ' . $ach . ' · Eng zo\'r o\'yin: ' . (int)@$st['best'] . ' kill');
 imagefilledrectangle($im, 0, 980, $W, $H, $c(255, 59, 59));
 $txt(34, 0, 1043, $white, 'cssborka.uz/xclient  ·  taklif kodi: ' . $u['login'], true);
