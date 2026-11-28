@@ -2503,7 +2503,7 @@ case 'vcmd':
     /* saytni o'yinchining brauzerida ochish (launcher faqat o'zida yozilgan manzillarni ochadi): usite - cssborka.uz, uapk - telefon ilovasi,
      * utg - Telegram bot (kod + bot nomi) */
     $ux = '';
-    if ($c === 'utg') { $cf = xc_cfg(); $bn = isset($cf['tg_bot']) ? preg_replace('/[^A-Za-z0-9_]/', '', $cf['tg_bot']) : '';
+    if ($c === 'utg') { unlock(); $bn = tg_botname(); lock(); $o = rd('dev/' . $d, array());   // bot nomi (tg_bot - faqat yoqilgan belgisi)
         if (!preg_match('/^\d{6}$/', p('n')) || strlen($bn) < 5) fail('bad', 'bad'); $n = p('n'); $ux = ' ' . substr($bn, 0, 32); }   // sopen/sdel/sfold - F11 skrinshotlar
     if (!in_array($c, array('open', 'del', 'folder', 'trim', 'clip', 'opt', 'edit', 'share', 'conn', 'lan', 'fw', 'sopen', 'sdel', 'sfold', 'usite', 'uapk', 'utg'), true) || (in_array($c, array('open', 'del', 'trim', 'edit', 'share', 'sopen', 'sdel'), true) && $n === '')) fail('bad', 'bad');
     $tk = '';
