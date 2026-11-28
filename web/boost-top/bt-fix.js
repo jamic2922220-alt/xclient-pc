@@ -49,6 +49,20 @@
     img.src = next || NOIMG;
   }, true);
 
+  /* hujjatga qo'shilmasdan oldin (innerHTML bilan yasalgan kartochkada) yiqilgan rasm yuqoridagi tinglovchiga yetmaydi -
+   * noimage bo'lib qolgan xarita rasmlarini nomi (alt) bo'yicha qayta sinaymiz */
+  function retryNoimg() {
+    [].forEach.call(document.querySelectorAll('img[src*="noimage"]'), function (img) {
+      if (img.__btScan) return; img.__btScan = 1;
+      var nm = (img.getAttribute('alt') || '').trim();
+      if (!/^[A-Za-z0-9_\-]{3,60}$/.test(nm)) return;
+      var c = mapCandidates('/media/maps/cs16/' + nm + '.jpg');
+      if (!c.length) return;
+      img.__btTry = c;
+      img.src = c.shift();
+    });
+  }
+
   /* ---------- 3): ruscha son + so'z ---------- */
   var FORMS = {
     'игрок': ['игрок', 'игрока', 'игроков'], 'сервер': ['сервер', 'сервера', 'серверов'], 'слот': ['слот', 'слота', 'слотов'],
@@ -141,7 +155,7 @@
   function run() {
     if (busy) { pending = true; return; }
     busy = true;
-    try { walk(document.body); fixTitles(document); fixFreeSlots(); addXc(document); addAlt(document); } catch (e) {}
+    try { retryNoimg(); walk(document.body); fixTitles(document); fixFreeSlots(); addXc(document); addAlt(document); } catch (e) {}
     busy = false;
     if (pending) { pending = false; setTimeout(run, 300); }
   }
