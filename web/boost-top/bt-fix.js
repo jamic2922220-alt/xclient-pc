@@ -1,6 +1,6 @@
 /* BOOST-TOP: tuzatishlar qatlami (2026-11-28) - boshqa fayllarga tegmasdan, sahifa chizilgandan keyin ishlaydi.
  *  1) rasmi yo'q xarita (404): avval o'xshash nomli xarita rasmi (de_inferno_harnas_lite_winter -> de_inferno), bo'lmasa noimage
- *  2) server nomlaridagi bezak belgilar (█ ▀ ▄ ▬ ■) olib tashlanadi
+ *  2) (server nomlari o'zgartirilmaydi - egasi qanday yozgan bo'lsa shunday)
  *  3) ruscha son bilan so'z: "124 игроков" -> "124 игрока", "4 серв." -> "4 сервера"
  *  4) bo'sh "Свободное место" kataklari: bittasi "Serveringiz shu yerda" taklifiga aylanadi, qolganlari yashiriladi
  *  5) "Подключиться" (steam://) yoniga "X CLIENT orqali kirish" (mmb.boost-top.com/j.php - X CLIENT o'zi ochilib ulanadi)
@@ -45,8 +45,7 @@
     img.src = next || NOIMG;
   }, true);
 
-  /* ---------- 2) va 3): matn tuzatishlari ---------- */
-  var JUNK = /[▀-▟■□▪▫▬▭▮▯]+/g;
+  /* ---------- 3): ruscha son + so'z ---------- */
   var FORMS = {
     'игрок': ['игрок', 'игрока', 'игроков'], 'сервер': ['сервер', 'сервера', 'серверов'], 'слот': ['слот', 'слота', 'слотов'],
     'голос': ['голос', 'голоса', 'голосов'], 'страна': ['страна', 'страны', 'стран'], 'круг': ['круг', 'круга', 'кругов'],
@@ -65,11 +64,6 @@
   }
   function fixText(s) {
     var t = s;
-    if (t.search(JUNK) >= 0) {
-      t = t.replace(JUNK, ' ').replace(/ {2,}/g, ' ');
-      if (!/^\s/.test(s)) t = t.replace(/^ +/, '');
-      if (!/\s$/.test(s)) t = t.replace(/ +$/, '');
-    }
     if (/[а-яё]/i.test(t) && /\d/.test(t)) t = t.replace(PL, function (m, pre, n, sp, w) {
       var k = WORD2KEY[w.toLowerCase()]; if (!k) return m;
       var r = form(parseInt(n, 10), k);
@@ -88,7 +82,6 @@
   }
   function fixTitles(root) {
     [].forEach.call((root || document).querySelectorAll('[title]'), function (el) { var v = el.getAttribute('title'); var f = v && fixText(v); if (f && f !== v) el.setAttribute('title', f); });
-    if (document.title.search(JUNK) >= 0) document.title = document.title.replace(JUNK, ' ').replace(/ {2,}/g, ' ').trim();
   }
 
   /* ---------- 4) bo'sh TOP kataklari ---------- */

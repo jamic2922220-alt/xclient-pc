@@ -21,10 +21,13 @@ if not os.path.isfile(os.path.join(site, T + 'main.tpl')):
 patch = json.load(open(os.path.join(src, 'patch.json'), encoding='utf-8'))
 
 new = {}
+upg = patch.pop('_upgrade', {})                                # oldingi versiya o'rnatilgan bo'lsa - yangilanadi
 for f, hunks in patch.items():
     txt = open(os.path.join(site, f), encoding='utf-8').read()
+    for a, b in upg.get(f, []):
+        if a != b and a in txt: txt = txt.replace(a, b); new[f] = txt
     if all(txt.count(b) >= 1 for a, b in hunks):                 # qayta ishga tushirilsa - ikki marta qo'shilmaydi
-        print("allaqachon o'rnatilgan:", f); new[f] = None; continue
+        print("allaqachon o'rnatilgan:", f); new.setdefault(f, None); continue
     for a, b in hunks:
         n = txt.count(a)
         if n != 1:
