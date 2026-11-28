@@ -3214,11 +3214,94 @@ static wchar_t g_err[256] = L"";
 /* yangilanish tekshiruvi sozlamalar so'rovi (fetch_opts) bilan parallel - launcher tezroq ochiladi */
 static UpdInfo g_upd; static BOOL g_upd_ok = FALSE;
 static DWORD WINAPI upd_th(LPVOID unused) { (void)unused; g_upd_ok = get_update(&g_upd); return 0; }
+/* ---- X CLIENT serverlari fayllarini OLDINDAN yuklash ----
+ * Serverlarda qo'shimcha fayl juda ko'p (skinlar, qurollar ~500+ MB). Birinchi kirishda o'yin ularni ketma-ket yuklaydi,
+ * 5-15 daqiqa "qotib" turadi va o'yinchi chiqib ketadi (admin > Muammolar: join_fail ~30/kun). Launcher ochilgach fonda,
+ * sekin (~600 KB/s - internetni band qilmay) shu fayllarni cstrike_downloads ga yuklab qo'yadi - serverga kirish bir necha soniya.
+ * Ro'yxat: fastdl dagi xc_pack.txt ("<hajm> <yo'l>"; serverda tools/xc_pack_gen.sh har kuni tuzadi - o'yinchilar haqiqatan
+ * yuklagan fayllar). Faqat yetishmayotgan yoki hajmi boshqa fayllar olinadi. xclient.ini: nopf=1 - o'chiq */
+static const char *XC_PACKS[] = { "http://212.47.58.89:8090/xc_pack.txt", "http://212.47.58.40:8090/xc_pack.txt" };
+static volatile LONG g_pf_done = 0, g_pf_total = 0;
+static BOOL pf_path_ok(const char *p)
+{
+    static const char *ext[] = { ".mdl", ".wav", ".spr", ".bsp", ".wad", ".txt", ".tga", ".bmp", ".mp3", ".res", ".png" };
+    size_t n = strlen(p);
+    if (!n || n > 180 || strstr(p, "..") || p[0] == '/' || p[0] == '\\') return FALSE;
+    for (size_t i = 0; i < n; i++) { char c = p[i]; if (!(isalnum((unsigned char)c) || c == '_' || c == '-' || c == '.' || c == '/')) return FALSE; }
+    for (int i = 0; i < (int)(sizeof(ext) / sizeof(ext[0])); i++) { size_t l = strlen(ext[i]); if (n > l && !_stricmp(p + n - l, ext[i])) return TRUE; }
+    return FALSE;
+}
+static BOOL pf_download(const char *url, const wchar_t *dst, DWORD want)
+{
+    HINTERNET h = open_url(url);
+    if (!h) return FALSE;
+    HANDLE f = CreateFileW(dst, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (f == INVALID_HANDLE_VALUE) { InternetCloseHandle(h); return FALSE; }
+    char *buf = (char *)malloc(32768); DWORD got, wr, tot = 0, t0 = GetTickCount();
+    BOOL ok = buf != NULL;
+    while (ok) {
+        if (!InternetReadFile(h, buf, 32768, &got)) { ok = FALSE; break; }
+        if (!got) break;
+        if (!WriteFile(f, buf, got, &wr, NULL) || wr != got) { ok = FALSE; break; }
+        tot += got; InterlockedExchangeAdd(&g_pf_done, (LONG)(got >> 10));
+        DWORD el = GetTickCount() - t0, need = tot / 600;           /* ~600 KB/s (1 ms = ~600 bayt) */
+        if (need > el) Sleep(need - el);
+        if (tot > 64u * 1048576u) { ok = FALSE; break; }
+    }
+    free(buf); CloseHandle(f); InternetCloseHandle(h);
+    if (!ok || (want && tot != want)) { DeleteFileW(dst); return FALSE; }
+    return TRUE;
+}
+static DWORD WINAPI prefetch_th(LPVOID unused)
+{
+    (void)unused;
+    if (ini_int(L"nopf") || !g_dir[0]) return 0;
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_LOWEST);
+    Sleep(20000);                                  /* avval o'yin ochilib olsin */
+    int got = 0, fail = 0;
+    for (int k = 0; k < (int)(sizeof(XC_PACKS) / sizeof(XC_PACKS[0])); k++) {
+        DWORD ml = 0; char *man = http_get(XC_PACKS[k], &ml);
+        if (!man) continue;
+        char base[200]; lstrcpynA(base, XC_PACKS[k], sizeof(base)); char *sl = strrchr(base, '/'); if (sl) sl[1] = 0;
+        for (char *ln = man; ln && *ln; ) {
+            char *nx = strchr(ln, '\n'); if (nx) *nx++ = 0;
+            char *sp = strchr(ln, ' ');
+            if (sp) {
+                *sp = 0; DWORD sz = (DWORD)strtoul(ln, NULL, 10); char *path = sp + 1;
+                size_t pl = strlen(path); while (pl && (path[pl - 1] == '\r' || path[pl - 1] == ' ')) path[--pl] = 0;
+                if (sz && sz < 64u * 1048576u && pf_path_ok(path)) {
+                    wchar_t wp[200]; MultiByteToWideChar(CP_UTF8, 0, path, -1, wp, 200); wp[199] = 0;
+                    for (wchar_t *q = wp; *q; q++) if (*q == L'/') *q = L'\\';
+                    wchar_t inGame[MAX_PATH], dst[MAX_PATH];
+                    _snwprintf(inGame, MAX_PATH, L"%s\\cstrike\\%s", g_dir, wp); inGame[MAX_PATH - 1] = 0;
+                    _snwprintf(dst, MAX_PATH, L"%s\\cstrike_downloads\\%s", g_dir, wp); dst[MAX_PATH - 1] = 0;
+                    WIN32_FILE_ATTRIBUTE_DATA fa;
+                    BOOL have = (GetFileAttributesExW(dst, GetFileExInfoStandard, &fa) && fa.nFileSizeLow == sz)
+                             || GetFileAttributesW(inGame) != INVALID_FILE_ATTRIBUTES;
+                    if (!have) {
+                        InterlockedExchangeAdd(&g_pf_total, (LONG)(sz >> 10));
+                        char url[600]; _snprintf(url, sizeof(url), "%s%s", base, path); url[sizeof(url) - 1] = 0;
+                        wchar_t tmp[MAX_PATH + 8]; _snwprintf(tmp, MAX_PATH + 8, L"%s.xcpf", dst); tmp[MAX_PATH + 7] = 0;
+                        mkdirs_for(dst);
+                        if (pf_download(url, tmp, sz) && MoveFileExW(tmp, dst, MOVEFILE_REPLACE_EXISTING)) got++;
+                        else { DeleteFileW(tmp); if (++fail > 40) break; }
+                    }
+                }
+            }
+            ln = nx;
+        }
+        free(man);
+    }
+    if (got || fail) { char raw[80]; _snprintf(raw, sizeof(raw), "got=%d fail=%d kb=%ld", got, fail, (long)g_pf_done); raw[79] = 0;
+        url_escape(g_probx, sizeof(g_probx), raw); prob_send("prefetch", 0); g_probx[0] = 0; }
+    return 0;
+}
 static DWORD WINAPI side_jobs(LPVOID unused)
 {
     (void)unused;
     menu_site_check();
     clean_hpk();
+    { HANDLE pf = CreateThread(NULL, 0, prefetch_th, NULL, 0, NULL); if (pf) CloseHandle(pf); }   /* server fayllari oldindan */
     return 0;
 }
 static DWORD WINAPI worker(LPVOID unused)
