@@ -539,7 +539,7 @@ function tg_bot_answer($chat, $txt) {
     if ($cmd === '/me' || $cmd === '/stats') {
         $st = isset($me['st']) ? $me['st'] : array(); $k = (int)@$st['k']; $d = (int)@$st['d'];
         $t = $me['name'] . " - " . level($me['xp']) . "-daraja (" . ((int)$me['xp'] % XP_PER_LEVEL) . "/" . XP_PER_LEVEL . " XP)\nKill: $k · O'lim: $d · K/D: " . ($d ? round($k / $d, 2) : $k) . "\nO'yinlar: " . (int)@$st['g'] . " · Soat: " . round((int)@$st['t'] / 3600, 1) . "\nEng zo'r o'yin: " . (int)@$st['best'] . " kill\nYutuqlar: " . (isset($me['ach']) ? count($me['ach']) : 0);
-        return array('text' => $t, 'photo' => TG_SITE . 'card.php?u=' . rawurlencode(strtolower($me['login'])) . '&t=' . floor(time() / 1800));
+        return array('text' => $t, 'photo' => TG_SITE . 'card.php?u=' . rawurlencode(strtolower($me['login'])) . '&v=2&t=' . floor(time() / 1800));
     }
     if ($cmd === '/friends') {
         $on = array(); foreach ((isset($me['friends']) ? $me['friends'] : array()) as $fl) { $f = user($fl); if ($f && is_online($f)) $on[] = $f['name'] . (!empty($f['server']) ? ' - ' . $f['server'] . (!empty($f['map']) ? ' (' . $f['map'] . ')' : '') : ' - menyuda'); }
