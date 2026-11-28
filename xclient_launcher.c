@@ -2945,6 +2945,11 @@ static BOOL run_game(void)
         g_played_s = (DWORD)played;
         perf_end((DWORD)played);
         if (played >= 600) fn_send("p10");
+        if (played >= 60 && !ini_int(L"nopf")) {     /* o'yin yopildi - server fayllarini endi (fonda, alohida jarayonda) yuklaymiz */
+            wchar_t pc[MAX_PATH * 2 + 40]; _snwprintf(pc, MAX_PATH * 2 + 40, L"\"%s\" --prefetch \"%s\"", g_self, g_dir); pc[MAX_PATH * 2 + 39] = 0;
+            STARTUPINFOW psi = { sizeof(psi) }; PROCESS_INFORMATION ppi;
+            if (CreateProcessW(g_self, pc, NULL, NULL, FALSE, CREATE_NO_WINDOW | IDLE_PRIORITY_CLASS, NULL, g_dir, &psi, &ppi)) { CloseHandle(ppi.hThread); CloseHandle(ppi.hProcess); }
+        }
         BOOL crashed = game_crashed(code, t0);
         /* ochilishdayoq yiqildi (o'yin oynasi umuman paydo bo'lmadi, xotira xatosi): bu o'yin ichidagi xato emas - exe bu Windows'da ishga tushmayapti */
         if (crashed && code == 0xC0000005 && !g_game_seen && played < 300) {
@@ -3219,9 +3224,31 @@ static DWORD WINAPI upd_th(LPVOID unused) { (void)unused; g_upd_ok = get_update(
  * 5-15 daqiqa "qotib" turadi va o'yinchi chiqib ketadi (admin > Muammolar: join_fail ~30/kun). Launcher ochilgach fonda,
  * sekin (~600 KB/s - internetni band qilmay) shu fayllarni cstrike_downloads ga yuklab qo'yadi - serverga kirish bir necha soniya.
  * Ro'yxat: fastdl dagi xc_pack.txt ("<hajm> <yo'l>"; serverda tools/xc_pack_gen.sh har kuni tuzadi - o'yinchilar haqiqatan
- * yuklagan fayllar). Faqat yetishmayotgan yoki hajmi boshqa fayllar olinadi. xclient.ini: nopf=1 - o'chiq */
+ * yuklagan fayllar). xclient.ini: nopf=1 - o'chiq.
+ * 1.0.178: faqat O'YIN YOPILGANDAN KEYIN, alohida yashirin jarayonda ("XClient.exe --prefetch <papka>") - o'yin paytida internet
+ * band qilinmaydi (1.0.177 da o'yin paytida yuklash MOTD/ulanishda o'yinni qotirgan). O'yin yoki launcher qayta ochilsa - darhol to'xtaydi.
+ * Faqat YO'Q fayllar olinadi: bor faylga (boshqa serverdan yuklangan nusxa ham) hech qachon tegilmaydi. */
 static const char *XC_PACKS[] = { "http://212.47.58.89:8090/xc_pack.txt", "http://212.47.58.40:8090/xc_pack.txt" };
 static volatile LONG g_pf_done = 0, g_pf_total = 0;
+static HANDLE g_pf_stop = NULL; static DWORD g_pf_chk = 0; static BOOL g_pf_abort = FALSE;
+static BOOL game_proc_running(void)
+{
+    BOOL r = FALSE; HANDLE sn = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (sn == INVALID_HANDLE_VALUE) return FALSE;
+    PROCESSENTRY32W pe; pe.dwSize = sizeof(pe);
+    for (BOOL ok = Process32FirstW(sn, &pe); ok && !r; ok = Process32NextW(sn, &pe))
+        if (!_wcsicmp(pe.szExeFile, L"hl.exe") || !_wcsicmp(pe.szExeFile, L"cstrike.exe")) r = TRUE;
+    CloseHandle(sn); return r;
+}
+/* to'xtash kerakmi: launcher qayta ochildi (hodisa) yoki o'yin ishlayapti (2 s da bir tekshiriladi) */
+static BOOL pf_should_stop(void)
+{
+    if (g_pf_abort) return TRUE;
+    if (g_pf_stop && WaitForSingleObject(g_pf_stop, 0) == WAIT_OBJECT_0) return g_pf_abort = TRUE;
+    DWORD now = GetTickCount();
+    if (now - g_pf_chk >= 2000) { g_pf_chk = now; if (game_proc_running()) return g_pf_abort = TRUE; }
+    return FALSE;
+}
 static BOOL pf_path_ok(const char *p)
 {
     static const char *ext[] = { ".mdl", ".wav", ".spr", ".bsp", ".wad", ".txt", ".tga", ".bmp", ".mp3", ".res", ".png" };
@@ -3244,8 +3271,9 @@ static BOOL pf_download(const char *url, const wchar_t *dst, DWORD want)
         if (!got) break;
         if (!WriteFile(f, buf, got, &wr, NULL) || wr != got) { ok = FALSE; break; }
         tot += got; InterlockedExchangeAdd(&g_pf_done, (LONG)(got >> 10));
-        DWORD el = GetTickCount() - t0, need = tot / 600;           /* ~600 KB/s (1 ms = ~600 bayt) */
+        DWORD el = GetTickCount() - t0, need = tot / 400;           /* ~400 KB/s (1 ms = ~400 bayt) - o'yinchi YouTube va h.k. ko'rayotgan bo'lishi mumkin */
         if (need > el) Sleep(need - el);
+        if (pf_should_stop()) { ok = FALSE; break; }
         if (tot > 64u * 1048576u) { ok = FALSE; break; }
     }
     free(buf); CloseHandle(f); InternetCloseHandle(h);
@@ -3257,13 +3285,12 @@ static DWORD WINAPI prefetch_th(LPVOID unused)
     (void)unused;
     if (ini_int(L"nopf") || !g_dir[0]) return 0;
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_LOWEST);
-    Sleep(20000);                                  /* avval o'yin ochilib olsin */
     int got = 0, fail = 0;
-    for (int k = 0; k < (int)(sizeof(XC_PACKS) / sizeof(XC_PACKS[0])); k++) {
+    for (int k = 0; k < (int)(sizeof(XC_PACKS) / sizeof(XC_PACKS[0])) && !pf_should_stop(); k++) {
         DWORD ml = 0; char *man = http_get(XC_PACKS[k], &ml);
         if (!man) continue;
         char base[200]; lstrcpynA(base, XC_PACKS[k], sizeof(base)); char *sl = strrchr(base, '/'); if (sl) sl[1] = 0;
-        for (char *ln = man; ln && *ln; ) {
+        for (char *ln = man; ln && *ln && !pf_should_stop(); ) {
             char *nx = strchr(ln, '\n'); if (nx) *nx++ = 0;
             char *sp = strchr(ln, ' ');
             if (sp) {
@@ -3272,19 +3299,20 @@ static DWORD WINAPI prefetch_th(LPVOID unused)
                 if (sz && sz < 64u * 1048576u && pf_path_ok(path)) {
                     wchar_t wp[200]; MultiByteToWideChar(CP_UTF8, 0, path, -1, wp, 200); wp[199] = 0;
                     for (wchar_t *q = wp; *q; q++) if (*q == L'/') *q = L'\\';
-                    wchar_t inGame[MAX_PATH], dst[MAX_PATH];
-                    _snwprintf(inGame, MAX_PATH, L"%s\\cstrike\\%s", g_dir, wp); inGame[MAX_PATH - 1] = 0;
+                    wchar_t dst[MAX_PATH];
                     _snwprintf(dst, MAX_PATH, L"%s\\cstrike_downloads\\%s", g_dir, wp); dst[MAX_PATH - 1] = 0;
-                    WIN32_FILE_ATTRIBUTE_DATA fa;
-                    BOOL have = (GetFileAttributesExW(dst, GetFileExInfoStandard, &fa) && fa.nFileSizeLow == sz)
-                             || GetFileAttributesW(inGame) != INVALID_FILE_ATTRIBUTES;
+                    /* fayl qayerda bo'lsa ham (o'yin, valve, boshqa serverdan yuklangani) - TEGILMAYDI */
+                    static const wchar_t *dirs[] = { L"cstrike_downloads", L"cstrike", L"valve", L"cstrike_addon", L"valve_downloads" };
+                    BOOL have = FALSE;
+                    for (int di = 0; di < 5 && !have; di++) { wchar_t pth[MAX_PATH]; _snwprintf(pth, MAX_PATH, L"%s\\%s\\%s", g_dir, dirs[di], wp); pth[MAX_PATH - 1] = 0;
+                        if (GetFileAttributesW(pth) != INVALID_FILE_ATTRIBUTES) have = TRUE; }
                     if (!have) {
                         InterlockedExchangeAdd(&g_pf_total, (LONG)(sz >> 10));
                         char url[600]; _snprintf(url, sizeof(url), "%s%s", base, path); url[sizeof(url) - 1] = 0;
                         wchar_t tmp[MAX_PATH + 8]; _snwprintf(tmp, MAX_PATH + 8, L"%s.xcpf", dst); tmp[MAX_PATH + 7] = 0;
                         mkdirs_for(dst);
-                        if (pf_download(url, tmp, sz) && MoveFileExW(tmp, dst, MOVEFILE_REPLACE_EXISTING)) got++;
-                        else { DeleteFileW(tmp); if (++fail > 40) break; }
+                        if (pf_download(url, tmp, sz) && GetFileAttributesW(dst) == INVALID_FILE_ATTRIBUTES && MoveFileExW(tmp, dst, 0)) got++;
+                        else { DeleteFileW(tmp); if (g_pf_abort) break; if (++fail > 40) break; }
                     }
                 }
             }
@@ -3292,7 +3320,7 @@ static DWORD WINAPI prefetch_th(LPVOID unused)
         }
         free(man);
     }
-    if (got || fail) { char raw[80]; _snprintf(raw, sizeof(raw), "got=%d fail=%d kb=%ld", got, fail, (long)g_pf_done); raw[79] = 0;
+    if (got || fail) { char raw[80]; _snprintf(raw, sizeof(raw), "got=%d fail=%d kb=%ld stop=%d", got, fail, (long)g_pf_done, g_pf_abort ? 1 : 0); raw[79] = 0;
         url_escape(g_probx, sizeof(g_probx), raw); prob_send("prefetch", 0); g_probx[0] = 0; }
     return 0;
 }
@@ -3301,7 +3329,6 @@ static DWORD WINAPI side_jobs(LPVOID unused)
     (void)unused;
     menu_site_check();
     clean_hpk();
-    { HANDLE pf = CreateThread(NULL, 0, prefetch_th, NULL, 0, NULL); if (pf) CloseHandle(pf); }   /* server fayllari oldindan */
     return 0;
 }
 static DWORD WINAPI worker(LPVOID unused)
@@ -3512,6 +3539,21 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE hp, LPWSTR cmdline, int show)
     CoInitialize(NULL);
     g_t0 = GetTickCount();
     GetModuleFileNameW(NULL, g_self, MAX_PATH);
+    if (cmdline && !wcsncmp(cmdline, L"--prefetch ", 11)) {   /* o'yin yopilgach: server fayllarini fonda yuklash (oynasiz) */
+        { const wchar_t *a = cmdline + 11; if (*a == L'"') a++; lstrcpynW(g_dir, a, MAX_PATH); size_t l = wcslen(g_dir); if (l && g_dir[l - 1] == L'"') g_dir[l - 1] = 0; }
+        HANDLE pm = CreateMutexW(NULL, FALSE, L"Local\\XClientPrefetch");
+        if (!pm || GetLastError() == ERROR_ALREADY_EXISTS) { if (pm) CloseHandle(pm); CoUninitialize(); return 0; }
+        g_pf_stop = CreateEventW(NULL, TRUE, FALSE, L"Local\\XClientPfStop");
+        Sleep(5000);
+        ini_load(); make_id();
+        g_net = InternetOpenA("XClient", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
+        if (g_net) { DWORD to = 6000, rto = 15000; InternetSetOptionA(g_net, INTERNET_OPTION_CONNECT_TIMEOUT, &to, sizeof(to)); InternetSetOptionA(g_net, INTERNET_OPTION_RECEIVE_TIMEOUT, &rto, sizeof(rto));
+            if (!pf_should_stop()) prefetch_th(NULL);
+            InternetCloseHandle(g_net); }
+        CloseHandle(pm); CoUninitialize(); return 0;
+    }
+    { HANDLE e = OpenEventW(EVENT_MODIFY_STATE, FALSE, L"Local\\XClientPfStop");   /* launcher ochildi - fonda yuklayotgan nusxa darhol to'xtasin */
+      if (e) { SetEvent(e); CloseHandle(e); for (int i = 0; i < 30; i++) { HANDLE m = OpenMutexW(SYNCHRONIZE, FALSE, L"Local\\XClientPrefetch"); if (!m) break; CloseHandle(m); Sleep(100); } } }
     if (cmdline && !wcsncmp(cmdline, L"--lantest ", 10)) {   /* avtomatik test: LAN skaner -> faylga */
         g_lan_dump = cmdline + 10; lan_thread(NULL); CoUninitialize(); return 0;
     }
