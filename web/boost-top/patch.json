@@ -24,7 +24,7 @@
   ],
   [
    "    <script src=\"templates/user/{{ settings_main.site_template }}/js/bt-mobile.js?v=1\" defer></script>\n",
-   "    <script src=\"templates/user/{{ settings_main.site_template }}/js/bt-mobile.js?v=1\" defer></script>\n    <!-- tuzatishlar qatlami (2026-11-28): xarita rasmlari, ruscha sonlar, TOP bo'sh joylari, X CLIENT orqali kirish -->\n    <link rel=\"stylesheet\" href=\"templates/user/{{ settings_main.site_template }}/css/bt-fix.css?v=1\">\n    <script src=\"templates/user/{{ settings_main.site_template }}/js/bt-fix.js?v=2\" defer></script>\n"
+   "    <script src=\"templates/user/{{ settings_main.site_template }}/js/bt-mobile.js?v=1\" defer></script>\n    <!-- tuzatishlar qatlami (2026-11-28): xarita rasmlari, ruscha sonlar, TOP bo'sh joylari, X CLIENT orqali kirish -->\n    <link rel=\"stylesheet\" href=\"templates/user/{{ settings_main.site_template }}/css/bt-fix.css?v=1\">\n    <script src=\"templates/user/{{ settings_main.site_template }}/js/bt-fix.js?v=3\" defer></script>\n"
   ],
   [
    "                            try { localStorage.setItem(CACHE_KEY, JSON.stringify({items: items, ts: Date.now()})); } catch (e) {}\n                        }\n",
@@ -43,11 +43,11 @@
   "templates/user/boost-top/main.tpl": [
    [
     "js/bt-fix.js?v=1\"",
-    "js/bt-fix.js?v=2\""
+    "js/bt-fix.js?v=3\""
    ],
    [
-    "X CLIENT orqali kirish -->",
-    "X CLIENT orqali kirish -->"
+    "js/bt-fix.js?v=2\"",
+    "js/bt-fix.js?v=3\""
    ],
    [
     "xarita rasmlari, nomdagi belgilar, ruscha sonlar",

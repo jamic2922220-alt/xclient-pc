@@ -32,6 +32,10 @@
     var parts = name.split('_');
     for (var i = parts.length - 1; i >= 2; i--) add(parts.slice(0, i).join('_'));   /* de_inferno_harnas_lite_winter -> de_inferno_harnas_lite ... de_inferno */
     add(name.replace(/_(v\d+|final|fix|new|winter|snow|2x2|lite|beta|\d+)$/g, ''));
+    /* nomida mashhur xarita bo'lsa (de_winterdust2 -> de_dust2) - saytda bor rasmlar */
+    var KW = [['dust2', 'de_dust2'], ['dust', 'de_dust'], ['inferno', 'de_inferno'], ['nuke', 'de_nuke'], ['train', 'de_train'], ['aztec', 'de_aztec'], ['cbble', 'de_cbble'],
+      ['italy', 'cs_italy'], ['office', 'cs_office'], ['assault', 'cs_assault'], ['militia', 'cs_militia'], ['snow', 'fy_snow']];
+    for (var k = 0; k < KW.length; k++) if (name.indexOf(KW[k][0]) >= 0) { add(KW[k][1]); break; }
     return out;
   }
   window.addEventListener('error', function (e) {
