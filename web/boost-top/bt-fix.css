@@ -1,0 +1,36 @@
+/* BOOST-TOP tuzatishlar qatlami (2026-11-28) - js/bt-fix.js bilan birga */
+
+/* tepadagi xizmatlar lentasi: server kam bo'lsa - aylanmaydi, takrorlanmaydi */
+.boost-ticker-static .boost-ticker-track { animation: none !important; transform: none !important; }
+
+/* "X CLIENT orqali kirish" tugmasi (Подключиться yonida): asosiy tugmadan ikkinchi darajali - qora fon, qizil chegara */
+.bt-xc { display: inline-flex; align-items: center; justify-content: center; gap: 5px; vertical-align: middle; margin-left: 6px;
+  height: 30px; padding: 0 8px; border-radius: 8px; background: rgba(214, 35, 47, .10); border: 1px solid rgba(239, 68, 68, .55);
+  color: #ff5a64 !important; text-decoration: none !important; white-space: nowrap;
+  font: 700 11px/1 "IBM Plex Sans", system-ui, sans-serif; letter-spacing: .2px; transition: background .15s, border-color .15s; }
+.bt-xc:hover { background: rgba(214, 35, 47, .22); border-color: #ef4444; }
+.bt-xc-logo { width: 18px; height: 18px; object-fit: contain; flex: none; }
+.bt-xc-wide { display: flex; width: 100%; margin: 8px 0 0; height: 36px; box-sizing: border-box; font-size: 13px; }
+html[data-theme="light"] .bt-xc { background: #fff1f2; color: #c81e2a !important; }
+/* jadval katagidagi tugma uslublari (ko'k kvadrat) bosib ketmasin */
+a.bt-xc.bt-xc-ico { display: inline-flex !important; width: 34px !important; min-width: 34px !important; height: 34px !important; padding: 0 !important; margin: 0 0 0 6px !important;
+  background: rgba(214, 35, 47, .12) !important; border: 1px solid rgba(239, 68, 68, .6) !important; border-radius: 8px !important; box-shadow: none !important; }
+a.bt-xc.bt-xc-ico .bt-xc-logo { width: 20px; height: 20px; }
+@media (max-width: 760px) { a.bt-xc.bt-xc-ico { margin: 6px 0 0 !important; } }
+
+/* bo'sh TOP kataklari o'rniga bitta taklif */
+.bt-fix-promo-box > *:not(.bt-fix-promo) { display: none !important; }
+.bt-fix-promo-box { display: flex !important; align-items: stretch; min-height: 100%; padding: 0 !important; border: 1.5px dashed rgba(96, 165, 250, .55) !important; background: rgba(59, 130, 246, .06) !important; }
+.bt-fix-promo { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 22px 16px; text-align: center; text-decoration: none !important; color: inherit !important; }
+.bt-fix-promo-plus { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 26px; line-height: 1; background: var(--boost-accent, #3b82f6); color: #fff; }
+.bt-fix-promo b { font-size: 16px; line-height: 1.25; }
+.bt-fix-promo small { font-size: 12.5px; opacity: .75; max-width: 260px; }
+.bt-fix-promo em { font-style: normal; font-weight: 700; font-size: 13px; color: var(--boost-accent, #3b82f6); }
+.bt-fix-promo:hover em { text-decoration: underline; }
+
+/* telefon: sarlavha chetdan chiqmasin, Android tugmasi kartochka ichida */
+@media (max-width: 430px) {
+  .tm-headerbar .bt-palette { display: none !important; }
+  .tm-headerbar .boost-logo { max-width: 170px; }
+}
+.btx-app-text .btx-btn { max-width: 100%; box-sizing: border-box; white-space: normal; }

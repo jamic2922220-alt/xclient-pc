@@ -1,0 +1,42 @@
+{
+ "templates/user/boost-top/js/bt-dplus.js": [
+  [
+   "      if (!g[cc]) g[cc] = { cc: cc, servers: 0, players: 0, top: null };\n      g[cc].servers++; g[cc].players += s.p;\n",
+   "      if (!g[cc]) g[cc] = { cc: cc, servers: 0, players: 0, top: null };\n      g[cc].servers++; g[cc].players += s.online ? s.p : 0;\n"
+  ],
+  [
+   "  function globeCardHtml(groups, list) {\n    var players = list.reduce(function (a, s) { return a + s.p; }, 0);\n",
+   "  function globeCardHtml(groups, list) {\n    var players = list.reduce(function (a, s) { return a + (s.online ? s.p : 0); }, 0);\n"
+  ],
+  [
+   "    var best = list.slice().sort(function (a, b) { return b.p - a.p; })[0];\n    var online = list.reduce(function (a, s) { return a + s.p; }, 0);\n    var slots = list.reduce(function (a, s) { return a + s.m; }, 0);\n",
+   "    var best = list.slice().sort(function (a, b) { return b.p - a.p; })[0];\n    var online = list.reduce(function (a, s) { return a + (s.online ? s.p : 0); }, 0);   /* oflayn serverning eski soni hisoblanmaydi - yon paneldagi \"Сейчас на сайте\" bilan bir xil */\n    var slots = list.reduce(function (a, s) { return a + (s.online ? s.m : 0); }, 0);\n"
+  ],
+  [
+   "      mapsEl.className = 'bt-maps';\n      mapsEl.innerHTML = '<div class=\"bt-maps-head\"><h2>' + esc(t('popular')) + '</h2><span style=\"font-size:12px;color:var(--boost-muted)\">' + esc(t('srv')) + '</span></div><div class=\"bt-maps-grid\">' +\n",
+   "      mapsEl.className = 'bt-maps';\n      mapsEl.innerHTML = '<div class=\"bt-maps-head\"><h2>' + esc(t('popular')) + '</h2><span style=\"font-size:12px;color:var(--boost-muted)\">' + esc(({ ru: 'по числу серверов', uz: \"serverlar soni bo'yicha\", en: 'by server count' })[lang()] || t('srv')) + '</span></div><div class=\"bt-maps-grid\">' +\n"
+  ]
+ ],
+ "templates/user/boost-top/main.tpl": [
+  [
+   "    <link rel=\"stylesheet\" href=\"templates/user/{{ settings_main.site_template }}/css/bt-dplus.css?v=49\">\n    <script src=\"templates/user/{{ settings_main.site_template }}/js/bt-dplus.js?v=33\" defer></script>\n",
+   "    <link rel=\"stylesheet\" href=\"templates/user/{{ settings_main.site_template }}/css/bt-dplus.css?v=49\">\n    <script src=\"templates/user/{{ settings_main.site_template }}/js/bt-dplus.js?v=34\" defer></script>\n"
+  ],
+  [
+   "    <script src=\"templates/user/{{ settings_main.site_template }}/js/bt-mobile.js?v=1\" defer></script>\n",
+   "    <script src=\"templates/user/{{ settings_main.site_template }}/js/bt-mobile.js?v=1\" defer></script>\n    <!-- tuzatishlar qatlami (2026-11-28): xarita rasmlari, nomdagi belgilar, ruscha sonlar, TOP bo'sh joylari, X CLIENT orqali kirish -->\n    <link rel=\"stylesheet\" href=\"templates/user/{{ settings_main.site_template }}/css/bt-fix.css?v=1\">\n    <script src=\"templates/user/{{ settings_main.site_template }}/js/bt-fix.js?v=1\" defer></script>\n"
+  ],
+  [
+   "                            try { localStorage.setItem(CACHE_KEY, JSON.stringify({items: items, ts: Date.now()})); } catch (e) {}\n                        }\n",
+   "                            try { localStorage.setItem(CACHE_KEY, JSON.stringify({items: items, ts: Date.now()})); } catch (e) {}\n                        }\n                        /* bitta server bir nechta xizmat (TOP + VIP) uchun qayta-qayta chiqmasin: har server bir marta, eng yuqori xizmati bilan */\n                        var RANKS = {top: 4, vip: 3, boost: 2, color: 1}, seen = {}, uniq = [];\n                        items.forEach(function (it) { var k = it.href || it.name; if (!(k in seen)) { seen[k] = uniq.length; uniq.push(it); } else if ((RANKS[it.service] || 0) > (RANKS[uniq[seen[k]].service] || 0)) uniq[seen[k]] = it; });\n                        items = uniq;\n                        var few = items.length < 4;              /* kam bo'lsa - aylanmaydi va takrorlanmaydi */\n"
+  ],
+  [
+   "                        var repeated = items;\n                        while (repeated.length < 10) repeated = repeated.concat(items);\n",
+   "                        var repeated = items;\n                        if (!few) while (repeated.length < 10) repeated = repeated.concat(items);\n"
+  ],
+  [
+   "                        var html = repeated.map(chipHtml).join('');\n                        track.innerHTML = html + html;\n",
+   "                        var html = repeated.map(chipHtml).join('');\n                        track.innerHTML = few ? html : html + html;\n                        wrap.classList.toggle('boost-ticker-static', few);\n"
+  ]
+ ]
+}
